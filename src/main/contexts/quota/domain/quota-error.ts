@@ -1,0 +1,38 @@
+// Quota value objects — QuotaError mirrors the slice of source AccountError that
+// the quota module raises (RepositoryError / NotFound / InvalidCredentialFormat
+// / CryptoError). The IPC layer stringifies these via toIpcError so the renderer
+// rejection message is a plain string matching Tauri invoke semantics. Message
+// strings match the source thiserror #[error(...)] formats byte-for-byte.
+
+export type QuotaErrorKind =
+  | 'NotFound'
+  | 'RepositoryError'
+  | 'InvalidCredentialFormat'
+  | 'CryptoError'
+
+export class QuotaError extends Error {
+  readonly kind: QuotaErrorKind
+
+  private constructor(kind: QuotaErrorKind, message: string) {
+    super(message)
+    this.name = 'QuotaError'
+    this.kind = kind
+    Object.setPrototypeOf(this, QuotaError.prototype)
+  }
+
+  static notFound(entityType: string, id: string): QuotaError {
+    return new QuotaError('NotFound', `Entity not found: ${entityType} with id '${id}'`)
+  }
+
+  static repositoryError(message: string): QuotaError {
+    return new QuotaError('RepositoryError', `Repository error: ${message}`)
+  }
+
+  static invalidCredentialFormat(reason: string): QuotaError {
+    return new QuotaError('InvalidCredentialFormat', `Invalid credential format: ${reason}`)
+  }
+
+  static cryptoError(reason: string): QuotaError {
+    return new QuotaError('CryptoError', `Crypto operation failed: ${reason}`)
+  }
+}
