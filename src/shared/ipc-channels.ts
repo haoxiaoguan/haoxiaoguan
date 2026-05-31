@@ -74,6 +74,45 @@ export const ACCOUNT_CHANNELS = {
   validateBatch: 'account:validateBatch',
 } as const
 
+// Credential context. Mirrors the local copy in
+// contexts/credential/ipc/credential-channels.ts (credential manifest §3).
+// validate_credential / validate_batch are OWNED here (envelope-aware validator)
+// — the renderer's healthService points its validation methods at credential:*.
+export const CREDENTIAL_CHANNELS = {
+  startOauth: 'credential:startOauth',
+  completeOauth: 'credential:completeOauth',
+  importTokenJson: 'credential:importTokenJson',
+  scanLocalCredentials: 'credential:scanLocalCredentials',
+  importDeeplink: 'credential:importDeeplink',
+  validateCredential: 'credential:validateCredential',
+  validateBatch: 'credential:validateBatch',
+} as const
+
+// Quota context. Channel string VALUES match the source Rust command names
+// (snake_case, no service prefix) per the quota manifest §3.
+export const QUOTA_CHANNELS = {
+  refreshQuota: 'refresh_quota',
+  refreshAllQuotas: 'refresh_all_quotas',
+  getQuota: 'get_quota',
+  getQuotaState: 'get_quota_state',
+  refreshQuotaState: 'refresh_quota_state',
+} as const
+
+// MCP context. Channel string VALUES match the Tauri frontend contract
+// (map_mcp.md IPC Commands table — exact Rust command names).
+export const MCP_CHANNELS = {
+  getMcpServers: 'get_mcp_servers',
+  upsertMcpServer: 'upsert_mcp_server',
+  deleteMcpServer: 'delete_mcp_server',
+  toggleMcpApp: 'toggle_mcp_app',
+  importMcpFromApps: 'import_mcp_from_apps',
+  validateMcpCommand: 'validate_mcp_command',
+  getClaudeMcpStatus: 'get_claude_mcp_status',
+  readAgentMcpConfig: 'read_agent_mcp_config',
+  scanUnmanagedMcp: 'scan_unmanaged_mcp',
+  importSelectedMcp: 'import_selected_mcp',
+} as const
+
 // Local-backup context. Channel string VALUES match the Tauri frontend contract
 // (localBackup manifest §3).
 export const LOCAL_BACKUP_CHANNELS = {
@@ -84,4 +123,15 @@ export const LOCAL_BACKUP_CHANNELS = {
   rename: 'local_backup_rename',
   getConfig: 'local_backup_get_config',
   saveConfig: 'local_backup_save_config',
+} as const
+
+// Sync (WebDAV E2EE) context. Channel string VALUES are the exact source Tauri
+// command names (snake_case) per the sync manifest §3.
+export const SYNC_CHANNELS = {
+  getConfig: 'webdav_get_config',
+  testConnection: 'webdav_test_connection',
+  saveConfig: 'webdav_save_config',
+  syncUpload: 'webdav_sync_upload',
+  syncDownload: 'webdav_sync_download',
+  fetchRemoteInfo: 'webdav_fetch_remote_info',
 } as const

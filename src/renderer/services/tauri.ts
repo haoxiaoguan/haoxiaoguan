@@ -5,11 +5,11 @@
 import { bridge } from './bridge';
 
 /**
- * Generic invoke wrapper. Migration shim: the implemented contexts (account,
- * agent, settings, system, skill, usage, localBackup, health) now call the
- * Electron `window.api.*` bridge directly. The services whose main-process
- * context is NOT yet implemented (quota, ws, credential OAuth/import, mcp, sync)
- * still call tauriInvoke and throw "not yet migrated" until those contexts land.
+ * Generic invoke wrapper. Migration shim: every implemented context now calls
+ * the Electron `window.api.*` bridge directly. The ONLY service still on this
+ * throwing shim is `wsService` (get_ws_status / toggle_ws) — the websocket
+ * context has not been built yet, so those two channels intentionally throw
+ * "not yet migrated" until that context lands.
  */
 export const tauriInvoke = async <T>(_cmd: string, _args?: Record<string, unknown>): Promise<T> => {
   throw new Error(`IPC command "${_cmd}" not yet migrated to the Electron bridge`);
@@ -74,19 +74,19 @@ export const accountService = {
 
 export const quotaService = {
   refreshQuota: (accountId: string) =>
-    tauriInvoke<QuotaInfo>('refresh_quota', { accountId }),
+    bridge().quota.refreshQuota({ accountId }) as Promise<QuotaInfo>,
 
   refreshAll: () =>
-    tauriInvoke<QuotaRefreshResult[]>('refresh_all_quotas'),
+    bridge().quota.refreshAllQuotas() as Promise<QuotaRefreshResult[]>,
 
   getQuota: (accountId: string) =>
-    tauriInvoke<QuotaInfo>('get_quota', { accountId }),
+    bridge().quota.getQuota({ accountId }) as Promise<QuotaInfo>,
 
   getQuotaState: (accountId: string) =>
-    tauriInvoke<AccountQuotaState>('get_quota_state', { accountId }),
+    bridge().quota.getQuotaState({ accountId }) as Promise<AccountQuotaState>,
 
   refreshQuotaState: (accountId: string) =>
-    tauriInvoke<AccountQuotaState>('refresh_quota_state', { accountId }),
+    bridge().quota.refreshQuotaState({ accountId }) as Promise<AccountQuotaState>,
 };
 
 // ============================================================================
@@ -186,30 +186,19 @@ export interface ImportedCredentialMaterial {
 
 export const credentialService = {
   startOAuth: (provider: string, mode: OAuthMode) =>
-    tauriInvoke<OAuthPending>("start_oauth", { provider, mode }),
+    bridge().credential.startOauth(provider, mode) as Promise<OAuthPending>,
 
   completeOAuth: (pendingId: string, code: string) =>
-    tauriInvoke<ImportedCredentialMaterial>("complete_oauth", {
-      pendingId,
-      code,
-    }),
+    bridge().credential.completeOauth(pendingId, code) as Promise<ImportedCredentialMaterial>,
 
   importTokenJson: (provider: string, payload: string) =>
-    tauriInvoke<ImportedCredentialMaterial>("import_token_json", {
-      provider,
-      payload,
-    }),
+    bridge().credential.importTokenJson(provider, payload) as Promise<ImportedCredentialMaterial>,
 
   scanLocalCredentials: (provider: string) =>
-    tauriInvoke<ImportedCredentialMaterial[]>("scan_local_credentials", {
-      provider,
-    }),
+    bridge().credential.scanLocalCredentials(provider) as Promise<ImportedCredentialMaterial[]>,
 
   importDeeplink: (provider: string, url: string) =>
-    tauriInvoke<ImportedCredentialMaterial>("import_deeplink", {
-      provider,
-      url,
-    }),
+    bridge().credential.importDeeplink(provider, url) as Promise<ImportedCredentialMaterial>,
 };
 
 // ============================================================================
@@ -255,13 +244,13 @@ export interface HealthSnapshot {
 
 export const healthService = {
   validateCredential: (accountId: string) =>
-    bridge().account.validateCredential(accountId) as Promise<CredentialValidationResult>,
+    bridge().credential.validateCredential(accountId) as Promise<CredentialValidationResult>,
 
   getAccountHealth: (accountId: string) =>
     bridge().account.getAccountHealth(accountId) as Promise<HealthSnapshot>,
 
   validateBatch: (accountIds: string[], concurrency = 4) =>
-    bridge().account.validateBatch(accountIds, concurrency) as Promise<
+    bridge().credential.validateBatch(accountIds, concurrency) as Promise<
       Array<
         | { account_id: string; result: CredentialValidationResult }
         | { account_id: string; error: string }
@@ -376,34 +365,36 @@ import type {
 
 export const mcpService = {
   getMcpServers: () =>
-    tauriInvoke<McpServer[]>('get_mcp_servers'),
+    bridge().mcp.getMcpServers() as Promise<McpServer[]>,
 
   upsertMcpServer: (request: UpsertMcpServerRequest) =>
-    tauriInvoke<McpServer>('upsert_mcp_server', { request }),
+    bridge().mcp.upsertMcpServer(
+      request as unknown as Parameters<typeof window.api.mcp.upsertMcpServer>[0],
+    ) as Promise<McpServer>,
 
   deleteMcpServer: (serverId: string) =>
-    tauriInvoke<boolean>('delete_mcp_server', { serverId }),
+    bridge().mcp.deleteMcpServer(serverId),
 
   toggleMcpApp: (request: { server_id: string; agent_id: string; enabled: boolean }) =>
-    tauriInvoke<void>('toggle_mcp_app', { request }),
+    bridge().mcp.toggleMcpApp(request),
 
   importMcpFromApps: () =>
-    tauriInvoke<ImportMcpResult>('import_mcp_from_apps'),
+    bridge().mcp.importMcpFromApps() as Promise<ImportMcpResult>,
 
   validateMcpCommand: (command: string) =>
-    tauriInvoke<ValidateCommandResult>('validate_mcp_command', { command }),
+    bridge().mcp.validateMcpCommand(command) as Promise<ValidateCommandResult>,
 
   getClaudeMcpStatus: () =>
-    tauriInvoke<Record<string, unknown>>('get_claude_mcp_status'),
+    bridge().mcp.getClaudeMcpStatus() as Promise<Record<string, unknown>>,
 
   readAgentMcpConfig: (agentId: string) =>
-    tauriInvoke<Record<string, McpServerSpec>>('read_agent_mcp_config', { agentId }),
+    bridge().mcp.readAgentMcpConfig(agentId) as Promise<Record<string, McpServerSpec>>,
 
   scanUnmanagedMcp: () =>
-    tauriInvoke<UnmanagedMcpEntry[]>('scan_unmanaged_mcp'),
+    bridge().mcp.scanUnmanagedMcp() as Promise<UnmanagedMcpEntry[]>,
 
   importSelectedMcp: (selections: Array<{ server_id: string; agent_ids: string[] }>) =>
-    tauriInvoke<ImportMcpResult>('import_selected_mcp', { request: { selections } }),
+    bridge().mcp.importSelectedMcp({ selections }) as Promise<ImportMcpResult>,
 };
 
 // ============================================================================
@@ -414,14 +405,10 @@ import type { WebdavConfig, RemoteInfo, DownloadResult } from '../types';
 
 export const syncService = {
   getConfig: () =>
-    tauriInvoke<WebdavConfig>('webdav_get_config'),
+    bridge().sync.getConfig() as Promise<WebdavConfig>,
 
   testConnection: (config: WebdavConfig, password: string | undefined, passwordTouched: boolean) =>
-    tauriInvoke<{ success: boolean }>('webdav_test_connection', {
-      config,
-      password,
-      passwordTouched,
-    }),
+    bridge().sync.testConnection({ config, password, passwordTouched }),
 
   saveConfig: (args: {
     config: WebdavConfig;
@@ -429,16 +416,16 @@ export const syncService = {
     passwordTouched: boolean;
     syncPassword?: string;
     syncPasswordTouched: boolean;
-  }) => tauriInvoke<void>('webdav_save_config', args),
+  }) => bridge().sync.saveConfig(args),
 
   syncUpload: () =>
-    tauriInvoke<{ status: string }>('webdav_sync_upload'),
+    bridge().sync.syncUpload() as Promise<{ status: string }>,
 
   syncDownload: () =>
-    tauriInvoke<DownloadResult>('webdav_sync_download'),
+    bridge().sync.syncDownload() as Promise<DownloadResult>,
 
   fetchRemoteInfo: () =>
-    tauriInvoke<RemoteInfo>('webdav_fetch_remote_info'),
+    bridge().sync.fetchRemoteInfo() as Promise<RemoteInfo>,
 };
 
 // ============================================================================

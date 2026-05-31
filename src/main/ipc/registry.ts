@@ -23,14 +23,27 @@ import { registerUsageHandlers } from '../contexts/usage/ipc/usage-handlers'
 import type { LocalBackupApplicationService } from '../contexts/localBackup/application/local-backup-service'
 import { registerLocalBackupHandlers } from '../contexts/localBackup/ipc/local-backup-handlers'
 
+import type { OAuthService } from '../contexts/credential/application/oauth-service'
+import type { ImportService } from '../contexts/credential/application/import-service'
+import type { ValidationService as CredentialValidationService } from '../contexts/credential/application/validation-service'
+import { registerCredentialHandlers } from '../contexts/credential/ipc/credential-handlers'
+
+import type { QuotaApplicationService } from '../contexts/quota/application/quota-service'
+import { registerQuotaHandlers } from '../contexts/quota/ipc/quota-handlers'
+
+import type { McpApplicationService } from '../contexts/mcp/application/mcp-application-service'
+import { registerMcpHandlers } from '../contexts/mcp/ipc/mcp-handlers'
+
+import type { SyncApplicationService } from '../contexts/sync/application/sync-application-service'
+import { registerSyncHandlers } from '../contexts/sync/ipc/sync-handlers'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
 //
-// NOTE: the credential, quota, mcp, and sync contexts are NOT yet implemented
-// (no IPC handlers / application services exist for them), so they are absent
-// here. The renderer keeps the throwing tauriInvoke shim for those services
-// until they land.
+// All nine contexts are wired. The only renderer methods still on the throwing
+// tauriInvoke shim are the websocket toggle/status pair (get_ws_status /
+// toggle_ws), which belong to a websocket context not yet built.
 export interface Services {
   settings: SettingsApplicationService
   agents: AgentRegistryService
@@ -40,6 +53,14 @@ export interface Services {
   accountSwitchOrchestrator: SwitchOrchestrator
   accountValidation: ValidationService
   accountHealth: AccountHealthService
+
+  // credential context (OAuth / import / envelope-aware validation)
+  credentialOAuth: OAuthService
+  credentialImport: ImportService
+  credentialValidation: CredentialValidationService
+
+  // quota context
+  quotaService: QuotaApplicationService
 
   // skill context
   skillService: SkillApplicationService
@@ -53,10 +74,15 @@ export interface Services {
 
   // localBackup context
   localBackup: LocalBackupApplicationService
+
+  // mcp context
+  mcp: McpApplicationService
+
+  // sync context (WebDAV E2EE)
+  sync: SyncApplicationService
 }
 
-// Each context contributes a register*Handlers function. As the remaining
-// contexts (credential, quota, mcp, sync) land, add their registrations here.
+// Each context contributes a register*Handlers function.
 export function registerAllHandlers(services: Services): void {
   registerSettingsHandlers(services.settings)
   registerAgentHandlers(services.agents)
@@ -66,6 +92,12 @@ export function registerAllHandlers(services: Services): void {
     validationService: services.accountValidation,
     healthService: services.accountHealth,
   })
+  registerCredentialHandlers({
+    oauthService: services.credentialOAuth,
+    importService: services.credentialImport,
+    validationService: services.credentialValidation,
+  })
+  registerQuotaHandlers(services.quotaService)
   registerSkillHandlers({
     skillService: services.skillService,
     discoveryService: services.discoveryService,
@@ -74,4 +106,6 @@ export function registerAllHandlers(services: Services): void {
   })
   registerUsageHandlers(services.usageSync, services.usageQuery)
   registerLocalBackupHandlers(services.localBackup)
+  registerMcpHandlers(services.mcp)
+  registerSyncHandlers(services.sync)
 }

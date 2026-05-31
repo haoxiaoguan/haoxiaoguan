@@ -24,6 +24,11 @@ let closeBehavior = 'quit'
 const BACKUP_INTERVAL_MS = 30 * 60 * 1000
 let backupTimer: ReturnType<typeof setInterval> | null = null
 
+// 5-minute periodic purge of expired pending OAuth sessions (credential manifest
+// §5/§9.5 — the source used an async scheduler; there is no built-in equivalent).
+const PENDING_OAUTH_PURGE_INTERVAL_MS = 5 * 60 * 1000
+let pendingOAuthPurgeTimer: ReturnType<typeof setInterval> | null = null
+
 // Deep-link URL captured before the renderer/container is ready (macOS can emit
 // open-url before whenReady resolves). Flushed once the window exists.
 let pendingDeepLink: string | null = null
@@ -141,9 +146,10 @@ function applyAutostart(enabled: boolean): void {
   }
 }
 
-// Route a haoxiaoguan:// deep link. The credential context (import_deeplink) is
-// not yet implemented in the main process, so the URL is forwarded to the
-// renderer, which owns the import flow until the credential context lands.
+// Route a haoxiaoguan:// deep link. The credential context now implements
+// import_deeplink (credential.importDeeplink), but the renderer still owns the
+// import confirmation UX (manifest §8 leaves the pending-import confirm flow to
+// the frontend), so the URL is forwarded to the renderer which drives the import.
 function routeDeepLink(url: string): void {
   if (!url || !url.startsWith(`${DEEP_LINK_SCHEME}://`)) return
   showMainWindow()
@@ -241,6 +247,18 @@ if (!gotLock) {
     runBackup()
     backupTimer = setInterval(runBackup, BACKUP_INTERVAL_MS)
 
+    // Periodic purge of expired pending OAuth sessions (replay/cleanup).
+    const runPendingOAuthPurge = (): void => {
+      services?.credentialOAuth.purgeExpired().catch((e) => {
+        console.error('[credential] pending oauth purge failed:', e)
+      })
+    }
+    runPendingOAuthPurge()
+    pendingOAuthPurgeTimer = setInterval(
+      runPendingOAuthPurge,
+      PENDING_OAUTH_PURGE_INTERVAL_MS,
+    )
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(false)
       else showMainWindow()
@@ -258,6 +276,10 @@ app.on('before-quit', () => {
   if (backupTimer) {
     clearInterval(backupTimer)
     backupTimer = null
+  }
+  if (pendingOAuthPurgeTimer) {
+    clearInterval(pendingOAuthPurgeTimer)
+    pendingOAuthPurgeTimer = null
   }
   services?.tokenRefreshScheduler.stop()
 })

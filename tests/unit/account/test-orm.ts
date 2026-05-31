@@ -5,7 +5,7 @@ import { ReflectMetadataProvider } from '@mikro-orm/core'
 import { AccountEntity } from '../../../src/main/contexts/account/infrastructure/account.entity'
 import { AccountTagEntity } from '../../../src/main/contexts/account/infrastructure/account-tag.entity'
 import { SwitchHistoryEntity } from '../../../src/main/contexts/account/infrastructure/switch-history.entity'
-import { CredentialRefEntity } from '../../../src/main/contexts/account/infrastructure/credential-ref.entity'
+import { CredentialEntity } from '../../../src/main/contexts/credential/infrastructure/credential.entity'
 
 // In-memory MikroORM for unit tests. We register the account entity CLASSES
 // explicitly (not the filesystem glob) because MikroORM's runtime glob
@@ -24,7 +24,7 @@ export async function createTestOrm(): Promise<TestOrm> {
   const orm = await MikroORM.init({
     metadataProvider: ReflectMetadataProvider,
     dbName: ':memory:',
-    entities: [AccountEntity, AccountTagEntity, SwitchHistoryEntity, CredentialRefEntity],
+    entities: [AccountEntity, AccountTagEntity, SwitchHistoryEntity, CredentialEntity],
     discovery: { warnWhenNoEntities: false },
     allowGlobalContext: true,
   })

@@ -1,9 +1,9 @@
 // The typed surface exposed on window.api. Covers every IPC service namespace
-// whose backing context is implemented (settings, system, agent, account, skill,
-// usage, localBackup) plus the version/shell helpers. The credential, quota,
-// mcp, and sync contexts are not yet implemented in the main process, so they
-// are intentionally absent — the renderer keeps calling the throwing tauriInvoke
-// shim for those until they land.
+// whose backing context is implemented (settings, system, agent, account,
+// credential, quota, skill, usage, localBackup, mcp, sync) plus the
+// version/shell helpers. The only renderer methods still on the throwing
+// tauriInvoke shim are the websocket toggle/status pair (get_ws_status /
+// toggle_ws), which belong to a websocket context not yet built.
 export interface SettingsResponse {
   theme: string
   language: string
@@ -204,6 +204,168 @@ export interface LocalBackupConfigDto {
   retainCount: number
 }
 
+// ── Credential DTOs (credential manifest §6) ─────────────────────────────────
+export interface OAuthPending {
+  pending_id: string
+  authorize_url: string
+  redirect_path: string
+  bound_port?: number
+}
+export interface ImportedCredentialMaterial {
+  provider: string
+  email: string
+  access_token: string
+  refresh_token?: string
+  expires_at?: string
+  source: 'oauth' | 'local_scan' | 'token_json_file' | 'deep_link'
+  raw_metadata?: unknown
+}
+
+// ── Quota DTOs (quota manifest §6) ───────────────────────────────────────────
+export interface ModelQuotaResponse {
+  modelName: string
+  used: number
+  total: number
+  usagePercentage: number
+  isWarning: boolean
+  resetAt?: string
+}
+export interface QuotaResponse {
+  accountId: string
+  models: ModelQuotaResponse[]
+  fetchedAt: string
+}
+export interface QuotaRefreshResultResponse {
+  accountId: string
+  success: boolean
+  quota?: QuotaResponse
+  error?: string
+}
+export type QuotaStatus = 'ok' | 'warning' | 'exhausted' | 'unknown' | 'unsupported' | 'error'
+export type QuotaUnit = 'credits' | 'requests' | 'tokens' | 'usd' | 'percent' | 'none'
+export type QuotaMetricKind =
+  | 'usage'
+  | 'remaining'
+  | 'balance'
+  | 'rate_limit'
+  | 'entitlement'
+  | 'credential'
+export type QuotaWindow = 'minute' | 'hour' | 'day' | 'month' | 'billing_cycle'
+export interface QuotaMetricResponse {
+  key: string
+  label: string
+  kind: QuotaMetricKind
+  unit: QuotaUnit
+  used?: number
+  total?: number
+  remaining?: number
+  percentUsed?: number
+  percentRemaining?: number
+  displayValue?: string
+  window?: QuotaWindow
+  resetAt?: string
+  status: QuotaStatus
+}
+export interface AccountQuotaStateResponse {
+  version: number
+  status: QuotaStatus
+  primaryMetricKey?: string
+  metrics: QuotaMetricResponse[]
+  fetchedAt?: string
+  error?: string
+  providerPayload: unknown
+}
+
+// ── MCP DTOs (mcp manifest §7) ───────────────────────────────────────────────
+export interface McpServerSpec {
+  transport: 'stdio' | 'http' | 'sse'
+  command: string | null
+  args: string[] | null
+  env: Record<string, string> | null
+  url: string | null
+}
+export interface McpServerDto {
+  id: string
+  name: string
+  description: string | null
+  spec: McpServerSpec
+  apps: Record<string, boolean>
+  homepage: string | null
+  docs: string | null
+  tags: string[]
+  created_at: number
+  updated_at: number
+  sort_order: number
+}
+export interface UnmanagedMcpEntryDto {
+  id: string
+  name: string
+  spec: McpServerSpec
+  found_in: string[]
+}
+export interface UpsertMcpServerRequest {
+  id?: string
+  name: string
+  description?: string | null
+  transport: 'stdio' | 'http' | 'sse'
+  command?: string | null
+  args?: string[] | null
+  env?: Record<string, string> | null
+  url?: string | null
+  apps?: Record<string, boolean>
+  homepage?: string | null
+  docs?: string | null
+  tags?: string[]
+}
+export interface ToggleMcpAppRequest {
+  server_id: string
+  agent_id: string
+  enabled: boolean
+}
+export interface ImportSelectedMcpRequest {
+  selections: Array<{ server_id: string; agent_ids: string[] }>
+}
+
+// ── Sync DTOs (sync manifest §7) ─────────────────────────────────────────────
+export interface WebdavStatus {
+  lastSyncAt?: number | null
+  lastError?: string | null
+  lastErrorSource?: string | null
+  lastRemoteEtag?: string | null
+}
+export interface WebdavConfig {
+  enabled: boolean
+  baseUrl: string
+  username: string
+  remoteRoot: string
+  profile: string
+  autoSync: boolean
+  status: WebdavStatus
+}
+export interface RemoteInfo {
+  empty: boolean
+  deviceName?: string
+  createdAt?: number
+  version?: number
+  compatible: boolean
+}
+export interface DownloadResult {
+  status: string
+  needsRestart: boolean
+}
+export interface TestConnectionArgs {
+  config: WebdavConfig
+  password?: string
+  passwordTouched: boolean
+}
+export interface SaveConfigArgs {
+  config: WebdavConfig
+  password?: string
+  passwordTouched: boolean
+  syncPassword?: string
+  syncPasswordTouched: boolean
+}
+
 export interface HxgApi {
   settings: {
     getSettings(): Promise<SettingsResponse>
@@ -247,6 +409,30 @@ export interface HxgApi {
         | { account_id: string; error: string }
       >
     >
+  }
+  credential: {
+    startOauth(provider: string, mode: string): Promise<OAuthPending>
+    completeOauth(pendingId: string, code: string): Promise<ImportedCredentialMaterial>
+    importTokenJson(provider: string, payload: string): Promise<ImportedCredentialMaterial>
+    scanLocalCredentials(provider: string): Promise<ImportedCredentialMaterial[]>
+    importDeeplink(provider: string, url: string): Promise<ImportedCredentialMaterial>
+    validateCredential(accountId: string): Promise<CredentialValidationResult>
+    validateBatch(
+      accountIds: string[],
+      concurrency: number,
+    ): Promise<
+      Array<
+        | { account_id: string; result: CredentialValidationResult }
+        | { account_id: string; error: string }
+      >
+    >
+  }
+  quota: {
+    refreshQuota(args: { accountId: string }): Promise<QuotaResponse>
+    refreshAllQuotas(): Promise<QuotaRefreshResultResponse[]>
+    getQuota(args: { accountId: string }): Promise<QuotaResponse>
+    getQuotaState(args: { accountId: string }): Promise<AccountQuotaStateResponse>
+    refreshQuotaState(args: { accountId: string }): Promise<AccountQuotaStateResponse>
   }
   skill: {
     getInstalledSkills(): Promise<InstalledSkillDto[]>
@@ -301,6 +487,28 @@ export interface HxgApi {
     rename(arg: { old_filename: string; new_name: string }): Promise<BackupEntryDto>
     getConfig(): Promise<LocalBackupConfigDto>
     saveConfig(config: LocalBackupConfigDto): Promise<void>
+  }
+  mcp: {
+    getMcpServers(): Promise<McpServerDto[]>
+    upsertMcpServer(request: UpsertMcpServerRequest): Promise<McpServerDto>
+    deleteMcpServer(server_id: string): Promise<boolean>
+    toggleMcpApp(request: ToggleMcpAppRequest): Promise<void>
+    importMcpFromApps(): Promise<{ imported_count: number }>
+    validateMcpCommand(command: string): Promise<{ valid: boolean }>
+    getClaudeMcpStatus(): Promise<
+      Record<string, { server_count: number; config_exists: boolean; config_path: string }>
+    >
+    readAgentMcpConfig(agent_id: string): Promise<Record<string, McpServerSpec>>
+    scanUnmanagedMcp(): Promise<UnmanagedMcpEntryDto[]>
+    importSelectedMcp(request: ImportSelectedMcpRequest): Promise<{ imported_count: number }>
+  }
+  sync: {
+    getConfig(): Promise<WebdavConfig>
+    testConnection(args: TestConnectionArgs): Promise<{ success: boolean }>
+    saveConfig(args: SaveConfigArgs): Promise<void>
+    syncUpload(): Promise<{ status: 'uploaded' }>
+    syncDownload(): Promise<DownloadResult>
+    fetchRemoteInfo(): Promise<RemoteInfo>
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>

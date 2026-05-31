@@ -6,7 +6,7 @@ import { CryptoService } from '../../../src/main/platform/crypto/crypto-service'
 import { Account } from '../../../src/main/contexts/account/domain/account'
 import { MikroOrmAccountRepository } from '../../../src/main/contexts/account/infrastructure/mikro-orm-account-repository'
 import { MikroOrmSwitchHistoryRepository } from '../../../src/main/contexts/account/infrastructure/mikro-orm-switch-history-repository'
-import { MikroOrmCredentialStore } from '../../../src/main/contexts/account/infrastructure/mikro-orm-credential-store'
+import { MikroOrmCredentialRepository } from '../../../src/main/contexts/credential/infrastructure/mikro-orm-credential-repository'
 import { AccountApplicationService } from '../../../src/main/contexts/account/application/account-service'
 import { SwitchService } from '../../../src/main/contexts/account/application/switch-service'
 import type {
@@ -184,7 +184,7 @@ describe('MikroOrmSwitchHistoryRepository', () => {
 describe('AccountApplicationService (sqlite end-to-end)', () => {
   function buildService(): AccountApplicationService {
     const accountRepo = new MikroOrmAccountRepository(em)
-    const credentialStore = new MikroOrmCredentialStore(makeCrypto(), em)
+    const credentialStore = new MikroOrmCredentialRepository(makeCrypto(), em)
     const switchService = new SwitchService(credentialStore, new NoopInjectorRegistry())
     return new AccountApplicationService(accountRepo, credentialStore, switchService)
   }
@@ -227,7 +227,7 @@ describe('AccountApplicationService (sqlite end-to-end)', () => {
   it('deletes account and its credential', async () => {
     const svc = buildService()
     const account = await svc.importAccount({ platform: 'cursor', email: 'u@e.com', token: 'tok', tags: [] })
-    const store = new MikroOrmCredentialStore(makeCrypto(), em)
+    const store = new MikroOrmCredentialRepository(makeCrypto(), em)
     await svc.deleteAccount(account.id)
     const repo = new MikroOrmAccountRepository(em)
     expect(await repo.findById(account.id)).toBeNull()

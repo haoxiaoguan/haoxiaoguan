@@ -4,9 +4,13 @@ import {
   SYSTEM_CHANNELS,
   AGENT_CHANNELS,
   ACCOUNT_CHANNELS,
+  CREDENTIAL_CHANNELS,
+  QUOTA_CHANNELS,
   SKILL_CHANNELS,
   USAGE_CHANNELS,
   LOCAL_BACKUP_CHANNELS,
+  MCP_CHANNELS,
+  SYNC_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi } from '../shared/api-types'
 
@@ -45,6 +49,29 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_CHANNELS.getAccountHealth, { accountId }),
     validateBatch: (accountIds, concurrency) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.validateBatch, { accountIds, concurrency }),
+  },
+  credential: {
+    startOauth: (provider, mode) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.startOauth, { provider, mode }),
+    completeOauth: (pendingId, code) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, { pendingId, code }),
+    importTokenJson: (provider, payload) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.importTokenJson, { provider, payload }),
+    scanLocalCredentials: (provider) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.scanLocalCredentials, { provider }),
+    importDeeplink: (provider, url) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.importDeeplink, { provider, url }),
+    validateCredential: (accountId) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.validateCredential, { accountId }),
+    validateBatch: (accountIds, concurrency) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.validateBatch, { accountIds, concurrency }),
+  },
+  quota: {
+    refreshQuota: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.refreshQuota, args),
+    refreshAllQuotas: () => ipcRenderer.invoke(QUOTA_CHANNELS.refreshAllQuotas),
+    getQuota: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.getQuota, args),
+    getQuotaState: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.getQuotaState, args),
+    refreshQuotaState: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.refreshQuotaState, args),
   },
   skill: {
     getInstalledSkills: () => ipcRenderer.invoke(SKILL_CHANNELS.getInstalledSkills),
@@ -94,6 +121,26 @@ const api: HxgApi = {
     rename: (arg) => ipcRenderer.invoke(LOCAL_BACKUP_CHANNELS.rename, arg),
     getConfig: () => ipcRenderer.invoke(LOCAL_BACKUP_CHANNELS.getConfig),
     saveConfig: (config) => ipcRenderer.invoke(LOCAL_BACKUP_CHANNELS.saveConfig, config),
+  },
+  mcp: {
+    getMcpServers: () => ipcRenderer.invoke(MCP_CHANNELS.getMcpServers),
+    upsertMcpServer: (request) => ipcRenderer.invoke(MCP_CHANNELS.upsertMcpServer, request),
+    deleteMcpServer: (server_id) => ipcRenderer.invoke(MCP_CHANNELS.deleteMcpServer, server_id),
+    toggleMcpApp: (request) => ipcRenderer.invoke(MCP_CHANNELS.toggleMcpApp, request),
+    importMcpFromApps: () => ipcRenderer.invoke(MCP_CHANNELS.importMcpFromApps),
+    validateMcpCommand: (command) => ipcRenderer.invoke(MCP_CHANNELS.validateMcpCommand, command),
+    getClaudeMcpStatus: () => ipcRenderer.invoke(MCP_CHANNELS.getClaudeMcpStatus),
+    readAgentMcpConfig: (agent_id) => ipcRenderer.invoke(MCP_CHANNELS.readAgentMcpConfig, agent_id),
+    scanUnmanagedMcp: () => ipcRenderer.invoke(MCP_CHANNELS.scanUnmanagedMcp),
+    importSelectedMcp: (request) => ipcRenderer.invoke(MCP_CHANNELS.importSelectedMcp, request),
+  },
+  sync: {
+    getConfig: () => ipcRenderer.invoke(SYNC_CHANNELS.getConfig),
+    testConnection: (args) => ipcRenderer.invoke(SYNC_CHANNELS.testConnection, args),
+    saveConfig: (args) => ipcRenderer.invoke(SYNC_CHANNELS.saveConfig, args),
+    syncUpload: () => ipcRenderer.invoke(SYNC_CHANNELS.syncUpload),
+    syncDownload: () => ipcRenderer.invoke(SYNC_CHANNELS.syncDownload),
+    fetchRemoteInfo: () => ipcRenderer.invoke(SYNC_CHANNELS.fetchRemoteInfo),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

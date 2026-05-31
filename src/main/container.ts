@@ -14,7 +14,6 @@ import { AgentRegistryService } from './agents/application/agent-registry-servic
 
 // Account context.
 import { MikroOrmAccountRepository } from './contexts/account/infrastructure/mikro-orm-account-repository'
-import { MikroOrmCredentialStore } from './contexts/account/infrastructure/mikro-orm-credential-store'
 import { RepositoryAccountPlatformLookup } from './contexts/account/infrastructure/account-platform-lookup'
 import { AccountApplicationService } from './contexts/account/application/account-service'
 import { SwitchService } from './contexts/account/application/switch-service'
@@ -26,9 +25,30 @@ import type {
   ProviderCapabilityRegistry,
   ValidationCapability,
   QuotaCapability,
+  CredentialValidationResult as AccountValidationResult,
+  QuotaFetchResult as AccountQuotaFetchResult,
 } from './contexts/account/application/capability-ports'
 import { AgentCredentialInjectorRegistry } from './agents/credential-injection/injector-registry'
 import { loadOrCreateMasterKey, CryptoService } from './platform/crypto/crypto-service'
+
+// Credential context — owns the authoritative `credentials` store + OAuth/import
+// /validation services. Its MikroOrmCredentialRepository implements the account
+// CredentialStorePort + the quota QuotaCredentialStore (drop-in replacement for
+// the deleted account TEMP MikroOrmCredentialStore).
+import { buildCredentialRegistry } from './contexts/credential/infrastructure/build-registry'
+import { MikroOrmCredentialRepository } from './contexts/credential/infrastructure/mikro-orm-credential-repository'
+import { MikroOrmPendingOAuthRepository } from './contexts/credential/infrastructure/mikro-orm-pending-oauth-repository'
+import { MikroOrmPendingImportRepository } from './contexts/credential/infrastructure/mikro-orm-pending-import-repository'
+import { OAuthService } from './contexts/credential/application/oauth-service'
+import { ImportService } from './contexts/credential/application/import-service'
+import { ValidationService as CredentialValidationService } from './contexts/credential/application/validation-service'
+import { validationResultToJson } from './contexts/credential/domain/capability-types'
+
+// Quota context.
+import { MikroOrmQuotaCacheRepository } from './contexts/quota/infrastructure/mikro-orm-quota-cache-repository'
+import { MikroOrmQuotaStateRepository } from './contexts/quota/infrastructure/mikro-orm-quota-state-repository'
+import { HttpLiveQuotaFetcher } from './contexts/quota/infrastructure/http/http-live-quota-fetcher'
+import { QuotaApplicationService } from './contexts/quota/application/quota-service'
 
 // Skill context.
 import { MikroOrmInstalledSkillRepository } from './contexts/skill/infrastructure/mikro-orm-installed-skill-repository'
@@ -56,20 +76,76 @@ import { QoderAgentClient } from './agents/qoder/qoder-agent'
 import { LocalBackupApplicationService } from './contexts/localBackup/application/local-backup-service'
 import { LocalBackupConfigAdapter } from './contexts/localBackup/infrastructure/local-backup-config-adapter'
 
+// MCP context.
+import { McpApplicationService } from './contexts/mcp/application/mcp-application-service'
+import { MikroOrmMcpServerRepository } from './contexts/mcp/infrastructure/mikro-orm-mcp-server-repository'
+
+// Sync context (WebDAV E2EE).
+import { SyncApplicationService } from './contexts/sync/application/sync-application-service'
+import { MikroOrmSqlDatabase } from './contexts/sync/infrastructure/mikro-orm-sql-database'
+import { FetchWebDavClient } from './contexts/sync/infrastructure/fetch-webdav-client'
+import { KeychainMasterKeyStore } from './contexts/sync/infrastructure/keychain-master-key-store'
+import { SafeStorageSecretStore } from './contexts/sync/infrastructure/secret-store'
+import { defaultSsotRoot } from './contexts/skill/application/skill-application-service'
+
 /**
- * No-capability provider registry. The quota / credential capability layer is
- * not yet implemented (those contexts have no source here), so every platform
- * lookup returns undefined. ValidationService / AccountHealthService handle that
- * gracefully ("unsupported provider" / unknown_error), matching the account
- * manifest §5/§9 contract. Replace with the real registry when quota lands.
+ * Account capability-registry adapter (quota manifest §5b).
+ *
+ * The account context's `ProviderCapabilityRegistry` is a NARROWER, account-id-
+ * keyed shape than the quota context's `ProviderRegistry` (which is the
+ * capability-trait registry keyed by credential/payload). This adapter bridges
+ * the two: it implements the account interface on top of the credential
+ * `ValidationService` (envelope-aware validation) and the quota
+ * `QuotaApplicationService` (cache-first quota read), replacing the former
+ * NULL_PROVIDER_REGISTRY placeholder.
+ *
+ * Note: `buildCredentialRegistry()` does not yet register any
+ * CredentialValidationCapability, so `credentialValidation.validate()` returns
+ * `unsupported` for every provider today — i.e. account health/validation
+ * behaves exactly as it did with the null placeholder, but now flows through the
+ * real wired services (no hardcoded stub). When per-provider validation
+ * capabilities are ported into build-registry.ts they light up automatically,
+ * and health's quota leg (only reached when validation is `valid`) reads through
+ * the quota service.
  */
-const NULL_PROVIDER_REGISTRY: ProviderCapabilityRegistry = {
-  validation(): ValidationCapability | undefined {
-    return undefined
-  },
-  quota(): QuotaCapability | undefined {
-    return undefined
-  },
+function buildAccountCapabilityRegistry(
+  credentialValidation: CredentialValidationService,
+  quotaService: QuotaApplicationService,
+): ProviderCapabilityRegistry {
+  const validationCapability: ValidationCapability = {
+    async validate(accountId: string): Promise<AccountValidationResult> {
+      const result = await credentialValidation.validate(accountId)
+      return validationResultToJson(result)
+    },
+  }
+  const quotaCapability: QuotaCapability = {
+    async fetchQuota(accountId: string): Promise<AccountQuotaFetchResult> {
+      const info = await quotaService.getQuota(accountId)
+      return {
+        outcome: 'success',
+        source: 'live',
+        freshness: 'fresh',
+        fetched_at: info.fetchedAt.toISOString(),
+        models: info.models.map((m) => {
+          const model: AccountQuotaFetchResult['models'][number] = {
+            model_name: m.modelName,
+            used: m.used,
+            total: m.total,
+          }
+          if (m.resetAt !== undefined) model.reset_at = m.resetAt.toISOString()
+          return model
+        }),
+      }
+    },
+  }
+  return {
+    validation(): ValidationCapability | undefined {
+      return validationCapability
+    },
+    quota(): QuotaCapability | undefined {
+      return quotaCapability
+    },
+  }
 }
 
 /** Holds lifecycle-managed singletons that main.ts needs beyond the IPC services. */
@@ -95,10 +171,13 @@ export async function buildContainer(): Promise<Container> {
   const agentRegistry = buildAgentRegistry()
   const agents = new AgentRegistryService(agentRegistry)
 
-  // 4. Account context.
+  // 4. Account context (repos + crypto). The credential context owns the
+  //    authoritative credential store; its MikroOrmCredentialRepository implements
+  //    the account CredentialStorePort (and the quota QuotaCredentialStore), so it
+  //    replaces the deleted account TEMP MikroOrmCredentialStore.
   const accountRepo = new MikroOrmAccountRepository()
   const masterKey = await loadOrCreateMasterKey()
-  const credentialStore = new MikroOrmCredentialStore(new CryptoService(masterKey))
+  const credentialStore = new MikroOrmCredentialRepository(new CryptoService(masterKey))
   const injectorRegistry = new AgentCredentialInjectorRegistry()
   const switchService = new SwitchService(credentialStore, injectorRegistry)
   const account = new AccountApplicationService(accountRepo, credentialStore, switchService)
@@ -108,10 +187,43 @@ export async function buildContainer(): Promise<Container> {
     injectorRegistry,
   )
   const platformLookup = new RepositoryAccountPlatformLookup(accountRepo)
-  const accountValidation = new ValidationService(NULL_PROVIDER_REGISTRY, platformLookup)
+
+  // 4b. Credential context — OAuth / import / validation services. The
+  //     OAuthService uses the platform OAuth capabilities (loopback/poll/device)
+  //     registered in buildCredentialRegistry; validation reuses the credential
+  //     store's envelopes. credentialStore (above) doubles as its repository.
+  const credentialRegistry = buildCredentialRegistry()
+  const pendingOAuthRepo = new MikroOrmPendingOAuthRepository()
+  const pendingImportRepo = new MikroOrmPendingImportRepository()
+  void pendingImportRepo // reserved for the deep-link confirm flow (manifest §8)
+  const credentialOAuth = new OAuthService(credentialRegistry, pendingOAuthRepo)
+  const credentialImport = new ImportService(credentialRegistry)
+  const credentialValidation = new CredentialValidationService(credentialStore, credentialRegistry)
+
+  // 4c. Quota context — cache/state repos + live HTTP fetcher + application
+  //     service. Depends on the account repo + credential store built above.
+  const quotaCacheRepo = new MikroOrmQuotaCacheRepository()
+  const quotaStateRepo = new MikroOrmQuotaStateRepository()
+  const quotaFetcher = new HttpLiveQuotaFetcher()
+  const quotaService = new QuotaApplicationService(
+    accountRepo,
+    credentialStore,
+    quotaCacheRepo,
+    quotaStateRepo,
+    quotaFetcher,
+  )
+
+  // 4d. Account validation / health — wired to the REAL capability registry
+  //     (credential validator + quota service), replacing NULL_PROVIDER_REGISTRY
+  //     (quota manifest §5b).
+  const accountCapabilityRegistry = buildAccountCapabilityRegistry(
+    credentialValidation,
+    quotaService,
+  )
+  const accountValidation = new ValidationService(accountCapabilityRegistry, platformLookup)
   const accountHealth = new AccountHealthService(
     accountValidation,
-    NULL_PROVIDER_REGISTRY,
+    accountCapabilityRegistry,
     platformLookup,
   )
   const tokenRefreshScheduler = new TokenRefreshScheduler(accountValidation, accountRepo)
@@ -156,6 +268,30 @@ export async function buildContainer(): Promise<Container> {
     localBackupConfigAdapter,
   )
 
+  // 8. MCP context — server registry persisted in `mcp_servers`, synced to the
+  //    shared agents registry's per-agent config files.
+  const mcpRepo = new MikroOrmMcpServerRepository()
+  const mcp = new McpApplicationService(mcpRepo, agentRegistry)
+
+  // 9. Sync context (WebDAV E2EE). Exports/imports the whole SQLite DB + SSOT
+  //    skills via raw SQL; safeStorage-backed master-key + password stores under
+  //    appDataDir(). The KeychainMasterKeyStore reads/writes the SAME
+  //    master.key.enc that the crypto service uses, so a recovered key takes
+  //    effect after the app:relaunch that main triggers on needsRestart.
+  const sync = new SyncApplicationService({
+    settingsFile,
+    db: new MikroOrmSqlDatabase(),
+    client: new FetchWebDavClient(),
+    masterKeyStore: new KeychainMasterKeyStore(),
+    webdavPasswordStore: new SafeStorageSecretStore(
+      join(appDataDir(), 'secrets', 'webdav.password.enc'),
+    ),
+    syncPasswordStore: new SafeStorageSecretStore(
+      join(appDataDir(), 'secrets', 'sync.password.enc'),
+    ),
+    ssotRoot: defaultSsotRoot(),
+  })
+
   return {
     settings,
     agents,
@@ -163,6 +299,10 @@ export async function buildContainer(): Promise<Container> {
     accountSwitchOrchestrator,
     accountValidation,
     accountHealth,
+    credentialOAuth,
+    credentialImport,
+    credentialValidation,
+    quotaService,
     skillService,
     discoveryService,
     backupService,
@@ -170,6 +310,8 @@ export async function buildContainer(): Promise<Container> {
     usageSync,
     usageQuery,
     localBackup,
+    mcp,
+    sync,
     tokenRefreshScheduler,
   }
 }

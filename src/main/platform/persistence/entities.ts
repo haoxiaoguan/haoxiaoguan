@@ -7,20 +7,25 @@
 // to buildOrmConfig (see database.ts).
 //
 // Add a context's entity to ALL_ENTITIES when it lands. Currently registered:
-//   - account  (4 tables: accounts, account_tags, switch_history, credentials*)
-//   - skill    (3 tables: installed_skills, skill_repos, skill_backups)
-//   - usage    (3 tables: usage_records, usage_sync_state, usage_daily_rollups)
+//   - account     (3 tables: accounts, account_tags, switch_history)
+//   - credential  (3 tables: credentials, pending_oauth, pending_import)
+//   - skill       (3 tables: installed_skills, skill_repos, skill_backups)
+//   - usage       (3 tables: usage_records, usage_sync_state, usage_daily_rollups)
+//   - quota       (2 tables: quota_cache, account_quota_state)
+//   - mcp         (1 table: mcp_servers)
 //
-// (*) `credentials` is owned by the account context's TEMP CredentialRefEntity
-// until the credential context lands with its own entity (see account manifest
-// §2). The credential and quota contexts are not yet implemented, so their
-// tables (pending_oauth, pending_import, quota_cache, account_quota_state) have
-// no entities to register.
+// The `credentials` table is owned by the credential context's CredentialEntity
+// (it supersedes the account context's former TEMP CredentialRefEntity, now
+// deleted — see credential manifest §2). credentials FK → accounts ON DELETE
+// CASCADE, so the account entities must register before/with it (they do).
 
 import { AccountEntity } from '../../contexts/account/infrastructure/account.entity'
 import { AccountTagEntity } from '../../contexts/account/infrastructure/account-tag.entity'
 import { SwitchHistoryEntity } from '../../contexts/account/infrastructure/switch-history.entity'
-import { CredentialRefEntity } from '../../contexts/account/infrastructure/credential-ref.entity'
+
+import { CredentialEntity } from '../../contexts/credential/infrastructure/credential.entity'
+import { PendingOAuthEntity } from '../../contexts/credential/infrastructure/pending-oauth.entity'
+import { PendingImportEntity } from '../../contexts/credential/infrastructure/pending-import.entity'
 
 import { InstalledSkillEntity } from '../../contexts/skill/infrastructure/installed-skill.entity'
 import { SkillRepoEntity } from '../../contexts/skill/infrastructure/skill-repo.entity'
@@ -30,13 +35,21 @@ import { UsageRecordEntity } from '../../contexts/usage/infrastructure/usage-rec
 import { UsageSyncStateEntity } from '../../contexts/usage/infrastructure/usage-sync-state.entity'
 import { UsageDailyRollupEntity } from '../../contexts/usage/infrastructure/usage-daily-rollup.entity'
 
+import { QuotaCacheEntity } from '../../contexts/quota/infrastructure/quota-cache.entity'
+import { AccountQuotaStateEntity } from '../../contexts/quota/infrastructure/account-quota-state.entity'
+
+import { McpServerEntity } from '../../contexts/mcp/infrastructure/mcp-server.entity'
+
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
   // account context
   AccountEntity,
   AccountTagEntity,
   SwitchHistoryEntity,
-  CredentialRefEntity,
+  // credential context
+  CredentialEntity,
+  PendingOAuthEntity,
+  PendingImportEntity,
   // skill context
   InstalledSkillEntity,
   SkillRepoEntity,
@@ -45,4 +58,9 @@ export const ALL_ENTITIES: unknown[] = [
   UsageRecordEntity,
   UsageSyncStateEntity,
   UsageDailyRollupEntity,
+  // quota context
+  QuotaCacheEntity,
+  AccountQuotaStateEntity,
+  // mcp context
+  McpServerEntity,
 ]
