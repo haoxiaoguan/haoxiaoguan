@@ -1,4 +1,4 @@
-import pLimit from 'p-limit'
+import { createLimit } from '../../../platform/async/limit'
 import { AccountError } from '../domain/account-error'
 import type {
   AccountPlatformLookup,
@@ -18,7 +18,7 @@ export interface BatchValidationItem {
  *
  * Resolves the per-platform validation capability via the provider registry,
  * feeds the account through it, and returns a CredentialValidationResult.
- * Batch validation bounds concurrency (default 4) with a semaphore (p-limit),
+ * Batch validation bounds concurrency (default 4) with a semaphore (createLimit),
  * mirroring the source tokio Semaphore + FuturesUnordered.
  */
 export class ValidationService {
@@ -41,7 +41,7 @@ export class ValidationService {
 
   /** Bounded-concurrency batch validation; never rejects (per-item errors). */
   async validateBatch(accountIds: string[], concurrency: number): Promise<BatchValidationItem[]> {
-    const limit = pLimit(Math.max(1, concurrency))
+    const limit = createLimit(Math.max(1, concurrency))
     return Promise.all(
       accountIds.map((accountId) =>
         limit(async (): Promise<BatchValidationItem> => {

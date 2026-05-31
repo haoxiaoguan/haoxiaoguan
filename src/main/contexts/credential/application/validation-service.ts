@@ -1,4 +1,4 @@
-import pLimit from 'p-limit'
+import { createLimit } from '../../../platform/async/limit'
 import { CredentialError } from '../domain/credential-error'
 import {
   unsupportedNow,
@@ -18,7 +18,7 @@ import { platformFromAgentIdOrCursor } from '../../account/domain/platform-id'
 // error (the account has no credential to validate).
 //
 // validateBatch runs the per-account validations with bounded concurrency
-// (default 4, via p-limit), isolating per-account errors into the result array
+// (default 4, via createLimit), isolating per-account errors into the result array
 // exactly like the source (each item is either {account_id, result} or
 // {account_id, error}).
 
@@ -51,7 +51,7 @@ export class ValidationService {
     accountIds: string[],
     concurrency = 4,
   ): Promise<BatchValidationItem[]> {
-    const limit = pLimit(Math.max(1, concurrency))
+    const limit = createLimit(Math.max(1, concurrency))
     return Promise.all(
       accountIds.map((accountId) =>
         limit(async (): Promise<BatchValidationItem> => {

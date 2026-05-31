@@ -106,6 +106,16 @@ test('IPC round-trips through the bridge to real services + DB', async () => {
   )
   expect(Array.isArray(accounts)).toBe(true)
 
+  // credential:validateBatch -> exercises the inline concurrency limiter that
+  // replaced the pure-ESM p-limit (which threw "p_limit.default is not a
+  // function" under the CJS bytecode bundle). Empty input must resolve to [].
+  const batch = await window.evaluate(() =>
+    (window as unknown as {
+      api: { credential: { validateBatch(ids: string[], c?: number): Promise<unknown[]> } }
+    }).api.credential.validateBatch([], 4),
+  )
+  expect(Array.isArray(batch)).toBe(true)
+
   // ws:getWsStatus + toggle -> the newly-wired websocket context (P0)
   const wsFlow = await window.evaluate(async () => {
     const api = (window as unknown as {
