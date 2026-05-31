@@ -15,6 +15,8 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import type { McpServerRepository } from '../domain/mcp-server-repository'
 import { McpServer } from '../domain/mcp-server'
 import type { McpServerSpec } from '../domain/mcp-server'
@@ -332,8 +334,6 @@ export class McpApplicationService {
       }
     }
     // Fallback: inline which/where check
-    const { execFile } = await import('node:child_process')
-    const { promisify } = await import('node:util')
     const execFileAsync = promisify(execFile)
     const lookup = process.platform === 'win32' ? 'where' : 'which'
     try {

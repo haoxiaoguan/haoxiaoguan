@@ -14,6 +14,7 @@ import { SkillError } from '../domain/skill-error'
 import type { AgentId } from '../../../agents/domain/agent-id'
 import type { AgentRegistry } from '../../../agents/domain/agent-registry'
 import type { SkillsSync } from '../../../agents/domain/skills-sync'
+import { scanSkillsDir } from './skill-scan-helper'
 
 export interface SkillUninstallResult {
   removed_from_agents: string[]
@@ -158,7 +159,6 @@ export class SkillApplicationService {
     // Append ~/.agents/skills/ entries (unified standard dir), dedup by dir_name
     const unifiedDir = join(homedir(), '.agents', 'skills')
     try {
-      const { scanSkillsDir } = await import('./skill-scan-helper')
       const unifiedEntries = await scanSkillsDir(unifiedDir)
       const existing = new Set(entries.map((e) => e.dir_name))
       for (const entry of unifiedEntries) {

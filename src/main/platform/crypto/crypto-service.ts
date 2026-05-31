@@ -1,4 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { safeStorage } from 'electron'
+import { appDataDir } from '../persistence/paths'
 
 // AAD binds the ciphertext to its owning account. We use JSON bytes (NOT Rust
 // bincode) since there is no data-compat requirement — see spec §5.2.
@@ -52,13 +56,9 @@ export class CryptoService {
 }
 
 // Loads (or creates) the 32-byte master key, persisted with Electron safeStorage.
-// Imported lazily so this module stays unit-testable without Electron.
+// Static imports only: the bytecode (.cjsc) bundle has no dynamic-import callback,
+// so `await import(...)` throws ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING at runtime.
 export async function loadOrCreateMasterKey(): Promise<Buffer> {
-  const { safeStorage } = await import('electron')
-  const { readFile, writeFile, mkdir } = await import('node:fs/promises')
-  const { join } = await import('node:path')
-  const { appDataDir } = await import('../persistence/paths')
-
   const keyFile = join(appDataDir(), 'master.key.enc')
   try {
     const enc = await readFile(keyFile)

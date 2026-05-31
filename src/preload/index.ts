@@ -11,6 +11,7 @@ import {
   LOCAL_BACKUP_CHANNELS,
   MCP_CHANNELS,
   SYNC_CHANNELS,
+  WS_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi } from '../shared/api-types'
 
@@ -141,6 +142,10 @@ const api: HxgApi = {
     syncUpload: () => ipcRenderer.invoke(SYNC_CHANNELS.syncUpload),
     syncDownload: () => ipcRenderer.invoke(SYNC_CHANNELS.syncDownload),
     fetchRemoteInfo: () => ipcRenderer.invoke(SYNC_CHANNELS.fetchRemoteInfo),
+  },
+  ws: {
+    getWsStatus: () => ipcRenderer.invoke(WS_CHANNELS.getWsStatus),
+    toggleWs: (enabled) => ipcRenderer.invoke(WS_CHANNELS.toggleWs, { enabled }),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

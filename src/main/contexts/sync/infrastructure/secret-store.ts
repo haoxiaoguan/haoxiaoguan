@@ -1,5 +1,6 @@
 import { dirname } from 'node:path'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { safeStorage } from 'electron'
 
 // safeStorage-backed secret store — the Electron equivalent of the source
 // keychain password stores (modules/sync/infrastructure/{webdav,sync}_password_store.rs).
@@ -15,13 +16,12 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 // unit-testable without an Electron runtime.
 
 /**
- * Resolve Electron `safeStorage` if it is importable AND encryption is available;
- * otherwise null (degraded raw-utf8 mode). Imported lazily so this module loads
- * in a plain Node (vitest) process.
+ * Resolve Electron `safeStorage` if encryption is available; otherwise null
+ * (degraded raw-utf8 mode). Static import (bytecode-safe); under vitest the
+ * `electron` stub reports encryption unavailable, exercising the fallback.
  */
-export async function getSafeStorage(): Promise<typeof import('electron').safeStorage | null> {
+export function getSafeStorage(): typeof safeStorage | null {
   try {
-    const { safeStorage } = await import('electron')
     return safeStorage.isEncryptionAvailable() ? safeStorage : null
   } catch {
     return null
@@ -55,7 +55,7 @@ export class SafeStorageSecretStore implements SecretStore {
       // Missing file ⇒ unset (source maps keyring NoEntry → None).
       return null
     }
-    const ss = await getSafeStorage()
+    const ss = getSafeStorage()
     if (ss) {
       try {
         return ss.decryptString(buf)
@@ -69,7 +69,7 @@ export class SafeStorageSecretStore implements SecretStore {
 
   async set(value: string): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true })
-    const ss = await getSafeStorage()
+    const ss = getSafeStorage()
     if (ss) {
       await writeFile(this.filePath, ss.encryptString(value))
     } else {

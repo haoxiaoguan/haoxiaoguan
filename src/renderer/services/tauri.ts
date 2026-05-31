@@ -1,19 +1,9 @@
 /**
  * IPC service layer - wraps the Electron preload bridge for type safety and
- * error handling. (Migrated from Tauri `invoke` to `window.api.*`.)
+ * error handling. (Migrated from Tauri `invoke` to `window.api.*`.) All service
+ * groups now call the Electron `window.api.*` bridge directly.
  */
 import { bridge } from './bridge';
-
-/**
- * Generic invoke wrapper. Migration shim: every implemented context now calls
- * the Electron `window.api.*` bridge directly. The ONLY service still on this
- * throwing shim is `wsService` (get_ws_status / toggle_ws) — the websocket
- * context has not been built yet, so those two channels intentionally throw
- * "not yet migrated" until that context lands.
- */
-export const tauriInvoke = async <T>(_cmd: string, _args?: Record<string, unknown>): Promise<T> => {
-  throw new Error(`IPC command "${_cmd}" not yet migrated to the Electron bridge`);
-};
 
 // ============================================================================
 // Account Commands
@@ -108,10 +98,10 @@ export const settingsService = {
 
 export const wsService = {
   getWsStatus: () =>
-    tauriInvoke<WsStatus>('get_ws_status'),
+    bridge().ws.getWsStatus() as Promise<WsStatus>,
 
   toggleWs: (enabled: boolean) =>
-    tauriInvoke<void>('toggle_ws', { enabled }),
+    bridge().ws.toggleWs(enabled),
 };
 
 // ============================================================================

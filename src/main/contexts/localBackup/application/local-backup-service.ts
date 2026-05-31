@@ -10,6 +10,7 @@
 // not here — this service is pure use-case logic.
 
 import { BackupEntry } from '../domain/backup-entry'
+import { stat, access } from 'node:fs/promises'
 import { LocalBackupConfig } from '../domain/local-backup-config'
 import { BackupError } from '../domain/backup-error'
 import {
@@ -58,7 +59,6 @@ export class LocalBackupApplicationService {
     await vacuumInto(this.liveDbPath, targetPath)
 
     // Stat the new file to build the BackupEntry (mtime as createdAt).
-    const { stat } = await import('node:fs/promises')
     const meta = await stat(targetPath)
     const sizeBytes = meta.size
     const createdAt = Math.floor(meta.mtimeMs / 1000)
@@ -81,8 +81,6 @@ export class LocalBackupApplicationService {
    */
   async restoreBackup(filename: string): Promise<string> {
     validateFilename(filename)
-
-    const { access } = await import('node:fs/promises')
     const snapshotPath = `${this.backupDir}/${filename}`
     try {
       await access(snapshotPath)
@@ -145,7 +143,6 @@ export class LocalBackupApplicationService {
    * Mirrors Rust unique_filename using chrono::Local::now().
    */
   private async uniqueFilename(): Promise<string> {
-    const { access } = await import('node:fs/promises')
     const stamp = localTimestamp()
     const base = `db_backup_${stamp}`
     let candidate = `${base}.db`

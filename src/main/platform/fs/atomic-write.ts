@@ -1,4 +1,4 @@
-import { writeFile, rename, mkdir } from 'node:fs/promises'
+import { writeFile, rename, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 // Write to a .tmp sibling then rename. Atomic on POSIX within the same volume.
@@ -8,7 +8,6 @@ export async function atomicWrite(path: string, data: string | Buffer): Promise<
   const tmp = `${path}.tmp`
   await writeFile(tmp, data)
   if (process.platform === 'win32') {
-    const { rm } = await import('node:fs/promises')
     await rm(path, { force: true })
   }
   await rename(tmp, path)

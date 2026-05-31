@@ -48,3 +48,65 @@ test('app launches from bytecode and exposes the preload bridge', async () => {
   expect(apiShape.hasSystem).toBe(true)
   expect(apiShape.hasGetVersion).toBe(true)
 })
+
+test('IPC round-trips through the bridge to real services + DB', async () => {
+  app = await electron.launch({ args: ['out/main/main.cjs'] })
+  const window = await app.firstWindow()
+  await window.waitForLoadState('domcontentloaded')
+
+  // settings:getSettings -> SettingsApplicationService -> settings.json
+  const settings = await window.evaluate(() =>
+    (window as unknown as { api: { settings: { getSettings(): Promise<unknown> } } }).api.settings.getSettings(),
+  )
+  expect(settings).toMatchObject({
+    theme: expect.any(String),
+    language: expect.any(String),
+    wsPort: expect.any(Number),
+  })
+
+  // settings round-trip: update then read back (proves write -> disk -> read)
+  const updated = await window.evaluate(async () => {
+    const api = (window as unknown as {
+      api: { settings: { updateSettings(r: { settings: Record<string, string> }): Promise<void>; getSettings(): Promise<{ theme: string }> } }
+    }).api
+    await api.settings.updateSettings({ settings: { theme: 'dark' } })
+    return (await api.settings.getSettings()).theme
+  })
+  expect(updated).toBe('dark')
+
+  // system:getAppDirs -> real OS paths
+  const dirs = await window.evaluate(() =>
+    (window as unknown as { api: { system: { getAppDirs(): Promise<{ dataDir: string }> } } }).api.system.getAppDirs(),
+  )
+  expect(dirs.dataDir).toContain('haoxiaoguan')
+
+  // agent:listAgents -> the 17-adapter registry
+  const agents = await window.evaluate(() =>
+    (window as unknown as { api: { agent: { listAgents(): Promise<unknown[]> } } }).api.agent.listAgents(),
+  )
+  expect(Array.isArray(agents)).toBe(true)
+  expect((agents as unknown[]).length).toBe(17)
+
+  // account:getAccountsByPlatform -> MikroORM repo -> SQLite (proves DB schema
+  // was created and a real query runs end-to-end; empty DB returns [])
+  const accounts = await window.evaluate(() =>
+    (window as unknown as { api: { account: { getAccountsByPlatform(p: string): Promise<unknown[]> } } }).api.account.getAccountsByPlatform('cursor'),
+  )
+  expect(Array.isArray(accounts)).toBe(true)
+
+  // ws:getWsStatus + toggle -> the newly-wired websocket context (P0)
+  const wsFlow = await window.evaluate(async () => {
+    const api = (window as unknown as {
+      api: { ws: { getWsStatus(): Promise<{ running: boolean }>; toggleWs(e: boolean): Promise<void> } }
+    }).api
+    const before = await api.ws.getWsStatus()
+    await api.ws.toggleWs(true)
+    const afterOn = await api.ws.getWsStatus()
+    await api.ws.toggleWs(false)
+    const afterOff = await api.ws.getWsStatus()
+    return { before: before.running, afterOn: afterOn.running, afterOff: afterOff.running }
+  })
+  expect(wsFlow.before).toBe(false)
+  expect(wsFlow.afterOn).toBe(true)
+  expect(wsFlow.afterOff).toBe(false)
+})

@@ -88,6 +88,10 @@ import { KeychainMasterKeyStore } from './contexts/sync/infrastructure/keychain-
 import { SafeStorageSecretStore } from './contexts/sync/infrastructure/secret-store'
 import { defaultSsotRoot } from './contexts/skill/application/skill-application-service'
 
+// WebSocket push-server context.
+import { WsServer } from './platform/websocket/ws-server'
+import { WebSocketApplicationService } from './contexts/websocket/application/websocket-service'
+
 /**
  * Account capability-registry adapter (quota manifest §5b).
  *
@@ -292,6 +296,12 @@ export async function buildContainer(): Promise<Container> {
     ssotRoot: defaultSsotRoot(),
   })
 
+  // 10. WebSocket push-server context. Bound to the configured ws_port (source
+  //     default 9876). Not auto-started — the renderer toggles it via toggle_ws;
+  //     status reports 'stopped' until then.
+  const wsServer = new WsServer({ port: settings.getWsPort() })
+  const websocket = new WebSocketApplicationService(wsServer)
+
   return {
     settings,
     agents,
@@ -312,6 +322,7 @@ export async function buildContainer(): Promise<Container> {
     localBackup,
     mcp,
     sync,
+    websocket,
     tokenRefreshScheduler,
   }
 }

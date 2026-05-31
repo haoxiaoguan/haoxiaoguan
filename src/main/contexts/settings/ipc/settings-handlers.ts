@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, app } from 'electron'
 import { toIpcError } from '../../../ipc/error'
 import { SETTINGS_CHANNELS, SYSTEM_CHANNELS } from '../../../../shared/ipc-channels'
 import type { SettingsApplicationService, AppDirs } from '../application/settings-service'
@@ -44,7 +44,6 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
 
   ipcMain.handle(SETTINGS_CHANNELS.setAutostart, async (_e, enabled: boolean) => {
     try {
-      const { app } = await import('electron')
       app.setLoginItemSettings({ openAtLogin: enabled })
       await svc.updateSettings({ autostart: String(enabled) })
     } catch (e) {

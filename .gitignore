@@ -29,3 +29,7 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# Playwright
+test-results/
+playwright-report/

@@ -135,3 +135,10 @@ export const SYNC_CHANNELS = {
   syncDownload: 'webdav_sync_download',
   fetchRemoteInfo: 'webdav_fetch_remote_info',
 } as const
+
+// WebSocket push-server context. Source Tauri command names get_ws_status /
+// toggle_ws.
+export const WS_CHANNELS = {
+  getWsStatus: 'get_ws_status',
+  toggleWs: 'toggle_ws',
+} as const

@@ -37,6 +37,9 @@ import { registerMcpHandlers } from '../contexts/mcp/ipc/mcp-handlers'
 import type { SyncApplicationService } from '../contexts/sync/application/sync-application-service'
 import { registerSyncHandlers } from '../contexts/sync/ipc/sync-handlers'
 
+import type { WebSocketApplicationService } from '../contexts/websocket/application/websocket-service'
+import { registerWebSocketHandlers } from '../contexts/websocket/ipc/websocket-handlers'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
@@ -80,6 +83,9 @@ export interface Services {
 
   // sync context (WebDAV E2EE)
   sync: SyncApplicationService
+
+  // websocket push-server context
+  websocket: WebSocketApplicationService
 }
 
 // Each context contributes a register*Handlers function.
@@ -108,4 +114,5 @@ export function registerAllHandlers(services: Services): void {
   registerLocalBackupHandlers(services.localBackup)
   registerMcpHandlers(services.mcp)
   registerSyncHandlers(services.sync)
+  registerWebSocketHandlers(services.websocket)
 }

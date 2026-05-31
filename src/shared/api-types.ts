@@ -510,8 +510,18 @@ export interface HxgApi {
     syncDownload(): Promise<DownloadResult>
     fetchRemoteInfo(): Promise<RemoteInfo>
   }
+  ws: {
+    getWsStatus(): Promise<WsStatus>
+    toggleWs(enabled: boolean): Promise<void>
+  }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
+}
+
+export interface WsStatus {
+  running: boolean
+  port?: number
+  connectionCount: number
 }
 
 declare global {

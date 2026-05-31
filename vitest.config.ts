@@ -26,6 +26,9 @@ export default defineConfig({
     alias: {
       '@main': resolve(__dirname, 'src/main'),
       '@shared': resolve(__dirname, 'src/shared'),
+      // Main-process code imports `electron` statically (bytecode-safe). There is
+      // no Electron runtime under vitest, so alias it to a minimal stub.
+      electron: resolve(__dirname, 'tests/stubs/electron.ts'),
     },
   },
   test: {
