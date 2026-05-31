@@ -1,0 +1,27 @@
+{
+  "title": "Add Account",
+  "method": {
+    "oauth": "OAuth Sign-In",
+    "token_json": "Token/JSON",
+    "local_scan": "Local Import"
+  },
+  "step": {
+    "method_select": "Choose Import Method",
+    "oauth_pending": "Waiting for browser authorization…",
+    "collecting_input": "Provide Credential Details",
+    "reviewing": "Review",
+    "committing": "Saving…",
+    "completed": "Import succeeded",
+    "failed": "Import failed"
+  },
+  "review": {
+    "email": "Email",
+    "user_id": "User ID"
+  },
+  "actions": {
+    "open_browser": "Open Authorization",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  }
+}

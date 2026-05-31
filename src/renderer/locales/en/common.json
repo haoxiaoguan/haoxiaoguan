@@ -1,0 +1,15 @@
+{
+  "brand": {
+    "name": "Haoxiaoguan",
+    "tagline": "Multi-platform account assistant"
+  },
+  "sidebar": {
+    "toggle": "Toggle sidebar"
+  },
+  "user": {
+    "menu": {
+      "preferences": "Preferences",
+      "stats": "Quick stats"
+    }
+  }
+}

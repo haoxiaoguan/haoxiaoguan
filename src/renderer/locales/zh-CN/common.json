@@ -1,0 +1,15 @@
+{
+  "brand": {
+    "name": "号小管",
+    "tagline": "多平台账号助手"
+  },
+  "sidebar": {
+    "toggle": "切换侧边栏"
+  },
+  "user": {
+    "menu": {
+      "preferences": "偏好设置",
+      "stats": "用量速览"
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "dashboard": "仪表盘",
+  "accounts": "账号管理",
+  "skills": "Skills 管理",
+  "mcp": "MCP 服务",
+  "analytics": "数据统计",
+  "settings": {
+    "back": "返回",
+    "menu": {
+      "general": "通用",
+      "agent": "Agent",
+      "sync": "同步与备份",
+      "advanced": "高级",
+      "about": "关于"
+    }
+  },
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "switchToLight": "切换到浅色主题",
+    "switchToDark": "切换到深色主题"
+  },
+  "shell": {
+    "support": "支持",
+    "docs": "文档",
+    "notifications": "通知",
+    "faq": {
+      "title": "常见问题",
+      "more": "查看更多",
+      "items": [
+        "新用户如何授权账号？",
+        "提示<系统短暂异常，请稍后再试。>",
+        "哔哩哔哩-Open 为什么授权不了新账号？",
+        "如何授权海外平台<YouTube>？",
+        "如何授权海外平台<TikTok>？"
+      ]
+    },
+    "support_panel": {
+      "title": "加入社群",
+      "desc": "扫码加入交流群，获取使用帮助与最新动态。",
+      "wechat": "微信群",
+      "qq": "QQ 群"
+    },
+    "notify": {
+      "title": "通知",
+      "more": "查看更多",
+      "empty": "暂无通知",
+      "items": [
+        {
+          "title": "号小管 v0.2.0 已发布",
+          "time": "2 小时前",
+          "unread": true
+        },
+        {
+          "title": "新增 Skill 仓库管理功能",
+          "time": "1 天前",
+          "unread": true
+        },
+        {
+          "title": "支持自定义主题色",
+          "time": "3 天前",
+          "unread": false
+        }
+      ]
+    }
+  }
+}

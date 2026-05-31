@@ -1,0 +1,67 @@
+{
+  "dashboard": "Dashboard",
+  "accounts": "Accounts",
+  "skills": "Skills",
+  "mcp": "MCP",
+  "analytics": "Analytics",
+  "settings": {
+    "back": "Back",
+    "menu": {
+      "general": "General",
+      "agent": "Agent",
+      "sync": "Sync & Backup",
+      "advanced": "Advanced",
+      "about": "About"
+    }
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme"
+  },
+  "shell": {
+    "support": "Support",
+    "docs": "Docs",
+    "notifications": "Notifications",
+    "faq": {
+      "title": "FAQ",
+      "more": "View more",
+      "items": [
+        "How do new users authorize an account?",
+        "Error <System temporarily unavailable, please retry later.>",
+        "Why can't Bilibili-Open authorize a new account?",
+        "How to authorize overseas platform <YouTube>?",
+        "How to authorize overseas platform <TikTok>?"
+      ]
+    },
+    "support_panel": {
+      "title": "Join the community",
+      "desc": "Scan to join our group for help and updates.",
+      "wechat": "WeChat Group",
+      "qq": "QQ Group"
+    },
+    "notify": {
+      "title": "Notifications",
+      "more": "View more",
+      "empty": "No notifications",
+      "items": [
+        {
+          "title": "Haoxiaoguan v0.2.0 released",
+          "time": "2h ago",
+          "unread": true
+        },
+        {
+          "title": "Added Skill repo management",
+          "time": "1d ago",
+          "unread": true
+        },
+        {
+          "title": "Custom accent color supported",
+          "time": "3d ago",
+          "unread": false
+        }
+      ]
+    }
+  }
+}

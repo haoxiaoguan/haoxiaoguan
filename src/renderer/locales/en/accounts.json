@@ -1,0 +1,138 @@
+{
+  "title": "Accounts",
+  "subtitle": "Multi-platform account orchestration & quota monitoring",
+  "import": "Import",
+  "refresh": "Refresh",
+  "refreshing": "Refreshing…",
+  "search": {
+    "placeholder": "Search accounts / email / tags"
+  },
+  "view": {
+    "card": "Cards",
+    "list": "List"
+  },
+  "kpi": {
+    "total": "Total",
+    "totalHint": "across {{count}} platforms",
+    "healthy": "Healthy",
+    "healthyHint": "vs yesterday {{delta}}",
+    "warning": "Issues",
+    "warningHint": "needs attention",
+    "platforms": "Platforms",
+    "platformsHint": "of {{count}} total",
+    "deltaSame": "no change"
+  },
+  "status": {
+    "all": "All",
+    "healthy": "Healthy",
+    "warning": "Issues",
+    "pending": "Pending"
+  },
+  "filter": {
+    "platform": "Platform",
+    "tags": "Tags",
+    "all": "All",
+    "allPlatforms": "All platforms",
+    "allTags": "All tags"
+  },
+  "card": {
+    "lastUsed": "Last used",
+    "tagsNone": "No tags",
+    "quotaTitle": "Quota usage",
+    "quotaEmpty": "Not fetched",
+    "active": "Active"
+  },
+  "list": {
+    "header": {
+      "account": "Account",
+      "status": "Status / Quota",
+      "lastUsed": "Last used",
+      "actions": "Actions"
+    },
+    "pageInfo": "Page {{page}} / {{total}} · {{count}} items",
+    "prev": "Prev",
+    "next": "Next",
+    "neverUsed": "Never"
+  },
+  "detail": {
+    "title": "Account detail",
+    "subtitle": "View and manage selected account",
+    "empty": "Select an account to view details",
+    "section": {
+      "basic": "Basic",
+      "health": "Health & Quota",
+      "platform": "Platform detail · {{platform}}",
+      "history": "Switch history"
+    },
+    "field": {
+      "identity": "Platform identity",
+      "identityKey": "Identity key",
+      "email": "Email",
+      "loginProvider": "Login provider",
+      "plan": "Plan",
+      "status": "Platform status",
+      "platform": "Platform",
+      "createdAt": "Created at",
+      "lastUsedAt": "Last used",
+      "tags": "Tags"
+    },
+    "history": {
+      "empty": "No switch history",
+      "closeProcess": "Close process",
+      "injectCredential": "Inject credential",
+      "launchIde": "Launch IDE",
+      "success": "Success",
+      "manual": "Manual",
+      "auto": "Auto",
+      "websocket": "WebSocket"
+    }
+  },
+  "actions": {
+    "switch": "Switch",
+    "switching": "Switching…",
+    "delete": "Delete",
+    "history": "History",
+    "refresh": "Refresh",
+    "export": "Export",
+    "viewDetail": "Detail",
+    "batchDelete": "Delete selected",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect",
+    "selected": "{{count}} selected",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "switchSuccess": "Switched",
+  "switchFailed": "Switch failed",
+  "refreshSuccess": "Refreshed",
+  "refreshFailed": "Refresh failed",
+  "refreshFailedCount": "{{failed}}/{{total}} accounts failed to refresh",
+  "importSuccess": "Imported",
+  "importFailed": "Import failed",
+  "confirmDelete": "Delete account?",
+  "confirmDeleteMsg": "This account will be removed permanently.",
+  "confirmBatchDeleteMsg": "Delete {{count}} accounts? This cannot be undone.",
+  "empty": {
+    "title": "No accounts yet",
+    "subtitle": "Import an account to start managing credentials",
+    "noMatch": "No accounts match the filters"
+  },
+  "health": {
+    "valid": "Valid",
+    "expired": "Expired",
+    "revoked": "Revoked",
+    "rate_limited": "Rate Limited",
+    "network_error": "Network Error",
+    "unknown_error": "Unknown",
+    "unsupported": "Unsupported",
+    "pending": "Pending"
+  },
+  "quota": {
+    "outcome": {
+      "success": "Live",
+      "unsupported": "Unsupported",
+      "stale": "Cached",
+      "failed": "Failed"
+    }
+  }
+}

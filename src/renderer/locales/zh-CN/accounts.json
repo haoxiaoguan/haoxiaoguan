@@ -1,0 +1,138 @@
+{
+  "title": "账号管理",
+  "subtitle": "多平台账号编排与配额监控",
+  "import": "导入账号",
+  "refresh": "刷新",
+  "refreshing": "刷新中…",
+  "search": {
+    "placeholder": "搜索账号 / 邮箱 / 标签"
+  },
+  "view": {
+    "card": "卡片",
+    "list": "列表"
+  },
+  "kpi": {
+    "total": "账号总数",
+    "totalHint": "覆盖 {{count}} 个平台",
+    "healthy": "健康账号",
+    "healthyHint": "较昨日 {{delta}}",
+    "warning": "异常账号",
+    "warningHint": "需要关注",
+    "platforms": "平台覆盖",
+    "platformsHint": "共 {{count}} 个平台",
+    "deltaSame": "持平"
+  },
+  "status": {
+    "all": "全部",
+    "healthy": "正常",
+    "warning": "异常",
+    "pending": "等待校验"
+  },
+  "filter": {
+    "platform": "平台",
+    "tags": "标签",
+    "all": "全部",
+    "allPlatforms": "所有平台",
+    "allTags": "所有标签"
+  },
+  "card": {
+    "lastUsed": "最近使用",
+    "tagsNone": "暂无标签",
+    "quotaTitle": "配额使用",
+    "quotaEmpty": "暂未拉取",
+    "active": "当前活跃"
+  },
+  "list": {
+    "header": {
+      "account": "账号",
+      "status": "状态 / 配额",
+      "lastUsed": "最近使用",
+      "actions": "操作"
+    },
+    "pageInfo": "第 {{page}} / {{total}} 页 · 共 {{count}} 条",
+    "prev": "上一页",
+    "next": "下一页",
+    "neverUsed": "从未使用"
+  },
+  "detail": {
+    "title": "账号详情",
+    "subtitle": "查看与管理选中账号",
+    "empty": "选择一个账号以查看详情",
+    "section": {
+      "basic": "基本信息",
+      "health": "健康与配额",
+      "platform": "平台详情 · {{platform}}",
+      "history": "切换记录"
+    },
+    "field": {
+      "identity": "平台身份",
+      "identityKey": "身份键",
+      "email": "邮箱",
+      "loginProvider": "登录来源",
+      "plan": "套餐",
+      "status": "平台状态",
+      "platform": "平台",
+      "createdAt": "创建时间",
+      "lastUsedAt": "最近使用",
+      "tags": "标签"
+    },
+    "history": {
+      "empty": "暂无切换记录",
+      "closeProcess": "关闭进程",
+      "injectCredential": "注入凭据",
+      "launchIde": "启动 IDE",
+      "success": "成功",
+      "manual": "手动",
+      "auto": "自动",
+      "websocket": "WebSocket"
+    }
+  },
+  "actions": {
+    "switch": "切换",
+    "switching": "切换中…",
+    "delete": "删除",
+    "history": "历史",
+    "refresh": "刷新",
+    "export": "导出",
+    "viewDetail": "查看详情",
+    "batchDelete": "批量删除",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "selected": "已选 {{count}} 个",
+    "active": "活跃",
+    "inactive": "未激活"
+  },
+  "switchSuccess": "切换成功",
+  "switchFailed": "切换失败",
+  "refreshSuccess": "刷新成功",
+  "refreshFailed": "刷新失败",
+  "refreshFailedCount": "{{failed}}/{{total}} 个账号刷新失败",
+  "importSuccess": "导入成功",
+  "importFailed": "导入失败",
+  "confirmDelete": "确认删除",
+  "confirmDeleteMsg": "确定要删除此账号吗？此操作不可撤销。",
+  "confirmBatchDeleteMsg": "确定要删除 {{count}} 个账号吗？此操作不可撤销。",
+  "empty": {
+    "title": "还没有账号",
+    "subtitle": "导入一个账号开始管理多平台凭证",
+    "noMatch": "没有符合筛选条件的账号"
+  },
+  "health": {
+    "valid": "正常",
+    "expired": "已过期",
+    "revoked": "已撤销",
+    "rate_limited": "限流中",
+    "network_error": "网络错误",
+    "unknown_error": "未知错误",
+    "unsupported": "未支持",
+    "pending": "等待校验"
+  },
+  "quota": {
+    "outcome": {
+      "success": "已获取",
+      "unsupported": "未支持",
+      "stale": "缓存数据",
+      "failed": "获取失败"
+    }
+  }
+}

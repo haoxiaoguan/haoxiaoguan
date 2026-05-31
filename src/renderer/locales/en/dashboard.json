@@ -1,0 +1,37 @@
+{
+  "title": "Dashboard",
+  "subtitle": "Real-time account overview across platforms",
+  "kpis": {
+    "accounts": "Accounts",
+    "mcp": "MCP Servers",
+    "skills": "Skills",
+    "comingSoon": "Coming soon",
+    "platformsUnit": "Platforms"
+  },
+  "activeAccount": {
+    "title": "Active account",
+    "empty": "No active account",
+    "switch": "Switch account",
+    "fiveHour": "5h quota",
+    "weekly": "Weekly quota",
+    "resetAt": "Resets {{time}}"
+  },
+  "health": {
+    "title": "Data health",
+    "ok": "Healthy",
+    "missing": "Missing",
+    "syncError": "Sync error",
+    "openFolder": "Open data folder",
+    "stores": {
+      "accounts": "Accounts store",
+      "platforms": "Platforms registry"
+    }
+  },
+  "trend": {
+    "title": "Activity trend",
+    "less": "Less",
+    "more": "More",
+    "rangeWeek": "Week",
+    "rangeYear": "Year"
+  }
+}

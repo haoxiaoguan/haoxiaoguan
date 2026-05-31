@@ -1,0 +1,27 @@
+{
+  "title": "添加账号",
+  "method": {
+    "oauth": "OAuth 登录",
+    "token_json": "Token/JSON",
+    "local_scan": "本地导入"
+  },
+  "step": {
+    "method_select": "选择导入方式",
+    "oauth_pending": "等待浏览器授权完成…",
+    "collecting_input": "填写凭证信息",
+    "reviewing": "确认信息",
+    "committing": "正在保存…",
+    "completed": "导入成功",
+    "failed": "导入失败"
+  },
+  "review": {
+    "email": "邮箱",
+    "user_id": "用户 ID"
+  },
+  "actions": {
+    "open_browser": "打开授权页",
+    "retry": "重试",
+    "cancel": "取消",
+    "confirm": "确认导入"
+  }
+}

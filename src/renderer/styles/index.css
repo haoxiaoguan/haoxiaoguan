@@ -1,0 +1,257 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 颜色：基础 */
+    --background: 240 4% 97.6%;
+    --foreground: 0 0% 6.7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6.7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6.7%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 93%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 94%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 0% / 0.04;
+    --accent-foreground: 0 0% 6.7%;
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 217 91% 60%;
+    --radius: 1rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 60%;
+
+    /* 业务 token */
+    --accent-color: 217 91% 60%;
+    --tooltip: 0 0% 6.7%;
+    --tooltip-foreground: 0 0% 100%;
+    /* 半透明深色版（参考截图 2，AiMaMi 风格）：用于 sidebar 悬浮提示等场景 */
+    --tooltip-translucent: 0 0% 0% / 0.78;
+    --tooltip-translucent-foreground: 0 0% 100%;
+    --heatmap-color: 145 76% 58%;
+    --heatmap-empty: 240 5% 94% / 0.6;
+
+    /* Brand 渐变 */
+    --brand-from: 233 100% 68%;
+    --brand-to: 230 100% 63%;
+
+    /* 阴影色（供 shadow-bento 等组合用） */
+    --shadow-bento-color: 0 0% 0% / 0.45;
+    --shadow-bento-light-color: 0 0% 0% / 0.07;
+    --shadow-bento-inner-color: 0 0% 100% / 0.04;
+
+    /* 滚动条 */
+    --scrollbar-size: 8px;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: 0 0% 89.8%;
+    --scrollbar-thumb-hover: 0 0% 40%;
+
+    /* Magic UI RainbowButton */
+    --color-1: 0 100% 63%;
+    --color-2: 270 100% 63%;
+    --color-3: 210 100% 63%;
+    --color-4: 195 100% 63%;
+    --color-5: 90 100% 63%;
+  }
+
+  .dark {
+    --background: 240 10% 6%;
+    --foreground: 240 20% 96%;
+    --card: 240 8% 11%;
+    --card-foreground: 240 20% 96%;
+    --popover: 240 8% 11%;
+    --popover-foreground: 240 20% 96%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 100% / 0.05;
+    --secondary-foreground: 240 20% 96%;
+    --muted: 240 5% 8%;
+    --muted-foreground: 0 0% 63%;
+    --accent: 0 0% 100% / 0.04;
+    --accent-foreground: 240 20% 96%;
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 2.17% 18.04%;
+    --input: 60 2.17% 18.04%;
+    --ring: 217 91% 60%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217 91% 60%;
+
+    --accent-color: 217 91% 60%;
+    --tooltip: 240 20% 96%;
+    --tooltip-foreground: 0 0% 6.7%;
+    /* 暗黑模式下，悬浮提示用更亮的半透明灰色，避免在深色侧栏上糊成黑块 */
+    --tooltip-translucent: 0 0% 100% / 0.92;
+    --tooltip-translucent-foreground: 240 10% 6%;
+    --heatmap-color: 145 76% 58%;
+    --heatmap-empty: 240 5% 8% / 0.6;
+
+    --brand-from: 233 100% 68%;
+    --brand-to: 230 100% 63%;
+
+    --shadow-bento-color: 0 0% 0% / 0.45;
+    --shadow-bento-light-color: 0 0% 0% / 0.07;
+    --shadow-bento-inner-color: 0 0% 100% / 0.04;
+
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: 60 2.17% 18.04%;
+    --scrollbar-thumb-hover: 0 0% 63%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+*[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+[data-tauri-no-drag],
+[data-tauri-drag-region] .no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Scrollbar：Tauri 三引擎统一 */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: calc(var(--scrollbar-size) / 2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover));
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox dev fallback */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) var(--scrollbar-track);
+}
+
+main {
+  scrollbar-gutter: stable;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+@layer components {
+  .accounts-card-region {
+    container-type: inline-size;
+    width: 100%;
+  }
+
+  .accounts-card-grid {
+    --accounts-card-gap: 0.75rem;
+    --accounts-card-min: 22.5rem;
+
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--accounts-card-min)), 1fr));
+    gap: var(--accounts-card-gap);
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/* Glow Card V2 — aurora effect driven by CSS variables */
+.glow-card-aurora {
+  background: radial-gradient(
+    ellipse at 30% 40%,
+    var(--g2-glow-strong) 0%,
+    var(--g2-glow-mid) 35%,
+    transparent 70%
+  );
+}
+.glow-card-edge {
+  background: radial-gradient(
+    ellipse at center,
+    var(--g2-glow-edge) 0%,
+    transparent 70%
+  );
+}
+
+/* Magic UI ShineBorder */
+@keyframes shine {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-shine-border] {
+    animation: none !important;
+  }
+}
+
+/* Magic UI animated-gradient-text */
+@keyframes gradient {
+  to {
+    background-position: var(--bg-size, 300%) 0;
+  }
+}
+
+.animate-gradient {
+  animation: gradient 8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient {
+    animation: none !important;
+  }
+}
