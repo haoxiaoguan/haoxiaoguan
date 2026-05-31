@@ -10,11 +10,11 @@ import type { AgentClient, Capability, SessionLogReader } from '../shared/sessio
 import type { UsageMetricsBatch, UsageCursor } from '../../contexts/usage/domain/usage-record'
 import { UsageRecord } from '../../contexts/usage/domain/usage-record'
 import {
-  collectMatchingFiles,
-  fileUpdatedAt,
+  collectMatchingFilesAsync,
+  fileUpdatedAtAsync,
   parseRfc3339Timestamp,
   rawHash,
-  readText,
+  readTextAsync,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -31,13 +31,14 @@ class GeminiCliSessionLogReader implements SessionLogReader {
   }
 
   async readUsageMetrics(_cursor: UsageCursor | null): Promise<UsageMetricsBatch> {
-    const files = collectMatchingFiles(this.logsRoot, true, isGeminiSessionFile)
+    const files = await collectMatchingFilesAsync(this.logsRoot, true, isGeminiSessionFile)
     const records: UsageRecord[] = []
 
-    for (const filePath of files) {
+    for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+      const filePath = files[fileIndex]
       let raw: string
       try {
-        raw = readText(filePath)
+        raw = await readTextAsync(filePath)
       } catch {
         continue
       }
@@ -52,7 +53,7 @@ class GeminiCliSessionLogReader implements SessionLogReader {
       for (let index = 0; index < events.length; index++) {
         const event = events[index]
         const tsStr: string | undefined = event?.timestamp
-        const occurredAt = tsStr ? parseRfc3339Timestamp(tsStr) : fileUpdatedAt(filePath, 0)
+        const occurredAt = tsStr ? parseRfc3339Timestamp(tsStr) : await fileUpdatedAtAsync(filePath, 0)
 
         const outputTokens =
           (event?.tokens?.output ?? 0) + (event?.tokens?.thoughts ?? 0)
@@ -71,10 +72,14 @@ class GeminiCliSessionLogReader implements SessionLogReader {
             cacheReadTokens: event?.tokens?.cached ?? 0,
             cacheCreationTokens: 0,
             occurredAt,
-            rawUpdatedAt: fileUpdatedAt(filePath, occurredAt),
+            rawUpdatedAt: await fileUpdatedAtAsync(filePath, occurredAt),
             rawHash: rawHash(raw),
           }),
         )
+      }
+
+      if ((fileIndex + 1) % 16 === 0) {
+        await new Promise((r) => setImmediate(r))
       }
     }
 

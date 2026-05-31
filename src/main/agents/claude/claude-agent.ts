@@ -8,12 +8,12 @@ import type { AgentClient, Capability, SessionLogReader } from '../shared/sessio
 import type { UsageMetricsBatch, UsageCursor } from '../../contexts/usage/domain/usage-record'
 import { UsageRecord } from '../../contexts/usage/domain/usage-record'
 import {
-  collectMatchingFiles,
-  fileUpdatedAt,
+  collectMatchingFilesAsync,
+  fileUpdatedAtAsync,
   isJsonlFile,
   parseRfc3339Timestamp,
   rawHash,
-  readJsonLines,
+  readJsonLinesAsync,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -25,11 +25,12 @@ class ClaudeSessionLogReader implements SessionLogReader {
   }
 
   async readUsageMetrics(_cursor: UsageCursor | null): Promise<UsageMetricsBatch> {
-    const files = collectMatchingFiles(this.logsRoot, true, isJsonlFile)
+    const files = await collectMatchingFilesAsync(this.logsRoot, true, isJsonlFile)
     const records: UsageRecord[] = []
 
+    let _i = 0
     for (const filePath of files) {
-      const lines = readJsonLines(filePath)
+      const lines = await readJsonLinesAsync(filePath)
       for (const [index, raw] of lines) {
         let value: Record<string, any>
         try {
@@ -41,7 +42,7 @@ class ClaudeSessionLogReader implements SessionLogReader {
         if (!hasUsageTokens(usage)) continue
 
         const tsStr: string | undefined = value?.timestamp
-        const occurredAt = tsStr ? parseRfc3339Timestamp(tsStr) : fileUpdatedAt(filePath, 0)
+        const occurredAt = tsStr ? parseRfc3339Timestamp(tsStr) : await fileUpdatedAtAsync(filePath, 0)
 
         records.push(
           UsageRecord.create({
@@ -57,11 +58,12 @@ class ClaudeSessionLogReader implements SessionLogReader {
             cacheReadTokens: usage?.cache_read_input_tokens ?? 0,
             cacheCreationTokens: usage?.cache_creation_input_tokens ?? 0,
             occurredAt,
-            rawUpdatedAt: fileUpdatedAt(filePath, occurredAt),
+            rawUpdatedAt: await fileUpdatedAtAsync(filePath, occurredAt),
             rawHash: rawHash(raw),
           }),
         )
       }
+      if (++_i % 16 === 0) await new Promise((r) => setImmediate(r))
     }
 
     return { records, nextCursor: { sourcePath: '', lastOffset: 0, lastModifiedNs: 0 } }

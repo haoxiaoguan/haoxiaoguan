@@ -43,24 +43,44 @@ export class MikroOrmUsageRecordRepository implements UsageRecordRepository {
         raw_hash = excluded.raw_hash
     `
 
-    for (const r of records) {
-      await conn.execute(sql, [
-        r.agentId,
-        r.sourceKind,
-        r.sourcePath,
-        r.sourceEventId,
-        r.sessionId ?? null,
-        r.model,
-        r.providerName ?? null,
-        r.inputTokens,
-        r.outputTokens,
-        r.cacheReadTokens,
-        r.cacheCreationTokens,
-        r.occurredAt,
-        r.rawUpdatedAt,
-        r.rawHash,
-        nowUnix,
-      ])
+    // Insert in chunked transactions. better-sqlite3 is synchronous per call, so
+    // we (a) wrap each chunk in a transaction — one fsync per chunk instead of
+    // per row, a large speedup — and (b) yield to the event loop between chunks
+    // so the main process stays responsive to IPC during a big sync (no UI
+    // freeze when scanning thousands of records).
+    const CHUNK = 200
+    const params = (r: UsageRecord): unknown[] => [
+      r.agentId,
+      r.sourceKind,
+      r.sourcePath,
+      r.sourceEventId,
+      r.sessionId ?? null,
+      r.model,
+      r.providerName ?? null,
+      r.inputTokens,
+      r.outputTokens,
+      r.cacheReadTokens,
+      r.cacheCreationTokens,
+      r.occurredAt,
+      r.rawUpdatedAt,
+      r.rawHash,
+      nowUnix,
+    ]
+
+    for (let i = 0; i < records.length; i += CHUNK) {
+      const chunk = records.slice(i, i + CHUNK)
+      await conn.execute('BEGIN')
+      try {
+        for (const r of chunk) {
+          await conn.execute(sql, params(r))
+        }
+        await conn.execute('COMMIT')
+      } catch (e) {
+        await conn.execute('ROLLBACK')
+        throw e
+      }
+      // Yield so queued IPC handlers can run between chunks.
+      await new Promise((resolve) => setImmediate(resolve))
     }
 
     return records.length

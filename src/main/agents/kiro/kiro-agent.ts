@@ -10,10 +10,10 @@ import type { AgentClient, Capability, SessionLogReader } from '../shared/sessio
 import type { UsageMetricsBatch, UsageCursor } from '../../contexts/usage/domain/usage-record'
 import { UsageRecord } from '../../contexts/usage/domain/usage-record'
 import {
-  fileUpdatedAt,
+  fileUpdatedAtAsync,
   parseRfc3339Timestamp,
   rawHash,
-  readJsonLines,
+  readJsonLinesAsync,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -35,9 +35,9 @@ class KiroSessionLogReader implements SessionLogReader {
       return { records: [], nextCursor: { sourcePath: '', lastOffset: 0, lastModifiedNs: 0 } }
     }
 
-    const lines = readJsonLines(filePath)
+    const lines = await readJsonLinesAsync(filePath)
     const records: UsageRecord[] = []
-    const fallbackTimestamp = fileUpdatedAt(filePath, 0)
+    const fallbackTimestamp = await fileUpdatedAtAsync(filePath, 0)
 
     for (const [index, raw] of lines) {
       let value: Record<string, any>
@@ -63,7 +63,7 @@ class KiroSessionLogReader implements SessionLogReader {
           cacheReadTokens: 0,
           cacheCreationTokens: 0,
           occurredAt,
-          rawUpdatedAt: fileUpdatedAt(filePath, occurredAt),
+          rawUpdatedAt: await fileUpdatedAtAsync(filePath, occurredAt),
           rawHash: rawHash(raw),
         }),
       )

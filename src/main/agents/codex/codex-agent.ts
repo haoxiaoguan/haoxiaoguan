@@ -10,12 +10,12 @@ import type { AgentClient, Capability, SessionLogReader } from '../shared/sessio
 import type { UsageMetricsBatch, UsageCursor } from '../../contexts/usage/domain/usage-record'
 import { UsageRecord } from '../../contexts/usage/domain/usage-record'
 import {
-  collectMatchingFiles,
-  fileUpdatedAt,
+  collectMatchingFilesAsync,
+  fileUpdatedAtAsync,
   isJsonlFile,
   parseRfc3339Timestamp,
   rawHash,
-  readJsonLines,
+  readJsonLinesAsync,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -31,14 +31,15 @@ class CodexSessionLogReader implements SessionLogReader {
     const archivedDir = join(this.logsRoot, 'archived_sessions')
 
     const files: string[] = []
-    files.push(...collectMatchingFiles(sessionsDir, true, isJsonlFile))
-    files.push(...collectMatchingFiles(archivedDir, false, isJsonlFile))
+    files.push(...(await collectMatchingFilesAsync(sessionsDir, true, isJsonlFile)))
+    files.push(...(await collectMatchingFilesAsync(archivedDir, false, isJsonlFile)))
     files.sort()
 
     const records: UsageRecord[] = []
 
-    for (const filePath of files) {
-      const lines = readJsonLines(filePath)
+    for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
+      const filePath = files[fileIdx]
+      const lines = await readJsonLinesAsync(filePath)
       // Delta-encoding state per file
       let prevIn = 0
       let prevOut = 0
@@ -73,7 +74,9 @@ class CodexSessionLogReader implements SessionLogReader {
         if (dIn === 0 && dOut === 0 && dCr === 0 && dCc === 0) continue
 
         const tsStr: string | undefined = value?.timestamp
-        const occurredAt = tsStr ? parseRfc3339Timestamp(tsStr) : fileUpdatedAt(filePath, 0)
+        const occurredAt = tsStr
+          ? parseRfc3339Timestamp(tsStr)
+          : await fileUpdatedAtAsync(filePath, 0)
 
         records.push(
           UsageRecord.create({
@@ -89,10 +92,15 @@ class CodexSessionLogReader implements SessionLogReader {
             cacheReadTokens: dCr,
             cacheCreationTokens: dCc,
             occurredAt,
-            rawUpdatedAt: fileUpdatedAt(filePath, occurredAt),
+            rawUpdatedAt: await fileUpdatedAtAsync(filePath, occurredAt),
             rawHash: rawHash(raw),
           }),
         )
+      }
+
+      // Yield to the event loop every 16 files to avoid blocking the Electron main process
+      if ((fileIdx + 1) % 16 === 0) {
+        await new Promise((r) => setImmediate(r))
       }
     }
 

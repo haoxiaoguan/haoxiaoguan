@@ -5,7 +5,10 @@ import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
 
-app.setPath('userData', appDataDir())
+// userData location. Tests set HXG_USER_DATA_DIR to an isolated temp dir so
+// parallel/sequential e2e launches don't share a SingletonLock or DB. In
+// production it defaults to the real per-OS app data dir.
+app.setPath('userData', process.env.HXG_USER_DATA_DIR || appDataDir())
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null

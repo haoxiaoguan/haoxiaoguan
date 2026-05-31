@@ -10,11 +10,11 @@ import type { AgentClient, Capability, SessionLogReader } from '../shared/sessio
 import type { UsageMetricsBatch, UsageCursor } from '../../contexts/usage/domain/usage-record'
 import { UsageRecord } from '../../contexts/usage/domain/usage-record'
 import {
-  collectMatchingFiles,
-  fileUpdatedAt,
+  collectMatchingFilesAsync,
+  fileUpdatedAtAsync,
   parseRfc3339Timestamp,
   rawHash,
-  readText,
+  readTextAsync,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -29,13 +29,14 @@ class QoderSessionLogReader implements SessionLogReader {
   }
 
   async readUsageMetrics(_cursor: UsageCursor | null): Promise<UsageMetricsBatch> {
-    const files = collectMatchingFiles(this.logsRoot, true, isQoderSessionFile)
+    const files = await collectMatchingFilesAsync(this.logsRoot, true, isQoderSessionFile)
     const records: UsageRecord[] = []
 
-    for (const filePath of files) {
+    for (let i = 0; i < files.length; i++) {
+      const filePath = files[i]
       let raw: string
       try {
-        raw = readText(filePath)
+        raw = await readTextAsync(filePath)
       } catch {
         continue
       }
@@ -46,7 +47,9 @@ class QoderSessionLogReader implements SessionLogReader {
         continue
       }
       const tsStr: string | undefined = value?.timestamp
-      const occurredAt = tsStr ? parseRfc3339Timestamp(tsStr) : fileUpdatedAt(filePath, 0)
+      const occurredAt = tsStr
+        ? parseRfc3339Timestamp(tsStr)
+        : await fileUpdatedAtAsync(filePath, 0)
 
       records.push(
         UsageRecord.create({
@@ -62,10 +65,14 @@ class QoderSessionLogReader implements SessionLogReader {
           cacheReadTokens: 0,
           cacheCreationTokens: 0,
           occurredAt,
-          rawUpdatedAt: fileUpdatedAt(filePath, occurredAt),
+          rawUpdatedAt: await fileUpdatedAtAsync(filePath, occurredAt),
           rawHash: rawHash(raw),
         }),
       )
+
+      if ((i + 1) % 16 === 0) {
+        await new Promise((r) => setImmediate(r))
+      }
     }
 
     return { records, nextCursor: { sourcePath: '', lastOffset: 0, lastModifiedNs: 0 } }

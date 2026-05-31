@@ -1,26 +1,38 @@
 import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Smoke test for the walking skeleton. Proves the full toolchain end-to-end:
 //  - Electron boots from the V8-bytecode main bundle (out/main/main.cjs),
-//  - the renderer (React 19) mounts into #root,
-//  - the preload contextBridge exposes window.api with the settings + system
-//    namespaces (renderer -> preload -> ipcMain wiring is in place).
+//  - the renderer (React 19, HashRouter under file://) mounts into #root,
+//  - the preload contextBridge exposes window.api, and IPC round-trips to the
+//    real services + SQLite.
 //
-// NOTE: the production build loads the renderer via loadFile (file://). The
-// source app uses BrowserRouter, which cannot match an absolute file path, so
-// the routed view renders empty under a packaged load — hence we assert React
-// mounted content (#root non-empty) rather than toBeVisible. Full routing under
-// file:// (HashRouter) and the Settings/About nav assertion are deferred to the
-// assembly plan (spec §8 step 13), per the "前端 UI 不动" constraint.
+// Each test launches with an isolated HXG_USER_DATA_DIR so the single-instance
+// SingletonLock and the SQLite DB do not collide across launches.
 
 let app: ElectronApplication
+let userDataDir: string | null = null
+
+async function launchIsolated(): Promise<ElectronApplication> {
+  userDataDir = mkdtempSync(join(tmpdir(), 'hxg-e2e-'))
+  return electron.launch({
+    args: ['out/main/main.cjs'],
+    env: { ...process.env, HXG_USER_DATA_DIR: userDataDir },
+  })
+}
 
 test.afterEach(async () => {
   if (app) await app.close()
+  if (userDataDir) {
+    rmSync(userDataDir, { recursive: true, force: true })
+    userDataDir = null
+  }
 })
 
 test('app launches from bytecode and exposes the preload bridge', async () => {
-  app = await electron.launch({ args: ['out/main/main.cjs'] })
+  app = await launchIsolated()
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')
 
@@ -50,7 +62,7 @@ test('app launches from bytecode and exposes the preload bridge', async () => {
 })
 
 test('IPC round-trips through the bridge to real services + DB', async () => {
-  app = await electron.launch({ args: ['out/main/main.cjs'] })
+  app = await launchIsolated()
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')
 
@@ -109,4 +121,47 @@ test('IPC round-trips through the bridge to real services + DB', async () => {
   expect(wsFlow.before).toBe(false)
   expect(wsFlow.afterOn).toBe(true)
   expect(wsFlow.afterOff).toBe(false)
+})
+
+test('heavy usage sync does not block the event loop (no UI freeze)', async () => {
+  app = await launchIsolated()
+  const window = await app.firstWindow()
+  await window.waitForLoadState('domcontentloaded')
+
+  // Kick off the heavy session-log scan (walks ~/.claude, ~/.codex, etc. —
+  // thousands of files). Concurrently fire a cheap IPC ping on a short interval;
+  // if the scan blocks the main event loop the pings stall. We assert several
+  // pings complete promptly WHILE the sync is still in flight.
+  const result = await window.evaluate(async () => {
+    const api = (window as unknown as {
+      api: {
+        usage: { syncUsageSources(): Promise<unknown> }
+        system: { getAppDirs(): Promise<unknown> }
+      }
+    }).api
+
+    let pings = 0
+    let blocked = false
+    const start = Date.now()
+    const pinger = setInterval(() => {
+      const t = Date.now()
+      void api.system.getAppDirs().then(() => {
+        // A responsive main process answers getAppDirs in well under 500ms.
+        if (Date.now() - t > 1500) blocked = true
+        pings++
+      })
+    }, 100)
+
+    // Run the heavy scan; do not let a rejection fail the test (data-dependent).
+    await api.usage.syncUsageSources().catch(() => undefined)
+    // Give a couple more ping cycles a chance to land.
+    await new Promise((r) => setTimeout(r, 400))
+    clearInterval(pinger)
+    return { pings, blocked, elapsed: Date.now() - start }
+  })
+
+  // The pinger fires every 100ms; if the loop were blocked for the whole scan we
+  // would see ~0 completed pings. Require several to have completed responsively.
+  expect(result.pings).toBeGreaterThanOrEqual(3)
+  expect(result.blocked).toBe(false)
 })

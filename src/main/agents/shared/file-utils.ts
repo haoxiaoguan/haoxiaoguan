@@ -4,6 +4,7 @@
  */
 import { readFileSync, statSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 
@@ -94,6 +95,86 @@ export function collectMatchingFiles(
     } else if (isFile && predicate(full)) {
       results.push(full)
     }
+  }
+  return results
+}
+
+// ── Async, event-loop-friendly variants ─────────────────────────────────────
+// The session-log scan runs in the Electron MAIN process. The synchronous
+// versions above block the event loop (and thus all IPC + the UI) for the whole
+// walk — with thousands of agent log files that freezes the app. These async
+// variants use fs/promises and yield to the event loop periodically so IPC stays
+// responsive while the scan proceeds.
+
+/** Yield to the event loop so pending IPC/microtasks can run. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve))
+}
+
+/** Async read of a JSONL file into (lineIndex, rawLine) pairs for non-empty lines. */
+export async function readJsonLinesAsync(filePath: string): Promise<Array<[number, string]>> {
+  const text = await readFile(filePath, 'utf8')
+  const result: Array<[number, string]> = []
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (line.length > 0) result.push([i, line])
+  }
+  return result
+}
+
+/** Async read of a whole text file. */
+export async function readTextAsync(filePath: string): Promise<string> {
+  return readFile(filePath, 'utf8')
+}
+
+/** Async file mtime as Unix seconds; `fallback` on error. */
+export async function fileUpdatedAtAsync(filePath: string, fallback: number): Promise<number> {
+  try {
+    const s = await stat(filePath)
+    return Math.floor(s.mtimeMs / 1000)
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Async recursive collect, yielding to the event loop between directory entries
+ * so a large tree never blocks the UI.
+ */
+export async function collectMatchingFilesAsync(
+  dir: string,
+  recursive: boolean,
+  predicate: (filePath: string) => boolean,
+): Promise<string[]> {
+  const results: string[] = []
+  let names: string[]
+  try {
+    names = (await readdir(dir)) as string[]
+  } catch {
+    return results
+  }
+  let processed = 0
+  for (const name of names) {
+    const full = join(dir, name)
+    let isDir = false
+    let isFile = false
+    try {
+      const st = await stat(full)
+      isDir = st.isDirectory()
+      isFile = st.isFile()
+    } catch {
+      continue
+    }
+    if (isDir) {
+      if (recursive) {
+        results.push(...(await collectMatchingFilesAsync(full, recursive, predicate)))
+      }
+    } else if (isFile && predicate(full)) {
+      results.push(full)
+    }
+    // Yield every 64 entries to keep the event loop responsive.
+    if (++processed % 64 === 0) await yieldToEventLoop()
   }
   return results
 }
