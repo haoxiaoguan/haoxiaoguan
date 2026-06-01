@@ -126,6 +126,56 @@ describe('fromAccountProfile — per platform', () => {
     expect((state.providerPayload as any).creditsTotal).toBe(100)
   })
 
+  it('kiro adds a second overage metric when overage is enabled', () => {
+    // Pro+ with overage: base 2000 + overage ceiling 10000. Both surface as
+    // separate metrics; base 'credits' stays primary.
+    const state = fromAccountProfile(
+      'kiro',
+      {
+        creditsTotal: 2000,
+        creditsUsed: 0,
+        overageEnabled: true,
+        overageCap: 10000,
+        overageUsed: 0,
+      },
+      undefined,
+    )!
+    expect(state.primaryMetricKey).toBe('credits')
+    expect(state.metrics.map((m) => m.key)).toEqual(['credits', 'overage_credits'])
+    expect(state.metrics[0].total).toBe(2000)
+    const overage = state.metrics[1]
+    expect(overage.label).toBe('超额额度')
+    expect(overage.total).toBe(10000)
+    expect(overage.used).toBe(0)
+    expect(overage.unit).toBe('credits')
+  })
+
+  it('kiro omits the overage metric when overage is disabled', () => {
+    const state = fromAccountProfile(
+      'kiro',
+      { creditsTotal: 2000, creditsUsed: 0, overageEnabled: false, overageCap: 10000 },
+      undefined,
+    )!
+    expect(state.metrics.map((m) => m.key)).toEqual(['credits'])
+  })
+
+  it('kiro derives overage from usageBreakdownList when overageStatus ENABLED', () => {
+    // Mirrors the live getUsageLimits shape (the real Pro+ account on disk).
+    const state = fromAccountProfile(
+      'kiro',
+      {
+        overageConfiguration: { overageStatus: 'ENABLED' },
+        usageBreakdownList: [
+          { usageLimit: 2000, currentUsage: 0, overageCap: 10000, currentOverages: 0 },
+        ],
+      },
+      undefined,
+    )!
+    const byKey = Object.fromEntries(state.metrics.map((m) => [m.key, m]))
+    expect(byKey.credits.total).toBe(2000)
+    expect(byKey.overage_credits.total).toBe(10000)
+  })
+
   it('cursor builds usage metrics from usage object', () => {
     const state = fromAccountProfile(
       'cursor',

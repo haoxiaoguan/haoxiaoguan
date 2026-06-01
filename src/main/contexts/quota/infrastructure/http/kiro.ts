@@ -96,6 +96,13 @@ export async function fetch(
     creditsUsed: usageCreditsUsed(usageValue) ?? null,
     bonusTotal: usageBonusTotal(usageValue) ?? null,
     bonusUsed: usageBonusUsed(usageValue) ?? null,
+    // Overage: Kiro lets paid plans spend past the base allotment at a per-credit
+    // rate, up to overageCap. overageEnabled gates whether to surface this as a
+    // second metric (see quota-state/kiro.ts). overageCap is the spend ceiling,
+    // NOT the plan's included credits (that's creditsTotal/usageLimit).
+    overageEnabled: usageOverageEnabled(usageValue),
+    overageCap: usageOverageCap(usageValue) ?? null,
+    overageUsed: usageOverageUsed(usageValue) ?? null,
     usageResetAt: usageResetAt(usageValue) ?? null,
     kiro_usage_raw: usageValue,
   }
@@ -232,6 +239,33 @@ function usageBonusUsed(usage: JsonValue): number | undefined {
     ['usageBreakdowns', 'bonus', 'used'],
     ['usageBreakdownList', '0', 'freeTrialInfo', 'currentUsage'],
   ])
+}
+
+// Overage spend ceiling (e.g. 10000 for a Pro+ with overage). Distinct from the
+// plan's included credits (usageLimit). overageCapWithPrecision is the float form.
+function usageOverageCap(usage: JsonValue): number | undefined {
+  return pickI64Http(usage, [
+    ['usageBreakdownList', '0', 'overageCap'],
+    ['usageBreakdownList', '0', 'overageCapWithPrecision'],
+    ['overageConfiguration', 'overageLimit'],
+  ])
+}
+
+function usageOverageUsed(usage: JsonValue): number | undefined {
+  return pickI64Http(usage, [
+    ['usageBreakdownList', '0', 'currentOverages'],
+    ['usageBreakdownList', '0', 'currentOveragesWithPrecision'],
+  ])
+}
+
+// overageConfiguration.overageStatus == 'ENABLED' → the account can spend past
+// the base allotment. Also honour a boolean overageEnabled if a future API uses it.
+function usageOverageEnabled(usage: JsonValue): boolean {
+  const status = pickStringHttp(usage, [
+    ['overageConfiguration', 'overageStatus'],
+    ['overageStatus'],
+  ])
+  return status !== undefined && status.trim().toUpperCase() === 'ENABLED'
 }
 
 function usageResetAt(usage: JsonValue): number | undefined {

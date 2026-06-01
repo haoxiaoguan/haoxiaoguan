@@ -348,6 +348,8 @@ function kiroProfile(email: string, raw: JsonValue | undefined, tokenHint: strin
       ['estimatedUsage', 'creditsTotal'],
       ['usageBreakdowns', 'plan', 'totalCredits'],
       ['usageBreakdowns', 'covered', 'total'],
+      ['usageBreakdownList', '0', 'usageLimit'],
+      ['usageBreakdownList', '0', 'usageLimitWithPrecision'],
       ['credits', 'total'],
       ['totalCredits'],
     ]),
@@ -361,6 +363,8 @@ function kiroProfile(email: string, raw: JsonValue | undefined, tokenHint: strin
       ['estimatedUsage', 'creditsUsed'],
       ['usageBreakdowns', 'plan', 'usedCredits'],
       ['usageBreakdowns', 'covered', 'used'],
+      ['usageBreakdownList', '0', 'currentUsage'],
+      ['usageBreakdownList', '0', 'currentUsageWithPrecision'],
       ['credits', 'used'],
       ['usedCredits'],
     ]),
@@ -384,6 +388,28 @@ function kiroProfile(email: string, raw: JsonValue | undefined, tokenHint: strin
       ['bonus', 'used'],
       ['usageBreakdowns', 'bonus', 'used'],
     ]),
+  )
+  // Overage (Pro/Pro+/Power can spend past the base allotment up to overageCap).
+  // Derived from the local scan's usageBreakdownList so a profile-only parse (no
+  // live fetch yet) is consistent with the live quota path. See quota/http/kiro.ts.
+  const overageEnabled =
+    pickString(usage, [['overageConfiguration', 'overageStatus'], ['overageStatus']])
+      ?.trim()
+      .toUpperCase() === 'ENABLED'
+  upsertPayloadValue(payload, 'overageEnabled', overageEnabled ? true : undefined)
+  upsertPayloadNumber(
+    payload,
+    'overageCap',
+    pickNumber(usage, [
+      ['overageCap'],
+      ['usageBreakdownList', '0', 'overageCap'],
+      ['overageConfiguration', 'overageLimit'],
+    ]),
+  )
+  upsertPayloadNumber(
+    payload,
+    'overageUsed',
+    pickNumber(usage, [['overageUsed'], ['usageBreakdownList', '0', 'currentOverages']]),
   )
   const usageResetAt = parseTimestamp(
     (usage === undefined ? undefined : getPathValue(usage, ['usageResetAt'])) ??

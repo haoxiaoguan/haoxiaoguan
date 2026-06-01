@@ -86,11 +86,13 @@ test('IPC round-trips through the bridge to real services + DB', async () => {
   })
   expect(updated).toBe('dark')
 
-  // system:getAppDirs -> real OS paths
+  // system:getAppDirs -> real OS paths. appDataDir() honors HXG_USER_DATA_DIR,
+  // so the reported dataDir must be the isolated temp dir this launch was given
+  // (proves the DB/key/settings live in the isolated dir, not the real home).
   const dirs = await window.evaluate(() =>
     (window as unknown as { api: { system: { getAppDirs(): Promise<{ dataDir: string }> } } }).api.system.getAppDirs(),
   )
-  expect(dirs.dataDir).toContain('haoxiaoguan')
+  expect(dirs.dataDir).toBe(userDataDir)
 
   // agent:listAgents -> the 17-adapter registry
   const agents = await window.evaluate(() =>

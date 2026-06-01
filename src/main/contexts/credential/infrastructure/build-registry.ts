@@ -1,7 +1,10 @@
 import { type PlatformId } from '../../account/domain/platform-id'
+import type { CryptoService } from '../../../platform/crypto/crypto-service'
 import { ProviderRegistry } from '../domain/provider-registry'
 import { CursorLocalImportCapability } from './capabilities/cursor-local-import'
 import { CodexLocalImportCapability } from './capabilities/codex-local-import'
+import { KiroLocalImportCapability } from './capabilities/kiro-local-import'
+import { TokenExpiryValidationCapability } from './capabilities/token-expiry-validation'
 import { CursorOAuthCapability } from './capabilities/cursor-oauth'
 import { KiroOAuthCapability } from './capabilities/kiro-oauth'
 import { GitHubCopilotOAuthCapability } from './capabilities/github-copilot-oauth'
@@ -20,8 +23,9 @@ import {
 //
 // Implemented for real:
 //   - OAuth:        cursor (poll), kiro (loopback), github_copilot (device flow)
-//   - LocalScan:    cursor (state.vscdb), codex (auth.json), + VSCode-family
-//                   SecretStorage (windsurf, kiro, qoder, trae, codebuddy,
+//   - LocalScan:    cursor (state.vscdb), codex (auth.json), kiro (AWS SSO
+//                   token file + profile.json + state.vscdb usage), + VSCode-
+//                   family SecretStorage (windsurf, qoder, trae, codebuddy,
 //                   codebuddy_cn, antigravity) via generic decrypt reader
 //   - TokenJson:    all 12 importable providers (generic normaliser)
 //   - DeepLink:     all 12 importable providers (haoxiaoguan://import/... parser)
@@ -53,7 +57,6 @@ const IMPORTABLE: readonly PlatformId[] = [
 const VSCODE_SECRET_CONFIGS: VsCodeSecretScanConfig[] = [
   // TODO(verify): exact extensionId/secretKey per provider against a live install.
   { platform: 'windsurf', appDir: 'Windsurf', extensionId: 'codeium.windsurf', secretKey: 'windsurf.auth', mode: 'default' },
-  { platform: 'kiro', appDir: 'Kiro', extensionId: 'kiro.kiroagent', secretKey: 'kiro.kiroAgent', mode: 'default' },
   { platform: 'qoder', appDir: 'Qoder', extensionId: 'qoder.qoder', secretKey: 'qoder.auth', mode: 'qoder' },
   { platform: 'trae', appDir: 'Trae', extensionId: 'trae.trae', secretKey: 'trae.auth', mode: 'default' },
   { platform: 'codebuddy', appDir: 'CodeBuddy', extensionId: 'codebuddy.codebuddy', secretKey: 'codebuddy.auth', mode: 'codebuddy' },
@@ -61,7 +64,7 @@ const VSCODE_SECRET_CONFIGS: VsCodeSecretScanConfig[] = [
   { platform: 'antigravity', appDir: 'Antigravity', extensionId: 'antigravity.antigravity', secretKey: 'antigravity.auth', mode: 'default' },
 ]
 
-export function buildCredentialRegistry(): ProviderRegistry {
+export function buildCredentialRegistry(crypto?: CryptoService): ProviderRegistry {
   const registry = new ProviderRegistry()
 
   // --- OAuth (real implementations) ---
@@ -69,9 +72,20 @@ export function buildCredentialRegistry(): ProviderRegistry {
   registry.registerOAuth(new KiroOAuthCapability())
   registry.registerOAuth(new GitHubCopilotOAuthCapability())
 
+  // --- Credential validation. Network-free expiry/refresh-token check, applied
+  //     to every importable platform so the top-right status badge shows a real
+  //     state (正常 / 已过期) instead of 未支持. Requires the CryptoService to
+  //     decrypt the stored envelope. ---
+  if (crypto) {
+    for (const platform of IMPORTABLE) {
+      registry.registerValidation(new TokenExpiryValidationCapability(platform, crypto))
+    }
+  }
+
   // --- Local import ---
   registry.registerLocalImport(new CursorLocalImportCapability())
   registry.registerLocalImport(new CodexLocalImportCapability())
+  registry.registerLocalImport(new KiroLocalImportCapability())
   for (const config of VSCODE_SECRET_CONFIGS) {
     registry.registerLocalImport(new VsCodeSecretLocalImportCapability(config))
   }

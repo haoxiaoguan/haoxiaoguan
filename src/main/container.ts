@@ -103,14 +103,13 @@ import { WebSocketApplicationService } from './contexts/websocket/application/we
  * `QuotaApplicationService` (cache-first quota read), replacing the former
  * NULL_PROVIDER_REGISTRY placeholder.
  *
- * Note: `buildCredentialRegistry()` does not yet register any
- * CredentialValidationCapability, so `credentialValidation.validate()` returns
- * `unsupported` for every provider today — i.e. account health/validation
- * behaves exactly as it did with the null placeholder, but now flows through the
- * real wired services (no hardcoded stub). When per-provider validation
- * capabilities are ported into build-registry.ts they light up automatically,
- * and health's quota leg (only reached when validation is `valid`) reads through
- * the quota service.
+ * Note: `buildCredentialRegistry()` registers a real CredentialValidationCapability
+ * for Kiro (decrypt + expiry/refresh check); other providers still return
+ * `unsupported` until ported. So account health/validation flows through the real
+ * wired services, with Kiro reporting valid/expired instead of unsupported. When
+ * per-provider validation capabilities are added they light up automatically, and
+ * health's quota leg (only reached when validation is `valid`) reads through the
+ * quota service.
  */
 function buildAccountCapabilityRegistry(
   credentialValidation: CredentialValidationService,
@@ -181,7 +180,8 @@ export async function buildContainer(): Promise<Container> {
   //    replaces the deleted account TEMP MikroOrmCredentialStore.
   const accountRepo = new MikroOrmAccountRepository()
   const masterKey = await loadOrCreateMasterKey()
-  const credentialStore = new MikroOrmCredentialRepository(new CryptoService(masterKey))
+  const cryptoService = new CryptoService(masterKey)
+  const credentialStore = new MikroOrmCredentialRepository(cryptoService)
   const injectorRegistry = new AgentCredentialInjectorRegistry()
   const switchService = new SwitchService(credentialStore, injectorRegistry)
   const account = new AccountApplicationService(accountRepo, credentialStore, switchService)
@@ -196,7 +196,7 @@ export async function buildContainer(): Promise<Container> {
   //     OAuthService uses the platform OAuth capabilities (loopback/poll/device)
   //     registered in buildCredentialRegistry; validation reuses the credential
   //     store's envelopes. credentialStore (above) doubles as its repository.
-  const credentialRegistry = buildCredentialRegistry()
+  const credentialRegistry = buildCredentialRegistry(cryptoService)
   const pendingOAuthRepo = new MikroOrmPendingOAuthRepository()
   const pendingImportRepo = new MikroOrmPendingImportRepository()
   void pendingImportRepo // reserved for the deep-link confirm flow (manifest §8)

@@ -2,10 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createCipheriv } from 'node:crypto'
+import { createCipheriv, randomBytes } from 'node:crypto'
 import Database from 'better-sqlite3'
 import { CursorLocalImportCapability } from '../../../src/main/contexts/credential/infrastructure/capabilities/cursor-local-import'
 import { CodexLocalImportCapability } from '../../../src/main/contexts/credential/infrastructure/capabilities/codex-local-import'
+import { KiroLocalImportCapability } from '../../../src/main/contexts/credential/infrastructure/capabilities/kiro-local-import'
+import { TokenExpiryValidationCapability } from '../../../src/main/contexts/credential/infrastructure/capabilities/token-expiry-validation'
+import { CryptoService } from '../../../src/main/platform/crypto/crypto-service'
+import { buildAad, type StoredEnvelope } from '../../../src/main/contexts/credential/domain/envelope'
 import { TokenJsonFileImportCapability } from '../../../src/main/contexts/credential/infrastructure/capabilities/token-json-file-import'
 import { DeepLinkImportCapabilityImpl } from '../../../src/main/contexts/credential/infrastructure/capabilities/deep-link-import'
 import { CredentialError } from '../../../src/main/contexts/credential/domain/credential-error'
@@ -87,6 +91,114 @@ describe('CodexLocalImportCapability', () => {
   it('returns empty when auth.json is absent', async () => {
     const cap = new CodexLocalImportCapability(join(tmp, 'no-such-dir'))
     expect(await cap.scanLocal()).toEqual([])
+  })
+})
+
+describe('KiroLocalImportCapability', () => {
+  // Kiro reads ~/.aws/sso/cache/kiro-auth-token.json (plain JSON), NOT a VSCode
+  // SecretStorage secret:// blob. These mirror the real on-disk shape.
+  function writeAuthToken(obj: Record<string, unknown>): string {
+    const p = join(tmp, 'kiro-auth-token.json')
+    writeFileSync(p, JSON.stringify(obj))
+    return p
+  }
+  function writeProfile(obj: Record<string, unknown>): string {
+    const p = join(tmp, 'profile.json')
+    writeFileSync(p, JSON.stringify(obj))
+    return p
+  }
+
+  it('reads accessToken/refreshToken/email/expiresAt from the AWS SSO token file', async () => {
+    const authPath = writeAuthToken({
+      accessToken: 'kiro-access',
+      refreshToken: 'kiro-refresh',
+      email: 'kiro@example.com',
+      userId: 'kiro-user-id',
+      loginProvider: 'Google',
+      expiresAt: '2026-12-31T00:00:00.000Z',
+    })
+    const profilePath = writeProfile({ email: 'kiro@example.com', userId: 'kiro-user-id', loginProvider: 'Google' })
+    const usageDb = makeStateVscdb({ 'kiro.kiroAgent': JSON.stringify({ usage: 42 }) })
+
+    const cap = new KiroLocalImportCapability(authPath, profilePath, usageDb)
+    const materials = await cap.scanLocal()
+    expect(materials).toHaveLength(1)
+    const m = materials[0]
+    expect(m.provider).toBe('kiro')
+    expect(m.accessToken).toBe('kiro-access')
+    expect(m.refreshToken).toBe('kiro-refresh')
+    expect(m.email).toBe('kiro-user-id') // profile userId wins per source pick order
+    expect(m.source).toBe('local_scan')
+    expect(m.expiresAt?.toISOString()).toBe('2026-12-31T00:00:00.000Z')
+    const meta = m.rawMetadata as Record<string, unknown>
+    expect(meta.login_provider).toBe('Google')
+    expect((meta.kiro_usage_raw as Record<string, unknown>).usage).toBe(42)
+    expect((meta.kiro_auth_token_raw as Record<string, unknown>).accessToken).toBe('kiro-access')
+  })
+
+  it('throws InvalidCredential when the token file has no accessToken', async () => {
+    const authPath = writeAuthToken({ refreshToken: 'r', email: 'e@x.com' })
+    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'))
+    await expect(cap.scanLocal()).rejects.toMatchObject({ kind: 'invalid_credential' })
+  })
+
+  it('returns empty when the token file is absent', async () => {
+    const cap = new KiroLocalImportCapability(join(tmp, 'missing.json'), join(tmp, 'p.json'), join(tmp, 'db.vscdb'))
+    expect(await cap.scanLocal()).toEqual([])
+  })
+
+  it('falls back to auth-token email when profile is missing', async () => {
+    const authPath = writeAuthToken({ accessToken: 'a', email: 'fallback@example.com' })
+    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'))
+    const m = (await cap.scanLocal())[0]
+    expect(m.email).toBe('fallback@example.com')
+    expect(m.refreshToken).toBeUndefined()
+  })
+})
+
+describe('TokenExpiryValidationCapability', () => {
+  const key = randomBytes(32)
+  const crypto = new CryptoService(key)
+  const aad = buildAad('kiro', 'acc-1', '2026-05-31T00:00:00.000Z')
+
+  function envelopeFor(cred: { token: string; refresh_token?: string; expires_at?: string }): StoredEnvelope {
+    return { aad, envelope: crypto.encrypt(JSON.stringify(cred), aad) }
+  }
+
+  it('reports the provider it was constructed with', () => {
+    expect(new TokenExpiryValidationCapability('cursor', crypto).provider()).toBe('cursor')
+    expect(new TokenExpiryValidationCapability('github_copilot', crypto).provider()).toBe('github_copilot')
+  })
+
+  it('reports valid when the token is unexpired', async () => {
+    const env = envelopeFor({ token: 'at', expires_at: '2999-01-01T00:00:00.000Z' })
+    const r = await new TokenExpiryValidationCapability('kiro', crypto).validate(env)
+    expect(r.state).toBe('valid')
+  })
+
+  it('reports valid for a credential with no expiry (e.g. API keys)', async () => {
+    const env = envelopeFor({ token: 'at' })
+    const r = await new TokenExpiryValidationCapability('cursor', crypto).validate(env)
+    expect(r.state).toBe('valid')
+  })
+
+  it('reports valid when expired but a refresh token exists (auto-refreshes)', async () => {
+    const env = envelopeFor({ token: 'at', refresh_token: 'rt', expires_at: '2000-01-01T00:00:00.000Z' })
+    const r = await new TokenExpiryValidationCapability('windsurf', crypto).validate(env)
+    expect(r.state).toBe('valid')
+  })
+
+  it('reports expired when expired and no refresh token', async () => {
+    const env = envelopeFor({ token: 'at', expires_at: '2000-01-01T00:00:00.000Z' })
+    const r = await new TokenExpiryValidationCapability('qoder', crypto).validate(env)
+    expect(r.state).toBe('expired')
+  })
+
+  it('reports unknown_error when the envelope cannot be decrypted (wrong key)', async () => {
+    const env = envelopeFor({ token: 'at' })
+    const otherKey = new CryptoService(randomBytes(32))
+    const r = await new TokenExpiryValidationCapability('kiro', otherKey).validate(env)
+    expect(r.state).toBe('unknown_error')
   })
 })
 

@@ -17,6 +17,7 @@ export const safeStorage = {
 }
 
 export const app = {
+  isPackaged: false,
   getPath(_name: string): string {
     return process.cwd()
   },
