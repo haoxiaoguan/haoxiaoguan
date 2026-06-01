@@ -7,7 +7,7 @@ import type { WsStatus } from '../../../types';
 
 export default function AdvancedSettings() {
   const { t } = useTranslation();
-  const { wsPort, setWsPort } = useSettingsStore();
+  const { wsPort, setWsPort, allowStaleKiroImport, setAllowStaleKiroImport } = useSettingsStore();
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(null);
   const [toggling, setToggling] = useState(false);
 
@@ -60,6 +60,28 @@ export default function AdvancedSettings() {
             Port: {wsStatus.port} | Connections: {wsStatus.connectionCount}
           </p>
         )}
+      </section>
+
+      <section className="rounded-xl border border-border/70 bg-card p-5 space-y-3">
+        <h3 className="text-sm font-semibold">
+          {t('settings.advanced.kiroImport.title', 'Kiro 账号导入')}
+        </h3>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox" className="toggle toggle-primary mt-0.5"
+            checked={allowStaleKiroImport}
+            onChange={(e) => void setAllowStaleKiroImport(e.target.checked)}
+          />
+          <span className="text-sm">
+            {t('settings.advanced.kiroImport.allowStale', '允许在无法联网确认身份时导入')}
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {t(
+                'settings.advanced.kiroImport.allowStaleDesc',
+                '默认关闭：导入 Kiro 账号时必须联网确认真实身份，否则阻止导入以免使用本地残留的旧账号信息。开启后将以占位身份导入，可稍后在账号详情刷新。',
+              )}
+            </span>
+          </span>
+        </label>
       </section>
     </SettingsLayout>
   );

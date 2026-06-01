@@ -64,7 +64,11 @@ const VSCODE_SECRET_CONFIGS: VsCodeSecretScanConfig[] = [
   { platform: 'antigravity', appDir: 'Antigravity', extensionId: 'antigravity.antigravity', secretKey: 'antigravity.auth', mode: 'default' },
 ]
 
-export function buildCredentialRegistry(crypto?: CryptoService): ProviderRegistry {
+export function buildCredentialRegistry(
+  crypto?: CryptoService,
+  // Live resolver for the allow_stale_kiro_import setting (read at scan time).
+  allowStaleKiroImport?: () => boolean,
+): ProviderRegistry {
   const registry = new ProviderRegistry()
 
   // --- OAuth (real implementations) ---
@@ -85,7 +89,7 @@ export function buildCredentialRegistry(crypto?: CryptoService): ProviderRegistr
   // --- Local import ---
   registry.registerLocalImport(new CursorLocalImportCapability())
   registry.registerLocalImport(new CodexLocalImportCapability())
-  registry.registerLocalImport(new KiroLocalImportCapability())
+  registry.registerLocalImport(new KiroLocalImportCapability(undefined, undefined, undefined, allowStaleKiroImport ?? false))
   for (const config of VSCODE_SECRET_CONFIGS) {
     registry.registerLocalImport(new VsCodeSecretLocalImportCapability(config))
   }

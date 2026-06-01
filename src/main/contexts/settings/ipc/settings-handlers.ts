@@ -28,6 +28,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         silentStart: kv.silent_start === 'true',
         autostart: kv.autostart === 'true',
         utilityButtons: kv.utility_buttons,
+        allowStaleKiroImport: kv.allow_stale_kiro_import === 'true',
       }
     } catch (e) {
       throw new Error(toIpcError(e))

@@ -13,6 +13,10 @@ export interface RuntimeSettings {
   silentStart: boolean
   autostart: boolean
   refreshIntervals: Record<string, number>
+  // When true, Kiro accounts import even when their identity cannot be confirmed
+  // online (degraded to a placeholder, never the stale local identity). Default
+  // false: import is blocked until a live getUsageLimits succeeds.
+  allowStaleKiroImport: boolean
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -27,6 +31,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   silentStart: false,
   autostart: false,
   refreshIntervals: {},
+  allowStaleKiroImport: false,
 }
 
 export class AppSettings {
@@ -69,6 +74,7 @@ export class AppSettings {
       ws_port: String(this.runtime.wsPort),
       silent_start: String(this.runtime.silentStart),
       autostart: String(this.runtime.autostart),
+      allow_stale_kiro_import: String(this.runtime.allowStaleKiroImport),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -88,6 +94,7 @@ export class AppSettings {
         if (Number.isInteger(n) && n >= 1024) this.runtime.wsPort = n
       } else if (k === 'silent_start') this.runtime.silentStart = v === 'true'
       else if (k === 'autostart') this.runtime.autostart = v === 'true'
+      else if (k === 'allow_stale_kiro_import') this.runtime.allowStaleKiroImport = v === 'true'
       else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

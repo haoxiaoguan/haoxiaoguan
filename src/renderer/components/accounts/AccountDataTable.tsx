@@ -195,24 +195,27 @@ export function AccountDataTable({
 
 function AccountIdentity({ account }: { account: Account }) {
   const { t } = useTranslation('accounts');
-  const title = account.name || account.displayIdentifier || account.email;
-  const identity = account.identityKey || account.displayIdentifier || account.email;
+  // Primary line = email (the human-readable identifier); secondary = the stable
+  // account id (userId / identityKey). Both are shown so enterprise accounts,
+  // whose email and opaque userId differ, are unambiguous.
+  const primary = account.email || account.name || account.displayIdentifier || account.identityKey;
+  const secondary = account.displayIdentifier || account.identityKey || account.email;
   return (
     <div className="flex min-w-0 items-center gap-3">
       <PlatformIcon platform={account.platform} className="size-7 rounded-[7px]" />
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[12.5px] font-semibold text-foreground">{title}</span>
+          <span className="truncate text-[12.5px] font-semibold text-foreground">{primary}</span>
           {account.isActive ? (
             <span className="inline-flex h-[17px] shrink-0 items-center gap-1 rounded-[5px] bg-emerald-500/12 px-1.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
               <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
               {t('card.active')}
             </span>
           ) : null}
-          <CopyButton value={identity} />
+          <CopyButton value={secondary} />
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted-foreground">
-          <span className="truncate">{identity}</span>
+          <span className="truncate">{secondary}</span>
         </div>
       </div>
     </div>

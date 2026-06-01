@@ -31,6 +31,54 @@ describe('profileFromImportMaterial', () => {
     expect(payload(p).accessToken).toBeUndefined()
   })
 
+  it('kiro pins explicit region + profileArn onto the payload', () => {
+    const raw = {
+      accessToken: 'secret',
+      region: 'us-east-1',
+      profileArn: 'arn:aws:codewhisperer:us-east-1:607416644019:profile/74G7G3NXYGXY',
+      userInfo: { userId: 'ent-user' },
+    }
+    const p = profileFromImportMaterial('kiro', 'e@x.com', raw, 'token')
+    expect(payload(p).region).toBe('us-east-1')
+    expect(payload(p).profileArn).toBe(
+      'arn:aws:codewhisperer:us-east-1:607416644019:profile/74G7G3NXYGXY',
+    )
+  })
+
+  it('kiro derives region from the profile ARN when no explicit region is set', () => {
+    const raw = {
+      accessToken: 'secret',
+      kiro_profile_raw: { arn: 'arn:aws:codewhisperer:eu-central-1:111122223333:profile/ABCDEF' },
+      userInfo: { userId: 'eu-user' },
+    }
+    const p = profileFromImportMaterial('kiro', 'e@x.com', raw, 'token')
+    expect(payload(p).region).toBe('eu-central-1')
+    expect(payload(p).profileArn).toBe(
+      'arn:aws:codewhisperer:eu-central-1:111122223333:profile/ABCDEF',
+    )
+  })
+
+  it('kiro takes identity + plan from usage.userInfo for enterprise accounts', () => {
+    // Enterprise: profile.json has only arn/name, token is opaque, identity is
+    // in the usage telemetry's userInfo. Regression for the "kiro-user" bug.
+    const raw = {
+      accessToken: 'aoaAAAAA-opaque',
+      kiro_profile_raw: {
+        arn: 'arn:aws:codewhisperer:us-east-1:607416644019:profile/74G7G3NXYGXY',
+        name: 'KiroProfile-us-east-1',
+      },
+      kiro_usage_raw: {
+        userInfo: { email: 'galardo@example.com', userId: 'd-9067c98495.4498b488' },
+        subscriptionInfo: { subscriptionTitle: 'KIRO FREE' },
+      },
+    }
+    const p = profileFromImportMaterial('kiro', 'galardo@example.com', raw, 'token')
+    expect(p.displayIdentifier).toBe('d-9067c98495.4498b488')
+    expect(p.identityKey).toBe('d-9067c98495.4498b488')
+    expect(p.planName).toBe('KIRO FREE')
+    expect(p.displayIdentifier).not.toMatch(/^kiro-[0-9a-f]+$/)
+  })
+
   it('cursor uses auth user id and keeps usage payload', () => {
     const raw = {
       user: { id: 'auth0|user_abc123', email: 'cursor@example.com' },

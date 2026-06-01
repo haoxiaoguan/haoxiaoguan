@@ -28,4 +28,8 @@ export class SettingsApplicationService {
   getWsPort(): number {
     return this.file.loadSync().runtime.wsPort
   }
+
+  getAllowStaleKiroImport(): boolean {
+    return this.file.loadSync().runtime.allowStaleKiroImport
+  }
 }

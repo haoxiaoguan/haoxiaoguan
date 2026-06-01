@@ -1,27 +1,34 @@
 // Kiro live quota fetch. 对应 quota/infrastructure/quota/Rust模块.
 //
-// Region-routed getUsageLimits (endpoint derived from the profileArn region
-// segment). On failure, refresh the token and retry once. provider_payload feeds
-// the kiro credits parser.
+// Region-routed getUsageLimits (endpoint derived from the profilePayload region
+// or the profileArn region segment). On failure, refresh the token and retry
+// once — IdC (Enterprise) refreshes against AWS SSO OIDC, Social against the
+// Kiro desktop auth service. provider_payload feeds the kiro credits parser.
+//
+// Transport (endpoints, headers, IdC/Social refresh split) lives in the shared
+// platform client so the import-time identity enrichment reuses it verbatim.
+// Endpoints overridable via HAOXIAOGUAN_KIRO_RUNTIME_ENDPOINT / _AUTH_ENDPOINT.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import { Credential } from '../../../account/domain/credential'
 import type { QuotaFetchResult } from '../../domain/capabilities'
 import {
   credentialWithPayload,
-  httpFetch,
   normalizeNonEmpty,
-  parseJson,
   pickI64Http,
   pickStringHttp,
   providerError,
   successResult,
-  timestampToDate,
 } from './common'
 import { getPathValue } from '../../domain/quota-state'
-
-const REFRESH_ENDPOINT = 'https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken'
-const RUNTIME_DEFAULT_ENDPOINT = 'https://q.us-east-1.amazonaws.com'
+import {
+  type KiroAuthMethod,
+  fetchKiroUsageLimits,
+  normalizeRegion,
+  parseRegionFromArn,
+  refreshKiroToken,
+  resolveKiroAuthMethod,
+} from '../../../../platform/net/kiro/kiro-identity-client'
 
 export async function fetch(
   credential: Credential,
@@ -34,37 +41,22 @@ export async function fetch(
   if (profileArn === undefined) {
     throw providerError('Kiro 缺少 profileArn，无法查询 runtime usage')
   }
+  // Region precedence: explicit profilePayload/rawMetadata region (set at import
+  // for Enterprise IdC accounts) > the profileArn segment > us-east-1.
+  const region = resolveRegion(credential.rawMetadata, profilePayload, profileArn)
+  const authMethod = resolveKiroAuthMethod(credential.rawMetadata)
 
   let usage: JsonValue | undefined
   try {
-    usage = await fetchUsageLimits(accessToken, profileArn)
+    usage = (await fetchKiroUsageLimits({ accessToken, authMethod, region, profileArn })) as JsonValue
   } catch {
     const refresh = normalizeNonEmpty(refreshToken)
-    if (refresh !== undefined) {
-      try {
-        const token = await refreshTokenRequest(refresh)
-        const nextAccess = pickStringHttp(token, [
-          ['accessToken'],
-          ['access_token'],
-          ['token'],
-          ['idToken'],
-          ['id_token'],
-        ])
-        if (nextAccess !== undefined) accessToken = nextAccess
-        refreshToken =
-          pickStringHttp(token, [['refreshToken'], ['refresh_token'], ['refreshTokenJwt']]) ??
-          refreshToken
-        const expTs = pickI64Http(token, [['expiresAt'], ['expires_at'], ['expiry'], ['expiration']])
-        if (expTs !== undefined) {
-          expiresAt = timestampToDate(expTs)
-        } else {
-          const expiresIn = pickI64Http(token, [['expiresIn'], ['expires_in']])
-          if (expiresIn !== undefined) expiresAt = new Date(Date.now() + expiresIn * 1000)
-        }
-        usage = await fetchUsageLimits(accessToken, profileArn)
-      } catch (e) {
-        throw e
-      }
+    if (refresh !== undefined && authMethod !== 'api_key') {
+      const token = await refreshKiroCredential(credential.rawMetadata, authMethod, region, refresh)
+      accessToken = token.accessToken
+      refreshToken = token.refreshToken ?? refreshToken
+      expiresAt = token.expiresAt ?? expiresAt
+      usage = (await fetchKiroUsageLimits({ accessToken, authMethod, region, profileArn })) as JsonValue
     }
   }
   if (usage === undefined) {
@@ -119,34 +111,24 @@ export async function fetch(
   return successResult('kiro', credential, providerPayload, updated)
 }
 
-async function fetchUsageLimits(accessToken: string, profileArn: string): Promise<JsonValue> {
-  const endpoint = runtimeEndpointForRegion(parseProfileArnRegion(profileArn))
-  const url = `${endpoint.replace(/\/+$/, '')}/getUsageLimits?origin=AI_EDITOR&profileArn=${encodeURIComponent(
-    profileArn,
-  )}&resourceType=AGENTIC_REQUEST&isEmailRequired=true`
-  const response = await httpFetch(
-    url,
-    { method: 'GET', headers: { Authorization: `Bearer ${accessToken.trim()}` } },
-    '请求 Kiro runtime usage 失败',
-  )
-  if (!response.ok) throw providerError(`Kiro runtime usage 返回异常: status=${response.status}`)
-  return parseJson(response, '解析 Kiro runtime usage 响应失败')
-}
-
-async function refreshTokenRequest(refreshToken: string): Promise<JsonValue> {
-  const response = await httpFetch(
-    REFRESH_ENDPOINT,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    },
-    '请求 Kiro refreshToken 失败',
-  )
-  if (!response.ok) throw providerError(`Kiro refreshToken 返回异常: status=${response.status}`)
-  const value = await parseJson(response, '解析 Kiro refreshToken 响应失败')
-  const data = getPathValue(value, ['data'])
-  return data ?? value
+// Refresh via the shared client, branching IdC (needs clientId/clientSecret from
+// the encrypted rawMetadata) vs Social. invalid_grant surfaces as a permanent
+// error from the shared client — caller lets it propagate (no silent retry).
+async function refreshKiroCredential(
+  rawMetadata: JsonValue | undefined,
+  authMethod: KiroAuthMethod,
+  region: string,
+  refreshToken: string,
+): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: Date }> {
+  if (authMethod === 'idc') {
+    const clientId = pickStringHttp(rawMetadata, [['client_id'], ['clientId']])
+    const clientSecret = pickStringHttp(rawMetadata, [['client_secret'], ['clientSecret']])
+    if (clientId === undefined || clientSecret === undefined) {
+      throw providerError('Kiro 企业号刷新缺少 clientId/clientSecret')
+    }
+    return refreshKiroToken({ kind: 'idc', clientId, clientSecret, refreshToken, region })
+  }
+  return refreshKiroToken({ kind: 'social', refreshToken, region })
 }
 
 function extractProfileArn(
@@ -169,36 +151,18 @@ function extractProfileArn(
   )
 }
 
-function parseProfileArnRegion(profileArn: string): string | undefined {
-  const segments = profileArn.split(':')
-  const prefix = segments[0]?.trim()
-  if (prefix === undefined || prefix.toLowerCase() !== 'arn') return undefined
-  // segments: arn, partition, service, region, ...
-  const region = segments[3]?.trim()
-  return region !== undefined && region.length > 0 ? region : undefined
-}
-
-function runtimeEndpointForRegion(region: string | undefined): string {
-  switch ((region ?? 'us-east-1').trim().toLowerCase()) {
-    case 'us-east-1':
-      return 'https://q.us-east-1.amazonaws.com'
-    case 'eu-central-1':
-      return 'https://q.eu-central-1.amazonaws.com'
-    case 'us-gov-east-1':
-      return 'https://q-fips.us-gov-east-1.amazonaws.com'
-    case 'us-gov-west-1':
-      return 'https://q-fips.us-gov-west-1.amazonaws.com'
-    case 'us-iso-east-1':
-      return 'https://q.us-iso-east-1.c2s.ic.gov'
-    case 'us-isob-east-1':
-      return 'https://q.us-isob-east-1.sc2s.sgov.gov'
-    case 'us-isof-south-1':
-      return 'https://q.us-isof-south-1.csp.hci.ic.gov'
-    case 'us-isof-east-1':
-      return 'https://q.us-isof-east-1.csp.hci.ic.gov'
-    default:
-      return RUNTIME_DEFAULT_ENDPOINT
-  }
+// Region used to route both the runtime and auth endpoints. Explicit region on
+// the credential/profile (pinned at import for Enterprise IdC accounts) wins,
+// then the profileArn segment, then the default.
+function resolveRegion(
+  rawMetadata: JsonValue | undefined,
+  profilePayload: JsonValue,
+  profileArn: string,
+): string {
+  const explicit =
+    pickStringHttp(profilePayload, [['region']]) ??
+    pickStringHttp(rawMetadata, [['region'], ['ssoRegion'], ['sso_region']])
+  return normalizeRegion(explicit ?? parseRegionFromArn(profileArn))
 }
 
 function usagePlanName(usage: JsonValue): string | undefined {

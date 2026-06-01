@@ -17,6 +17,7 @@ import {
   pickNumber,
   pickString,
   providerFromLoginOption,
+  regionFromArn,
   sanitizeIdentifierPart,
   sanitizeProviderPayload,
   sanitizedPayload,
@@ -295,18 +296,37 @@ function kiroProfile(email: string, raw: JsonValue | undefined, tokenHint: strin
       ['accountId'],
       ['account', 'id'],
     ]) ??
+    // Enterprise (IdC) identity lives in the usage telemetry's userInfo — there
+    // is no email/userId in profile.json or the (opaque, non-JWT) access token.
+    pickString(usage, [
+      ['userInfo', 'userId'],
+      ['userInfo', 'user_id'],
+      ['userInfo', 'sub'],
+    ]) ??
     pickString(idTokenClaims, [['sub'], ['user_id'], ['uid'], ['preferred_username']]) ??
     pickString(accessTokenClaims, [['sub'], ['user_id'], ['uid'], ['preferred_username']])
 
+  // Email is a better display identifier than the opaque userId; prefer it when
+  // present (profile/token first, then the usage userInfo for enterprise).
+  const resolvedEmail =
+    normalizeNonEmpty(email) ??
+    pickString(profile, [['email'], ['userEmail']]) ??
+    pickString(usage, [['userInfo', 'email'], ['email']])
+
   const displayIdentifier =
     userId ??
-    normalizeNonEmpty(email) ??
+    resolvedEmail ??
     pickString(authToken, [['login_hint'], ['loginHint']]) ??
     `kiro-${shortHash(tokenHint)}`
   const identityKey = sanitizeIdentifierPart(displayIdentifier)
   const loginProviderRaw =
     pickString(profile, [['loginProvider'], ['provider'], ['authProvider'], ['signedInWith']]) ??
-    pickString(authToken, [['login_option'], ['provider'], ['loginProvider']])
+    pickString(authToken, [['login_option'], ['provider'], ['loginProvider']]) ??
+    pickString(usage, [
+      ['userInfo', 'provider', 'label'],
+      ['userInfo', 'provider', 'name'],
+      ['userInfo', 'loginProvider'],
+    ])
   const loginProvider =
     loginProviderRaw === undefined
       ? undefined
@@ -332,9 +352,25 @@ function kiroProfile(email: string, raw: JsonValue | undefined, tokenHint: strin
   const status = pickString(raw, [['status'], ['accountStatus'], ['state'], ['userStatus']])
   const statusReason = pickString(raw, [['statusReason'], ['status_reason'], ['reason']])
 
+  // CodeWhisperer profile ARN + region — pinned onto the payload so the live
+  // quota fetcher routes to the right regional endpoint without re-reading the
+  // local files (and so reauth/OAuth, which lack profile.json, stay routable).
+  // Enterprise (IdC) accounts are NOT us-east-1; the ARN's 4th segment and the
+  // token's explicit `region` field are the authoritative sources.
+  const profileArn =
+    pickString(raw, [['profileArn'], ['profile_arn']]) ??
+    pickString(profile, [['arn'], ['profileArn'], ['profile_arn']]) ??
+    pickString(authToken, [['profileArn'], ['profile_arn'], ['arn']])
+  const region =
+    pickString(raw, [['region']]) ??
+    pickString(authToken, [['region'], ['ssoRegion'], ['sso_region']]) ??
+    regionFromArn(profileArn)
+
   const payload = cell(raw === undefined ? emptyPayload() : sanitizeProviderPayload(structuredClone(raw)))
   upsertPayloadString(payload, 'userId', userId)
   upsertPayloadString(payload, 'loginProvider', loginProvider)
+  upsertPayloadString(payload, 'profileArn', profileArn)
+  upsertPayloadString(payload, 'region', region)
   upsertPayloadString(payload, 'planName', planName)
   upsertPayloadString(payload, 'planTier', planTier)
   upsertPayloadString(payload, 'status', status)

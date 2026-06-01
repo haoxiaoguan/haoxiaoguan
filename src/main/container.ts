@@ -208,7 +208,9 @@ export async function buildContainer(): Promise<Container> {
   //     OAuthService uses the platform OAuth capabilities (loopback/poll/device)
   //     registered in buildCredentialRegistry; validation reuses the credential
   //     store's envelopes. credentialStore (above) doubles as its repository.
-  const credentialRegistry = buildCredentialRegistry(cryptoService)
+  const credentialRegistry = buildCredentialRegistry(cryptoService, () =>
+    settings.getAllowStaleKiroImport(),
+  )
   const pendingOAuthRepo = new MikroOrmPendingOAuthRepository()
   const pendingImportRepo = new MikroOrmPendingImportRepository()
   void pendingImportRepo // reserved for the deep-link confirm flow (manifest §8)

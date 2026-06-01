@@ -19,6 +19,8 @@ interface SettingsState {
   autostart: boolean;
   /** Comma-separated enabled top utility buttons */
   utilityButtons: string;
+  /** Allow Kiro import when identity cannot be confirmed online */
+  allowStaleKiroImport: boolean;
   /** Loading state */
   loading: boolean;
   /** Error message */
@@ -42,6 +44,8 @@ interface SettingsState {
   setAutostart: (enabled: boolean) => Promise<void>;
   /** Update utility buttons */
   setUtilityButtons: (value: string) => Promise<void>;
+  /** Update allow-stale-Kiro-import toggle */
+  setAllowStaleKiroImport: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -53,6 +57,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   silentStart: false,
   autostart: false,
   utilityButtons: 'device,support,docs,notification',
+  allowStaleKiroImport: false,
   loading: false,
   error: null,
 
@@ -73,6 +78,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         silentStart: settings.silentStart,
         autostart: settings.autostart,
         utilityButtons: settings.utilityButtons,
+        allowStaleKiroImport: settings.allowStaleKiroImport,
         loading: false,
       });
     } catch (err) {
@@ -151,6 +157,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       await settingsService.updateSettings({ settings: { utility_buttons: value } });
       set({ utilityButtons: value });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setAllowStaleKiroImport: async (enabled: boolean) => {
+    try {
+      await settingsService.updateSettings({
+        settings: { allow_stale_kiro_import: enabled ? 'true' : 'false' },
+      });
+      set({ allowStaleKiroImport: enabled });
     } catch (err) {
       set({ error: String(err) });
     }

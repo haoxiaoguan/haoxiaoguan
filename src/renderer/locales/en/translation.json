@@ -119,6 +119,15 @@
     "wsPort": "Port",
     "wsEnabled": "Enabled",
     "wsDisabled": "Disabled",
+    "advanced": {
+      "title": "Advanced",
+      "desc": "WebSocket service and developer options.",
+      "kiroImport": {
+        "title": "Kiro Account Import",
+        "allowStale": "Allow import when identity can't be confirmed online",
+        "allowStaleDesc": "Off by default: importing a Kiro account requires an online identity check, otherwise the import is blocked to avoid using stale local account data. When on, the account imports with a placeholder identity that can be refreshed later from the account details."
+      }
+    },
     "idePath": "IDE Path",
     "idePathPlaceholder": "/path/to/ide",
     "idePathInvalid": "Path does not exist or is not executable",

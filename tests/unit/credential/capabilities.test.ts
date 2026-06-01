@@ -97,6 +97,23 @@ describe('CodexLocalImportCapability', () => {
 describe('KiroLocalImportCapability', () => {
   // Kiro reads ~/.aws/sso/cache/kiro-auth-token.json (plain JSON), NOT a VSCode
   // SecretStorage secret:// blob. These mirror the real on-disk shape.
+  //
+  // scanLocal now confirms identity live (getUsageLimits). These extraction
+  // tests inject a live response that echoes the expected identity, so the
+  // enrichment step is an identity-preserving passthrough and we can assert the
+  // resulting material. Pure-extraction fields (region/profileArn/clientSecret)
+  // come from the local scan; identity fields come from the live userInfo. The
+  // live-failure abort/degrade behaviours are covered in kiro-identity-enrichment.
+  function liveFetch(userInfo: Record<string, unknown>, subscriptionTitle?: string) {
+    return async (url: string): Promise<Response> => {
+      if (!url.includes('/getUsageLimits')) throw new Error(`unexpected url ${url}`)
+      const body = JSON.stringify({
+        userInfo,
+        subscriptionInfo: subscriptionTitle ? { subscriptionTitle } : undefined,
+      })
+      return { ok: true, status: 200, text: async () => body } as Response
+    }
+  }
   function writeAuthToken(obj: Record<string, unknown>): string {
     const p = join(tmp, 'kiro-auth-token.json')
     writeFileSync(p, JSON.stringify(obj))
@@ -107,8 +124,16 @@ describe('KiroLocalImportCapability', () => {
     writeFileSync(p, JSON.stringify(obj))
     return p
   }
+  function kiroCap(
+    authPath: string,
+    profilePath: string,
+    usageDb: string,
+    fetchImpl: (url: string) => Promise<Response>,
+  ): KiroLocalImportCapability {
+    return new KiroLocalImportCapability(authPath, profilePath, usageDb, false, fetchImpl)
+  }
 
-  it('reads accessToken/refreshToken/email/expiresAt from the AWS SSO token file', async () => {
+  it('reads accessToken/refreshToken/expiresAt from the AWS SSO token file', async () => {
     const authPath = writeAuthToken({
       accessToken: 'kiro-access',
       refreshToken: 'kiro-refresh',
@@ -120,39 +145,137 @@ describe('KiroLocalImportCapability', () => {
     const profilePath = writeProfile({ email: 'kiro@example.com', userId: 'kiro-user-id', loginProvider: 'Google' })
     const usageDb = makeStateVscdb({ 'kiro.kiroAgent': JSON.stringify({ usage: 42 }) })
 
-    const cap = new KiroLocalImportCapability(authPath, profilePath, usageDb)
+    const cap = kiroCap(authPath, profilePath, usageDb, liveFetch({ email: 'kiro@example.com', userId: 'kiro-user-id' }))
     const materials = await cap.scanLocal()
     expect(materials).toHaveLength(1)
     const m = materials[0]
     expect(m.provider).toBe('kiro')
     expect(m.accessToken).toBe('kiro-access')
     expect(m.refreshToken).toBe('kiro-refresh')
-    expect(m.email).toBe('kiro-user-id') // profile userId wins per source pick order
+    expect(m.email).toBe('kiro@example.com') // from the live userInfo
     expect(m.source).toBe('local_scan')
     expect(m.expiresAt?.toISOString()).toBe('2026-12-31T00:00:00.000Z')
     const meta = m.rawMetadata as Record<string, unknown>
-    expect(meta.login_provider).toBe('Google')
-    expect((meta.kiro_usage_raw as Record<string, unknown>).usage).toBe(42)
     expect((meta.kiro_auth_token_raw as Record<string, unknown>).accessToken).toBe('kiro-access')
+  })
+
+  it('surfaces enterprise region/provider/profileArn + clientSecret into rawMetadata', async () => {
+    // Real enterprise (IdC) token shape: explicit region + provider + clientId,
+    // with the CodeWhisperer profile ARN in profile.json.
+    const authPath = writeAuthToken({
+      accessToken: 'ent-access',
+      refreshToken: 'ent-refresh',
+      expiresAt: '2026-12-31T00:00:00.000Z',
+      clientIdHash: 'a96ec6ff09e0c558ceca191cdaa0ff2b0e4e3e35',
+      authMethod: 'IdC',
+      provider: 'Enterprise',
+      region: 'us-east-1',
+    })
+    // The real OIDC clientId + clientSecret live in the paired <clientIdHash>.json,
+    // not the token file. Write it so resolveRegistration() can follow the pointer.
+    writeFileSync(
+      join(tmp, 'a96ec6ff09e0c558ceca191cdaa0ff2b0e4e3e35.json'),
+      JSON.stringify({ clientId: 'mHSX_IT0LsTuOEhHwP-arnVzLWVhc3QtMQ', clientSecret: 'sekret' }),
+    )
+    const profilePath = writeProfile({
+      arn: 'arn:aws:codewhisperer:us-east-1:607416644019:profile/74G7G3NXYGXY',
+      name: 'Acme Corp',
+    })
+    const cap = kiroCap(authPath, profilePath, join(tmp, 'no.vscdb'), liveFetch({ email: 'ent@corp.com', userId: 'd-ent.1' }))
+    const m = (await cap.scanLocal())[0]
+    const meta = m.rawMetadata as Record<string, unknown>
+    expect(meta.region).toBe('us-east-1')
+    expect(meta.auth_method).toBe('IdC')
+    expect(meta.provider).toBe('Enterprise')
+    // clientId + clientSecret recovered from the registration file via clientIdHash.
+    expect(meta.client_id).toBe('mHSX_IT0LsTuOEhHwP-arnVzLWVhc3QtMQ')
+    expect(meta.client_secret).toBe('sekret')
+    expect(meta.client_id_hash).toBe('a96ec6ff09e0c558ceca191cdaa0ff2b0e4e3e35')
+    expect(meta.profileArn).toBe('arn:aws:codewhisperer:us-east-1:607416644019:profile/74G7G3NXYGXY')
+  })
+
+  it('derives region from the profile ARN when the token omits an explicit region', async () => {
+    const authPath = writeAuthToken({
+      accessToken: 'eu-access',
+      refreshToken: 'eu-refresh',
+      authMethod: 'IdC',
+      provider: 'Enterprise',
+    })
+    const profilePath = writeProfile({
+      arn: 'arn:aws:codewhisperer:eu-central-1:111122223333:profile/ABCDEF',
+    })
+    // Route getUsageLimits to the eu-central-1 endpoint; the fetch matches on
+    // path so region routing is exercised but not asserted here.
+    const cap = kiroCap(authPath, profilePath, join(tmp, 'no.vscdb'), liveFetch({ email: 'eu@corp.com', userId: 'd-eu.1' }))
+    const m = (await cap.scanLocal())[0]
+    const meta = m.rawMetadata as Record<string, unknown>
+    expect(meta.region).toBe('eu-central-1')
+    expect(meta.profileArn).toBe('arn:aws:codewhisperer:eu-central-1:111122223333:profile/ABCDEF')
+  })
+
+  it('takes identity from the live getUsageLimits userInfo', async () => {
+    // The real enterprise shape: profile.json has only { arn, name }, the access
+    // token is opaque (not a JWT), and the authoritative identity comes from the
+    // live getUsageLimits userInfo — NOT the (possibly stale) local state.vscdb.
+    const authPath = writeAuthToken({
+      accessToken: 'aoaAAAAA-opaque-not-a-jwt',
+      refreshToken: 'aorAAAAA-opaque',
+      authMethod: 'IdC',
+      provider: 'Enterprise',
+      region: 'us-east-1',
+    })
+    const profilePath = writeProfile({
+      arn: 'arn:aws:codewhisperer:us-east-1:607416644019:profile/74G7G3NXYGXY',
+      name: 'KiroProfile-us-east-1',
+    })
+    // Stale local usage (a previous account) — must be overridden by live data.
+    const usageDb = makeStateVscdb({
+      'kiro.kiroAgent': JSON.stringify({
+        userInfo: { email: 'stale@example.com', userId: 'd-STALE.x' },
+        subscriptionInfo: { subscriptionTitle: 'KIRO FREE' },
+      }),
+    })
+    const cap = kiroCap(
+      authPath,
+      profilePath,
+      usageDb,
+      liveFetch({ email: 'live@example.com', userId: 'd-LIVE.current' }, 'KIRO POWER'),
+    )
+    const m = (await cap.scanLocal())[0]
+    expect(m.email).toBe('live@example.com')
+    const meta = m.rawMetadata as Record<string, unknown>
+    expect(meta.user_id).toBe('d-LIVE.current')
+    expect(meta.identity_source).toBe('live')
   })
 
   it('throws InvalidCredential when the token file has no accessToken', async () => {
     const authPath = writeAuthToken({ refreshToken: 'r', email: 'e@x.com' })
-    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'))
+    const cap = kiroCap(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'), liveFetch({ email: 'e@x.com' }))
     await expect(cap.scanLocal()).rejects.toMatchObject({ kind: 'invalid_credential' })
   })
 
   it('returns empty when the token file is absent', async () => {
-    const cap = new KiroLocalImportCapability(join(tmp, 'missing.json'), join(tmp, 'p.json'), join(tmp, 'db.vscdb'))
+    const cap = kiroCap(join(tmp, 'missing.json'), join(tmp, 'p.json'), join(tmp, 'db.vscdb'), liveFetch({ email: 'e@x.com' }))
     expect(await cap.scanLocal()).toEqual([])
   })
 
   it('falls back to auth-token email when profile is missing', async () => {
     const authPath = writeAuthToken({ accessToken: 'a', email: 'fallback@example.com' })
-    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'))
+    const cap = kiroCap(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'), liveFetch({ email: 'fallback@example.com' }))
     const m = (await cap.scanLocal())[0]
     expect(m.email).toBe('fallback@example.com')
     expect(m.refreshToken).toBeUndefined()
+  })
+
+  it('aborts import (default) when identity cannot be confirmed online', async () => {
+    // allowStale defaults to false → a failed live confirmation throws rather
+    // than importing the (possibly stale) local identity.
+    const offlineFetch = async (): Promise<Response> => {
+      throw new Error('offline')
+    }
+    const authPath = writeAuthToken({ accessToken: 'a', refreshToken: 'r', email: 'x@y.com' })
+    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'), false, offlineFetch)
+    await expect(cap.scanLocal()).rejects.toMatchObject({ kind: 'provider_error' })
   })
 })
 

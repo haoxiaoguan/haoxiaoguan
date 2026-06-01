@@ -223,6 +223,7 @@ export interface Settings {
   silentStart: boolean;
   autostart: boolean;
   utilityButtons: string;
+  allowStaleKiroImport: boolean;
 }
 
 export interface UpdateSettingsRequest {

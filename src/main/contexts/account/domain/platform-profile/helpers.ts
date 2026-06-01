@@ -111,6 +111,17 @@ export function commonStatusReason(raw: JsonValue | undefined): string | undefin
   return pickString(raw, [['statusReason'], ['status_reason'], ['reason'], ['message']])
 }
 
+// region_from_arn: the region segment of an AWS ARN
+// (arn:aws:codewhisperer:<region>:<account>:...). Used to route Kiro's
+// region-specific quota endpoints when no explicit region field is present.
+export function regionFromArn(arn: string | undefined): string | undefined {
+  if (arn === undefined) return undefined
+  const segments = arn.split(':')
+  if (segments[0]?.trim().toLowerCase() !== 'arn') return undefined
+  const region = segments[3]?.trim()
+  return region !== undefined && region.length > 0 ? region : undefined
+}
+
 // provider_from_login_option: map known login option tokens to display names.
 export function providerFromLoginOption(loginOption: string): string | undefined {
   switch (loginOption.trim().toLowerCase()) {
@@ -227,6 +238,7 @@ const SENSITIVE_EXACT = new Set([
   'sessionkey',
   'sessionsecret',
   'secret',
+  'clientsecret',
   'codeverifier',
   'oauthstate',
   'state',
