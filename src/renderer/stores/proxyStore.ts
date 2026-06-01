@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type {
   ProxyDto,
-  ProxyGroupDto,
   AccountBindingDto,
   ProxyImportSummary,
   ProxyTestResultDto,
@@ -12,7 +11,6 @@ import { proxyService } from '../services/tauri';
 
 interface ProxyState {
   proxies: ProxyDto[];
-  groups: ProxyGroupDto[];
   bindings: AccountBindingDto[];
   loading: boolean;
   testingIds: Set<string>;
@@ -25,16 +23,12 @@ interface ProxyState {
   importProxies: (text: string) => Promise<ProxyImportSummary | null>;
   testProxy: (id: string) => Promise<ProxyTestResultDto | null>;
   testProxies: (ids: string[]) => Promise<void>;
-  createGroup: (name: string, proxyId: string) => Promise<void>;
-  deleteGroup: (id: string) => Promise<void>;
   bindAccountToProxy: (accountId: string, proxyId: string) => Promise<void>;
-  bindAccountToGroup: (accountId: string, groupId: string) => Promise<void>;
   unbindAccount: (accountId: string) => Promise<void>;
 }
 
 export const useProxyStore = create<ProxyState>((set, get) => ({
   proxies: [],
-  groups: [],
   bindings: [],
   loading: false,
   testingIds: new Set(),
@@ -43,12 +37,11 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   fetchAll: async () => {
     set({ loading: true, error: null });
     try {
-      const [proxies, groups, bindings] = await Promise.all([
+      const [proxies, bindings] = await Promise.all([
         proxyService.listProxies(),
-        proxyService.listGroups(),
         proxyService.listBindings(),
       ]);
-      set({ proxies, groups, bindings, loading: false });
+      set({ proxies, bindings, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
     }
@@ -133,39 +126,9 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     }
   },
 
-  createGroup: async (name, proxyId) => {
-    try {
-      await proxyService.createGroup(name, proxyId);
-      await get().fetchAll();
-    } catch (e) {
-      set({ error: String(e) });
-      throw e;
-    }
-  },
-
-  deleteGroup: async (id) => {
-    try {
-      await proxyService.deleteGroup(id);
-      await get().fetchAll();
-    } catch (e) {
-      set({ error: String(e) });
-      throw e;
-    }
-  },
-
   bindAccountToProxy: async (accountId, proxyId) => {
     try {
       await proxyService.bindAccountToProxy(accountId, proxyId);
-      await get().fetchAll();
-    } catch (e) {
-      set({ error: String(e) });
-      throw e;
-    }
-  },
-
-  bindAccountToGroup: async (accountId, groupId) => {
-    try {
-      await proxyService.bindAccountToGroup(accountId, groupId);
       await get().fetchAll();
     } catch (e) {
       set({ error: String(e) });

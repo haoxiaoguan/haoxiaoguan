@@ -98,6 +98,34 @@ vi.mock('@/stores', () => ({
       ensureMany: vi.fn(async () => {}),
       refresh: vi.fn(async () => {}),
     }),
+  // EditAccountDialog (rendered by Accounts) reads the account-group store.
+  useAccountGroupStore: (selector?: (state: Record<string, unknown>) => unknown) => {
+    const state = {
+      groups: [] as unknown[],
+      fetchGroups: vi.fn(async () => {}),
+      addMembers: vi.fn(async () => 0),
+      removeMembers: vi.fn(async () => 0),
+    };
+    return selector ? selector(state) : state;
+  },
+}));
+
+// EditAccountDialog also reads the proxy store + proxy/account-group services.
+vi.mock('@/stores/proxyStore', () => ({
+  useProxyStore: (selector?: (state: Record<string, unknown>) => unknown) => {
+    const state = {
+      proxies: [] as unknown[],
+      fetchAll: vi.fn(async () => {}),
+      bindAccountToProxy: vi.fn(async () => {}),
+      unbindAccount: vi.fn(async () => {}),
+    };
+    return selector ? selector(state) : state;
+  },
+}));
+vi.mock('@/services/tauri', () => ({
+  accountGroupService: { listGroupsForAccount: vi.fn(async () => []) },
+  proxyService: { getAccountBinding: vi.fn(async () => null) },
+  credentialService: { startOAuth: vi.fn(), completeOAuth: vi.fn() },
 }));
 
 describe('Accounts empty state layout', () => {
@@ -287,13 +315,13 @@ describe('Accounts empty state layout', () => {
     expect(headerRow.children[8]).toHaveClass('sticky');
     expect(headerRow.children[8]).toHaveStyle({ right: '0px' });
     expect(dataRow.children[0]).toHaveClass('sticky');
-    expect(dataRow.children[0]).toHaveClass('bg-card', 'group-hover:bg-muted');
+    expect(dataRow.children[0]).toHaveClass('dt-cell-pinned');
     expect(dataRow.children[0]).toHaveStyle({ left: '0px' });
     expect(dataRow.children[1]).toHaveClass('sticky');
-    expect(dataRow.children[1]).toHaveClass('bg-card', 'group-hover:bg-muted');
+    expect(dataRow.children[1]).toHaveClass('dt-cell-pinned');
     expect(dataRow.children[1]).toHaveStyle({ left: '44px' });
     expect(dataRow.children[8]).toHaveClass('sticky');
-    expect(dataRow.children[8]).toHaveClass('bg-card', 'group-hover:bg-muted');
+    expect(dataRow.children[8]).toHaveClass('dt-cell-pinned');
     expect(dataRow.children[8]).toHaveStyle({ right: '0px' });
   });
 });

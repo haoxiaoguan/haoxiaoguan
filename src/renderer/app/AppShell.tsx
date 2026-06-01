@@ -3,6 +3,7 @@ import {
   Bell,
   BookOpen,
   Cpu,
+  FolderTree,
   Headphones,
   Info,
   LayoutGrid,
@@ -61,9 +62,10 @@ interface NavItem {
 const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav:dashboard', icon: LayoutGrid, end: true },
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
+  { to: '/proxies', labelKey: 'nav:proxies', icon: Network },
+  { to: '/groups', labelKey: 'nav:groups', icon: FolderTree },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
-  { to: '/proxies', labelKey: 'nav:proxies', icon: Network },
 ];
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [
@@ -87,6 +89,7 @@ function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/skills')) return 'nav:skills';
   if (pathname.startsWith('/mcp')) return 'nav:mcp';
   if (pathname.startsWith('/proxies')) return 'nav:proxies';
+  if (pathname.startsWith('/groups')) return 'nav:groups';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
   if (pathname.startsWith('/settings/agent')) return 'nav:settings.menu.agent';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';

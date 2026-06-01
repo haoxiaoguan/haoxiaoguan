@@ -4,7 +4,6 @@ import {
   redactProxyUrl,
   type Proxy,
   type ProxyCheckResult,
-  type ProxyGroup,
   type AccountProxyBinding,
   type ProxyProtocol,
 } from '../domain/proxy'
@@ -41,21 +40,12 @@ export interface ProxyDto {
   tags: string[]
   displayUrl: string
   boundAccountCount: number
-  boundGroupCount: number
-  createdAt: string
-}
-
-export interface ProxyGroupDto {
-  id: string
-  name: string
-  proxyId: string
   createdAt: string
 }
 
 export interface AccountBindingDto {
   accountId: string
   proxyId?: string
-  groupId?: string
 }
 
 export interface ImportSummary {
@@ -112,9 +102,8 @@ export class ProxyService {
 
   async deleteProxy(id: string): Promise<void> {
     const accountCount = await this.repo.countAccountsForProxy(id)
-    const groupCount = await this.repo.countGroupsForProxy(id)
-    if (accountCount > 0 || groupCount > 0) {
-      throw ProxyError.inUse(id, accountCount, groupCount)
+    if (accountCount > 0) {
+      throw ProxyError.inUse(id, accountCount, 0)
     }
     await this.repo.deleteProxy(id)
   }
@@ -169,38 +158,12 @@ export class ProxyService {
     return Promise.all(ids.map((id) => limit(() => this.testProxy(id))))
   }
 
-  // --- groups ---
-
-  async createGroup(name: string, proxyId: string): Promise<ProxyGroupDto> {
-    const proxy = await this.repo.getProxy(proxyId)
-    if (proxy === null) throw ProxyError.notFound(proxyId)
-    const group = await this.repo.createGroup(name, proxyId)
-    return this.toGroupDto(group)
-  }
-
-  async listGroups(): Promise<ProxyGroupDto[]> {
-    const groups = await this.repo.listGroups()
-    return groups.map((g) => this.toGroupDto(g))
-  }
-
-  async deleteGroup(id: string): Promise<void> {
-    const accountCount = await this.repo.countAccountsForGroup(id)
-    if (accountCount > 0) throw ProxyError.inUse(id, accountCount, 0)
-    await this.repo.deleteGroup(id)
-  }
-
   // --- bindings ---
 
   async bindAccountToProxy(accountId: string, proxyId: string): Promise<void> {
     const proxy = await this.repo.getProxy(proxyId)
     if (proxy === null) throw ProxyError.notFound(proxyId)
     await this.repo.bindAccount(accountId, { proxyId })
-  }
-
-  async bindAccountToGroup(accountId: string, groupId: string): Promise<void> {
-    const group = await this.repo.getGroup(groupId)
-    if (group === null) throw ProxyError.notFound(groupId)
-    await this.repo.bindAccount(accountId, { groupId })
   }
 
   async unbindAccount(accountId: string): Promise<void> {
@@ -220,10 +183,7 @@ export class ProxyService {
   // --- mapping ---
 
   private async toDto(proxy: Proxy): Promise<ProxyDto> {
-    const [boundAccountCount, boundGroupCount] = await Promise.all([
-      this.repo.countAccountsForProxy(proxy.id),
-      this.repo.countGroupsForProxy(proxy.id),
-    ])
+    const boundAccountCount = await this.repo.countAccountsForProxy(proxy.id)
     return {
       id: proxy.id,
       label: proxy.label,
@@ -239,17 +199,12 @@ export class ProxyService {
       tags: proxy.tags,
       displayUrl: redactProxyUrl(proxy),
       boundAccountCount,
-      boundGroupCount,
       createdAt: proxy.createdAt.toISOString(),
     }
   }
 
-  private toGroupDto(g: ProxyGroup): ProxyGroupDto {
-    return { id: g.id, name: g.name, proxyId: g.proxyId, createdAt: g.createdAt.toISOString() }
-  }
-
   private toBindingDto(b: AccountProxyBinding): AccountBindingDto {
-    return { accountId: b.accountId, proxyId: b.proxyId, groupId: b.groupId }
+    return { accountId: b.accountId, proxyId: b.proxyId }
   }
 
   private validateInput(input: CreateProxyInput): void {

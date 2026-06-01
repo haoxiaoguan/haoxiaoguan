@@ -13,7 +13,7 @@
 //   - usage       (3 tables: usage_records, usage_sync_state, usage_daily_rollups)
 //   - quota       (2 tables: quota_cache, account_quota_state)
 //   - mcp         (1 table: mcp_servers)
-//   - proxy       (3 tables: proxies, proxy_groups, account_proxy_bindings)
+//   - proxy       (2 tables: proxies, account_proxy_bindings)
 //
 // The `credentials` table is owned by the credential context's CredentialEntity
 // (it supersedes the account context's former TEMP CredentialRefEntity, now
@@ -42,8 +42,11 @@ import { AccountQuotaStateEntity } from '../../contexts/quota/infrastructure/acc
 import { McpServerEntity } from '../../contexts/mcp/infrastructure/mcp-server.entity'
 
 import { ProxyEntity } from '../../contexts/proxy/infrastructure/proxy.entity'
-import { ProxyGroupEntity } from '../../contexts/proxy/infrastructure/proxy-group.entity'
 import { AccountProxyBindingEntity } from '../../contexts/proxy/infrastructure/account-proxy-binding.entity'
+
+import { AccountGroupEntity } from '../../contexts/accountGroup/infrastructure/account-group.entity'
+import { AccountGroupMembershipEntity } from '../../contexts/accountGroup/infrastructure/account-group-membership.entity'
+import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infrastructure/account-group-proxy-binding.entity'
 
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
@@ -70,6 +73,9 @@ export const ALL_ENTITIES: unknown[] = [
   McpServerEntity,
   // proxy context
   ProxyEntity,
-  ProxyGroupEntity,
   AccountProxyBindingEntity,
+  // account-group context
+  AccountGroupEntity,
+  AccountGroupMembershipEntity,
+  AccountGroupProxyBindingEntity,
 ]

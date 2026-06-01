@@ -41,6 +41,7 @@ import {
 } from '@/components/management/ManagementControls';
 import AddAccountSheet from '../components/AddAccountSheet';
 import AccountCard from '../components/accounts/AccountCard';
+import EditAccountDialog from '../components/accounts/EditAccountDialog';
 import { AccountDataTable } from '../components/accounts/AccountDataTable';
 import { PlatformIcon } from '../components/accounts/PlatformIcon';
 import { primaryMetric } from '../components/accounts/quota-display';
@@ -125,6 +126,7 @@ export default function Accounts() {
   const [searchText, setSearchText] = useState('');
   const [view, setView] = useState<ViewMode>('card');
   const [showImportSheet, setShowImportSheet] = useState(false);
+  const [editTarget, setEditTarget] = useState<Account | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -520,6 +522,7 @@ export default function Accounts() {
                       onSwitch={() => handleSwitch(account.platform, account.id)}
                       onDelete={() => handleDelete(account.id)}
                       onOpen={() => setHighlightedId(account.id)}
+                      onEdit={() => setEditTarget(account)}
                     />
                   ))}
                 </div>
@@ -537,6 +540,10 @@ export default function Accounts() {
                   onSwitch={handleSwitch}
                   onDelete={handleDelete}
                   onOpen={setHighlightedId}
+                  onEdit={(id) => {
+                    const acc = filteredAccounts.find((a) => a.id === id);
+                    if (acc) setEditTarget(acc);
+                  }}
                 />
                 {selectedIds.size > 0 ? (
                   <div className="mt-2 flex h-11 items-center justify-between rounded-[8px] border border-border bg-muted/20 px-4">
@@ -567,6 +574,15 @@ export default function Accounts() {
           toast.success(t('importSuccess'));
           fetchAccounts(selectedPlatform);
         }}
+      />
+
+      <EditAccountDialog
+        account={editTarget}
+        open={editTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+        onSaved={() => fetchAccounts(selectedPlatform)}
       />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

@@ -43,6 +43,9 @@ import { registerWebSocketHandlers } from '../contexts/websocket/ipc/websocket-h
 import type { ProxyService } from '../contexts/proxy/application/proxy-service'
 import { registerProxyHandlers } from '../contexts/proxy/ipc/proxy-handlers'
 
+import type { AccountGroupService } from '../contexts/accountGroup/application/account-group-service'
+import { registerAccountGroupHandlers } from '../contexts/accountGroup/ipc/account-group-handlers'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
@@ -92,6 +95,9 @@ export interface Services {
 
   // proxy context (outbound proxy IP management)
   proxyService: ProxyService
+
+  // account-group context (cross-platform account groupings + group→proxy binding)
+  accountGroupService: AccountGroupService
 }
 
 // Each context contributes a register*Handlers function.
@@ -122,4 +128,5 @@ export function registerAllHandlers(services: Services): void {
   registerSyncHandlers(services.sync)
   registerWebSocketHandlers(services.websocket)
   registerProxyHandlers(services.proxyService)
+  registerAccountGroupHandlers(services.accountGroupService)
 }

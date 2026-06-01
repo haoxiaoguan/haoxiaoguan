@@ -87,6 +87,95 @@
       "websocket": "WebSocket"
     }
   },
+  "edit": {
+    "title": "Edit account",
+    "description": "Update display name, tags and notes. Login state is left untouched.",
+    "name": "Display name",
+    "tags": "Tags",
+    "tagsHint": "Comma-separated. Max 10 tags, each ≤ 32 bytes.",
+    "notes": "Notes",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "failed": "Failed to save",
+    "identity": "Identity",
+    "identityHint": "The identity is fixed; use \"Re-authenticate\" to rotate the token.",
+    "belongsToGroup": "Group",
+    "noGroup": "No group",
+    "bindProxy": "Proxy",
+    "noProxy": "Not bound (use group or direct)",
+    "effectiveEgress": "Effective egress",
+    "egressAccount": "Account proxy: {{label}}",
+    "egressGroup": "Group \"{{group}}\" proxy: {{label}}",
+    "egressGroupUnbound": "Group \"{{group}}\" has no proxy → direct",
+    "egressDirect": "Direct (no proxy bound)"
+  },
+  "reauth": {
+    "title": "Re-authenticate",
+    "description": "Run the sign-in flow again to refresh the token. The replacement is rejected if the identity does not match.",
+    "confirm": "Replace token",
+    "success": "Credential updated",
+    "failed": "Re-authentication failed",
+    "identityMismatch": "Identity mismatch. Sign in with the same account."
+  },
+  "group": {
+    "title": "Account groups",
+    "subtitle": "Cross-platform grouping and proxy binding",
+    "create": "New group",
+    "edit": "Edit group",
+    "cancel": "Cancel",
+    "name": "Name",
+    "color": "Color",
+    "description": "Description",
+    "memberCount": "{{count}} accounts",
+    "noGroups": "No groups yet. Click \"New group\" to start.",
+    "addToGroup": "Add to group",
+    "removeFromGroup": "Remove from group",
+    "deleteConfirm": "Delete this group?",
+    "deleteWithMembers": "{{count}} accounts still belong to this group — check force delete to continue.",
+    "forceDelete": "Force delete (also drops memberships)",
+    "binding": {
+      "title": "Outbound proxy",
+      "none": "Not bound",
+      "noneHint": "Not bound: members go direct, or use the proxy bound to each account.",
+      "proxy": "Bind a proxy",
+      "proxyHint": "Members without their own proxy egress through this one; an account's own proxy still takes precedence.",
+      "selectProxy": "Pick a proxy",
+      "bound": "Bound"
+    },
+    "wizard": {
+      "step1": "Basics",
+      "step2": "Members",
+      "step3": "Proxy",
+      "stepOf": "Step {{current}} / {{total}}",
+      "next": "Next",
+      "back": "Back",
+      "finish": "Finish",
+      "memberHint": "Select accounts to add to this group; cross-platform is fine.",
+      "memberSelected": "{{count}} accounts selected",
+      "searchMember": "Search account / email",
+      "namePlaceholder": "e.g. Client A",
+      "created": "Group created",
+      "updated": "Group updated"
+    },
+    "table": {
+      "name": "Group",
+      "members": "Members",
+      "proxy": "Egress proxy",
+      "description": "Description",
+      "actions": "Actions",
+      "empty": "No groups yet. Click \"New group\" to start."
+    },
+    "summary": {
+      "total": "{{count}} groups",
+      "bound": "{{count}} bound to proxy"
+    },
+    "filter": {
+      "all": "Group: All",
+      "ungrouped": "Group: Ungrouped",
+      "label": "Group: {{name}}"
+    }
+  },
   "actions": {
     "switch": "Switch",
     "switching": "Switching…",

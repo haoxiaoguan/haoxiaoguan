@@ -3,7 +3,6 @@ import { MikroORM } from '@mikro-orm/better-sqlite'
 import type { EntityManager } from '@mikro-orm/better-sqlite'
 import { ReflectMetadataProvider } from '@mikro-orm/core'
 import { ProxyEntity } from '../../../src/main/contexts/proxy/infrastructure/proxy.entity'
-import { ProxyGroupEntity } from '../../../src/main/contexts/proxy/infrastructure/proxy-group.entity'
 import { AccountProxyBindingEntity } from '../../../src/main/contexts/proxy/infrastructure/account-proxy-binding.entity'
 
 // In-memory MikroORM for proxy unit tests. Registers the three proxy entity
@@ -20,7 +19,7 @@ export async function createProxyTestOrm(): Promise<TestOrm> {
   const orm = await MikroORM.init({
     metadataProvider: ReflectMetadataProvider,
     dbName: ':memory:',
-    entities: [ProxyEntity, ProxyGroupEntity, AccountProxyBindingEntity],
+    entities: [ProxyEntity, AccountProxyBindingEntity],
     discovery: { warnWhenNoEntities: false },
     allowGlobalContext: true,
   })

@@ -120,22 +120,12 @@ describe('MikroOrmProxyRepository — proxies CRUD', () => {
   })
 })
 
-describe('MikroOrmProxyRepository — groups + bindings', () => {
-  it('creates a group and lists it', async () => {
-    const proxy = await repo.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
-    const group = await repo.createGroup('team-a', proxy.id)
-    expect(group.name).toBe('team-a')
-    expect(group.proxyId).toBe(proxy.id)
-    const groups = await repo.listGroups()
-    expect(groups).toHaveLength(1)
-  })
-
+describe('MikroOrmProxyRepository — account bindings', () => {
   it('binds an account directly to a proxy (upsert is unique per account)', async () => {
     const proxy = await repo.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
     await repo.bindAccount('acc-1', { proxyId: proxy.id })
     let binding = await repo.getBinding('acc-1')
     expect(binding?.proxyId).toBe(proxy.id)
-    expect(binding?.groupId).toBeUndefined()
 
     // re-binding the same account replaces (still one row)
     const proxy2 = await repo.createProxy({ protocol: 'http', host: 'b', port: 2, tags: [] })
@@ -145,15 +135,6 @@ describe('MikroOrmProxyRepository — groups + bindings', () => {
     expect(await repo.listBindings()).toHaveLength(1)
   })
 
-  it('binds an account via a group', async () => {
-    const proxy = await repo.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
-    const group = await repo.createGroup('g', proxy.id)
-    await repo.bindAccount('acc-1', { groupId: group.id })
-    const binding = await repo.getBinding('acc-1')
-    expect(binding?.groupId).toBe(group.id)
-    expect(binding?.proxyId).toBeUndefined()
-  })
-
   it('unbinds an account', async () => {
     const proxy = await repo.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
     await repo.bindAccount('acc-1', { proxyId: proxy.id })
@@ -161,15 +142,11 @@ describe('MikroOrmProxyRepository — groups + bindings', () => {
     expect(await repo.getBinding('acc-1')).toBeNull()
   })
 
-  it('counts accounts + groups using a proxy (for delete protection)', async () => {
+  it('counts accounts using a proxy (for delete protection)', async () => {
     const proxy = await repo.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
-    const group = await repo.createGroup('g', proxy.id)
     await repo.bindAccount('acc-1', { proxyId: proxy.id })
     await repo.bindAccount('acc-2', { proxyId: proxy.id })
-    await repo.bindAccount('acc-3', { groupId: group.id })
 
     expect(await repo.countAccountsForProxy(proxy.id)).toBe(2)
-    expect(await repo.countGroupsForProxy(proxy.id)).toBe(1)
-    expect(await repo.countAccountsForGroup(group.id)).toBe(1)
   })
 })

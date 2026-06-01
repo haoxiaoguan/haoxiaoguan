@@ -56,6 +56,22 @@ export const accountService = {
 
   importAccounts: (request: ImportAccountsRequest) =>
     bridge().account.importAccounts(request) as Promise<ImportResultResponse>,
+
+  updateAccount: (
+    accountId: string,
+    patch: { name?: string | null; tags?: string[]; notes?: string | null },
+  ) => bridge().account.updateAccount(accountId, patch) as Promise<Account>,
+
+  reauthenticate: (
+    accountId: string,
+    input: {
+      identifier: string;
+      token: string;
+      refreshToken?: string;
+      expiresAt?: string;
+      rawMetadata?: unknown;
+    },
+  ) => bridge().account.reauthenticate(accountId, input) as Promise<Account>,
 };
 
 // ============================================================================
@@ -453,12 +469,16 @@ export const localBackupService = {
 
 import type {
   ProxyDto,
-  ProxyGroupDto,
   AccountBindingDto,
   ProxyImportSummary,
   ProxyTestResultDto,
   CreateProxyRequest,
   UpdateProxyRequest,
+  AccountGroupDto,
+  AccountGroupBindingDto,
+  AccountGroupMembershipDto,
+  CreateAccountGroupRequest,
+  UpdateAccountGroupRequest,
 } from '@shared/api-types';
 
 export const proxyService = {
@@ -480,13 +500,6 @@ export const proxyService = {
   testProxies: (ids: string[], concurrency = 4) =>
     bridge().proxy.testProxies(ids, concurrency) as Promise<ProxyTestResultDto[]>,
 
-  listGroups: () => bridge().proxy.listGroups() as Promise<ProxyGroupDto[]>,
-
-  createGroup: (name: string, proxyId: string) =>
-    bridge().proxy.createGroup(name, proxyId) as Promise<ProxyGroupDto>,
-
-  deleteGroup: (id: string) => bridge().proxy.deleteGroup(id),
-
   listBindings: () => bridge().proxy.listBindings() as Promise<AccountBindingDto[]>,
 
   getAccountBinding: (accountId: string) =>
@@ -495,8 +508,43 @@ export const proxyService = {
   bindAccountToProxy: (accountId: string, proxyId: string) =>
     bridge().proxy.bindAccountToProxy(accountId, proxyId),
 
-  bindAccountToGroup: (accountId: string, groupId: string) =>
-    bridge().proxy.bindAccountToGroup(accountId, groupId),
-
   unbindAccount: (accountId: string) => bridge().proxy.unbindAccount(accountId),
+};
+
+// ============================================================================
+// AccountGroup Commands — cross-platform account groupings + group→proxy binding
+// ============================================================================
+
+export const accountGroupService = {
+  listGroups: () =>
+    bridge().accountGroup.listGroups() as Promise<AccountGroupDto[]>,
+
+  createGroup: (req: CreateAccountGroupRequest) =>
+    bridge().accountGroup.createGroup(req) as Promise<AccountGroupDto>,
+
+  updateGroup: (id: string, patch: UpdateAccountGroupRequest) =>
+    bridge().accountGroup.updateGroup(id, patch) as Promise<AccountGroupDto>,
+
+  deleteGroup: (id: string, force = false) =>
+    bridge().accountGroup.deleteGroup(id, force),
+
+  listMembers: (groupId: string) =>
+    bridge().accountGroup.listMembers(groupId) as Promise<AccountGroupMembershipDto[]>,
+
+  listGroupsForAccount: (accountId: string) =>
+    bridge().accountGroup.listGroupsForAccount(accountId) as Promise<AccountGroupDto[]>,
+
+  addMembers: (groupId: string, accountIds: string[]) =>
+    bridge().accountGroup.addMembers(groupId, accountIds) as Promise<{ added: number }>,
+
+  removeMembers: (groupId: string, accountIds: string[]) =>
+    bridge().accountGroup.removeMembers(groupId, accountIds) as Promise<{ removed: number }>,
+
+  bindGroupToProxy: (groupId: string, proxyId: string) =>
+    bridge().accountGroup.bindGroupToProxy(groupId, proxyId) as Promise<AccountGroupBindingDto>,
+
+  unbindGroup: (groupId: string) => bridge().accountGroup.unbindGroup(groupId),
+
+  getGroupBinding: (groupId: string) =>
+    bridge().accountGroup.getGroupBinding(groupId) as Promise<AccountGroupBindingDto | null>,
 };

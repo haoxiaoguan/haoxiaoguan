@@ -207,6 +207,93 @@ main {
     min-width: 0;
     width: 100%;
   }
+
+  /* antd-style fixed-column scroll shadows.
+     The boundary cells (last left-pinned / first right-pinned) float a gradient
+     shadow on their inner edge. Visibility is gated by the scroll container's
+     data-ping-* attributes so the shadow only shows while content is clipped on
+     that side — fades out at the very start / end of the horizontal scroll. */
+  .data-table-scroll {
+    --dt-shadow-color: 0 0% 0% / 0.16;
+    --dt-shadow-width: 14px;
+  }
+
+  .dt-pin-left-last::after,
+  .dt-pin-right-first::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: var(--dt-shadow-width);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+
+  .dt-pin-left-last::after {
+    right: 0;
+    transform: translateX(100%);
+    background: linear-gradient(to right, hsl(var(--dt-shadow-color)), transparent);
+  }
+
+  .dt-pin-right-first::after {
+    left: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(to left, hsl(var(--dt-shadow-color)), transparent);
+  }
+
+  .data-table-scroll[data-ping-left='true'] .dt-pin-left-last::after {
+    opacity: 1;
+  }
+
+  .data-table-scroll[data-ping-right='true'] .dt-pin-right-first::after {
+    opacity: 1;
+  }
+
+  /* Pinned header cells must be opaque (so scrolling body content never shows
+     through), yet match the non-pinned headers, which are a translucent
+     bg-muted/25 over the card. Stack an opaque card base with the same 25%
+     muted tint on top to reproduce that exact composite. */
+  .dt-head-pinned {
+    background-image:
+      linear-gradient(hsl(var(--muted) / 0.25), hsl(var(--muted) / 0.25)),
+      linear-gradient(hsl(var(--card)), hsl(var(--card)));
+  }
+
+  /* Pinned body cells composite an opaque card base with the row's tint
+     (active / highlighted / hover / selected) on top — same color the
+     non-pinned cells inherit from the row. */
+  .dt-cell-pinned {
+    background-image:
+      linear-gradient(var(--dt-row-tint, transparent), var(--dt-row-tint, transparent)),
+      linear-gradient(hsl(var(--card)), hsl(var(--card)));
+  }
+
+  /* The row publishes its tint through --dt-row-tint and mirrors it as the
+     <tr>'s background-color so non-pinned cells (transparent) inherit it.
+     Hover and selected override any idle tint set inline. */
+  .dt-row {
+    background-color: var(--dt-row-tint, transparent);
+  }
+
+  .dt-row:hover {
+    --dt-row-tint: hsl(var(--muted) / 0.5);
+  }
+
+  .dt-row[data-state='selected'] {
+    --dt-row-tint: hsl(var(--muted));
+  }
+}
+
+.dark .data-table-scroll {
+  --dt-shadow-color: 0 0% 0% / 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-pin-left-last::after,
+  .dt-pin-right-first::after {
+    transition: none;
+  }
 }
 
 /* Glow Card V2 — aurora effect driven by CSS variables */

@@ -111,12 +111,6 @@ describe('ProxyService — bindings + delete protection', () => {
     expect(await service.getProxy(dto.id)).not.toBeNull()
   })
 
-  it('blocks deleting a proxy still used by a group', async () => {
-    const dto = await service.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
-    await service.createGroup('g', dto.id)
-    await expect(service.deleteProxy(dto.id)).rejects.toMatchObject({ kind: 'in_use' })
-  })
-
   it('allows deleting an unbound proxy', async () => {
     const dto = await service.createProxy({ protocol: 'http', host: 'a', port: 1, tags: [] })
     await service.deleteProxy(dto.id)
@@ -130,7 +124,6 @@ describe('ProxyService — bindings + delete protection', () => {
     const list = await service.listProxies()
     const found = list.find((p) => p.id === dto.id)
     expect(found?.boundAccountCount).toBe(2)
-    expect(found?.boundGroupCount).toBe(0)
   })
 })
 

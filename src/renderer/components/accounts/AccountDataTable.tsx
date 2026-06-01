@@ -1,13 +1,6 @@
-import type { CSSProperties, ComponentType } from 'react';
+import type { ComponentType } from 'react';
 import { useMemo } from 'react';
-import {
-  type Column,
-  type ColumnDef,
-  type ColumnPinningState,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from '@tanstack/react-table';
+import { type ColumnDef, type ColumnPinningState } from '@tanstack/react-table';
 import {
   ArrowLeftRight,
   Chrome,
@@ -24,14 +17,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
 import { useAccountStore, useHealthStore, useQuotaStateStore } from '../../stores';
 import type { Account } from '../../types';
@@ -50,6 +36,7 @@ interface AccountDataTableProps {
   onSwitch: (platform: Account['platform'], id: string) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
+  onEdit?: (id: string) => void;
 }
 
 const PINNING: ColumnPinningState = {
@@ -68,6 +55,7 @@ export function AccountDataTable({
   onSwitch,
   onDelete,
   onOpen,
+  onEdit,
 }: AccountDataTableProps) {
   const { t } = useTranslation('accounts');
   const allSelected = accounts.length > 0 && selectedIds.size === accounts.length;
@@ -156,6 +144,7 @@ export function AccountDataTable({
             switching={switchingId === row.original.id}
             onSwitch={() => onSwitch(row.original.platform, row.original.id)}
             onOpen={() => onOpen(row.original.id)}
+            onEdit={onEdit ? () => onEdit(row.original.id) : undefined}
             onDelete={() => onDelete(row.original.id)}
           />
         ),
@@ -164,6 +153,7 @@ export function AccountDataTable({
     [
       allSelected,
       onDelete,
+      onEdit,
       onOpen,
       onSwitch,
       onToggleSelect,
@@ -176,93 +166,30 @@ export function AccountDataTable({
     ],
   );
 
-  const table = useReactTable({
-    data: accounts,
-    columns,
-    enableColumnPinning: true,
-    getCoreRowModel: getCoreRowModel(),
-    state: { columnPinning: PINNING },
-  });
-
   return (
-    <div data-testid="accounts-table" className="min-w-0 overflow-hidden rounded-[8px] border border-border bg-card">
-      <Table className="min-w-[1040px] table-fixed">
-        <TableHeader className="bg-muted/25">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="hover:bg-transparent">
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={cn(
-                    'h-10 px-2.5 text-[11.5px] font-medium',
-                    pinnedCellClass(header.column, true, false),
-                  )}
-                  style={columnStyle(header.column)}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => {
-            const highlighted = highlightedId === row.original.id;
-            return (
-              <TableRow
-                key={row.id}
-                data-state={selectedIds.has(row.original.id) ? 'selected' : undefined}
-                className={cn(
-                  'group h-[64px] hover:bg-muted',
-                  row.original.isActive && 'bg-emerald-500/[0.04]',
-                  highlighted && 'bg-primary/[0.03]',
-                )}
-                onDoubleClick={() => onOpen(row.original.id)}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cn(
-                      'px-2.5 py-2.5',
-                      pinnedCellClass(cell.column, false, highlighted),
-                    )}
-                    style={columnStyle(cell.column)}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function columnStyle(column: Column<Account, unknown>): CSSProperties {
-  const pinned = column.getIsPinned();
-  return {
-    left: pinned === 'left' ? `${column.getStart('left')}px` : undefined,
-    right: pinned === 'right' ? `${column.getAfter('right')}px` : undefined,
-    width: `${column.getSize()}px`,
-    minWidth: `${column.getSize()}px`,
-    maxWidth: `${column.getSize()}px`,
-  };
-}
-
-function pinnedCellClass(column: Column<Account, unknown>, header: boolean, highlighted: boolean) {
-  const pinned = column.getIsPinned();
-  if (!pinned) return '';
-  return cn(
-    header
-      ? 'sticky z-30 bg-muted'
-      : 'sticky z-20 bg-card group-hover:bg-muted group-data-[state=selected]:bg-muted',
-    highlighted && !header && 'bg-card group-hover:bg-muted',
-    column.id === 'account' && 'shadow-[1px_0_0_hsl(var(--border))]',
-    column.id === 'actions' && 'z-40 shadow-[-1px_0_0_hsl(var(--border))]',
+    <DataTable
+      testId="accounts-table"
+      columns={columns}
+      data={accounts}
+      getRowId={(account) => account.id}
+      columnPinning={PINNING}
+      tableClassName="min-w-[1040px] table-fixed"
+      headCellClassName="h-10 px-2.5 text-[11.5px] font-medium"
+      cellClassName="px-2.5 py-2.5"
+      rowProps={(row) => ({
+        selected: selectedIds.has(row.original.id),
+        onDoubleClick: () => onOpen(row.original.id),
+        className: 'h-[64px]',
+        // Idle row tint — emerald for the active account, primary for the
+        // highlighted row. DataTable forwards this to every cell (pinned and
+        // not) via --dt-row-tint, so fixed columns track the same shade.
+        tint: row.original.isActive
+          ? 'hsl(142 71% 45% / 0.04)'
+          : highlightedId === row.original.id
+            ? 'hsl(217 91% 60% / 0.03)'
+            : undefined,
+      })}
+    />
   );
 }
 
@@ -405,6 +332,7 @@ function RowActions({
   switching,
   onSwitch,
   onOpen,
+  onEdit,
   onDelete,
 }: {
   account: Account;
@@ -412,6 +340,7 @@ function RowActions({
   switching?: boolean;
   onSwitch: () => void;
   onOpen: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation('accounts');
@@ -446,7 +375,7 @@ function RowActions({
         spin={refreshing || quotaRefreshing}
         onClick={handleRefresh}
       />
-      <IconAction label={t('actions.viewDetail')} icon={Pencil} onClick={onOpen} />
+      <IconAction label={t('actions.viewDetail')} icon={Pencil} onClick={onEdit ?? onOpen} />
       <IconAction label={t('actions.delete')} icon={MoreHorizontal} onClick={onDelete} />
     </div>
   );

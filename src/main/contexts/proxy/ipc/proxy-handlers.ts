@@ -6,7 +6,6 @@ import { ProxyError } from '../domain/proxy-error'
 import type {
   ProxyService,
   ProxyDto,
-  ProxyGroupDto,
   AccountBindingDto,
   ImportSummary,
   ProxyTestResultDto,
@@ -130,33 +129,6 @@ export function registerProxyHandlers(proxyService: ProxyService): void {
     },
   )
 
-  ipcMain.handle(PROXY_CHANNELS.listGroups, async (): Promise<ProxyGroupDto[]> => {
-    try {
-      return await proxyService.listGroups()
-    } catch (e) {
-      throw new Error(toIpcError(e))
-    }
-  })
-
-  ipcMain.handle(
-    PROXY_CHANNELS.createGroup,
-    async (_e, args: { name: string; proxyId: string }): Promise<ProxyGroupDto> => {
-      try {
-        return await proxyService.createGroup(args.name, args.proxyId)
-      } catch (e) {
-        throw new Error(toIpcError(e))
-      }
-    },
-  )
-
-  ipcMain.handle(PROXY_CHANNELS.deleteGroup, async (_e, args: { id: string }): Promise<void> => {
-    try {
-      await proxyService.deleteGroup(args.id)
-    } catch (e) {
-      throw new Error(toIpcError(e))
-    }
-  })
-
   ipcMain.handle(PROXY_CHANNELS.listBindings, async (): Promise<AccountBindingDto[]> => {
     try {
       return await proxyService.listBindings()
@@ -181,17 +153,6 @@ export function registerProxyHandlers(proxyService: ProxyService): void {
     async (_e, args: { accountId: string; proxyId: string }): Promise<void> => {
       try {
         await proxyService.bindAccountToProxy(args.accountId, args.proxyId)
-      } catch (e) {
-        throw new Error(toIpcError(e))
-      }
-    },
-  )
-
-  ipcMain.handle(
-    PROXY_CHANNELS.bindAccountToGroup,
-    async (_e, args: { accountId: string; groupId: string }): Promise<void> => {
-      try {
-        await proxyService.bindAccountToGroup(args.accountId, args.groupId)
       } catch (e) {
         throw new Error(toIpcError(e))
       }

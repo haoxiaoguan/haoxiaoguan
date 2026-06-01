@@ -22,6 +22,22 @@ interface AccountState {
   batchDelete: (accountIds: string[]) => Promise<number>;
   /** Import a new account */
   importAccount: (request: ImportAccountRequest) => Promise<Account>;
+  /** Update editable metadata (name / tags / notes) */
+  updateAccount: (
+    accountId: string,
+    patch: { name?: string | null; tags?: string[]; notes?: string | null },
+  ) => Promise<Account>;
+  /** Replace credentials for the same upstream identity */
+  reauthenticate: (
+    accountId: string,
+    input: {
+      identifier: string;
+      token: string;
+      refreshToken?: string;
+      expiresAt?: string;
+      rawMetadata?: unknown;
+    },
+  ) => Promise<Account>;
   /** Filter accounts by criteria */
   filterAccounts: (filter: FilterAccountsRequest) => Promise<Account[]>;
   /** Clear error */
@@ -125,6 +141,42 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       currentAccounts.set(agentId, [...existing, account]);
       set({ accounts: currentAccounts, loading: false });
       return account;
+    } catch (err) {
+      set({ loading: false, error: String(err) });
+      throw err;
+    }
+  },
+
+  updateAccount: async (accountId, patch) => {
+    set({ loading: true, error: null });
+    try {
+      const updated = await accountService.updateAccount(accountId, patch);
+      const currentAccounts = new Map(get().accounts);
+      const list = currentAccounts.get(updated.platform) ?? [];
+      currentAccounts.set(
+        updated.platform,
+        list.map((a) => (a.id === updated.id ? updated : a)),
+      );
+      set({ accounts: currentAccounts, loading: false });
+      return updated;
+    } catch (err) {
+      set({ loading: false, error: String(err) });
+      throw err;
+    }
+  },
+
+  reauthenticate: async (accountId, input) => {
+    set({ loading: true, error: null });
+    try {
+      const updated = await accountService.reauthenticate(accountId, input);
+      const currentAccounts = new Map(get().accounts);
+      const list = currentAccounts.get(updated.platform) ?? [];
+      currentAccounts.set(
+        updated.platform,
+        list.map((a) => (a.id === updated.id ? updated : a)),
+      );
+      set({ accounts: currentAccounts, loading: false });
+      return updated;
     } catch (err) {
       set({ loading: false, error: String(err) });
       throw err;

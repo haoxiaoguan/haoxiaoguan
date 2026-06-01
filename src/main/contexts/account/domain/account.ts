@@ -73,7 +73,7 @@ export class Account {
   private _statusReason?: string
   private _profilePayload: JsonValue
   private readonly _tags: Tags
-  private readonly _notes?: Notes
+  private _notes?: Notes
   private _isActive: boolean
   private readonly _createdAt: Date
   private _lastUsedAt?: Date
@@ -193,6 +193,27 @@ export class Account {
   /** Add a tag (delegates to Tags invariants). */
   addTag(tag: string): void {
     this._tags.add(tag)
+  }
+
+  /**
+   * Edit user-controlled metadata in place. Re-validates each value object via
+   * its factory; passing `undefined` leaves a field unchanged. The aggregate's
+   * tags are replaced wholesale so the caller can both add and remove.
+   *
+   * Identity-bearing fields (email/identityKey/displayIdentifier/profilePayload)
+   * are intentionally NOT editable here — changing them would break uniqueness
+   * and quota correlation. Use re-authenticate for credential rotation instead.
+   */
+  editMetadata(patch: { name?: string | null; tags?: string[]; notes?: string | null }): void {
+    if (patch.name !== undefined) {
+      this._name = patch.name === null ? undefined : AccountName.create(patch.name)
+    }
+    if (patch.tags !== undefined) {
+      this._tags.replaceAll(patch.tags)
+    }
+    if (patch.notes !== undefined) {
+      this._notes = patch.notes === null ? undefined : Notes.create(patch.notes)
+    }
   }
 
   /**

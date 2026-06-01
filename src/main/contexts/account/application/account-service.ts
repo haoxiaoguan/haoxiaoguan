@@ -95,6 +95,93 @@ export class AccountApplicationService {
   }
 
   /**
+   * Update editable user metadata (name / tags / notes). Identity-bearing
+   * fields stay frozen — changing them would break duplicate detection and
+   * quota correlation. The credential is left untouched (use re-authenticate
+   * for that). Returns the refreshed aggregate.
+   */
+  async updateAccountMetadata(
+    accountId: string,
+    patch: { name?: string | null; tags?: string[]; notes?: string | null },
+  ): Promise<Account> {
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) {
+      throw AccountError.notFound('Account', accountId)
+    }
+    account.editMetadata(patch)
+    await this.accountRepo.save(account)
+    return account
+  }
+
+  /**
+   * Re-authenticate: replace an account's credential without losing its id,
+   * tags, notes, or group memberships.
+   *
+   * Identity guard: the new material's normalized identity MUST match the
+   * existing account's identity_key. Re-auth is meant to refresh tokens for
+   * the SAME upstream principal — letting "Alice" silently replace "Bob"'s
+   * row would corrupt the user's mental model and break quota correlation.
+   * If you genuinely want a different account, delete + import.
+   *
+   * On success: the credential is replaced through the same encrypted store
+   * as import, and the profile payload is merged so any platform-side metadata
+   * refresh (plan tier change, login provider, …) flows in.
+   */
+  async reauthenticate(
+    accountId: string,
+    input: {
+      token: string
+      refreshToken?: string
+      expiresAt?: Date
+      rawMetadata?: JsonValue
+      /** New identifier the credential reports (email or platform identity). */
+      identifier: string
+    },
+  ): Promise<Account> {
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) {
+      throw AccountError.notFound('Account', accountId)
+    }
+    const platform = parsePlatformAgent(account.agentId)
+
+    // Re-derive the profile from the new material under the SAME platform, so
+    // identityKey is computed identically to the import path.
+    const profile = profileFromImportMaterial(
+      platform,
+      input.identifier,
+      input.rawMetadata,
+      input.token,
+    )
+    const fallbackIdentifier =
+      input.identifier.trim().length === 0 ? profile.displayIdentifier : input.identifier
+    const normalized = profile.normalized(fallbackIdentifier)
+
+    if (normalized.identityKey !== account.identityKey) {
+      throw AccountError.invalidCredentialFormat(
+        `Identity mismatch: existing '${account.identityKey}' vs new '${normalized.identityKey}'.`
+          + ' Use a different account to import a different principal.',
+      )
+    }
+
+    // Merge the new payload into the aggregate so derived fields (plan/status)
+    // refresh; leave name/tags/notes untouched.
+    account.updateProfilePayload(normalized.profilePayload)
+    await this.accountRepo.save(account)
+
+    // Replace the credential atomically. The credential store's `store` upserts
+    // by accountId, so the previous envelope is overwritten.
+    const credential = new Credential(
+      input.token,
+      input.refreshToken,
+      input.expiresAt,
+      input.rawMetadata,
+    )
+    await this.credentialStore.store(account.id, platform, credential)
+
+    return account
+  }
+
+  /**
    * Switch: load target → deactivate current active for platform → inject via
    * SwitchService → activate target → persist. 对应 switch_account.
    */

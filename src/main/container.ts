@@ -96,9 +96,13 @@ import { WebSocketApplicationService } from './contexts/websocket/application/we
 // QuotaService so per-account quota fetches route through the bound proxy.
 import { MikroOrmProxyRepository } from './contexts/proxy/infrastructure/mikro-orm-proxy-repository'
 import { ProxyDispatcherFactory } from './contexts/proxy/infrastructure/proxy-dispatcher-factory'
-import { ProxyResolver } from './contexts/proxy/infrastructure/proxy-resolver'
+import { ProxyResolver, asAccountGroupResolverStore } from './contexts/proxy/infrastructure/proxy-resolver'
 import { ProxyTester } from './contexts/proxy/infrastructure/proxy-tester'
 import { ProxyService } from './contexts/proxy/application/proxy-service'
+
+// Account-group context — cross-platform account groupings + group→proxy binding.
+import { MikroOrmAccountGroupRepository } from './contexts/accountGroup/infrastructure/mikro-orm-account-group-repository'
+import { AccountGroupService } from './contexts/accountGroup/application/account-group-service'
 
 /**
  * Account capability-registry adapter (quota manifest §5b).
@@ -218,9 +222,23 @@ export async function buildContainer(): Promise<Container> {
   //     fetches route through the account's bound proxy dispatcher.
   const proxyRepo = new MikroOrmProxyRepository(cryptoService)
   const proxyDispatcherFactory = new ProxyDispatcherFactory()
-  const proxyResolver = new ProxyResolver(proxyRepo, proxyDispatcherFactory)
   const proxyTester = new ProxyTester(proxyDispatcherFactory)
   const proxyService = new ProxyService(proxyRepo, proxyTester)
+
+  // 4c-bis. Account-group context — cross-platform account groupings + per-group
+  //   proxy binding. The proxy resolver below reads its proxy bindings to override
+  //   the per-account binding at routing time.
+  const accountGroupRepo = new MikroOrmAccountGroupRepository()
+  const accountGroupService = new AccountGroupService(accountGroupRepo)
+
+  // ProxyResolver depends on both proxyRepo (for proxies + proxy-groups) AND
+  // accountGroupRepo (for account-group → proxy bindings). Built AFTER both
+  // repos exist so it can fall back from per-account binding to group binding.
+  const proxyResolver = new ProxyResolver(
+    proxyRepo,
+    proxyDispatcherFactory,
+    asAccountGroupResolverStore(accountGroupRepo),
+  )
 
   const quotaCacheRepo = new MikroOrmQuotaCacheRepository()
   const quotaStateRepo = new MikroOrmQuotaStateRepository()
@@ -342,6 +360,7 @@ export async function buildContainer(): Promise<Container> {
     sync,
     websocket,
     proxyService,
+    accountGroupService,
     tokenRefreshScheduler,
   }
 }

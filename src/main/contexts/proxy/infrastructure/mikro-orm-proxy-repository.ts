@@ -8,14 +8,12 @@ import {
   proxyDedupeKey,
   type Proxy,
   type ProxyCheckResult,
-  type ProxyGroup,
   type AccountProxyBinding,
   type ProxyProtocol,
   type ProxyStatus,
 } from '../domain/proxy'
 import { ProxyError } from '../domain/proxy-error'
 import { ProxyEntity } from './proxy.entity'
-import { ProxyGroupEntity } from './proxy-group.entity'
 import { AccountProxyBindingEntity } from './account-proxy-binding.entity'
 
 // MikroORM-backed proxy repository. Encrypts the proxy password with the shared
@@ -153,43 +151,9 @@ export class MikroOrmProxyRepository {
     await em.flush()
   }
 
-  // --- groups ---
-
-  async createGroup(name: string, proxyId: string): Promise<ProxyGroup> {
-    const em = this.emFactory()
-    const entity = new ProxyGroupEntity()
-    entity.id = randomUUID()
-    entity.name = name
-    entity.proxyId = proxyId
-    entity.createdAt = new Date().toISOString()
-    em.persist(entity)
-    await em.flush()
-    return this.toGroup(entity)
-  }
-
-  async listGroups(): Promise<ProxyGroup[]> {
-    const em = this.emFactory()
-    const rows = await em.find(ProxyGroupEntity, {}, { orderBy: { createdAt: 'asc' } })
-    return rows.map((e) => this.toGroup(e))
-  }
-
-  async getGroup(id: string): Promise<ProxyGroup | null> {
-    const em = this.emFactory()
-    const entity = await em.findOne(ProxyGroupEntity, { id })
-    return entity === null ? null : this.toGroup(entity)
-  }
-
-  async deleteGroup(id: string): Promise<void> {
-    const em = this.emFactory()
-    await em.nativeDelete(ProxyGroupEntity, { id })
-  }
-
   // --- bindings ---
 
-  async bindAccount(
-    accountId: string,
-    target: { proxyId?: string; groupId?: string },
-  ): Promise<void> {
+  async bindAccount(accountId: string, target: { proxyId?: string }): Promise<void> {
     const em = this.emFactory()
     let entity = await em.findOne(AccountProxyBindingEntity, { accountId })
     if (entity === null) {
@@ -199,7 +163,6 @@ export class MikroOrmProxyRepository {
       em.persist(entity)
     }
     entity.proxyId = target.proxyId ?? null
-    entity.groupId = target.groupId ?? null
     await em.flush()
   }
 
@@ -223,16 +186,6 @@ export class MikroOrmProxyRepository {
   async countAccountsForProxy(proxyId: string): Promise<number> {
     const em = this.emFactory()
     return em.count(AccountProxyBindingEntity, { proxyId })
-  }
-
-  async countGroupsForProxy(proxyId: string): Promise<number> {
-    const em = this.emFactory()
-    return em.count(ProxyGroupEntity, { proxyId })
-  }
-
-  async countAccountsForGroup(groupId: string): Promise<number> {
-    const em = this.emFactory()
-    return em.count(AccountProxyBindingEntity, { groupId })
   }
 
   // --- mapping + crypto helpers ---
@@ -281,15 +234,10 @@ export class MikroOrmProxyRepository {
     }
   }
 
-  private toGroup(e: ProxyGroupEntity): ProxyGroup {
-    return { id: e.id, name: e.name, proxyId: e.proxyId, createdAt: new Date(e.createdAt) }
-  }
-
   private toBinding(e: AccountProxyBindingEntity): AccountProxyBinding {
     return {
       accountId: e.accountId,
       proxyId: e.proxyId ?? undefined,
-      groupId: e.groupId ?? undefined,
       createdAt: new Date(e.createdAt),
     }
   }

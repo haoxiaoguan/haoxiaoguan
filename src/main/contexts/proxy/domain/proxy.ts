@@ -42,19 +42,10 @@ export interface Proxy {
   createdAt: Date
 }
 
-/** A named group whose member accounts all route through one proxy. */
-export interface ProxyGroup {
-  id: string
-  name: string
-  proxyId: string
-  createdAt: Date
-}
-
-/** account → (proxy | group). Exactly one of proxyId/groupId is set. */
+/** account → proxy. A bound account routes outbound traffic through proxyId. */
 export interface AccountProxyBinding {
   accountId: string
   proxyId?: string
-  groupId?: string
   createdAt: Date
 }
 

@@ -87,6 +87,95 @@
       "websocket": "WebSocket"
     }
   },
+  "edit": {
+    "title": "编辑账号",
+    "description": "修改备注、标签和说明，不影响登录态。",
+    "name": "备注名",
+    "tags": "标签",
+    "tagsHint": "多个标签用英文逗号分隔，最多 10 个，每个 ≤ 32 字节。",
+    "notes": "说明",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "保存成功",
+    "failed": "保存失败",
+    "identity": "身份标识",
+    "identityHint": "身份标识不可修改；如需更换 token，请使用「重新认证」。",
+    "belongsToGroup": "所属分组",
+    "noGroup": "不加入分组",
+    "bindProxy": "绑定代理",
+    "noProxy": "不绑定（按分组或直连）",
+    "effectiveEgress": "当前生效出口",
+    "egressAccount": "走账号代理：{{label}}",
+    "egressGroup": "走分组「{{group}}」代理：{{label}}",
+    "egressGroupUnbound": "分组「{{group}}」未绑代理 → 直连",
+    "egressDirect": "直连（未绑定任何代理）"
+  },
+  "reauth": {
+    "title": "重新认证",
+    "description": "重新走登录流程更新 token；若身份不一致会拒绝替换。",
+    "confirm": "替换 token",
+    "success": "已更新登录凭据",
+    "failed": "重新认证失败",
+    "identityMismatch": "身份不匹配，请确认是否在登录同一账号"
+  },
+  "group": {
+    "title": "账号组",
+    "subtitle": "跨平台分组与代理绑定",
+    "create": "新建分组",
+    "edit": "编辑分组",
+    "cancel": "取消",
+    "name": "名称",
+    "color": "颜色",
+    "description": "描述",
+    "memberCount": "{{count}} 个账号",
+    "noGroups": "还没有分组，点击「新建分组」开始。",
+    "addToGroup": "加入分组",
+    "removeFromGroup": "移出分组",
+    "deleteConfirm": "确定要删除该分组吗？",
+    "deleteWithMembers": "该分组仍包含 {{count}} 个账号，需勾选强制删除以继续。",
+    "forceDelete": "强制删除（同时移除成员关系）",
+    "binding": {
+      "title": "出口代理绑定",
+      "none": "不绑定",
+      "noneHint": "不绑定：组内账号各自直连，或使用账号自己绑定的代理。",
+      "proxy": "绑定代理 IP",
+      "proxyHint": "绑定后，组内未单独绑定代理的账号都经此代理出网；账号自己绑了代理则以账号的为准。",
+      "selectProxy": "选择代理",
+      "bound": "已绑定"
+    },
+    "wizard": {
+      "step1": "基本信息",
+      "step2": "选择成员",
+      "step3": "绑定代理",
+      "stepOf": "第 {{current}} / {{total}} 步",
+      "next": "下一步",
+      "back": "上一步",
+      "finish": "完成",
+      "memberHint": "勾选要加入该分组的账号，可跨平台选择。",
+      "memberSelected": "已选 {{count}} 个账号",
+      "searchMember": "搜索账号 / 邮箱",
+      "namePlaceholder": "例如：客户 A",
+      "created": "分组已创建",
+      "updated": "分组已更新"
+    },
+    "table": {
+      "name": "分组",
+      "members": "成员",
+      "proxy": "出口代理",
+      "description": "描述",
+      "actions": "操作",
+      "empty": "还没有分组，点击「新建分组」开始。"
+    },
+    "summary": {
+      "total": "{{count}} 个分组",
+      "bound": "{{count}} 个已绑代理"
+    },
+    "filter": {
+      "all": "组：全部",
+      "ungrouped": "组：未分组",
+      "label": "组：{{name}}"
+    }
+  },
   "actions": {
     "switch": "切换",
     "switching": "切换中…",

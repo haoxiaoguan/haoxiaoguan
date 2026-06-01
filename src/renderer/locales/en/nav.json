@@ -3,7 +3,8 @@
   "accounts": "Accounts",
   "skills": "Skills",
   "mcp": "MCP",
-  "proxies": "Proxy IPs",
+  "proxies": "Proxies",
+  "groups": "Groups",
   "analytics": "Analytics",
   "settings": {
     "back": "Back",

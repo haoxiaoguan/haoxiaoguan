@@ -69,9 +69,27 @@ export const ACCOUNT_CHANNELS = {
   switchAccountV2: 'account:switchAccountV2',
   exportAccounts: 'account:exportAccounts',
   importAccounts: 'account:importAccounts',
+  updateAccount: 'account:updateAccount',
+  reauthenticate: 'account:reauthenticate',
   getAccountHealth: 'account:getAccountHealth',
   validateCredential: 'account:validateCredential',
   validateBatch: 'account:validateBatch',
+} as const
+
+// Account-group context — cross-platform account grouping with optional proxy
+// binding. Channels are "accountGroup:<method>" since this is a new feature.
+export const ACCOUNT_GROUP_CHANNELS = {
+  listGroups: 'accountGroup:listGroups',
+  createGroup: 'accountGroup:createGroup',
+  updateGroup: 'accountGroup:updateGroup',
+  deleteGroup: 'accountGroup:deleteGroup',
+  listMembers: 'accountGroup:listMembers',
+  listGroupsForAccount: 'accountGroup:listGroupsForAccount',
+  addMembers: 'accountGroup:addMembers',
+  removeMembers: 'accountGroup:removeMembers',
+  bindGroupToProxy: 'accountGroup:bindGroupToProxy',
+  unbindGroup: 'accountGroup:unbindGroup',
+  getGroupBinding: 'accountGroup:getGroupBinding',
 } as const
 
 // Credential context. Mirrors the local copy in
@@ -153,12 +171,8 @@ export const PROXY_CHANNELS = {
   importProxies: 'proxy:importProxies',
   testProxy: 'proxy:testProxy',
   testProxies: 'proxy:testProxies',
-  listGroups: 'proxy:listGroups',
-  createGroup: 'proxy:createGroup',
-  deleteGroup: 'proxy:deleteGroup',
   listBindings: 'proxy:listBindings',
   getAccountBinding: 'proxy:getAccountBinding',
   bindAccountToProxy: 'proxy:bindAccountToProxy',
-  bindAccountToGroup: 'proxy:bindAccountToGroup',
   unbindAccount: 'proxy:unbindAccount',
 } as const

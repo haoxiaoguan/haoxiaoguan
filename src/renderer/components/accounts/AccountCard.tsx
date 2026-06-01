@@ -34,6 +34,7 @@ interface AccountCardProps {
   onSwitch: () => void;
   onDelete: () => void;
   onOpen: () => void;
+  onEdit?: () => void;
 }
 
 const HEALTH_TONE: Record<string, { labelKey: string; className: string; dot: string }> = {
@@ -201,7 +202,7 @@ export default function AccountCard(props: AccountCardProps) {
             spin={refreshing || quotaRefreshing}
             onClick={handleRefresh}
           />
-          <IconAction label={t('actions.viewDetail')} icon={Pencil} onClick={props.onOpen} />
+          <IconAction label={t('actions.viewDetail')} icon={Pencil} onClick={props.onEdit ?? props.onOpen} />
           <IconAction label={t('actions.delete')} icon={MoreVertical} onClick={props.onDelete} />
         </div>
       </div>

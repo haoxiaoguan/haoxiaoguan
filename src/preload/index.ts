@@ -4,6 +4,7 @@ import {
   SYSTEM_CHANNELS,
   AGENT_CHANNELS,
   ACCOUNT_CHANNELS,
+  ACCOUNT_GROUP_CHANNELS,
   CREDENTIAL_CHANNELS,
   QUOTA_CHANNELS,
   SKILL_CHANNELS,
@@ -45,6 +46,10 @@ const api: HxgApi = {
     switchAccountV2: (args) => ipcRenderer.invoke(ACCOUNT_CHANNELS.switchAccountV2, args),
     exportAccounts: (req) => ipcRenderer.invoke(ACCOUNT_CHANNELS.exportAccounts, { request: req }),
     importAccounts: (req) => ipcRenderer.invoke(ACCOUNT_CHANNELS.importAccounts, { request: req }),
+    updateAccount: (accountId, patch) =>
+      ipcRenderer.invoke(ACCOUNT_CHANNELS.updateAccount, { accountId, patch }),
+    reauthenticate: (accountId, input) =>
+      ipcRenderer.invoke(ACCOUNT_CHANNELS.reauthenticate, { accountId, ...input }),
     validateCredential: (accountId) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.validateCredential, { accountId }),
     getAccountHealth: (accountId) =>
@@ -157,19 +162,35 @@ const api: HxgApi = {
     testProxy: (id) => ipcRenderer.invoke(PROXY_CHANNELS.testProxy, { id }),
     testProxies: (ids, concurrency) =>
       ipcRenderer.invoke(PROXY_CHANNELS.testProxies, { ids, concurrency }),
-    listGroups: () => ipcRenderer.invoke(PROXY_CHANNELS.listGroups),
-    createGroup: (name, proxyId) =>
-      ipcRenderer.invoke(PROXY_CHANNELS.createGroup, { name, proxyId }),
-    deleteGroup: (id) => ipcRenderer.invoke(PROXY_CHANNELS.deleteGroup, { id }),
     listBindings: () => ipcRenderer.invoke(PROXY_CHANNELS.listBindings),
     getAccountBinding: (accountId) =>
       ipcRenderer.invoke(PROXY_CHANNELS.getAccountBinding, { accountId }),
     bindAccountToProxy: (accountId, proxyId) =>
       ipcRenderer.invoke(PROXY_CHANNELS.bindAccountToProxy, { accountId, proxyId }),
-    bindAccountToGroup: (accountId, groupId) =>
-      ipcRenderer.invoke(PROXY_CHANNELS.bindAccountToGroup, { accountId, groupId }),
     unbindAccount: (accountId) =>
       ipcRenderer.invoke(PROXY_CHANNELS.unbindAccount, { accountId }),
+  },
+  accountGroup: {
+    listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),
+    createGroup: (req) => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.createGroup, req),
+    updateGroup: (id, patch) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.updateGroup, { id, patch }),
+    deleteGroup: (id, force) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.deleteGroup, { id, force: force ?? false }),
+    listMembers: (groupId) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listMembers, { groupId }),
+    listGroupsForAccount: (accountId) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroupsForAccount, { accountId }),
+    addMembers: (groupId, accountIds) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.addMembers, { groupId, accountIds }),
+    removeMembers: (groupId, accountIds) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.removeMembers, { groupId, accountIds }),
+    bindGroupToProxy: (groupId, proxyId) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.bindGroupToProxy, { groupId, proxyId }),
+    unbindGroup: (groupId) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.unbindGroup, { groupId }),
+    getGroupBinding: (groupId) =>
+      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.getGroupBinding, { groupId }),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

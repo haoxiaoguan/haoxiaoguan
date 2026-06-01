@@ -2,8 +2,9 @@
   "dashboard": "仪表盘",
   "accounts": "账号管理",
   "skills": "Skills 管理",
-  "mcp": "MCP 服务",
-  "proxies": "代理 IP",
+  "mcp": "MCP 管理",
+  "proxies": "代理管理",
+  "groups": "分组管理",
   "analytics": "数据统计",
   "settings": {
     "back": "返回",

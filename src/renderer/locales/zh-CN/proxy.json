@@ -32,7 +32,7 @@
     "bindings": "绑定",
     "lastChecked": "最后检测",
     "actions": "操作",
-    "bindingCount": "{{accounts}} 个账号 / {{groups}} 组",
+    "bindingCount": "{{accounts}} 个账号",
     "empty": "还没有代理，点击「添加」开始。",
     "test": "测连通",
     "edit": "编辑",

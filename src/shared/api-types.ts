@@ -398,6 +398,20 @@ export interface HxgApi {
       data: string
       conflictStrategy: 'skip' | 'overwrite' | 'keep_both'
     }): Promise<ImportResultResponse>
+    updateAccount(
+      accountId: string,
+      patch: { name?: string | null; tags?: string[]; notes?: string | null },
+    ): Promise<AccountResponse>
+    reauthenticate(
+      accountId: string,
+      input: {
+        identifier: string
+        token: string
+        refreshToken?: string
+        expiresAt?: string
+        rawMetadata?: unknown
+      },
+    ): Promise<AccountResponse>
     validateCredential(accountId: string): Promise<CredentialValidationResult>
     getAccountHealth(accountId: string): Promise<HealthSnapshot>
     validateBatch(
@@ -522,14 +536,23 @@ export interface HxgApi {
     importProxies(text: string): Promise<ProxyImportSummary>
     testProxy(id: string): Promise<ProxyTestResultDto>
     testProxies(ids: string[], concurrency?: number): Promise<ProxyTestResultDto[]>
-    listGroups(): Promise<ProxyGroupDto[]>
-    createGroup(name: string, proxyId: string): Promise<ProxyGroupDto>
-    deleteGroup(id: string): Promise<void>
     listBindings(): Promise<AccountBindingDto[]>
     getAccountBinding(accountId: string): Promise<AccountBindingDto | null>
     bindAccountToProxy(accountId: string, proxyId: string): Promise<void>
-    bindAccountToGroup(accountId: string, groupId: string): Promise<void>
     unbindAccount(accountId: string): Promise<void>
+  }
+  accountGroup: {
+    listGroups(): Promise<AccountGroupDto[]>
+    createGroup(req: CreateAccountGroupRequest): Promise<AccountGroupDto>
+    updateGroup(id: string, patch: UpdateAccountGroupRequest): Promise<AccountGroupDto>
+    deleteGroup(id: string, force?: boolean): Promise<void>
+    listMembers(groupId: string): Promise<AccountGroupMembershipDto[]>
+    listGroupsForAccount(accountId: string): Promise<AccountGroupDto[]>
+    addMembers(groupId: string, accountIds: string[]): Promise<{ added: number }>
+    removeMembers(groupId: string, accountIds: string[]): Promise<{ removed: number }>
+    bindGroupToProxy(groupId: string, proxyId: string): Promise<AccountGroupBindingDto>
+    unbindGroup(groupId: string): Promise<void>
+    getGroupBinding(groupId: string): Promise<AccountGroupBindingDto | null>
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
@@ -562,19 +585,11 @@ export interface ProxyDto {
   tags: string[]
   displayUrl: string
   boundAccountCount: number
-  boundGroupCount: number
-  createdAt: string
-}
-export interface ProxyGroupDto {
-  id: string
-  name: string
-  proxyId: string
   createdAt: string
 }
 export interface AccountBindingDto {
   accountId: string
   proxyId?: string
-  groupId?: string
 }
 export interface ProxyImportSummary {
   imported: number
@@ -606,6 +621,37 @@ export interface UpdateProxyRequest {
   username?: string
   password?: string | null
   tags?: string[]
+}
+
+// ── AccountGroup DTOs (account-group context) ────────────────────────────────
+export interface AccountGroupBindingDto {
+  groupId: string
+  proxyId?: string
+}
+export interface AccountGroupDto {
+  id: string
+  name: string
+  color?: string
+  description?: string
+  memberCount: number
+  proxyBinding?: AccountGroupBindingDto
+  createdAt: string
+  updatedAt: string
+}
+export interface AccountGroupMembershipDto {
+  groupId: string
+  accountId: string
+  createdAt: string
+}
+export interface CreateAccountGroupRequest {
+  name: string
+  color?: string
+  description?: string
+}
+export interface UpdateAccountGroupRequest {
+  name?: string
+  color?: string | null
+  description?: string | null
 }
 
 declare global {

@@ -32,7 +32,7 @@
     "bindings": "Bindings",
     "lastChecked": "Last checked",
     "actions": "Actions",
-    "bindingCount": "{{accounts}} accounts / {{groups}} groups",
+    "bindingCount": "{{accounts}} accounts",
     "empty": "No proxies yet. Click \"Add\" to start.",
     "test": "Test",
     "edit": "Edit",

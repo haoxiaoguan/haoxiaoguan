@@ -39,17 +39,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable } from '@/components/ui/data-table';
+import type { ColumnDef, ColumnPinningState } from '@tanstack/react-table';
 import { cn } from '@/lib/utils';
 
 type StatusFilter = 'all' | 'ok' | 'failed' | 'unknown';
+
+// Address sticks to the left, actions to the right (antd-style fixed columns).
+const PROXY_PINNING: ColumnPinningState = { left: ['address'], right: ['actions'] };
 
 interface FormState {
   id?: string;
@@ -214,6 +211,115 @@ export default function Proxies() {
     if (filtered.length > 0) void testProxies(filtered.map((p) => p.id));
   };
 
+  const columns = useMemo<ColumnDef<ProxyDto>[]>(
+    () => [
+      {
+        id: 'address',
+        size: 240,
+        header: () => t('table.address'),
+        cell: ({ row }) => (
+          <span className="block truncate font-mono text-[12px]">{row.original.displayUrl}</span>
+        ),
+      },
+      {
+        id: 'label',
+        size: 180,
+        header: () => t('table.label'),
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <div className="truncate font-medium">{row.original.label || row.original.host}</div>
+            {row.original.tags.length > 0 ? (
+              <div className="mt-0.5 flex flex-wrap gap-1">
+                {row.original.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'status',
+        size: 96,
+        header: () => t('table.status'),
+        cell: ({ row }) => (
+          <StatusBadge status={row.original.status} label={t(`status.${row.original.status}`)} />
+        ),
+      },
+      {
+        id: 'egressIp',
+        size: 140,
+        header: () => t('table.egressIp'),
+        cell: ({ row }) => (
+          <span className="block truncate font-mono text-[12px]">
+            {row.original.lastEgressIp ?? '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'latency',
+        size: 90,
+        header: () => t('table.latency'),
+        cell: ({ row }) =>
+          row.original.lastLatencyMs != null ? `${row.original.lastLatencyMs}ms` : '—',
+      },
+      {
+        id: 'bindings',
+        size: 110,
+        header: () => t('table.bindings'),
+        cell: ({ row }) => (
+          <span className="text-[12px] text-muted-foreground">
+            {t('table.bindingCount', { accounts: row.original.boundAccountCount })}
+          </span>
+        ),
+      },
+      {
+        id: 'lastChecked',
+        size: 170,
+        header: () => t('table.lastChecked'),
+        cell: ({ row }) => (
+          <span className="block truncate text-[12px] text-muted-foreground">
+            {row.original.lastCheckedAt ? new Date(row.original.lastCheckedAt).toLocaleString() : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        size: 128,
+        header: () => <span className="block text-right">{t('table.actions')}</span>,
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end gap-1">
+            <ManagementIconButton
+              label={t('table.test')}
+              icon={Wifi}
+              spin={testingIds.has(row.original.id)}
+              disabled={testingIds.has(row.original.id)}
+              onClick={() => void testProxy(row.original.id)}
+            />
+            <ManagementIconButton
+              label={t('table.edit')}
+              icon={Pencil}
+              onClick={() => openEdit(row.original)}
+            />
+            <ManagementIconButton
+              label={t('table.delete')}
+              icon={Trash2}
+              onClick={() => setDeleteTarget(row.original)}
+            />
+          </div>
+        ),
+      },
+    ],
+    // openEdit is stable within a render; t/testingIds drive labels + spinners.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, testingIds],
+  );
+
   return (
     <div className="flex h-[calc(100vh-98px)] min-h-0 flex-col overflow-hidden px-6 py-5">
       {/* Toolbar */}
@@ -261,88 +367,18 @@ export default function Proxies() {
       </div>
 
       {/* Table */}
-      <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-border/80 bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('table.label')}</TableHead>
-              <TableHead>{t('table.address')}</TableHead>
-              <TableHead>{t('table.status')}</TableHead>
-              <TableHead>{t('table.egressIp')}</TableHead>
-              <TableHead>{t('table.latency')}</TableHead>
-              <TableHead>{t('table.bindings')}</TableHead>
-              <TableHead>{t('table.lastChecked')}</TableHead>
-              <TableHead className="text-right">{t('table.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((proxy) => (
-                <TableRow key={proxy.id} data-testid="proxy-row">
-                  <TableCell>
-                    <div className="font-medium">{proxy.label || proxy.host}</div>
-                    {proxy.tags.length > 0 ? (
-                      <div className="mt-0.5 flex flex-wrap gap-1">
-                        {proxy.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="font-mono text-[12px]">{proxy.displayUrl}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={proxy.status} label={t(`status.${proxy.status}`)} />
-                  </TableCell>
-                  <TableCell className="font-mono text-[12px]">
-                    {proxy.lastEgressIp ?? '—'}
-                  </TableCell>
-                  <TableCell>{proxy.lastLatencyMs != null ? `${proxy.lastLatencyMs}ms` : '—'}</TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground">
-                    {t('table.bindingCount', {
-                      accounts: proxy.boundAccountCount,
-                      groups: proxy.boundGroupCount,
-                    })}
-                  </TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground">
-                    {proxy.lastCheckedAt ? new Date(proxy.lastCheckedAt).toLocaleString() : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      <ManagementIconButton
-                        label={t('table.test')}
-                        icon={Wifi}
-                        spin={testingIds.has(proxy.id)}
-                        disabled={testingIds.has(proxy.id)}
-                        onClick={() => void testProxy(proxy.id)}
-                      />
-                      <ManagementIconButton
-                        label={t('table.edit')}
-                        icon={Pencil}
-                        onClick={() => openEdit(proxy)}
-                      />
-                      <ManagementIconButton
-                        label={t('table.delete')}
-                        icon={Trash2}
-                        onClick={() => setDeleteTarget(proxy)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <DataTable
+          columns={columns}
+          data={filtered}
+          getRowId={(p) => p.id}
+          columnPinning={PROXY_PINNING}
+          className="h-full"
+          rowTestId="proxy-row"
+          emptyState={
+            <div className="py-10 text-center text-muted-foreground">{t('table.empty')}</div>
+          }
+        />
       </div>
 
       {/* Add (manual / paste tabs) + Edit dialog */}
@@ -477,10 +513,9 @@ export default function Proxies() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('delete.confirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget && (deleteTarget.boundAccountCount > 0 || deleteTarget.boundGroupCount > 0)
+              {deleteTarget && deleteTarget.boundAccountCount > 0
                 ? t('delete.blocked', {
                     accounts: deleteTarget.boundAccountCount,
-                    groups: deleteTarget.boundGroupCount,
                   })
                 : t('delete.confirmBody')}
             </AlertDialogDescription>

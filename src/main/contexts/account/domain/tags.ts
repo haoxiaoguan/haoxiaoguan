@@ -36,6 +36,25 @@ export class Tags {
     this.values.push(tag)
   }
 
+  /**
+   * Replace the entire tag set in place. Validates each new tag against the
+   * same length / count invariants as the factory. Used by Account.editMetadata
+   * so the aggregate's Tags reference stays stable while contents are swapped.
+   */
+  replaceAll(tags: string[]): void {
+    if (tags.length > Tags.MAX_COUNT) {
+      throw AccountError.tooManyTags(Tags.MAX_COUNT, tags.length)
+    }
+    for (const tag of tags) {
+      const len = byteLen(tag)
+      if (len > Tags.MAX_TAG_LENGTH) {
+        throw AccountError.tagTooLong(Tags.MAX_TAG_LENGTH, len)
+      }
+    }
+    this.values.length = 0
+    for (const tag of tags) this.values.push(tag)
+  }
+
   asSlice(): readonly string[] {
     return this.values
   }

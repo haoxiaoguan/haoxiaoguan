@@ -46,6 +46,20 @@ interface ImportAccountsRequest {
   conflictStrategy: ConflictStrategy
 }
 
+interface UpdateAccountRequest {
+  accountId: string
+  patch: { name?: string | null; tags?: string[]; notes?: string | null }
+}
+
+interface ReauthenticateRequest {
+  accountId: string
+  identifier: string
+  token: string
+  refreshToken?: string
+  expiresAt?: string
+  rawMetadata?: JsonValue
+}
+
 const MAX_IMPORT_SIZE = 50 * 1024 * 1024 // 50MB
 
 export interface AccountHandlerDeps {
@@ -105,6 +119,38 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
       throw new Error(toIpcError(e))
     }
   })
+
+  // update_account — args: { accountId, patch:{name?,tags?,notes?} } → AccountResponse
+  ipcMain.handle(
+    ACCOUNT_CHANNELS.updateAccount,
+    async (_e, args: UpdateAccountRequest): Promise<AccountResponse> => {
+      try {
+        const account = await accountService.updateAccountMetadata(args.accountId, args.patch)
+        return toAccountResponse(account)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
+  // reauthenticate — args: { accountId, identifier, token, ... } → AccountResponse
+  ipcMain.handle(
+    ACCOUNT_CHANNELS.reauthenticate,
+    async (_e, args: ReauthenticateRequest): Promise<AccountResponse> => {
+      try {
+        const account = await accountService.reauthenticate(args.accountId, {
+          identifier: args.identifier,
+          token: args.token,
+          refreshToken: args.refreshToken,
+          expiresAt: args.expiresAt ? parseRfc3339(args.expiresAt) : undefined,
+          rawMetadata: args.rawMetadata,
+        })
+        return toAccountResponse(account)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
 
   // batch_delete — args: { request: { accountIds } } → { deletedCount }
   ipcMain.handle(

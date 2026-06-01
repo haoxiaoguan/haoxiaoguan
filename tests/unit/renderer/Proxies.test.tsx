@@ -5,12 +5,10 @@ import i18n from '@/i18n';
 
 // Mock the proxy service so the store's fetchAll resolves with fixtures.
 const listProxies = vi.fn();
-const listGroups = vi.fn();
 const listBindings = vi.fn();
 vi.mock('@/services/tauri', () => ({
   proxyService: {
     listProxies: () => listProxies(),
-    listGroups: () => listGroups(),
     listBindings: () => listBindings(),
     testProxy: vi.fn(),
     testProxies: vi.fn(),
@@ -18,10 +16,7 @@ vi.mock('@/services/tauri', () => ({
     updateProxy: vi.fn(),
     deleteProxy: vi.fn(),
     importProxies: vi.fn(),
-    createGroup: vi.fn(),
-    deleteGroup: vi.fn(),
     bindAccountToProxy: vi.fn(),
-    bindAccountToGroup: vi.fn(),
     unbindAccount: vi.fn(),
   },
 }));
@@ -37,7 +32,6 @@ function renderPage() {
 }
 
 beforeEach(() => {
-  listGroups.mockResolvedValue([]);
   listBindings.mockResolvedValue([]);
 });
 
@@ -58,7 +52,6 @@ describe('Proxies page', () => {
         tags: ['prod'],
         displayUrl: 'http://alice:***@1.2.3.4:8080',
         boundAccountCount: 3,
-        boundGroupCount: 1,
         createdAt: '2026-06-01T00:00:00.000Z',
       },
     ]);
@@ -71,8 +64,8 @@ describe('Proxies page', () => {
     expect(within(row).getByText('http://alice:***@1.2.3.4:8080')).toBeInTheDocument();
     expect(within(row).getByText('9.9.9.9')).toBeInTheDocument();
     expect(within(row).getByText('120ms')).toBeInTheDocument();
-    // binding count: "3 accounts / 1 groups" (en) or "3 个账号 / 1 组" (zh-CN)
-    expect(within(row).getByText(/3 accounts \/ 1 groups|3 个账号 \/ 1 组/)).toBeInTheDocument();
+    // binding count: "3 accounts" (en) or "3 个账号" (zh-CN)
+    expect(within(row).getByText(/3 accounts|3 个账号/)).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no proxies', async () => {
