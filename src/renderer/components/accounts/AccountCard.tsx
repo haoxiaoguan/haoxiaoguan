@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import {
   ArrowLeftRight,
+  CalendarDays,
   Chrome,
   Copy,
   Github,
@@ -97,7 +98,6 @@ export default function AccountCard(props: AccountCardProps) {
   const plan = accountPlanLabel(props.account);
   const login = props.account.loginProvider || loginFallback(props.account);
   const lines = metricLines(props.account, quotaState).slice(0, 2);
-  const showPlanBadge = props.account.platform === 'codex';
   const subscription = codexSubscriptionInfo(props.account);
 
   return (
@@ -113,10 +113,11 @@ export default function AccountCard(props: AccountCardProps) {
         }
       }}
       className={cn(
-        'group flex min-h-[224px] cursor-pointer flex-col rounded-[8px] border border-border bg-card px-3.5 py-3.5 text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-colors',
+        'group relative flex min-h-[224px] cursor-pointer flex-col rounded-[8px] border border-border bg-card px-3.5 py-3.5 text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-colors',
         'hover:border-primary/30 hover:bg-primary/[0.015]',
         props.highlighted && 'border-primary/50 ring-1 ring-primary/20',
         props.selected && 'border-primary/60',
+        props.active && 'border-l-[3px] border-l-emerald-500 pl-[calc(0.875rem-2px)]',
       )}
     >
       <div className="flex items-start gap-3">
@@ -126,25 +127,22 @@ export default function AccountCard(props: AccountCardProps) {
             <h3 className="truncate text-[13.5px] font-semibold leading-5 text-foreground">
               {title}
             </h3>
+            {props.active ? <InUseChip label={t('card.active')} /> : null}
             <CopyButton value={identity} label="复制账号标识" />
           </div>
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted-foreground">
             <span className="truncate">{identity}</span>
           </div>
         </div>
-        {showPlanBadge ? (
-          <PlanBadge label={plan} />
-        ) : (
-          <span
-            className={cn(
-              'inline-flex h-5 shrink-0 items-center gap-1 rounded-[6px] px-1.5 text-[11.5px] font-medium',
-              health.className,
-            )}
-          >
-            <span className={cn('size-1.5 rounded-full', health.dot)} aria-hidden />
-            {props.active ? t('card.active') : t(health.labelKey)}
-          </span>
-        )}
+        <span
+          className={cn(
+            'inline-flex h-5 shrink-0 items-center gap-1 rounded-[6px] px-1.5 text-[11.5px] font-medium',
+            health.className,
+          )}
+        >
+          <span className={cn('size-1.5 rounded-full', health.dot)} aria-hidden />
+          {t(health.labelKey)}
+        </span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -186,7 +184,7 @@ export default function AccountCard(props: AccountCardProps) {
           </span>
         ) : (
           <span className="text-[11.5px] text-muted-foreground">
-            {formatRelativeTime(props.account.lastUsedAt || props.account.createdAt)}
+            {formatRelativeTime(quotaState?.fetchedAt || props.account.lastUsedAt || props.account.createdAt)}
           </span>
         )}
         <div className="flex items-center gap-2">
@@ -223,9 +221,10 @@ function SubscriptionLine({ info }: { info: CodexSubscriptionInfo }) {
   );
 }
 
-function PlanBadge({ label }: { label: string }) {
+function InUseChip({ label }: { label: string }) {
   return (
-    <span className="inline-flex h-5 shrink-0 items-center rounded-[6px] bg-primary/10 px-1.5 text-[11.5px] font-semibold text-primary">
+    <span className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-[5px] bg-emerald-500/12 px-1.5 text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-300">
+      <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
       {label}
     </span>
   );
@@ -269,26 +268,44 @@ function InfoCell({
 
 function QuotaLine({ line }: { line: MetricLine }) {
   const progress = line.progress ?? 0;
+  // Top-right: prefer the explicit percent text; fall back to the line value
+  // (e.g. Codex "85% 剩余" or a raw value) so non-credit metrics still show.
+  const topRight = line.percentText ?? line.value;
+  // Bottom-left: used/total (e.g. "288 / 10,000"). Falls back to subLabel.
+  const bottomLeft = line.usageText ?? line.subLabel;
+  // Bottom-right: reset date with a calendar icon.
+  const resetText = line.resetText;
+  const hasBottom = !!bottomLeft || !!resetText;
+
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between gap-3 text-[11.5px]">
         <span className={cn('truncate font-medium', quotaTextColor(line.tone))}>
           {line.label}
-          {line.value ? `  ${line.value}` : ''}
         </span>
-        {line.subValue ? (
-          <span className="shrink-0 text-muted-foreground">{line.subValue}</span>
+        {topRight ? (
+          <span className={cn('shrink-0 font-semibold tabular-nums', quotaTextColor(line.tone))}>
+            {topRight}
+          </span>
         ) : null}
       </div>
-      {line.subLabel ? (
-        <div className="mt-0.5 truncate text-[11.5px] text-foreground">{line.subLabel}</div>
-      ) : null}
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className={cn('h-full rounded-full', quotaProgressColor(line.tone))}
           style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
         />
       </div>
+      {hasBottom ? (
+        <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate tabular-nums">{bottomLeft ?? ''}</span>
+          {resetText ? (
+            <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+              <CalendarDays className="size-3" strokeWidth={1.8} aria-hidden />
+              {resetText} 重置
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

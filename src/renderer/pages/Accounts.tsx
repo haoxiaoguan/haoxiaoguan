@@ -646,12 +646,15 @@ function quotaBucket(state: AccountQuotaState | undefined): QuotaFilter {
   return 'unknown';
 }
 
-function compareAccounts(
+export function compareAccounts(
   a: Account,
   b: Account,
   sortMode: SortMode,
   quotaStates: Map<string, AccountQuotaState>,
 ) {
+  // The account the agent is currently using always pins to the top, regardless
+  // of sort mode, so "which account is active" is answerable at a glance.
+  if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
   if (sortMode === 'name') return accountTitle(a).localeCompare(accountTitle(b));
   if (sortMode === 'recent') return dateValue(b.lastUsedAt) - dateValue(a.lastUsedAt);
   return quotaScore(quotaStates.get(b.id)) - quotaScore(quotaStates.get(a.id));

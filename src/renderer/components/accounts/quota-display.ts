@@ -9,6 +9,12 @@ export interface MetricLine {
   subValue?: string;
   progress?: number;
   tone?: MetricTone;
+  /** Top-right percentage text (e.g. "3%" or "85% 剩余"). */
+  percentText?: string;
+  /** Bottom-left used/total text with thousands separators (e.g. "288 / 10,000"). */
+  usageText?: string;
+  /** Bottom-right reset date (e.g. "2026-07-01"). */
+  resetText?: string;
 }
 
 export function primaryMetric(state?: AccountQuotaState): QuotaMetric | undefined {
@@ -40,16 +46,27 @@ export function metricLines(account: Account, state?: AccountQuotaState): Metric
     ];
   }
 
-  return state.metrics.map((metric) => ({
-    label: metric.label,
-    value: metric.displayValue ?? formatMetricValue(metric),
-    subLabel: formatMetricSubLabel(metric),
-    subValue: metric.resetAt ? `重置：${new Date(metric.resetAt).toLocaleString()}` : undefined,
-    progress: metric.kind === 'remaining'
-      ? metric.percentRemaining ?? metric.percentUsed
-      : metric.percentUsed ?? metric.percentRemaining,
-    tone: metricTone(account, metric),
-  }));
+  return state.metrics.map((metric) => {
+    const value = metric.displayValue ?? formatMetricValue(metric);
+    const subLabel = formatMetricSubLabel(metric);
+    return {
+      label: metric.label,
+      value,
+      // subLabel shows the absolute used/total only when `value` is something
+      // else (e.g. a percentage). When `value` is already the used/total pair
+      // (credit metrics), omit it so the line isn't shown twice.
+      subLabel: subLabel && subLabel !== value ? subLabel : undefined,
+      subValue: metric.resetAt ? `重置：${new Date(metric.resetAt).toLocaleString()}` : undefined,
+      progress: metric.kind === 'remaining'
+        ? metric.percentRemaining ?? metric.percentUsed
+        : metric.percentUsed ?? metric.percentRemaining,
+      tone: metricTone(account, metric),
+      // Screenshot-style fields (top-right %, bottom-left used/total, bottom-right reset date).
+      percentText: formatPercentText(metric),
+      usageText: formatUsageText(metric),
+      resetText: formatResetDate(metric.resetAt),
+    };
+  });
 }
 
 function metricTone(account: Account, metric: QuotaMetric): MetricTone {
@@ -86,6 +103,40 @@ function formatMetricSubLabel(metric: QuotaMetric): string | undefined {
     return `${metric.used} / ${metric.total}`;
   }
   return undefined;
+}
+
+// Top-right percentage. Usage metrics show percent used (e.g. "3%"); remaining
+// metrics show percent remaining (e.g. "85% 剩余"). Undefined when no percentage.
+function formatPercentText(metric: QuotaMetric): string | undefined {
+  if (metric.kind === 'remaining' && isFiniteNumber(metric.percentRemaining)) {
+    return `${Math.round(metric.percentRemaining)}% 剩余`;
+  }
+  if (isFiniteNumber(metric.percentUsed)) {
+    return `${Math.round(metric.percentUsed)}%`;
+  }
+  return undefined;
+}
+
+// Bottom-left used/total with thousands separators (e.g. "288 / 10,000").
+// Only when both used and total are concrete numbers.
+function formatUsageText(metric: QuotaMetric): string | undefined {
+  if (isFiniteNumber(metric.used) && isFiniteNumber(metric.total)) {
+    return `${formatThousands(metric.used)} / ${formatThousands(metric.total)}`;
+  }
+  return undefined;
+}
+
+function formatThousands(value: number): string {
+  return Number.isInteger(value) ? value.toLocaleString('en-US') : String(value);
+}
+
+// Bottom-right reset date in YYYY-MM-DD local form (e.g. "2026-07-01").
+function formatResetDate(resetAt?: string): string | undefined {
+  if (!resetAt) return undefined;
+  const date = new Date(resetAt);
+  if (Number.isNaN(date.getTime())) return undefined;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function isFiniteNumber(value: number | null | undefined): value is number {

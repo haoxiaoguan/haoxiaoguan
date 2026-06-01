@@ -1,3 +1,4 @@
+import { CalendarDays } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { Account, AccountQuotaState } from '../../types';
@@ -135,29 +136,22 @@ function MetricLineView({
   compact?: boolean;
 }) {
   const progressTone = progressClassName ?? progressColor(line.tone);
+  const topRight = line.percentText ?? line.value;
+  const bottomLeft = line.usageText ?? line.subLabel;
+  const resetText = line.resetText;
+  const hasBottom = !!bottomLeft || !!resetText;
   return (
     <div className={cn('flex flex-col', compact ? 'gap-1' : 'gap-1.5')}>
       <div className="flex items-center justify-between gap-3">
         <span className="truncate text-[12px] font-medium text-foreground/80">
           {line.label}
         </span>
-        {line.value && (
-          <span className={cn('shrink-0 text-[12px] font-semibold', valueColor(line.tone))}>
-            {line.value}
+        {topRight && (
+          <span className={cn('shrink-0 text-[12px] font-semibold tabular-nums', valueColor(line.tone))}>
+            {topRight}
           </span>
         )}
       </div>
-
-      {(line.subLabel || line.subValue) && (
-        <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-          {line.subLabel && (
-            <span className="min-w-0 truncate font-medium text-foreground">
-              {line.subLabel}
-            </span>
-          )}
-          {line.subValue && <span className="shrink-0 truncate">{line.subValue}</span>}
-        </div>
-      )}
 
       {line.progress !== undefined && (
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -166,6 +160,18 @@ function MetricLineView({
             style={{ width: `${Math.max(0, Math.min(100, line.progress))}%` }}
             aria-hidden
           />
+        </div>
+      )}
+
+      {hasBottom && (
+        <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate tabular-nums">{bottomLeft ?? ''}</span>
+          {resetText && (
+            <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+              <CalendarDays className="size-3" strokeWidth={1.8} aria-hidden />
+              {resetText} 重置
+            </span>
+          )}
         </div>
       )}
     </div>

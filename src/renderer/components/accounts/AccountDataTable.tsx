@@ -143,11 +143,7 @@ export function AccountDataTable({
         id: 'sync',
         size: 86,
         header: () => '同步时间',
-        cell: ({ row }) => (
-          <span className="text-[13px] text-muted-foreground">
-            {formatRelativeTime(row.original.lastUsedAt || row.original.createdAt)}
-          </span>
-        ),
+        cell: ({ row }) => <AccountSyncTime account={row.original} />,
       },
       {
         id: 'actions',
@@ -220,6 +216,7 @@ export function AccountDataTable({
                 data-state={selectedIds.has(row.original.id) ? 'selected' : undefined}
                 className={cn(
                   'group h-[64px] hover:bg-muted',
+                  row.original.isActive && 'bg-emerald-500/[0.04]',
                   highlighted && 'bg-primary/[0.03]',
                 )}
                 onDoubleClick={() => onOpen(row.original.id)}
@@ -270,6 +267,7 @@ function pinnedCellClass(column: Column<Account, unknown>, header: boolean, high
 }
 
 function AccountIdentity({ account }: { account: Account }) {
+  const { t } = useTranslation('accounts');
   const title = account.name || account.displayIdentifier || account.email;
   const identity = account.identityKey || account.displayIdentifier || account.email;
   return (
@@ -278,6 +276,12 @@ function AccountIdentity({ account }: { account: Account }) {
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[12.5px] font-semibold text-foreground">{title}</span>
+          {account.isActive ? (
+            <span className="inline-flex h-[17px] shrink-0 items-center gap-1 rounded-[5px] bg-emerald-500/12 px-1.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+              <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
+              {t('card.active')}
+            </span>
+          ) : null}
           <CopyButton value={identity} />
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted-foreground">
@@ -332,19 +336,11 @@ function AccountPlanCell({ account }: { account: Account }) {
 function AccountStatus({ account }: { account: Account }) {
   const { t } = useTranslation('accounts');
   const snapshot = useHealthStore((s) => s.snapshots.get(account.id));
-  if (account.platform === 'codex') {
-    return (
-      <span className="inline-flex items-center rounded-[6px] bg-primary/10 px-1.5 py-0.5 text-[12px] font-semibold text-primary">
-        {accountPlanLabel(account)}
-      </span>
-    );
-  }
-
   const state = snapshot?.validation.state ?? normalizeAccountStatus(account.status);
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-[12.5px] font-medium', statusColor(state))}>
       <span className={cn('size-1.5 rounded-full', statusDot(state))} aria-hidden />
-      {account.isActive ? t('card.active') : t(`health.${state}`)}
+      {t(`health.${state}`)}
     </span>
   );
 }
@@ -363,13 +359,21 @@ function AccountQuota({ account }: { account: Account }) {
   const quotaState = useQuotaStateStore((s) => s.states.get(account.id));
   const line = metricLines(account, quotaState)[0];
   const primary = primaryMetric(quotaState);
+  const topRight = line?.percentText ?? line?.value ?? primary?.displayValue;
+  const bottomText = line?.usageText
+    ? line.resetText
+      ? `${line.usageText} · ${line.resetText} 重置`
+      : line.usageText
+    : line?.subValue;
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between gap-2">
         <span className={cn('truncate font-medium', quotaTextColor(line?.tone))}>
           {line?.label ?? '额度'}
-          {line?.value ? ` ${line.value}` : primary?.displayValue ? ` ${primary.displayValue}` : ''}
         </span>
+        {topRight ? (
+          <span className={cn('shrink-0 tabular-nums', quotaTextColor(line?.tone))}>{topRight}</span>
+        ) : null}
       </div>
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
@@ -377,12 +381,21 @@ function AccountQuota({ account }: { account: Account }) {
           style={{ width: `${Math.max(0, Math.min(100, line?.progress ?? 0))}%` }}
         />
       </div>
-      {line?.subValue ? (
-        <div className="mt-1 truncate text-[10.5px] text-muted-foreground">
-          {line.subValue}
+      {bottomText ? (
+        <div className="mt-1 truncate text-[10.5px] text-muted-foreground tabular-nums">
+          {bottomText}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AccountSyncTime({ account }: { account: Account }) {
+  const fetchedAt = useQuotaStateStore((s) => s.states.get(account.id)?.fetchedAt);
+  return (
+    <span className="text-[13px] text-muted-foreground">
+      {formatRelativeTime(fetchedAt || account.lastUsedAt || account.createdAt)}
+    </span>
   );
 }
 

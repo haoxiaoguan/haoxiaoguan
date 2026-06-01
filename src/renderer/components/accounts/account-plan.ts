@@ -8,6 +8,9 @@ export interface CodexSubscriptionInfo {
 
 export function accountPlanLabel(account: Account): string {
   if (account.platform === 'codex') return codexPlanLabel(account);
+  // Kiro's planTier is an internal AWS code (e.g. Q_DEVELOPER_STANDALONE_PRO_PLUS);
+  // planName is the human title (e.g. KIRO PRO+). Prefer the readable name.
+  if (account.platform === 'kiro') return account.planName || account.planTier || 'Free';
   return account.planTier || account.planName || 'Free';
 }
 
