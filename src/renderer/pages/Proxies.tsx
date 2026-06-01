@@ -28,7 +28,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AnimatedSegmentedControl } from '@/components/ui/animated-segmented-control';
+import { SegmentedOptions } from '@/components/ui/segmented-options';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -356,14 +356,14 @@ export default function Proxies() {
 
           {/* Tab switcher — only when adding (editing is manual-only) */}
           {!form.id ? (
-            <AnimatedSegmentedControl
+            <SegmentedOptions
               items={[
                 { value: 'manual', label: t('addDialog.tabManual') },
                 { value: 'paste', label: t('addDialog.tabPaste') },
               ]}
               value={addTab}
-              onValueChange={(v) => setAddTab(v as 'manual' | 'paste')}
-              equalWidth
+              onChange={(v) => setAddTab(v as 'manual' | 'paste')}
+              fullWidth
             />
           ) : null}
 
