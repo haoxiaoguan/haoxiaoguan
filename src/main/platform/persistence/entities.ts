@@ -13,6 +13,7 @@
 //   - usage       (3 tables: usage_records, usage_sync_state, usage_daily_rollups)
 //   - quota       (2 tables: quota_cache, account_quota_state)
 //   - mcp         (1 table: mcp_servers)
+//   - proxy       (3 tables: proxies, proxy_groups, account_proxy_bindings)
 //
 // The `credentials` table is owned by the credential context's CredentialEntity
 // (it supersedes the account context's former TEMP CredentialRefEntity, now
@@ -40,6 +41,10 @@ import { AccountQuotaStateEntity } from '../../contexts/quota/infrastructure/acc
 
 import { McpServerEntity } from '../../contexts/mcp/infrastructure/mcp-server.entity'
 
+import { ProxyEntity } from '../../contexts/proxy/infrastructure/proxy.entity'
+import { ProxyGroupEntity } from '../../contexts/proxy/infrastructure/proxy-group.entity'
+import { AccountProxyBindingEntity } from '../../contexts/proxy/infrastructure/account-proxy-binding.entity'
+
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
   // account context
@@ -63,4 +68,8 @@ export const ALL_ENTITIES: unknown[] = [
   AccountQuotaStateEntity,
   // mcp context
   McpServerEntity,
+  // proxy context
+  ProxyEntity,
+  ProxyGroupEntity,
+  AccountProxyBindingEntity,
 ]
