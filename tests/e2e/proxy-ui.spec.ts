@@ -37,8 +37,9 @@ test('user can navigate to Proxies, add a proxy via the form, and see it listed'
   // Empty state shows first.
   await expect(window.getByText(/No proxies yet|还没有代理/)).toBeVisible()
 
-  // Click the manual-add button (label: "Add manually" / "手动添加").
-  await window.getByRole('button', { name: /Add manually|手动添加/ }).click()
+  // Click the toolbar "Add" button to open the combined dialog (manual tab is
+  // the default).
+  await window.getByRole('button', { name: /^Add$|^添加$/ }).click()
 
   // Fill host + port (dialog inputs). Host has placeholder 1.2.3.4, port 8080.
   await window.getByPlaceholder('1.2.3.4').fill('203.0.113.7')

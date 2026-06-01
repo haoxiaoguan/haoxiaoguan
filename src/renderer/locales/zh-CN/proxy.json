@@ -18,6 +18,11 @@
       "unknown": "未测"
     }
   },
+  "addDialog": {
+    "title": "添加代理",
+    "tabManual": "手动添加",
+    "tabPaste": "批量粘贴"
+  },
   "table": {
     "label": "备注/标签",
     "address": "地址",

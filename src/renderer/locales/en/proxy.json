@@ -18,6 +18,11 @@
       "unknown": "Untested"
     }
   },
+  "addDialog": {
+    "title": "Add proxy",
+    "tabManual": "Add manually",
+    "tabPaste": "Paste in bulk"
+  },
   "table": {
     "label": "Label/Tags",
     "address": "Address",

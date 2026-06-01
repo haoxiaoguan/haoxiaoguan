@@ -28,6 +28,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AnimatedSegmentedControl } from '@/components/ui/animated-segmented-control';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,9 +92,9 @@ export default function Proxies() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [formOpen, setFormOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addTab, setAddTab] = useState<'manual' | 'paste'>('manual');
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ProxyDto | null>(null);
 
@@ -120,9 +121,11 @@ export default function Proxies() {
 
   const okCount = useMemo(() => proxies.filter((p) => p.status === 'ok').length, [proxies]);
 
-  const openCreate = () => {
+  const openAdd = () => {
     setForm(EMPTY_FORM);
-    setFormOpen(true);
+    setPasteText('');
+    setAddTab('manual');
+    setAddOpen(true);
   };
 
   const openEdit = (proxy: ProxyDto) => {
@@ -137,7 +140,8 @@ export default function Proxies() {
       tags: proxy.tags.join(', '),
       passwordSet: proxy.passwordSet,
     });
-    setFormOpen(true);
+    setAddTab('manual');
+    setAddOpen(true);
   };
 
   const submitForm = async () => {
@@ -173,7 +177,7 @@ export default function Proxies() {
           tags,
         });
       }
-      setFormOpen(false);
+      setAddOpen(false);
     } catch {
       // error toast handled via store error effect
     }
@@ -189,7 +193,7 @@ export default function Proxies() {
           failed: summary.failed.length,
         }),
       );
-      setPasteOpen(false);
+      setAddOpen(false);
       setPasteText('');
     }
   };
@@ -221,11 +225,8 @@ export default function Proxies() {
         />
         <ManagementInfoPill tone="green" label={t('summary.ok', { count: okCount })} />
         <div className="flex-1" />
-        <ManagementActionButton icon={Plus} onClick={openCreate}>
-          {t('toolbar.addManual')}
-        </ManagementActionButton>
-        <ManagementActionButton icon={Plus} onClick={() => setPasteOpen(true)}>
-          {t('toolbar.addPaste')}
+        <ManagementActionButton icon={Plus} onClick={openAdd}>
+          {t('toolbar.add')}
         </ManagementActionButton>
         <ManagementActionButton
           icon={Wifi}
@@ -344,113 +345,129 @@ export default function Proxies() {
         </Table>
       </div>
 
-      {/* Add / Edit dialog */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle>{form.id ? t('form.editTitle') : t('form.title')}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div className="grid grid-cols-[1fr_2fr] gap-2">
-              <div>
-                <label className="text-[12px] text-muted-foreground">{t('form.protocol')}</label>
-                <Select
-                  value={form.protocol}
-                  onValueChange={(v) => setForm((f) => ({ ...f, protocol: v as ProxyProtocolDto }))}
-                >
-                  <SelectTrigger className="h-9 rounded-[8px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="http">HTTP</SelectItem>
-                    <SelectItem value="https">HTTPS</SelectItem>
-                    <SelectItem value="socks5">SOCKS5</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-[12px] text-muted-foreground">{t('form.host')}</label>
-                <Input
-                  value={form.host}
-                  onChange={(e) => setForm((f) => ({ ...f, host: e.target.value }))}
-                  placeholder="1.2.3.4"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[12px] text-muted-foreground">{t('form.port')}</label>
-                <Input
-                  value={form.port}
-                  onChange={(e) => setForm((f) => ({ ...f, port: e.target.value }))}
-                  placeholder="8080"
-                  inputMode="numeric"
-                />
-              </div>
-              <div>
-                <label className="text-[12px] text-muted-foreground">{t('form.label')}</label>
-                <Input
-                  value={form.label}
-                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[12px] text-muted-foreground">{t('form.username')}</label>
-                <Input
-                  value={form.username}
-                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="text-[12px] text-muted-foreground">{t('form.password')}</label>
-                <Input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  placeholder={form.passwordSet ? t('form.passwordSetPlaceholder') : ''}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-[12px] text-muted-foreground">{t('form.tags')}</label>
-              <Input
-                value={form.tags}
-                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
-                placeholder="prod, us-east"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>
-              {t('form.cancel')}
-            </Button>
-            <Button onClick={() => void submitForm()}>{t('form.save')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Paste import dialog */}
-      <Dialog open={pasteOpen} onOpenChange={setPasteOpen}>
+      {/* Add (manual / paste tabs) + Edit dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>{t('paste.title')}</DialogTitle>
+            <DialogTitle>
+              {form.id ? t('form.editTitle') : t('addDialog.title')}
+            </DialogTitle>
           </DialogHeader>
-          <Textarea
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-            placeholder={t('paste.placeholder')}
-            className="min-h-[180px] font-mono text-[12px]"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPasteOpen(false)}>
-              {t('form.cancel')}
-            </Button>
-            <Button onClick={() => void submitPaste()} disabled={pasteText.trim() === ''}>
-              {t('paste.import')}
-            </Button>
-          </DialogFooter>
+
+          {/* Tab switcher — only when adding (editing is manual-only) */}
+          {!form.id ? (
+            <AnimatedSegmentedControl
+              items={[
+                { value: 'manual', label: t('addDialog.tabManual') },
+                { value: 'paste', label: t('addDialog.tabPaste') },
+              ]}
+              value={addTab}
+              onValueChange={(v) => setAddTab(v as 'manual' | 'paste')}
+              equalWidth
+            />
+          ) : null}
+
+          {form.id || addTab === 'manual' ? (
+            <>
+              <div className="grid gap-3 py-2">
+                <div className="grid grid-cols-[1fr_2fr] gap-2">
+                  <div>
+                    <label className="text-[12px] text-muted-foreground">{t('form.protocol')}</label>
+                    <Select
+                      value={form.protocol}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, protocol: v as ProxyProtocolDto }))
+                      }
+                    >
+                      <SelectTrigger className="h-9 rounded-[8px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="http">HTTP</SelectItem>
+                        <SelectItem value="https">HTTPS</SelectItem>
+                        <SelectItem value="socks5">SOCKS5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[12px] text-muted-foreground">{t('form.host')}</label>
+                    <Input
+                      value={form.host}
+                      onChange={(e) => setForm((f) => ({ ...f, host: e.target.value }))}
+                      placeholder="1.2.3.4"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[12px] text-muted-foreground">{t('form.port')}</label>
+                    <Input
+                      value={form.port}
+                      onChange={(e) => setForm((f) => ({ ...f, port: e.target.value }))}
+                      placeholder="8080"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] text-muted-foreground">{t('form.label')}</label>
+                    <Input
+                      value={form.label}
+                      onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[12px] text-muted-foreground">{t('form.username')}</label>
+                    <Input
+                      value={form.username}
+                      onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] text-muted-foreground">{t('form.password')}</label>
+                    <Input
+                      type="password"
+                      value={form.password}
+                      onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                      placeholder={form.passwordSet ? t('form.passwordSetPlaceholder') : ''}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[12px] text-muted-foreground">{t('form.tags')}</label>
+                  <Input
+                    value={form.tags}
+                    onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
+                    placeholder="prod, us-east"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>
+                  {t('form.cancel')}
+                </Button>
+                <Button onClick={() => void submitForm()}>{t('form.save')}</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <Textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={t('paste.placeholder')}
+                className="mt-2 min-h-[180px] font-mono text-[12px]"
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>
+                  {t('form.cancel')}
+                </Button>
+                <Button onClick={() => void submitPaste()} disabled={pasteText.trim() === ''}>
+                  {t('paste.import')}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
