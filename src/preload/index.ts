@@ -12,6 +12,7 @@ import {
   MCP_CHANNELS,
   SYNC_CHANNELS,
   WS_CHANNELS,
+  PROXY_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi } from '../shared/api-types'
 
@@ -146,6 +147,29 @@ const api: HxgApi = {
   ws: {
     getWsStatus: () => ipcRenderer.invoke(WS_CHANNELS.getWsStatus),
     toggleWs: (enabled) => ipcRenderer.invoke(WS_CHANNELS.toggleWs, { enabled }),
+  },
+  proxy: {
+    listProxies: () => ipcRenderer.invoke(PROXY_CHANNELS.listProxies),
+    createProxy: (req) => ipcRenderer.invoke(PROXY_CHANNELS.createProxy, req),
+    updateProxy: (id, patch) => ipcRenderer.invoke(PROXY_CHANNELS.updateProxy, { id, patch }),
+    deleteProxy: (id) => ipcRenderer.invoke(PROXY_CHANNELS.deleteProxy, { id }),
+    importProxies: (text) => ipcRenderer.invoke(PROXY_CHANNELS.importProxies, { text }),
+    testProxy: (id) => ipcRenderer.invoke(PROXY_CHANNELS.testProxy, { id }),
+    testProxies: (ids, concurrency) =>
+      ipcRenderer.invoke(PROXY_CHANNELS.testProxies, { ids, concurrency }),
+    listGroups: () => ipcRenderer.invoke(PROXY_CHANNELS.listGroups),
+    createGroup: (name, proxyId) =>
+      ipcRenderer.invoke(PROXY_CHANNELS.createGroup, { name, proxyId }),
+    deleteGroup: (id) => ipcRenderer.invoke(PROXY_CHANNELS.deleteGroup, { id }),
+    listBindings: () => ipcRenderer.invoke(PROXY_CHANNELS.listBindings),
+    getAccountBinding: (accountId) =>
+      ipcRenderer.invoke(PROXY_CHANNELS.getAccountBinding, { accountId }),
+    bindAccountToProxy: (accountId, proxyId) =>
+      ipcRenderer.invoke(PROXY_CHANNELS.bindAccountToProxy, { accountId, proxyId }),
+    bindAccountToGroup: (accountId, groupId) =>
+      ipcRenderer.invoke(PROXY_CHANNELS.bindAccountToGroup, { accountId, groupId }),
+    unbindAccount: (accountId) =>
+      ipcRenderer.invoke(PROXY_CHANNELS.unbindAccount, { accountId }),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

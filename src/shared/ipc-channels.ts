@@ -142,3 +142,23 @@ export const WS_CHANNELS = {
   getWsStatus: 'get_ws_status',
   toggleWs: 'toggle_ws',
 } as const
+
+// Proxy context — outbound proxy IP management (new feature, no Tauri origin).
+// Channels are "proxy:<method>" since there is no source command name to mirror.
+export const PROXY_CHANNELS = {
+  listProxies: 'proxy:listProxies',
+  createProxy: 'proxy:createProxy',
+  updateProxy: 'proxy:updateProxy',
+  deleteProxy: 'proxy:deleteProxy',
+  importProxies: 'proxy:importProxies',
+  testProxy: 'proxy:testProxy',
+  testProxies: 'proxy:testProxies',
+  listGroups: 'proxy:listGroups',
+  createGroup: 'proxy:createGroup',
+  deleteGroup: 'proxy:deleteGroup',
+  listBindings: 'proxy:listBindings',
+  getAccountBinding: 'proxy:getAccountBinding',
+  bindAccountToProxy: 'proxy:bindAccountToProxy',
+  bindAccountToGroup: 'proxy:bindAccountToGroup',
+  unbindAccount: 'proxy:unbindAccount',
+} as const

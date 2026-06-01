@@ -514,6 +514,23 @@ export interface HxgApi {
     getWsStatus(): Promise<WsStatus>
     toggleWs(enabled: boolean): Promise<void>
   }
+  proxy: {
+    listProxies(): Promise<ProxyDto[]>
+    createProxy(req: CreateProxyRequest): Promise<ProxyDto>
+    updateProxy(id: string, patch: UpdateProxyRequest): Promise<ProxyDto>
+    deleteProxy(id: string): Promise<void>
+    importProxies(text: string): Promise<ProxyImportSummary>
+    testProxy(id: string): Promise<ProxyTestResultDto>
+    testProxies(ids: string[], concurrency?: number): Promise<ProxyTestResultDto[]>
+    listGroups(): Promise<ProxyGroupDto[]>
+    createGroup(name: string, proxyId: string): Promise<ProxyGroupDto>
+    deleteGroup(id: string): Promise<void>
+    listBindings(): Promise<AccountBindingDto[]>
+    getAccountBinding(accountId: string): Promise<AccountBindingDto | null>
+    bindAccountToProxy(accountId: string, proxyId: string): Promise<void>
+    bindAccountToGroup(accountId: string, groupId: string): Promise<void>
+    unbindAccount(accountId: string): Promise<void>
+  }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
 }
@@ -522,6 +539,73 @@ export interface WsStatus {
   running: boolean
   port?: number
   connectionCount: number
+}
+
+// ── Proxy DTOs (proxy context — outbound proxy IP management) ─────────────────
+export type ProxyProtocolDto = 'http' | 'https' | 'socks5'
+export type ProxyStatusDto = 'unknown' | 'ok' | 'failed'
+
+/** A proxy as seen by the renderer — never carries the plaintext password. */
+export interface ProxyDto {
+  id: string
+  label?: string
+  protocol: ProxyProtocolDto
+  host: string
+  port: number
+  username?: string
+  passwordSet: boolean
+  status: ProxyStatusDto
+  lastEgressIp?: string
+  lastLatencyMs?: number
+  lastCheckedAt?: string
+  lastError?: string
+  tags: string[]
+  displayUrl: string
+  boundAccountCount: number
+  boundGroupCount: number
+  createdAt: string
+}
+export interface ProxyGroupDto {
+  id: string
+  name: string
+  proxyId: string
+  createdAt: string
+}
+export interface AccountBindingDto {
+  accountId: string
+  proxyId?: string
+  groupId?: string
+}
+export interface ProxyImportSummary {
+  imported: number
+  skipped: number
+  failed: Array<{ lineNumber: number; raw: string; error: string }>
+}
+export interface ProxyTestResultDto {
+  proxyId: string
+  status: 'ok' | 'failed'
+  egressIp?: string
+  latencyMs?: number
+  error?: string
+  checkedAt: string
+}
+export interface CreateProxyRequest {
+  label?: string
+  protocol: ProxyProtocolDto
+  host: string
+  port: number
+  username?: string
+  password?: string
+  tags?: string[]
+}
+export interface UpdateProxyRequest {
+  label?: string
+  protocol?: ProxyProtocolDto
+  host?: string
+  port?: number
+  username?: string
+  password?: string | null
+  tags?: string[]
 }
 
 declare global {

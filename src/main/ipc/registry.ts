@@ -40,6 +40,9 @@ import { registerSyncHandlers } from '../contexts/sync/ipc/sync-handlers'
 import type { WebSocketApplicationService } from '../contexts/websocket/application/websocket-service'
 import { registerWebSocketHandlers } from '../contexts/websocket/ipc/websocket-handlers'
 
+import type { ProxyService } from '../contexts/proxy/application/proxy-service'
+import { registerProxyHandlers } from '../contexts/proxy/ipc/proxy-handlers'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
@@ -86,6 +89,9 @@ export interface Services {
 
   // websocket push-server context
   websocket: WebSocketApplicationService
+
+  // proxy context (outbound proxy IP management)
+  proxyService: ProxyService
 }
 
 // Each context contributes a register*Handlers function.
@@ -115,4 +121,5 @@ export function registerAllHandlers(services: Services): void {
   registerMcpHandlers(services.mcp)
   registerSyncHandlers(services.sync)
   registerWebSocketHandlers(services.websocket)
+  registerProxyHandlers(services.proxyService)
 }

@@ -92,6 +92,14 @@ import { defaultSsotRoot } from './contexts/skill/application/skill-application-
 import { WsServer } from './platform/websocket/ws-server'
 import { WebSocketApplicationService } from './contexts/websocket/application/websocket-service'
 
+// Proxy context — outbound proxy IP management. ProxyResolver is injected into
+// QuotaService so per-account quota fetches route through the bound proxy.
+import { MikroOrmProxyRepository } from './contexts/proxy/infrastructure/mikro-orm-proxy-repository'
+import { ProxyDispatcherFactory } from './contexts/proxy/infrastructure/proxy-dispatcher-factory'
+import { ProxyResolver } from './contexts/proxy/infrastructure/proxy-resolver'
+import { ProxyTester } from './contexts/proxy/infrastructure/proxy-tester'
+import { ProxyService } from './contexts/proxy/application/proxy-service'
+
 /**
  * Account capability-registry adapter (quota manifest §5b).
  *
@@ -206,6 +214,14 @@ export async function buildContainer(): Promise<Container> {
 
   // 4c. Quota context — cache/state repos + live HTTP fetcher + application
   //     service. Depends on the account repo + credential store built above.
+  //     The proxy ProxyResolver (built here) is injected so per-account quota
+  //     fetches route through the account's bound proxy dispatcher.
+  const proxyRepo = new MikroOrmProxyRepository(cryptoService)
+  const proxyDispatcherFactory = new ProxyDispatcherFactory()
+  const proxyResolver = new ProxyResolver(proxyRepo, proxyDispatcherFactory)
+  const proxyTester = new ProxyTester(proxyDispatcherFactory)
+  const proxyService = new ProxyService(proxyRepo, proxyTester)
+
   const quotaCacheRepo = new MikroOrmQuotaCacheRepository()
   const quotaStateRepo = new MikroOrmQuotaStateRepository()
   const quotaFetcher = new HttpLiveQuotaFetcher()
@@ -215,6 +231,8 @@ export async function buildContainer(): Promise<Container> {
     quotaCacheRepo,
     quotaStateRepo,
     quotaFetcher,
+    undefined,
+    proxyResolver,
   )
 
   // 4d. Account validation / health — wired to the REAL capability registry
@@ -323,6 +341,7 @@ export async function buildContainer(): Promise<Container> {
     mcp,
     sync,
     websocket,
+    proxyService,
     tokenRefreshScheduler,
   }
 }
