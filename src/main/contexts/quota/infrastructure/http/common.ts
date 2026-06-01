@@ -10,6 +10,8 @@ import { Credential } from '../../../account/domain/credential'
 import { ModelQuota } from '../../domain/quota'
 import type { PlatformId } from '../../domain/platform-id'
 import type { QuotaFetchResult } from '../../domain/capabilities'
+import { currentDispatcher } from '../../../../platform/net/dispatcher-context'
+import { fetch as undiciFetch } from 'undici'
 import {
   fromAccountProfile,
   getPathValue,
@@ -31,7 +33,16 @@ export function providerError(message: string): ProviderError {
   return new ProviderError(message)
 }
 
-/** fetch() with a 25s timeout. Throws ProviderError on network failure. */
+/**
+ * fetch() with a 25s timeout. Throws ProviderError on network failure.
+ *
+ * When an ambient proxy dispatcher is set for the current async context (see
+ * platform/net/dispatcher-context), the request is routed through it using
+ * undici's own fetch — the global fetch's RequestInit type doesn't expose
+ * `dispatcher`, and mixing our undici Dispatcher with Electron's bundled undici
+ * fetch fails the instanceof check. With no dispatcher, behaviour is unchanged
+ * (global fetch, direct connection).
+ */
 export async function httpFetch(
   url: string,
   init: RequestInit,
@@ -39,7 +50,16 @@ export async function httpFetch(
 ): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), QUOTA_HTTP_TIMEOUT_MS)
+  const dispatcher = currentDispatcher()
   try {
+    if (dispatcher !== undefined) {
+      const response = await undiciFetch(url, {
+        ...(init as Parameters<typeof undiciFetch>[1]),
+        signal: controller.signal,
+        dispatcher,
+      })
+      return response as unknown as Response
+    }
     return await fetch(url, { ...init, signal: controller.signal })
   } catch (err) {
     throw providerError(`${describe}: ${err instanceof Error ? err.message : String(err)}`)

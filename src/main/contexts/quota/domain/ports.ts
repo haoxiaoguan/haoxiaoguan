@@ -63,4 +63,15 @@ export interface QuotaPlatformLookup {
   platformOf(accountId: string): Promise<PlatformId | undefined>
 }
 
+/**
+ * Resolves the proxy dispatcher an account's outbound requests must route
+ * through, or undefined for a direct connection. Implemented by the proxy
+ * context's ProxyResolver; injected into QuotaService so quota fetches can be
+ * proxied per-account. Typed structurally (undici Dispatcher) to avoid a hard
+ * quota→proxy dependency.
+ */
+export interface AccountDispatcherResolver {
+  dispatcherForAccount(accountId: string): Promise<import('undici').Dispatcher | undefined>
+}
+
 export type { QuotaFetchResult }

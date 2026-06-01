@@ -22,7 +22,9 @@ import type {
   QuotaCacheRepository,
   QuotaCredentialStore,
   QuotaStateRepository,
+  AccountDispatcherResolver,
 } from '../domain/ports'
+import { runWithDispatcher } from '../../../platform/net/dispatcher-context'
 import {
   AccountQuotaState,
   fromAccountProfile,
@@ -66,6 +68,7 @@ export class QuotaApplicationService {
     private readonly quotaStateCache: QuotaStateRepository,
     private readonly quotaFetcher: LiveQuotaFetcher,
     private readonly supportedPlatforms: readonly PlatformId[] = QUOTA_FETCH_PLATFORMS,
+    private readonly dispatcherResolver?: AccountDispatcherResolver,
   ) {}
 
   /** Refresh quota for a single account (live fetch + cache update). */
@@ -76,14 +79,25 @@ export class QuotaApplicationService {
     const credential = await this.decryptCredential(accountId)
     const platform = platformFromAgentIdOrCursor(account.agentId)
 
+    // Resolve the per-account proxy dispatcher (undefined = direct). Set as the
+    // ambient dispatcher for the duration of the live fetch so common.httpFetch
+    // routes every outbound quota request through it. Per-async-context, so
+    // concurrent refreshAll() accounts never cross dispatchers.
+    const dispatcher =
+      this.dispatcherResolver !== undefined
+        ? await this.dispatcherResolver.dispatcherForAccount(accountId)
+        : undefined
+
     let result
     try {
-      result = await this.quotaFetcher.fetch({
-        accountId,
-        platform,
-        credential,
-        profilePayload: account.profilePayload,
-      })
+      result = await runWithDispatcher(dispatcher, () =>
+        this.quotaFetcher.fetch({
+          accountId,
+          platform,
+          credential,
+          profilePayload: account.profilePayload,
+        }),
+      )
     } catch (e) {
       const message = errorMessage(e)
       await this.recordFailedQuotaRefresh(account, accountId, message)
