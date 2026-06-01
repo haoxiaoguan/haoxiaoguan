@@ -1,0 +1,81 @@
+{
+  "title": "Proxy IP Management",
+  "summary": {
+    "total": "{{count}} proxies",
+    "ok": "{{count}} available"
+  },
+  "toolbar": {
+    "add": "Add",
+    "addManual": "Add manually",
+    "addPaste": "Paste in bulk",
+    "addFile": "Import from file",
+    "testAll": "Test all",
+    "search": "Search host / label / tag",
+    "filter": {
+      "all": "All",
+      "ok": "Available",
+      "failed": "Failed",
+      "unknown": "Untested"
+    }
+  },
+  "table": {
+    "label": "Label/Tags",
+    "address": "Address",
+    "status": "Status",
+    "egressIp": "Egress IP",
+    "latency": "Latency",
+    "bindings": "Bindings",
+    "lastChecked": "Last checked",
+    "actions": "Actions",
+    "bindingCount": "{{accounts}} accounts / {{groups}} groups",
+    "empty": "No proxies yet. Click \"Add\" to start.",
+    "test": "Test",
+    "edit": "Edit",
+    "delete": "Delete",
+    "bind": "Bind"
+  },
+  "status": {
+    "ok": "Available",
+    "failed": "Failed",
+    "unknown": "Untested"
+  },
+  "form": {
+    "title": "Add proxy",
+    "editTitle": "Edit proxy",
+    "protocol": "Protocol",
+    "host": "Host",
+    "port": "Port",
+    "username": "Username",
+    "password": "Password",
+    "passwordSetPlaceholder": "Set (leave blank to keep)",
+    "label": "Label",
+    "tags": "Tags (comma-separated)",
+    "save": "Save",
+    "saveAndTest": "Save and test",
+    "cancel": "Cancel"
+  },
+  "paste": {
+    "title": "Bulk paste import",
+    "placeholder": "One per line:\nhost:port\nhost:port:user:pass\nscheme://user:pass@host:port",
+    "import": "Import"
+  },
+  "import": {
+    "summary": "{{imported}} imported, {{skipped}} skipped, {{failed}} failed",
+    "openFile": "Choose file"
+  },
+  "delete": {
+    "confirmTitle": "Delete proxy",
+    "confirmBody": "Delete this proxy? This cannot be undone.",
+    "blocked": "This proxy is still used by {{accounts}} accounts / {{groups}} groups and cannot be deleted."
+  },
+  "bind": {
+    "title": "Bind account",
+    "direct": "Direct (no proxy)",
+    "selectAccounts": "Select accounts",
+    "selectGroup": "Select group",
+    "confirm": "Confirm"
+  },
+  "errors": {
+    "loadFailed": "Failed to load proxies"
+  }
+}

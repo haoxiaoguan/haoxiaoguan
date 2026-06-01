@@ -7,6 +7,7 @@ import zhCNDashboard from '../locales/zh-CN/dashboard.json';
 import zhCNTranslation from '../locales/zh-CN/translation.json';
 import zhCNAccounts from '../locales/zh-CN/accounts.json';
 import zhCNOnboarding from '../locales/zh-CN/onboarding.json';
+import zhCNProxy from '../locales/zh-CN/proxy.json';
 
 import enCommon from '../locales/en/common.json';
 import enNav from '../locales/en/nav.json';
@@ -14,6 +15,7 @@ import enDashboard from '../locales/en/dashboard.json';
 import enTranslation from '../locales/en/translation.json';
 import enAccounts from '../locales/en/accounts.json';
 import enOnboarding from '../locales/en/onboarding.json';
+import enProxy from '../locales/en/proxy.json';
 
 import ja from '../locales/ja.json';
 import ko from '../locales/ko.json';
@@ -64,6 +66,7 @@ i18n.use(initReactI18next).init({
       dashboard: zhCNDashboard,
       accounts: zhCNAccounts,
       onboarding: zhCNOnboarding,
+      proxy: zhCNProxy,
     },
     en: {
       translation: enTranslation,
@@ -72,6 +75,7 @@ i18n.use(initReactI18next).init({
       dashboard: enDashboard,
       accounts: enAccounts,
       onboarding: enOnboarding,
+      proxy: enProxy,
     },
     ja: { translation: ja },
     ko: { translation: ko },
@@ -82,7 +86,7 @@ i18n.use(initReactI18next).init({
   lng: detectOSLanguage(),
   fallbackLng: 'zh-CN',
   defaultNS: 'common',
-  ns: ['common', 'nav', 'dashboard', 'translation', 'accounts', 'onboarding'],
+  ns: ['common', 'nav', 'dashboard', 'translation', 'accounts', 'onboarding', 'proxy'],
   fallbackNS: 'translation',
   interpolation: {
     escapeValue: false, // React already escapes

@@ -1,0 +1,81 @@
+{
+  "title": "代理 IP 管理",
+  "summary": {
+    "total": "{{count}} 个代理",
+    "ok": "{{count}} 个可用"
+  },
+  "toolbar": {
+    "add": "添加",
+    "addManual": "手动添加",
+    "addPaste": "批量粘贴",
+    "addFile": "文件导入",
+    "testAll": "批量测连通",
+    "search": "搜索 host / 备注 / 标签",
+    "filter": {
+      "all": "全部",
+      "ok": "可用",
+      "failed": "失败",
+      "unknown": "未测"
+    }
+  },
+  "table": {
+    "label": "备注/标签",
+    "address": "地址",
+    "status": "状态",
+    "egressIp": "出口 IP",
+    "latency": "延迟",
+    "bindings": "绑定",
+    "lastChecked": "最后检测",
+    "actions": "操作",
+    "bindingCount": "{{accounts}} 个账号 / {{groups}} 组",
+    "empty": "还没有代理，点击「添加」开始。",
+    "test": "测连通",
+    "edit": "编辑",
+    "delete": "删除",
+    "bind": "绑定"
+  },
+  "status": {
+    "ok": "可用",
+    "failed": "失败",
+    "unknown": "未测"
+  },
+  "form": {
+    "title": "添加代理",
+    "editTitle": "编辑代理",
+    "protocol": "协议",
+    "host": "主机",
+    "port": "端口",
+    "username": "用户名",
+    "password": "密码",
+    "passwordSetPlaceholder": "已设置（留空不修改）",
+    "label": "备注",
+    "tags": "标签（逗号分隔）",
+    "save": "保存",
+    "saveAndTest": "保存并测连通",
+    "cancel": "取消"
+  },
+  "paste": {
+    "title": "批量粘贴导入",
+    "placeholder": "每行一条：\nhost:port\nhost:port:user:pass\nscheme://user:pass@host:port",
+    "import": "导入"
+  },
+  "import": {
+    "summary": "成功 {{imported}} 条，跳过 {{skipped}} 条，失败 {{failed}} 条",
+    "openFile": "选择文件"
+  },
+  "delete": {
+    "confirmTitle": "删除代理",
+    "confirmBody": "确定删除该代理吗？此操作不可撤销。",
+    "blocked": "该代理仍被 {{accounts}} 个账号 / {{groups}} 组使用，无法删除。"
+  },
+  "bind": {
+    "title": "绑定账号",
+    "direct": "直连（不走代理）",
+    "selectAccounts": "选择账号",
+    "selectGroup": "选择账号组",
+    "confirm": "确定"
+  },
+  "errors": {
+    "loadFailed": "加载代理列表失败"
+  }
+}

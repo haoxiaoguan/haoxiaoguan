@@ -446,3 +446,57 @@ export const localBackupService = {
   saveConfig: (config: LocalBackupConfig) =>
     bridge().localBackup.saveConfig(config),
 };
+
+// ============================================================================
+// Proxy Commands (proxy 上下文：出站代理 IP 管理)
+// ============================================================================
+
+import type {
+  ProxyDto,
+  ProxyGroupDto,
+  AccountBindingDto,
+  ProxyImportSummary,
+  ProxyTestResultDto,
+  CreateProxyRequest,
+  UpdateProxyRequest,
+} from '@shared/api-types';
+
+export const proxyService = {
+  listProxies: () => bridge().proxy.listProxies() as Promise<ProxyDto[]>,
+
+  createProxy: (req: CreateProxyRequest) =>
+    bridge().proxy.createProxy(req) as Promise<ProxyDto>,
+
+  updateProxy: (id: string, patch: UpdateProxyRequest) =>
+    bridge().proxy.updateProxy(id, patch) as Promise<ProxyDto>,
+
+  deleteProxy: (id: string) => bridge().proxy.deleteProxy(id),
+
+  importProxies: (text: string) =>
+    bridge().proxy.importProxies(text) as Promise<ProxyImportSummary>,
+
+  testProxy: (id: string) => bridge().proxy.testProxy(id) as Promise<ProxyTestResultDto>,
+
+  testProxies: (ids: string[], concurrency = 4) =>
+    bridge().proxy.testProxies(ids, concurrency) as Promise<ProxyTestResultDto[]>,
+
+  listGroups: () => bridge().proxy.listGroups() as Promise<ProxyGroupDto[]>,
+
+  createGroup: (name: string, proxyId: string) =>
+    bridge().proxy.createGroup(name, proxyId) as Promise<ProxyGroupDto>,
+
+  deleteGroup: (id: string) => bridge().proxy.deleteGroup(id),
+
+  listBindings: () => bridge().proxy.listBindings() as Promise<AccountBindingDto[]>,
+
+  getAccountBinding: (accountId: string) =>
+    bridge().proxy.getAccountBinding(accountId) as Promise<AccountBindingDto | null>,
+
+  bindAccountToProxy: (accountId: string, proxyId: string) =>
+    bridge().proxy.bindAccountToProxy(accountId, proxyId),
+
+  bindAccountToGroup: (accountId: string, groupId: string) =>
+    bridge().proxy.bindAccountToGroup(accountId, groupId),
+
+  unbindAccount: (accountId: string) => bridge().proxy.unbindAccount(accountId),
+};

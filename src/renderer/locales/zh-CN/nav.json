@@ -3,6 +3,7 @@
   "accounts": "账号管理",
   "skills": "Skills 管理",
   "mcp": "MCP 服务",
+  "proxies": "代理 IP",
   "analytics": "数据统计",
   "settings": {
     "back": "返回",

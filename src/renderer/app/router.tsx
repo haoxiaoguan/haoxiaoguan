@@ -3,6 +3,7 @@ import Dashboard from '../pages/Dashboard';
 import Accounts from '../pages/Accounts';
 import Skills from '../pages/Skills';
 import Mcp from '../pages/Mcp';
+import Proxies from '../pages/Proxies';
 import Analytics from '../pages/Analytics';
 import Settings from '../pages/Settings';
 import GeneralSettings from '../components/settings/pages/GeneralSettings';
@@ -21,6 +22,7 @@ export function AppRouter() {
           <Route path="accounts/:platform?" element={<Accounts />} />
           <Route path="skills" element={<Skills />} />
           <Route path="mcp" element={<Mcp />} />
+          <Route path="proxies" element={<Proxies />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="settings" element={<Settings />}>
             <Route index element={<Navigate to="general" replace />} />
