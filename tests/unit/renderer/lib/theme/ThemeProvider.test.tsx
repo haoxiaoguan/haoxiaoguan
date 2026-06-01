@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ThemeProvider } from './ThemeProvider';
+import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 
 describe('ThemeProvider', () => {
   it('renders children', () => {

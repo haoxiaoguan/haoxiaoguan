@@ -1,13 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import AddAccountSheet from './AddAccountSheet';
-import zhOnboarding from '../locales/zh-CN/onboarding.json';
+import AddAccountSheet from '@/components/AddAccountSheet';
+import zhOnboarding from '@/locales/zh-CN/onboarding.json';
 
 const mocks = vi.hoisted(() => ({
   completeOAuth: vi.fn(),
   importAccount: vi.fn(),
   getDisplayName: vi.fn((platform: string) => platform),
-  open: vi.fn(),
+  shellOpen: vi.fn(),
   reset: vi.fn(),
   start: vi.fn(),
   startOAuth: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../services/tauri', () => ({
+vi.mock('@/services/tauri', () => ({
   credentialService: {
     startOAuth: mocks.startOAuth,
     completeOAuth: mocks.completeOAuth,
@@ -33,11 +33,13 @@ vi.mock('../services/tauri', () => ({
   },
 }));
 
-vi.mock('@tauri-apps/plugin-shell', () => ({
-  open: mocks.open,
+// Component migrated off Tauri: it opens external URLs via the Electron preload
+// bridge (`bridge().shellOpen`), dynamically imported from services/bridge.
+vi.mock('@/services/bridge', () => ({
+  bridge: () => ({ shellOpen: mocks.shellOpen }),
 }));
 
-vi.mock('../stores', () => ({
+vi.mock('@/stores', () => ({
   useAccountStore: () => ({
     importAccount: mocks.importAccount,
   }),
@@ -179,7 +181,7 @@ describe('AddAccountSheet', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.open_browser' }));
 
-    await waitFor(() => expect(mocks.open).toHaveBeenCalledWith(pending.authorize_url));
+    await waitFor(() => expect(mocks.shellOpen).toHaveBeenCalledWith(pending.authorize_url));
     expect(mocks.completeOAuth).toHaveBeenCalledWith(pending.pending_id, '');
     expect(mocks.setPending).toHaveBeenCalledWith(pending);
     expect(mocks.setMaterial).toHaveBeenCalledWith(material);

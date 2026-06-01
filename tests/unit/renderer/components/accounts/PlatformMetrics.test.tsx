@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Account, AccountQuotaState } from '../../types';
+import type { Account, AccountQuotaState } from '@/types';
 import {
   getPlatformMetricBadge,
   PlatformMetricBlock,
   PlatformMetricSummary,
-} from './PlatformMetrics';
+} from '@/components/accounts/PlatformMetrics';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

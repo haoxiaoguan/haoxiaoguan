@@ -1,13 +1,13 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { GlowCard } from '../glow-card';
-import { ShineBorder } from '../shine-border';
-import { AnimatedGradientText } from '../animated-gradient-text';
-import { PageHeader } from '../page-header';
-import { SegmentedOptions } from '../segmented-options';
-import { ScrollArea } from '../scroll-area';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../tooltip';
-import { Sheet, SheetContent, SheetTrigger } from '../sheet';
+import { GlowCard } from '@/components/ui/glow-card';
+import { ShineBorder } from '@/components/ui/shine-border';
+import { AnimatedGradientText } from '@/components/ui/animated-gradient-text';
+import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedOptions } from '@/components/ui/segmented-options';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 describe('decoration smoke', () => {
   it('renders GlowCard with required props', () => {

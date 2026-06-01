@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import Skills from './Skills';
+import Skills from '@/pages/Skills';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -9,7 +9,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../components/skills/UnifiedSkillsPanel', () => ({
+vi.mock('@/components/skills/UnifiedSkillsPanel', () => ({
   UnifiedSkillsPanel: () => <div>skills-panel</div>,
 }));
 

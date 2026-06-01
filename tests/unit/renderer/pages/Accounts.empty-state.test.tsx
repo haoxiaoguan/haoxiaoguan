@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import Accounts from './Accounts';
+import Accounts from '@/pages/Accounts';
 
 const mocks = vi.hoisted(() => ({
   accounts: new Map<string, unknown[]>(),
@@ -39,7 +39,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../components/AddAccountSheet', () => ({
+vi.mock('@/components/AddAccountSheet', () => ({
   default: (props: { open: boolean; defaultPlatform?: string }) => {
     mocks.addAccountSheetProps.push({
       open: props.open,
@@ -49,7 +49,7 @@ vi.mock('../components/AddAccountSheet', () => ({
   },
 }));
 
-vi.mock('../stores', () => ({
+vi.mock('@/stores', () => ({
   useAccountStore: (selector?: (state: {
     accounts: Map<string, unknown[]>;
     loading: boolean;

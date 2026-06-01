@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectPlatformShell } from './platform-shell';
+import { detectPlatformShell } from '@/app/platform-shell';
 
 describe('detectPlatformShell', () => {
   it('prefers explicit shell override for development preview', () => {

@@ -7,7 +7,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
-} from '../sidebar';
+} from '@/components/ui/sidebar';
 
 describe('sidebar smoke', () => {
   it('renders provider/sidebar/inset shell without throwing', () => {

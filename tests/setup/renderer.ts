@@ -1,6 +1,16 @@
+// Renderer (jsdom) test setup: registers @testing-library/jest-dom matchers
+// (toBeInTheDocument, etc.), auto-cleans the DOM between tests, and polyfills
+// browser APIs jsdom omits but some components (next-themes, recharts, radix)
+// rely on at render time.
 import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
 
-// jsdom 默认不实现 matchMedia；next-themes / 部分组件依赖它。
+afterEach(() => {
+  cleanup();
+});
+
+// jsdom does not implement matchMedia; next-themes and some components need it.
 if (typeof window !== 'undefined' && !window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,

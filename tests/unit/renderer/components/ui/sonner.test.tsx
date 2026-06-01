@@ -2,7 +2,7 @@ import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { toast } from 'sonner';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
-import { Toaster } from './sonner';
+import { Toaster } from '@/components/ui/sonner';
 
 describe('Toaster', () => {
   afterEach(() => {

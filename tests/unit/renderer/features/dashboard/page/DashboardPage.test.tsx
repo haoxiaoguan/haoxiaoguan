@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import DashboardPage from './DashboardPage';
+import DashboardPage from '@/features/dashboard/page/DashboardPage';
 
 const mocks = vi.hoisted(() => ({
   syncUsageSources: vi.fn().mockResolvedValue({ imported: 0, failed: 0, platforms: [] }),

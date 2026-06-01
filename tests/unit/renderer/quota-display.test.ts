@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Account, AccountQuotaState } from '../../types';
-import { metricLines } from './quota-display';
+import type { Account, AccountQuotaState } from '@/types';
+import { metricLines } from '@/components/accounts/quota-display';
 
 const baseAccount: Account = {
   id: 'a1',
@@ -94,5 +94,60 @@ describe('quota-display', () => {
     const lines = metricLines(codexAccount, state);
 
     expect(lines.map((line) => line.tone)).toEqual(['warning', 'danger', 'success']);
+  });
+
+  it('builds screenshot-style fields for a credit metric (percent, used/total, reset date)', () => {
+    const state: AccountQuotaState = {
+      version: 1,
+      status: 'ok',
+      primaryMetricKey: 'credits',
+      metrics: [
+        {
+          key: 'credits',
+          label: '使用量',
+          kind: 'usage',
+          unit: 'credits',
+          used: 288,
+          total: 10000,
+          percentUsed: 2.88,
+          displayValue: '288 / 10000',
+          // noon UTC so the local-date format is stable across CI timezones
+          resetAt: '2026-07-01T12:00:00.000Z',
+          status: 'ok',
+        },
+      ],
+      providerPayload: {},
+    };
+
+    const [line] = metricLines(baseAccount, state);
+    expect(line.percentText).toBe('3%'); // rounded
+    expect(line.usageText).toBe('288 / 10,000'); // thousands separator
+    expect(line.resetText).toBe('2026-07-01');
+    expect(line.progress).toBeCloseTo(2.88);
+  });
+
+  it('formats remaining-percent metrics with a 剩余 suffix and no usage text', () => {
+    const state: AccountQuotaState = {
+      version: 1,
+      status: 'ok',
+      metrics: [
+        {
+          key: 'codex_hourly',
+          label: '5小时额度',
+          kind: 'remaining',
+          unit: 'percent',
+          percentRemaining: 85,
+          percentUsed: 15,
+          displayValue: '85% 剩余',
+          status: 'ok',
+        },
+      ],
+      providerPayload: {},
+    };
+
+    const [line] = metricLines(codexAccount, state);
+    expect(line.percentText).toBe('85% 剩余');
+    expect(line.usageText).toBeUndefined();
+    expect(line.resetText).toBeUndefined();
   });
 });

@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ThemeToggle } from './theme-toggle';
-import { ThemeProvider } from './ThemeProvider';
+import { ThemeToggle } from '@/lib/theme/theme-toggle';
+import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),

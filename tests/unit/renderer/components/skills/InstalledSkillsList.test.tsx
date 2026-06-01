@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { InstalledSkill } from '../../types';
-import { InstalledSkillsList } from './InstalledSkillsList';
+import type { InstalledSkill } from '@/types';
+import { InstalledSkillsList } from '@/components/skills/InstalledSkillsList';
 
 const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
@@ -67,7 +67,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../hooks/useSkills', () => ({
+vi.mock('@/hooks/useSkills', () => ({
   useSkills: () => ({
     installed: installedSkills,
     loading: false,
@@ -82,7 +82,7 @@ vi.mock('../../hooks/useSkills', () => ({
   }),
 }));
 
-vi.mock('../../stores/skillsStore', () => ({
+vi.mock('@/stores/skillsStore', () => ({
   useSkillsStore: () => ({
     toggleApp: mocks.toggleApp,
     uninstallSkill: mocks.uninstallSkill,
@@ -90,7 +90,7 @@ vi.mock('../../stores/skillsStore', () => ({
   }),
 }));
 
-vi.mock('../../services/tauri', () => ({
+vi.mock('@/services/tauri', () => ({
   skillsService: {
     checkSkillUpdates: mocks.checkSkillUpdates,
     updateSkill: mocks.updateSkill,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { installAccountsMock } from './mock-invoke';
+import { installAccountsMock } from '@/dev/mock-invoke';
 
 describe('accounts mock invoke', () => {
   afterEach(() => {
