@@ -93,6 +93,28 @@ describe('createHonoApp', () => {
     expect(json.data.map((m) => m.id)).toEqual(['echo-1', 'echo-mini'])
   })
 
+  it('GET /v1beta/models returns gemini-shaped model list', async () => {
+    const app = createHonoApp(makeDeps())
+    const res = await app.request('/v1beta/models')
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { models: { name: string }[] }
+    expect(json.models.map((m) => m.name)).toEqual(['models/echo-1', 'models/echo-mini'])
+  })
+
+  it('GET /echo/v1/models scopes to the echo platform', async () => {
+    const app = createHonoApp(makeDeps())
+    const res = await app.request('/echo/v1/models')
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { data: { id: string }[] }
+    expect(json.data.map((m) => m.id)).toEqual(['echo-1', 'echo-mini'])
+  })
+
+  it('GET /v1/models requires no key when keys are empty (anonymous)', async () => {
+    const app = createHonoApp(makeDeps())
+    const res = await app.request('/v1/models')
+    expect(res.status).toBe(200)
+  })
+
   it('auth: configured keys reject missing key with 401', async () => {
     const app = createHonoApp(makeDeps(['secret']))
     const res = await app.request('/v1/chat/completions', {
