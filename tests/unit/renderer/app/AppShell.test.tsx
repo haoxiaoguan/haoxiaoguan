@@ -91,7 +91,7 @@ describe('AppShell', () => {
     expect(screen.getByTestId('app-shell-utility-actions')).toHaveClass('gap-1');
   });
 
-  it('uses the account management title for account routes', () => {
+  it('renders account/group tabs in the route header for account routes', () => {
     render(
       <ThemeProvider>
         <MemoryRouter initialEntries={['/accounts']}>
@@ -104,7 +104,47 @@ describe('AppShell', () => {
       </ThemeProvider>,
     );
 
-    expect(screen.getByTestId('app-shell-title')).toHaveTextContent('accounts:title');
+    expect(screen.queryByTestId('app-shell-title')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'nav:accounts' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'nav:groups' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('marks the groups tab active on the groups child route', () => {
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/accounts/groups']}>
+          <Routes>
+            <Route element={<AppShell shell="macos" />}>
+              <Route path="/accounts/groups" element={<div>groups-page</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole('tab', { name: 'nav:groups' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'nav:accounts' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('keeps the sidebar "Accounts" entry active on the groups child route', () => {
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/accounts/groups']}>
+          <Routes>
+            <Route element={<AppShell shell="macos" />}>
+              <Route path="/accounts/groups" element={<div>groups-page</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    // /accounts/groups is a child of /accounts, so the sidebar "Accounts" item
+    // (matched with end:false) stays highlighted — this is the whole point of
+    // nesting Groups under Accounts.
+    const sidebar = screen.getByTestId('app-shell-sidebar');
+    const accountsLink = within(sidebar).getByRole('link', { name: 'nav:accounts' });
+    expect(accountsLink).toHaveAttribute('data-active', 'true');
   });
 
   it('renders Skills tabs in the route header instead of a plain title', () => {

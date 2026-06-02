@@ -318,7 +318,7 @@ test('the 分组管理 page mounts via the nav route and creates a group through
 
   // Navigate to the dedicated Groups page via its hash route.
   await window.evaluate(() => {
-    window.location.hash = '#/groups'
+    window.location.hash = '#/accounts/groups'
   })
 
   // Empty state: the table shows the "no groups" row.
