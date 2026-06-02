@@ -213,14 +213,25 @@ export class KiroUpstreamClient {
       // 每端点最多两轮：原始 → （401/403 且尚未刷新）刷新后重试同端点一次。
       for (let attempt = 0; attempt < 2; attempt++) {
         const req = this.buildRequest(endpoint, envelope, curCtx)
-        const resp = await this.fetchImpl(req.url, {
-          method: req.method,
-          headers: req.headers,
-          body: req.body,
-          ...(curCtx.signal ? { signal: curCtx.signal } : {}),
-        })
+        let resp: KiroFetchResponse
+        try {
+          resp = await this.fetchImpl(req.url, {
+            method: req.method,
+            headers: req.headers,
+            body: req.body,
+            ...(curCtx.signal ? { signal: curCtx.signal } : {}),
+          })
+        } catch (e) {
+          // 出站异常（代理/DNS/超时）：记录后上抛，便于真机排查（不含凭据）。
+          console.error(`[apiProxy:kiro] ${endpoint.name} fetch exception: ${(e as Error)?.message}`)
+          throw e
+        }
 
         if (resp.ok) return resp.bytes()
+
+        const body = await resp.text()
+        // 非 2xx：记录 AWS 响应（不含凭据/machineId），便于真机排查 400/403/429。
+        console.error(`[apiProxy:kiro] ${endpoint.name} HTTP ${resp.status}: ${body.slice(0, 600)}`)
 
         if (resp.status === 429) {
           // 配额耗尽：记录错误并结束本端点（不刷新）；无更多端点时抛出。
@@ -229,7 +240,6 @@ export class KiroUpstreamClient {
         }
 
         if (resp.status === 401 || resp.status === 403) {
-          const body = await resp.text()
           if (!refreshed) {
             const next = await this.refresher.refresh(toCred(curCtx), curCtx.region)
             if (next !== undefined) {
@@ -247,7 +257,6 @@ export class KiroUpstreamClient {
         }
 
         // 其它非 2xx：记录后换下一个端点。
-        const body = await resp.text()
         lastError = new KiroUpstreamError(`upstream error ${resp.status}: ${body}`, resp.status)
         break
       }
