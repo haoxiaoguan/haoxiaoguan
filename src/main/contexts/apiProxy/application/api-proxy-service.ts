@@ -184,7 +184,7 @@ export class ApiProxyService {
 
     if (intent.stream) {
       const events = await drainStream(adapter.chatStream(ir, ctx))
-      return this.serializeStream(intent, ir, events)
+      return this.serializeStream(intent, ir, events, requestId)
     }
     const resp = await adapter.chat(ir, ctx)
     return { kind: 'json', status: 200, body: this.toResponseBody(intent, resp, requestId) }
@@ -220,10 +220,13 @@ export class ApiProxyService {
   }
 
   // ---- 内部：出站流式 ----
+  // requestId 用于派生确定性出站 id（与非流式 toResponseBody 对齐：chatcmpl-${requestId}/msg_${requestId}），
+  // 仍禁 Date.now/随机，保证可单测。
   private serializeStream(
     intent: RequestIntent,
     ir: CanonicalRequest,
     events: CanonicalStreamEvent[],
+    requestId: string,
   ): StreamResult {
     switch (intent.format) {
       case 'openai':
@@ -231,7 +234,7 @@ export class ApiProxyService {
           kind: 'stream',
           status: 200,
           contentType: 'text/event-stream',
-          frames: this.converters.openai.serializeStream(events, ir.model, { id: 'chatcmpl-stream', created: 0 }),
+          frames: this.converters.openai.serializeStream(events, ir.model, { id: `chatcmpl-${requestId}`, created: 0 }),
         }
       case 'anthropic': {
         // Anthropic 流需要一个 resp 提供 message_start 的初始 usage/model；从 events 里抽 usage，缺省 0。
@@ -246,7 +249,7 @@ export class ApiProxyService {
           kind: 'stream',
           status: 200,
           contentType: 'text/event-stream',
-          frames: this.converters.anthropic.serializeStream(seed, events, { id: 'msg_stream' }),
+          frames: this.converters.anthropic.serializeStream(seed, events, { id: `msg_${requestId}` }),
         }
       }
       case 'gemini':

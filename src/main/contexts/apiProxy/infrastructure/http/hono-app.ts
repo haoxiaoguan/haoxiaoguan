@@ -144,14 +144,20 @@ export function createHonoApp(deps: HonoAppDeps): Hono {
     if (result.kind === 'json') {
       return c.json(result.body as object, result.status as 200)
     }
-    // 流式：用 streamSSE 逐帧写出（Gemini 的 JSON chunk 也按帧写，不强制 SSE data: 前缀——
-    // frame 已是完整 wire 文本，用 stream.write 裸写而非 writeSSE 以免二次包裹）。
-    c.header('Content-Type', result.contentType)
-    return streamSSE(c, async (stream) => {
-      for (const frame of result.frames) {
-        await stream.write(frame)
-      }
-    })
+    // 流式按协议分流：SSE 协议（OpenAI/Anthropic，text/event-stream）用 streamSSE 逐 frame
+    // 裸写（frame 已是完整 wire 文本，用 stream.write 而非 writeSSE 以免二次包裹）。
+    // 注意：hono streamSSE 内部无条件把 Content-Type 设为 text/event-stream，故非 SSE 协议
+    // （Gemini，application/json）不能走 streamSSE——否则 result.contentType 会被覆盖。
+    if (result.contentType === 'text/event-stream') {
+      return streamSSE(c, async (stream) => {
+        for (const frame of result.frames) {
+          await stream.write(frame)
+        }
+      })
+    }
+    // 非 SSE 流式（Gemini）：拼帧一次性写出，并显式保留 result.contentType（application/json），
+    // 不经 streamSSE 以免头被改写。frame 已是完整 wire 文本，直接 join 即得响应体。
+    return c.body(result.frames.join(''), result.status as 200, { 'Content-Type': result.contentType })
   }
 
   // 路由表（裸 + /{platform} 前缀；用 all 收口让 parseIntent 决定合法性）。

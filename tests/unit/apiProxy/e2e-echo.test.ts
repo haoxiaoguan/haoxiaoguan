@@ -123,6 +123,24 @@ describe('e2e: Echo over real HTTP', () => {
     expect(text.trimEnd().endsWith('data: [DONE]')).toBe(true)
   })
 
+  it('Gemini STREAM — :streamGenerateContent keeps application/json content-type (not text/event-stream)', async () => {
+    // 回归护栏：Gemini 流式是非 SSE 协议（帧体为 JSON chunk），hono streamSSE 会无条件把
+    // Content-Type 改成 text/event-stream，故 handler 必须改走保留头的非 SSE 写法。
+    // 断言响应头是 application/json（不是 text/event-stream）+ 帧体含 echo 回显。
+    const { start } = buildServer()
+    const port = await start()
+    const res = await fetch(`http://127.0.0.1:${port}/v1beta/models/echo-1:streamGenerateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'streamed-gemini' }] }] }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    expect(res.headers.get('content-type')).not.toContain('text/event-stream')
+    const text = await res.text()
+    expect(text).toContain('"streamed-gemini"')
+  })
+
   it('Anthropic non-stream — bare /v1/messages (second entry for anthropic)', async () => {
     const { start } = buildServer()
     const port = await start()
