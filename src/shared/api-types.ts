@@ -570,6 +570,14 @@ export interface HxgApi {
     bindAccountToProxy(accountId: string, proxyId: string): Promise<void>
     unbindAccount(accountId: string): Promise<void>
   }
+  apiProxy: {
+    /** 启动本地反代服务；resolve 启动后的最新状态。 */
+    start(): Promise<ApiProxyStatus>
+    /** 停止本地反代服务；resolve 停止后的最新状态。 */
+    stop(): Promise<ApiProxyStatus>
+    /** 读取当前服务状态（state + 可选已绑定端口）。 */
+    getStatus(): Promise<ApiProxyStatus>
+  }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>
     createGroup(req: CreateAccountGroupRequest): Promise<AccountGroupDto>
@@ -591,6 +599,14 @@ export interface WsStatus {
   running: boolean
   port?: number
   connectionCount: number
+}
+
+// apiProxy 服务状态（与 main/contexts/apiProxy/application/api-proxy-service.ts
+// 的 ApiProxyStatus 保持同形：state + 可选 port）。
+export type ApiProxyState = 'stopped' | 'running' | 'failed'
+export interface ApiProxyStatus {
+  state: ApiProxyState
+  port?: number
 }
 
 // ── Proxy DTOs (proxy context — outbound proxy IP management) ─────────────────

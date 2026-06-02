@@ -15,6 +15,7 @@ import {
   SYNC_CHANNELS,
   WS_CHANNELS,
   PROXY_CHANNELS,
+  API_PROXY_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi } from '../shared/api-types'
 
@@ -178,6 +179,11 @@ const api: HxgApi = {
       ipcRenderer.invoke(PROXY_CHANNELS.bindAccountToProxy, { accountId, proxyId }),
     unbindAccount: (accountId) =>
       ipcRenderer.invoke(PROXY_CHANNELS.unbindAccount, { accountId }),
+  },
+  apiProxy: {
+    start: () => ipcRenderer.invoke(API_PROXY_CHANNELS.start),
+    stop: () => ipcRenderer.invoke(API_PROXY_CHANNELS.stop),
+    getStatus: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getStatus),
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),
