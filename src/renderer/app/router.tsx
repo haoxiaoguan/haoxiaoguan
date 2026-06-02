@@ -19,16 +19,18 @@ export function AppRouter() {
       <Routes>
         <Route path="/" element={<AppShell />}>
           <Route index element={<Dashboard />} />
-          {/* Groups is a child of accounts so the sidebar "Accounts" entry stays
-              active under it. Static "groups" out-ranks the optional :platform?,
-              so /accounts/groups → Groups and /accounts(/:platform) → Accounts. */}
+          {/* Groups and Proxies are children of accounts so the sidebar
+              "Accounts" entry stays active under them. The static "groups" /
+              "proxies" segments out-rank the optional :platform?, so
+              /accounts/groups → Groups, /accounts/proxies → Proxies, and
+              /accounts(/:platform) → Accounts. */}
           <Route path="accounts">
             <Route path="groups" element={<Groups />} />
+            <Route path="proxies" element={<Proxies />} />
             <Route path=":platform?" element={<Accounts />} />
           </Route>
           <Route path="skills" element={<Skills />} />
           <Route path="mcp" element={<Mcp />} />
-          <Route path="proxies" element={<Proxies />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="settings" element={<Settings />}>
             <Route index element={<Navigate to="general" replace />} />

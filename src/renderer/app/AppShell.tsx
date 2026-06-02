@@ -5,7 +5,6 @@ import {
   Headphones,
   Info,
   LayoutGrid,
-  Network,
   Puzzle,
   RefreshCw,
   Server,
@@ -60,7 +59,6 @@ interface NavItem {
 const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav:dashboard', icon: LayoutGrid, end: true },
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
-  { to: '/proxies', labelKey: 'nav:proxies', icon: Network },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
 ];
@@ -79,13 +77,12 @@ const navButtonClassName =
   'group-data-[state=expanded]:!h-9 group-data-[state=expanded]:!rounded-[8px] group-data-[state=expanded]:!px-3 group-data-[state=expanded]:!py-2 group-data-[state=expanded]:gap-2.5 group-data-[state=expanded]:!text-sm group-data-[state=expanded]:[&>svg]:!size-[18px] md:group-data-[collapsible=icon]/sidebar:!translate-x-0';
 
 type SkillsHeaderTab = 'installed' | 'discover';
-type AccountsHeaderTab = 'accounts' | 'groups';
+type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
   if (pathname.startsWith('/skills')) return 'nav:skills';
   if (pathname.startsWith('/mcp')) return 'nav:mcp';
-  if (pathname.startsWith('/proxies')) return 'nav:proxies';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';
   if (pathname.startsWith('/settings/advanced')) return 'nav:settings.menu.advanced';
@@ -206,13 +203,15 @@ export function AppShell({ shell }: AppShellProps) {
   const isSkillsRoute = location.pathname.startsWith('/skills');
   const activeSkillsTab: SkillsHeaderTab =
     new URLSearchParams(location.search).get('tab') === 'discover' ? 'discover' : 'installed';
-  // Accounts + Groups share one header: two tabs in place of the title. Groups
-  // is an /accounts/groups child route, so the sidebar "Accounts" entry stays
-  // highlighted underneath it. Mirrors the Skills header.
+  // Accounts, Groups, and Proxies share one header: three tabs in place of the
+  // title. Groups and Proxies are /accounts/* child routes, so the sidebar
+  // "Accounts" entry stays highlighted underneath them. Mirrors the Skills header.
   const isAccountsRoute = location.pathname.startsWith('/accounts');
   const activeAccountsTab: AccountsHeaderTab = location.pathname.startsWith('/accounts/groups')
     ? 'groups'
-    : 'accounts';
+    : location.pathname.startsWith('/accounts/proxies')
+      ? 'proxies'
+      : 'accounts';
 
   return (
     <div
@@ -311,6 +310,7 @@ export function AppShell({ shell }: AppShellProps) {
                 tabs={[
                   { value: 'accounts', label: t('nav:accounts'), to: '/accounts' },
                   { value: 'groups', label: t('nav:groups'), to: '/accounts/groups' },
+                  { value: 'proxies', label: t('nav:proxies'), to: '/accounts/proxies' },
                 ]}
               />
             ) : (

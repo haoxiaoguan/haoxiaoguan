@@ -29,9 +29,10 @@ test('user can navigate to Proxies, add a proxy via the form, and see it listed'
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')
 
-  // Navigate to the proxy page via the hash route (the nav item links here).
+  // Navigate to the proxy page via its hash route. Proxies is nested under
+  // /accounts (the "代理管理" tab in the accounts header links here).
   await window.evaluate(() => {
-    window.location.hash = '#/proxies'
+    window.location.hash = '#/accounts/proxies'
   })
 
   // Empty state shows first.
