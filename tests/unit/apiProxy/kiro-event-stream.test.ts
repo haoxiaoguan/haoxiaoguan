@@ -54,6 +54,18 @@ describe('parseKiroEventStream — text', () => {
     const usage = events.find((e) => e.type === 'usage')
     expect(usage).toEqual({ type: 'usage', usage: { inputTokens: 12, outputTokens: 4, cacheReadTokens: 7, cacheWriteTokens: 2 } })
   })
+
+  it('contextUsageEvent → 末 usage 事件带 contextUsagePercentage', () => {
+    const bytes = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'Hi' } },
+      { eventType: 'contextUsageEvent', payload: { contextUsagePercentage: 2.05 } },
+      { eventType: 'meteringEvent', payload: { usage: 0.01, unit: 'credit' } },
+    ])
+    const events = parseKiroEventStream(bytes)
+    const usageEv = events.find((e) => e.type === 'usage')
+    expect(usageEv).toBeDefined()
+    expect(usageEv && 'contextUsagePercentage' in usageEv ? usageEv.contextUsagePercentage : undefined).toBeCloseTo(2.05)
+  })
 })
 
 describe('parseKiroEventStream — thinking', () => {

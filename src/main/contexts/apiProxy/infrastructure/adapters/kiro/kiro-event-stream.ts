@@ -92,6 +92,7 @@ export function parseKiroEventStream(bytes: Uint8Array): CanonicalStreamEvent[] 
   const usage: Usage = { inputTokens: 0, outputTokens: 0 }
   let usageSeen = false
   let sawToolUse = false
+  let contextUsagePercentage: number | undefined
 
   let tool: ToolAccum | null = null
   let nextToolIndex = 0
@@ -169,8 +170,11 @@ export function parseKiroEventStream(bytes: Uint8Array): CanonicalStreamEvent[] 
           if (u.cacheReadTokens !== undefined) usage.cacheReadTokens = u.cacheReadTokens
           if (u.cacheWriteTokens !== undefined) usage.cacheWriteTokens = u.cacheWriteTokens
           usageSeen = true
+        } else if (eventType === 'contextUsageEvent') {
+          const pct = body.contextUsagePercentage
+          if (typeof pct === 'number' && Number.isFinite(pct)) contextUsagePercentage = pct
         }
-        // 其它 event-type（metering/contextUsage/codeReference/followup/citation 等）M3a 忽略。
+        // 其它 event-type（metering/codeReference/followup/citation 等）M3a 忽略。
       }
     }
 
@@ -180,7 +184,7 @@ export function parseKiroEventStream(bytes: Uint8Array): CanonicalStreamEvent[] 
   closeTool()
   // 流末统一补 usage + message_stop（即使无 metadata 也补一个零 usage，保证下游有收尾）。
   void usageSeen
-  out.push({ type: 'usage', usage })
+  out.push({ type: 'usage', usage, ...(contextUsagePercentage !== undefined ? { contextUsagePercentage } : {}) })
   const stopReason: StopReason = sawToolUse ? 'tool_use' : 'end_turn'
   out.push({ type: 'message_stop', stopReason })
   return out

@@ -37,10 +37,11 @@ export interface MessageStopEvent {
   stopReason: StopReason
 }
 
-/** 用量事件：流式收尾时给出 token 统计。 */
+/** 用量事件：流式收尾时给出 token 统计。contextUsagePercentage 为上游上下文占用百分比（可反推 input）。 */
 export interface UsageEvent {
   type: 'usage'
   usage: Usage
+  contextUsagePercentage?: number
 }
 
 /** 流式事件联合。 */
