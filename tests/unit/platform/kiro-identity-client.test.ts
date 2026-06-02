@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   KiroAuthError,
+  KIRO_BUILDER_ID_PROFILE_ARN,
+  KIRO_SOCIAL_PROFILE_ARN,
+  defaultProfileArnFor,
   fetchKiroUsageLimits,
   parseRegionFromArn,
   refreshKiroToken,
@@ -38,6 +41,13 @@ describe('resolveKiroAuthMethod', () => {
     expect(resolveKiroAuthMethod({ client_id: 'a', client_secret: 'b' })).toBe('idc')
     expect(resolveKiroAuthMethod({ refreshToken: 'r' })).toBe('social')
     expect(resolveKiroAuthMethod({ kiroApiKey: 'k' })).toBe('api_key')
+  })
+
+  it('honors the reference provider field (Github/Google→social, BuilderId/Enterprise→idc)', () => {
+    expect(resolveKiroAuthMethod({ provider: 'Github', refreshToken: 'r' })).toBe('social')
+    expect(resolveKiroAuthMethod({ provider: 'Google', refreshToken: 'r' })).toBe('social')
+    expect(resolveKiroAuthMethod({ provider: 'BuilderId', client_id: 'a', client_secret: 'b' })).toBe('idc')
+    expect(resolveKiroAuthMethod({ provider: 'Enterprise', client_id: 'a', client_secret: 'b' })).toBe('idc')
   })
 })
 
@@ -134,5 +144,33 @@ describe('fetchKiroUsageLimits', () => {
       { fetchImpl: f.impl },
     )
     expect(headersOf(f.calls[0].init).tokentype).toBe('API_KEY')
+  })
+
+  it('falls back to the social default profileArn when none is provided (social)', async () => {
+    const f = fakeFetch(200, {})
+    await fetchKiroUsageLimits(
+      { accessToken: 'tok', authMethod: 'social', region: 'us-east-1' },
+      { fetchImpl: f.impl },
+    )
+    // 699475941385/.../EHGA3GRVQMUK is the well-known social profile.
+    expect(f.calls[0].url).toContain('profileArn=arn%3Aaws%3Acodewhisperer')
+    expect(decodeURIComponent(f.calls[0].url)).toContain('699475941385:profile/EHGA3GRVQMUK')
+  })
+
+  it('falls back to the Builder-ID default profileArn for idc when none is provided', async () => {
+    const f = fakeFetch(200, {})
+    await fetchKiroUsageLimits(
+      { accessToken: 'tok', authMethod: 'idc', region: 'us-east-1' },
+      { fetchImpl: f.impl },
+    )
+    expect(decodeURIComponent(f.calls[0].url)).toContain('638616132270:profile/AAAACCCCXXXX')
+  })
+})
+
+describe('defaultProfileArnFor', () => {
+  it('maps social→social profile, idc/api_key→builder-id profile', () => {
+    expect(defaultProfileArnFor('social')).toBe(KIRO_SOCIAL_PROFILE_ARN)
+    expect(defaultProfileArnFor('idc')).toBe(KIRO_BUILDER_ID_PROFILE_ARN)
+    expect(defaultProfileArnFor('api_key')).toBe(KIRO_BUILDER_ID_PROFILE_ARN)
   })
 })

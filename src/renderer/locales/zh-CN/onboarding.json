@@ -3,6 +3,7 @@
   "method": {
     "oauth": "OAuth 登录",
     "token_json": "Token/JSON",
+    "token_batch": "卡密/批量",
     "local_scan": "本地导入"
   },
   "step": {
@@ -17,6 +18,14 @@
   "review": {
     "email": "邮箱",
     "user_id": "用户 ID"
+  },
+  "batch": {
+    "placeholder": "每行一个账号，卡密格式：\n邮箱----密码----RefreshToken----ClientId----ClientSecret----provider\n也支持粘贴 JSON 数组",
+    "hint": "分隔符支持 ---- / Tab / 多个空格；# 开头的行会被忽略。仅 RefreshToken 必填。",
+    "empty": "未解析到有效凭证，请检查格式",
+    "result": "成功 {{success}} / 失败 {{failed}}，共 {{total}}",
+    "importing": "导入中…",
+    "run": "开始导入"
   },
   "actions": {
     "open_browser": "打开授权页",

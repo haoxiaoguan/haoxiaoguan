@@ -9,6 +9,7 @@ import { CursorOAuthCapability } from './capabilities/cursor-oauth'
 import { KiroOAuthCapability } from './capabilities/kiro-oauth'
 import { GitHubCopilotOAuthCapability } from './capabilities/github-copilot-oauth'
 import { TokenJsonFileImportCapability } from './capabilities/token-json-file-import'
+import { KiroTokenJsonImportCapability } from './capabilities/kiro-token-json-import'
 import { DeepLinkImportCapabilityImpl } from './capabilities/deep-link-import'
 import {
   VsCodeSecretLocalImportCapability,
@@ -99,6 +100,12 @@ export function buildCredentialRegistry(
     registry.registerFileImport(new TokenJsonFileImportCapability(platform))
     registry.registerDeepLink(new DeepLinkImportCapabilityImpl(platform))
   }
+
+  // Kiro overrides the generic token-JSON parser: pasted enterprise (IdC) tokens
+  // carry no real identity in the blob, so confirm it online (enrichKiroMaterial)
+  // exactly as the local-scan path does. Registered AFTER the loop so it replaces
+  // the generic entry for 'kiro' (the registry maps by provider id).
+  registry.registerFileImport(new KiroTokenJsonImportCapability(allowStaleKiroImport ?? false))
 
   return registry
 }

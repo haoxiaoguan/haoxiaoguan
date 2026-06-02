@@ -3,6 +3,7 @@
   "method": {
     "oauth": "OAuth Sign-In",
     "token_json": "Token/JSON",
+    "token_batch": "Card-key / Batch",
     "local_scan": "Local Import"
   },
   "step": {
@@ -17,6 +18,14 @@
   "review": {
     "email": "Email",
     "user_id": "User ID"
+  },
+  "batch": {
+    "placeholder": "One account per line, card-key format:\nemail----password----RefreshToken----ClientId----ClientSecret----provider\nA JSON array is also accepted",
+    "hint": "Delimiters: ---- / Tab / 2+ spaces; lines starting with # are ignored. Only RefreshToken is required.",
+    "empty": "No valid credentials parsed — check the format",
+    "result": "{{success}} succeeded / {{failed}} failed of {{total}}",
+    "importing": "Importing…",
+    "run": "Start import"
   },
   "actions": {
     "open_browser": "Open Authorization",

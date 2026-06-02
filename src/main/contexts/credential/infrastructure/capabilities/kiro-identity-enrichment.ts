@@ -105,6 +105,28 @@ async function fetchLiveIdentity(
   let expiresAt = material.expiresAt
   let arn = profileArn
 
+  // refreshToken-only paste (the reference's canonical IdC format carries no
+  // accessToken): refresh up-front to obtain one before the first usage call,
+  // rather than firing getUsageLimits with an empty bearer token.
+  if (accessToken.trim().length === 0) {
+    if (authMethod === 'api_key') {
+      throw new Error('Kiro api_key import requires an access token')
+    }
+    const refreshed = await tryRefresh(meta, authMethod, region, refreshToken, fetchImpl)
+    if (refreshed === undefined) {
+      throw new Error('Kiro import: no access token and refresh failed (missing refreshToken/clientId/clientSecret?)')
+    }
+    accessToken = refreshed.accessToken
+    refreshToken = refreshed.refreshToken ?? refreshToken
+    expiresAt = refreshed.expiresAt ?? expiresAt
+    arn = refreshed.profileArn ?? arn
+    const usage = await fetchKiroUsageLimits(
+      { accessToken, authMethod, region, profileArn: arn },
+      { fetchImpl },
+    )
+    return { usage: usage as JsonValue, accessToken, refreshToken, expiresAt, profileArn: arn }
+  }
+
   try {
     const usage = await fetchKiroUsageLimits(
       { accessToken, authMethod, region, profileArn: arn },

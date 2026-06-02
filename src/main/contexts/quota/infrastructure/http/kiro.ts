@@ -23,6 +23,7 @@ import {
 import { getPathValue } from '../../domain/quota-state'
 import {
   type KiroAuthMethod,
+  defaultProfileArnFor,
   fetchKiroUsageLimits,
   normalizeRegion,
   parseRegionFromArn,
@@ -37,14 +38,15 @@ export async function fetch(
   let accessToken = credential.token
   let refreshToken = credential.refreshToken
   let expiresAt = credential.expiresAt
-  const profileArn = extractProfileArn(credential.rawMetadata, profilePayload)
-  if (profileArn === undefined) {
-    throw providerError('Kiro 缺少 profileArn，无法查询 runtime usage')
-  }
+  const authMethod = resolveKiroAuthMethod(credential.rawMetadata)
+  // profileArn is optional: social / device-login accounts carry none. Fall back
+  // to the canonical per-auth-method default (mirrors the reference) so we never
+  // reject the refresh and the persisted payload always has a usable ARN.
+  const profileArn =
+    extractProfileArn(credential.rawMetadata, profilePayload) ?? defaultProfileArnFor(authMethod)
   // Region precedence: explicit profilePayload/rawMetadata region (set at import
   // for Enterprise IdC accounts) > the profileArn segment > us-east-1.
   const region = resolveRegion(credential.rawMetadata, profilePayload, profileArn)
-  const authMethod = resolveKiroAuthMethod(credential.rawMetadata)
 
   let usage: JsonValue | undefined
   try {
@@ -157,7 +159,7 @@ function extractProfileArn(
 function resolveRegion(
   rawMetadata: JsonValue | undefined,
   profilePayload: JsonValue,
-  profileArn: string,
+  profileArn: string | undefined,
 ): string {
   const explicit =
     pickStringHttp(profilePayload, [['region']]) ??

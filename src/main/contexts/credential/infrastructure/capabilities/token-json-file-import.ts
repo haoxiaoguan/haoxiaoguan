@@ -15,7 +15,15 @@ import { jwtClaimString, parseExpiresAt, pickString } from '../scan-helpers'
 // Construct one per provider so the registry can key it by PlatformId.
 
 export class TokenJsonFileImportCapability implements FileImportCapability {
-  constructor(private readonly platform: PlatformId) {}
+  // requireAccessToken (default true) keeps the strict contract for most
+  // providers. Kiro passes false: an enterprise (IdC) paste may carry only a
+  // refreshToken (+ clientId/clientSecret), with the access token obtained by a
+  // refresh during identity enrichment — so an absent access token is valid
+  // there and must not throw here.
+  constructor(
+    private readonly platform: PlatformId,
+    private readonly requireAccessToken = true,
+  ) {}
 
   provider(): PlatformId {
     return this.platform
@@ -42,7 +50,7 @@ export class TokenJsonFileImportCapability implements FileImportCapability {
       ['tokens', 'access_token'],
       ['tokens', 'accessToken'],
     ])
-    if (!accessToken) {
+    if (!accessToken && this.requireAccessToken) {
       throw CredentialError.invalidCredential('missing access_token')
     }
     const refreshToken = pickString(obj, [
@@ -51,10 +59,14 @@ export class TokenJsonFileImportCapability implements FileImportCapability {
       ['tokens', 'refresh_token'],
       ['tokens', 'refreshToken'],
     ])
+    // accessToken may be absent when requireAccessToken is false (Kiro IdC
+    // refreshToken-only paste). Coerce to '' so JWT-claim lookups are safe no-ops
+    // and the field is a string; enrichment obtains the real token via refresh.
+    const token = accessToken ?? ''
     const email =
       pickString(obj, [['email'], ['cachedEmail'], ['userEmail']]) ??
-      jwtClaimString(accessToken, 'email') ??
-      jwtClaimString(accessToken, 'sub') ??
+      jwtClaimString(token, 'email') ??
+      jwtClaimString(token, 'sub') ??
       `${this.platform}-imported`
     const expiresAt = parseExpiresAt(
       obj.expires_at ?? obj.expiresAt ?? obj.expiry ?? (obj.tokens as Record<string, unknown>)?.expires_at,
@@ -63,7 +75,7 @@ export class TokenJsonFileImportCapability implements FileImportCapability {
     return {
       provider: this.platform,
       email,
-      accessToken,
+      accessToken: token,
       refreshToken,
       expiresAt,
       source: 'token_json_file',

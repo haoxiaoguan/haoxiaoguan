@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import type { ImportedCredentialMaterial, OAuthPending } from '../services/tauri';
 import type { PlatformId } from '../types';
 
-export type OnboardingMethod = 'oauth' | 'token_json' | 'local_scan';
+export type OnboardingMethod = 'oauth' | 'token_json' | 'token_batch' | 'local_scan';
 
 export type OnboardingStep =
   | 'idle'

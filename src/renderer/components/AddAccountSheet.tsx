@@ -22,6 +22,7 @@ import {
 } from '../services/tauri';
 import { useAccountStore, usePlatformStore, useOnboardingStore } from '../stores';
 import type { OnboardingMethod } from '../stores/onboardingStore';
+import { parseCredentialBatch, toTokenJson } from '../lib/parseCredentialBatch';
 import type { PlatformId } from '../types';
 
 interface AddAccountSheetProps {
@@ -62,6 +63,13 @@ export default function AddAccountSheet({
   const platform = defaultPlatform || 'kiro';
   const [method, setMethod] = useState<OnboardingMethod>('oauth');
   const [tokenJson, setTokenJson] = useState('');
+  const [batchText, setBatchText] = useState('');
+  const [batchResult, setBatchResult] = useState<{
+    total: number;
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [material, setMaterial] = useState<ImportedCredentialMaterial | null>(null);
@@ -69,6 +77,7 @@ export default function AddAccountSheet({
   const reset = () => {
     setError(null);
     setMaterial(null);
+    setBatchResult(null);
     setBusy(false);
   };
 
@@ -76,6 +85,7 @@ export default function AddAccountSheet({
     if (!open) return;
     setMethod('oauth');
     setTokenJson('');
+    setBatchText('');
     reset();
   }, [open, platform]);
 
@@ -85,6 +95,7 @@ export default function AddAccountSheet({
       onboarding.reset();
       setMethod('oauth');
       setTokenJson('');
+      setBatchText('');
     }
     onOpenChange(next);
   };
@@ -154,9 +165,50 @@ export default function AddAccountSheet({
     }
   };
 
+  // Batch import: parse multi-line card-key / JSON, then run each row through the
+  // same single-account path (importTokenJson → importAccount) so every account
+  // gets online identity confirmation. Serial, error-isolated, with a per-row
+  // result summary. Card-key passwords are dropped by the parser (toTokenJson).
+  const runBatchImport = async () => {
+    const creds = parseCredentialBatch(batchText);
+    if (creds.length === 0) {
+      setError(t('batch.empty'));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setBatchResult(null);
+    const result = { total: creds.length, success: 0, failed: 0, errors: [] as string[] };
+    const backendPlatform = toBackendPlatform(platform);
+    for (let i = 0; i < creds.length; i += 1) {
+      const cred = creds[i];
+      const label = cred.email || `#${i + 1}`;
+      try {
+        const m = await credentialService.importTokenJson(backendPlatform, toTokenJson(cred));
+        await importAccount({
+          platform: m.provider,
+          email: m.email,
+          token: m.access_token,
+          refreshToken: m.refresh_token,
+          expiresAt: m.expires_at,
+          rawMetadata: m.raw_metadata,
+          tags: [],
+        });
+        result.success += 1;
+      } catch (e) {
+        result.failed += 1;
+        result.errors.push(`${label}: ${String(e)}`);
+      }
+    }
+    setBatchResult(result);
+    setBusy(false);
+    if (result.success > 0) onSuccess();
+  };
+
   const methodItems: ReadonlyArray<{ value: OnboardingMethod; label: string }> = [
     { value: 'oauth', label: t('method.oauth') },
     { value: 'token_json', label: t('method.token_json') },
+    { value: 'token_batch', label: t('method.token_batch') },
     { value: 'local_scan', label: t('method.local_scan') },
   ];
   const platformDisplayName = getDisplayName(platform);
@@ -199,6 +251,39 @@ export default function AddAccountSheet({
               />
             </div>
           )}
+          {method === 'token_batch' && (
+            <div className="space-y-2">
+              <label className="text-[13px] font-medium text-foreground">
+                {t('method.token_batch')}
+              </label>
+              <Textarea
+                placeholder={t('batch.placeholder')}
+                value={batchText}
+                onChange={(e) => setBatchText(e.target.value)}
+                disabled={busy}
+                className="min-h-[140px] font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">{t('batch.hint')}</p>
+              {batchResult && (
+                <BentoInnerPanel className="space-y-1.5 text-xs">
+                  <div className="font-medium text-foreground">
+                    {t('batch.result', {
+                      success: batchResult.success,
+                      failed: batchResult.failed,
+                      total: batchResult.total,
+                    })}
+                  </div>
+                  {batchResult.errors.length > 0 && (
+                    <ul className="max-h-[120px] space-y-1 overflow-y-auto text-red-600 dark:text-red-400">
+                      {batchResult.errors.map((msg, i) => (
+                        <li key={i} className="break-all">{msg}</li>
+                      ))}
+                    </ul>
+                  )}
+                </BentoInnerPanel>
+              )}
+            </div>
+          )}
           {method === 'oauth' && (
             <BentoInnerPanel className="text-xs text-muted-foreground">
               {t('step.oauth_pending')}
@@ -238,7 +323,11 @@ export default function AddAccountSheet({
           <Button variant="ghost" size="sm" onClick={() => closeAndReset(false)} disabled={busy}>
             {t('actions.cancel')}
           </Button>
-          {!material ? (
+          {method === 'token_batch' ? (
+            <Button size="sm" onClick={runBatchImport} disabled={busy || !batchText.trim()}>
+              {busy ? t('batch.importing') : t('batch.run')}
+            </Button>
+          ) : !material ? (
             <Button size="sm" onClick={startMethod} disabled={busy}>
               {method === 'oauth' ? t('actions.open_browser') : t('actions.confirm')}
             </Button>

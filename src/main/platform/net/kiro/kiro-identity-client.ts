@@ -87,10 +87,33 @@ export function resolveKiroAuthMethod(rawMetadata: unknown): KiroAuthMethod {
   if (explicit === 'api_key' || explicit === 'apikey') return 'api_key'
   if (explicit === 'social' || explicit === 'builderid') return 'social'
   if (pickStr(meta, ['kiroApiKey', 'kiro_api_key', 'apiKey']) !== undefined) return 'api_key'
+  // The reference uses a `provider` field: Github/Google are social logins;
+  // BuilderId/Enterprise are AWS SSO (IdC). Honor it before the pair heuristic.
+  const provider = pickStr(meta, ['provider'])?.toLowerCase()
+  if (provider === 'github' || provider === 'google') return 'social'
+  if (provider === 'builderid' || provider === 'enterprise' || provider === 'idc') return 'idc'
   const hasIdcPair =
     pickStr(meta, ['client_id', 'clientId']) !== undefined &&
     pickStr(meta, ['client_secret', 'clientSecret']) !== undefined
   return hasIdcPair ? 'idc' : 'social'
+}
+
+// --- profileArn defaults ---
+
+// Well-known CodeWhisperer profile ARNs the Kiro IDE uses when an account has no
+// explicit profileArn (e.g. a social/Builder-ID device login). Mirrors the
+// reference 参考实现 (index.ts): social logins resolve to the social
+// profile, everything else to the Builder-ID profile. Without one, getUsageLimits
+// still works for some accounts but Enterprise/runtime routing expects it, so we
+// supply the canonical default rather than omitting it.
+export const KIRO_SOCIAL_PROFILE_ARN =
+  'arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK'
+export const KIRO_BUILDER_ID_PROFILE_ARN =
+  'arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX'
+
+/** Default profileArn for an account that carries none, keyed by auth method. */
+export function defaultProfileArnFor(authMethod: KiroAuthMethod): string {
+  return authMethod === 'social' ? KIRO_SOCIAL_PROFILE_ARN : KIRO_BUILDER_ID_PROFILE_ARN
 }
 
 // --- region → endpoint ---
@@ -262,10 +285,10 @@ export async function fetchKiroUsageLimits(
   const region = normalizeRegion(input.region)
   const doFetch = opts.fetchImpl ?? defaultFetch
   const base = runtimeEndpointForRegion(region).replace(/\/+$/, '')
-  const profilePart =
-    input.profileArn !== undefined
-      ? `&profileArn=${encodeURIComponent(input.profileArn)}`
-      : ''
+  // Fall back to the well-known per-auth-method profile when the account carries
+  // none (social/device logins typically don't). Mirrors the reference.
+  const profileArn = input.profileArn ?? defaultProfileArnFor(input.authMethod)
+  const profilePart = `&profileArn=${encodeURIComponent(profileArn)}`
   const url = `${base}/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&isEmailRequired=true${profilePart}`
   const response = await doFetch(url, { method: 'GET', headers: usageLimitsHeaders(input) })
   const text = await response.text()
