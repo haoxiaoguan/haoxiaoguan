@@ -343,7 +343,11 @@ export function serializeAnthropicStream(
   const id = opts.id ?? 'msg_0'
   const frames: string[] = []
 
-  // message_start：初始 usage 用 resp.usage 的 input（output 起步 0）。
+  // message_start 的 cache 用量：优先取流末 usage 事件（含 cache 读写），退回 resp.usage。
+  const usageEv = events.find((e): e is Extract<CanonicalStreamEvent, { type: 'usage' }> => e.type === 'usage')
+  const startCache = usageEv?.usage ?? resp.usage
+
+  // message_start：初始 usage 用 resp.usage 的 input（output 起步 0），cache 字段按规范补充。
   frames.push(
     anthropicSseFrame('message_start', {
       type: 'message_start',
@@ -355,7 +359,12 @@ export function serializeAnthropicStream(
         content: [],
         stop_reason: null,
         stop_sequence: null,
-        usage: { input_tokens: resp.usage.inputTokens, output_tokens: 0 },
+        usage: {
+          input_tokens: resp.usage.inputTokens,
+          output_tokens: 0,
+          ...(startCache.cacheReadTokens !== undefined ? { cache_read_input_tokens: startCache.cacheReadTokens } : {}),
+          ...(startCache.cacheWriteTokens !== undefined ? { cache_creation_input_tokens: startCache.cacheWriteTokens } : {}),
+        },
       },
     }),
   )

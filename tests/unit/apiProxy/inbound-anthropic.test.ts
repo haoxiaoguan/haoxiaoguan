@@ -218,6 +218,56 @@ describe('serializeAnthropicStream', () => {
     expect(msgDelta.usage.output_tokens).toBe(2)
   })
 
+  it('message_start.usage 带 cache 字段（从 usage 事件取）', () => {
+    const resp = {
+      model: 'claude-sonnet-4.5',
+      content: [],
+      stopReason: 'end_turn' as const,
+      usage: { inputTokens: 10, outputTokens: 0, cacheReadTokens: 2000, cacheWriteTokens: 0 },
+    }
+    const events = [
+      { type: 'text_delta' as const, text: 'hi' },
+      { type: 'usage' as const, usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 2000 } },
+      { type: 'message_stop' as const, stopReason: 'end_turn' as const },
+    ]
+    const frames = serializeAnthropicStream(resp, events)
+    const start = frames.find((f) => f.includes('message_start'))
+    expect(start).toContain('cache_read_input_tokens')
+
+    const events2 = parseEvents(frames)
+    const startUsage = (events2[0].data as { message: { usage: Record<string, number> } }).message.usage
+    // cache 值取自 usage 事件（含 cacheReadTokens）；input 仍来自 resp、output 起步 0。
+    expect(startUsage.cache_read_input_tokens).toBe(2000)
+    expect(startUsage.input_tokens).toBe(10)
+    expect(startUsage.output_tokens).toBe(0)
+  })
+
+  it('message_start.usage：缺 usage 事件时回退 resp.usage 的 cache 写入', () => {
+    const resp = {
+      model: 'claude-sonnet-4.5',
+      content: [],
+      stopReason: 'end_turn' as const,
+      usage: { inputTokens: 8, outputTokens: 0, cacheReadTokens: 100, cacheWriteTokens: 50 },
+    }
+    const frames = serializeAnthropicStream(resp, [{ type: 'message_stop' as const, stopReason: 'end_turn' as const }])
+    const start = parseEvents(frames)[0].data as { message: { usage: Record<string, number> } }
+    expect(start.message.usage.cache_read_input_tokens).toBe(100)
+    expect(start.message.usage.cache_creation_input_tokens).toBe(50)
+  })
+
+  it('message_start.usage：无任何 cache 值时不出 cache 字段', () => {
+    const resp = {
+      model: 'm',
+      content: [],
+      stopReason: 'end_turn' as const,
+      usage: { inputTokens: 4, outputTokens: 0 },
+    }
+    const frames = serializeAnthropicStream(resp, [{ type: 'message_stop' as const, stopReason: 'end_turn' as const }])
+    const start = frames.find((f) => f.includes('message_start'))!
+    expect(start).not.toContain('cache_read_input_tokens')
+    expect(start).not.toContain('cache_creation_input_tokens')
+  })
+
   it('tool_use 流：content_block_start(tool_use) + input_json_delta', () => {
     const frames = serializeAnthropicStream(
       { model: 'm', content: [], stopReason: 'tool_use', usage: { inputTokens: 1, outputTokens: 1 } },
