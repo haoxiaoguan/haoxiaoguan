@@ -126,6 +126,16 @@ describe('irToGeminiResponse', () => {
     expect(out.candidates[0].finishReason).toBe('MAX_TOKENS')
     expect(out.usageMetadata.cachedContentTokenCount).toBe(3)
   })
+
+  it('cacheReadTokens → cachedContentTokenCount', () => {
+    const r = irToGeminiResponse({
+      model: 'm',
+      content: [{ type: 'text', text: 'x' }],
+      stopReason: 'end_turn',
+      usage: { inputTokens: 100, outputTokens: 5, cacheReadTokens: 80 },
+    })
+    expect(r.usageMetadata.cachedContentTokenCount).toBe(80)
+  })
 })
 
 describe('serializeGeminiStream', () => {

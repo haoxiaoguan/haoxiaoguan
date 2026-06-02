@@ -172,6 +172,14 @@ describe('irToOpenAIResponse', () => {
     expect(out.choices[0].finish_reason).toBe('length')
     expect(out.usage.prompt_tokens_details).toEqual({ cached_tokens: 4 })
   })
+
+  it('cacheReadTokens → prompt_tokens_details.cached_tokens', () => {
+    const r = irToOpenAIResponse(
+      { model: 'm', content: [{ type: 'text', text: 'x' }], stopReason: 'end_turn', usage: { inputTokens: 100, outputTokens: 5, cacheReadTokens: 80 } },
+      { id: 'x', created: 0 },
+    )
+    expect(r.usage.prompt_tokens_details?.cached_tokens).toBe(80)
+  })
 })
 
 describe('serializeOpenAIStream', () => {

@@ -163,6 +163,14 @@ describe('irToAnthropicResponse', () => {
     )
     expect(out.content[0]).toEqual({ type: 'thinking', thinking: 'mmm', signature: 'sig' })
   })
+
+  it('cacheWriteTokens → cache_creation_input_tokens', () => {
+    const r = irToAnthropicResponse(
+      { model: 'm', content: [{ type: 'text', text: 'x' }], stopReason: 'end_turn', usage: { inputTokens: 20, outputTokens: 5, cacheWriteTokens: 2000 } },
+      { id: 'x' },
+    )
+    expect(r.usage.cache_creation_input_tokens).toBe(2000)
+  })
 })
 
 describe('serializeAnthropicStream', () => {
