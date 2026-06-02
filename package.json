@@ -38,7 +38,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-table": "^8.21.3",
     "adm-zip": "^0.5.16",
-    "better-sqlite3": "^11.8.0",
+    "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fetch-socks": "1.3.3",
@@ -78,7 +78,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.0",
     "daisyui": "^5.5.20",
-    "electron": "^34.0.0",
+    "electron": "^40.10.2",
     "electron-builder": "^25.1.8",
     "electron-vite": "6.0.0-beta.1",
     "jsdom": "^25.0.1",
@@ -90,5 +90,10 @@
     "vite": "^8.0.0",
     "vitest": "^4.1.7"
   },
-  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
+  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
+  "pnpm": {
+    "overrides": {
+      "better-sqlite3": "12.10.0"
+    }
+  }
 }

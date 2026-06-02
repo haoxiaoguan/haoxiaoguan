@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  better-sqlite3: 12.10.0
+
 importers:
 
   .:
@@ -69,8 +72,8 @@ importers:
         specifier: ^0.5.16
         version: 0.5.17
       better-sqlite3:
-        specifier: ^11.8.0
-        version: 11.10.0
+        specifier: 12.10.0
+        version: 12.10.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -184,8 +187,8 @@ importers:
         specifier: ^5.5.20
         version: 5.5.20
       electron:
-        specifier: ^34.0.0
-        version: 34.5.8
+        specifier: ^40.10.2
+        version: 40.10.2
       electron-builder:
         specifier: ^25.1.8
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
@@ -622,7 +625,7 @@ packages:
     engines: {node: '>= 18.12.0'}
     peerDependencies:
       '@mikro-orm/core': ^6.0.0
-      better-sqlite3: '*'
+      better-sqlite3: 12.10.0
       libsql: '*'
       mariadb: '*'
     peerDependenciesMeta:
@@ -1477,11 +1480,11 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
-  '@types/node@20.19.41':
-    resolution: {integrity: sha512-ECymXOukMnOoVkC2bb1Vc/w/836DXncOg5m8Xj1RH7xSHZJWNYY6Zh7EH477vcnD5egKNNfy2RpNOmuChhFPgQ==}
-
   '@types/node@22.19.19':
     resolution: {integrity: sha512-dyh/xO2Fh5bYrfWaaqGrRQQGkNdmYw6AmaAUvYeUMNTWQtvb796ikLdmTchRmOlOiIJ1TDXfWgVx1QkUlQ6Hew==}
+
+  '@types/node@24.12.4':
+    resolution: {integrity: sha512-GUUEShf+PBCGW2KaXwcIt3Yk+e3pkKwWKb9GSyM9WQVE+ep2jzmHdGsHzu4wgcZy5fN9FBdVzjpBQsYlpfpgLA==}
 
   '@types/plist@3.0.5':
     resolution: {integrity: sha512-E6OCaRmAe4WDmWNsL/9RMqdkkzDCY1etutkflWk4c+AcjDU07Pcz1fQwTX0TQz+Pxqn9i4L1TU3UFpjnrcDgxA==}
@@ -1713,8 +1716,9 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-sqlite3@11.10.0:
-    resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
+  better-sqlite3@12.10.0:
+    resolution: {integrity: sha512-CyzaZRQKyHkB2ZInfTTl2nvT33EbDpjkLEbE8/Zck3Ll6O0qqvuGdrJ45HgtH+HykRg88ITY3AdreBGN70aBSQ==}
+    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
 
   binary-extensions@2.3.0:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
@@ -2151,8 +2155,8 @@ packages:
       '@swc/core':
         optional: true
 
-  electron@34.5.8:
-    resolution: {integrity: sha512-vxLD65mabTzYmEVa9KceMHM0+zO+vqgrhcyNVlmTd0IGV5J7XZ8v/qElm0o4YQ4wPeq7olZkUjZkBQQEdr23/g==}
+  electron@40.10.2:
+    resolution: {integrity: sha512-Xj3Hy0Imbu4g0gDIW55w/jJYz94nMO2JRSGYA3LyAn5SwaERCelgZrA21vfH+Bi//SWAWQXddHsMwCqauyMT8g==}
     engines: {node: '>= 12.20.55'}
     hasBin: true
 
@@ -3742,6 +3746,9 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+
   undici@7.26.0:
     resolution: {integrity: sha512-3O9Tf67pGhgOv9jM35AbhkXAKi13f3oy3aE4CSgr+TckGeY+/iu97ZXN+J7DpHPzLbVApFd1IFhcnBjREYXYcg==}
     engines: {node: '>=20.18.1'}
@@ -4432,8 +4439,8 @@ snapshots:
   '@mikro-orm/better-sqlite@6.6.14(@mikro-orm/core@6.6.14)':
     dependencies:
       '@mikro-orm/core': 6.6.14
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@11.10.0)
-      better-sqlite3: 11.10.0
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@12.10.0)
+      better-sqlite3: 12.10.0
       fs-extra: 11.3.3
       sqlstring-sqlite: 0.1.1
     transitivePeerDependencies:
@@ -4458,14 +4465,14 @@ snapshots:
       mikro-orm: 6.6.14
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@11.10.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@12.10.0)':
     dependencies:
       '@mikro-orm/core': 6.6.14
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@11.10.0)
+      knex: 3.2.10(better-sqlite3@12.10.0)
       sqlstring: 2.3.3
     optionalDependencies:
-      better-sqlite3: 11.10.0
+      better-sqlite3: 12.10.0
     transitivePeerDependencies:
       - mysql
       - mysql2
@@ -5228,13 +5235,13 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
-  '@types/node@20.19.41':
-    dependencies:
-      undici-types: 6.21.0
-
   '@types/node@22.19.19':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/node@24.12.4':
+    dependencies:
+      undici-types: 7.16.0
 
   '@types/plist@3.0.5':
     dependencies:
@@ -5513,7 +5520,7 @@ snapshots:
 
   baseline-browser-mapping@2.10.33: {}
 
-  better-sqlite3@11.10.0:
+  better-sqlite3@12.10.0:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
@@ -6004,10 +6011,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@34.5.8:
+  electron@40.10.2:
     dependencies:
       '@electron/get': 2.0.3
-      '@types/node': 20.19.41
+      '@types/node': 24.12.4
       extract-zip: 2.0.1
     transitivePeerDependencies:
       - supports-color
@@ -6572,7 +6579,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  knex@3.2.10(better-sqlite3@11.10.0):
+  knex@3.2.10(better-sqlite3@12.10.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -6589,7 +6596,7 @@ snapshots:
       tarn: 3.0.2
       tildify: 2.0.0
     optionalDependencies:
-      better-sqlite3: 11.10.0
+      better-sqlite3: 12.10.0
     transitivePeerDependencies:
       - supports-color
 
@@ -7584,6 +7591,8 @@ snapshots:
   typescript@5.9.3: {}
 
   undici-types@6.21.0: {}
+
+  undici-types@7.16.0: {}
 
   undici@7.26.0: {}
 
