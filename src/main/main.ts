@@ -249,6 +249,14 @@ if (!gotLock) {
     })
     services.platformQuotaScheduler.start()
 
+    // 本地 AI API 反代服务：尊重「API 服务」页开关，仅当 apiProxyEnabled 为 true
+    // 时随就绪自启。启动失败（如端口耗尽）只记日志，不致命。
+    if (services.settings.getApiProxyEnabled()) {
+      services.apiProxyService.start().catch((e) => {
+        console.error('[apiProxy] autostart failed:', e)
+      })
+    }
+
     // 30-minute periodic local backup. Run once immediately, then on interval.
     const runBackup = (): void => {
       services?.localBackup.periodicBackupIfNeeded().catch((e) => {
@@ -294,6 +302,9 @@ app.on('before-quit', () => {
   }
   services?.tokenRefreshScheduler.stop()
   services?.platformQuotaScheduler.stop()
+  services?.apiProxyService.stop().catch((e) => {
+    console.error('[apiProxy] stop on quit failed:', e)
+  })
 })
 
 app.on('window-all-closed', () => {
