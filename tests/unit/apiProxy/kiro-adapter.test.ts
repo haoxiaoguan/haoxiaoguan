@@ -10,7 +10,7 @@ import type {
   KiroCredential,
   KiroAccountInfo,
 } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
-import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent } from '../../../src/main/contexts/apiProxy/domain/canonical'
+import type { CanonicalRequest, CanonicalStreamEvent } from '../../../src/main/contexts/apiProxy/domain/canonical'
 import type { UpstreamCtx } from '../../../src/main/contexts/apiProxy/domain/platform-adapter'
 
 const ACCOUNT: KiroAccountInfo = {
@@ -86,12 +86,12 @@ describe('KiroAdapter.chat', () => {
     ])
     const { adapter, dispatcherCalls } = makeAdapter(f.impl)
     const resp = await adapter.chat(REQ, CTX)
-    expect(resp).toEqual<CanonicalResponse>({
-      model: 'claude-sonnet-4-5',
-      content: [{ type: 'text', text: 'hi back' }],
-      stopReason: 'end_turn',
-      usage: { inputTokens: 4, outputTokens: 2 },
-    })
+    // M3c：usage 本地估算（不取上游 tokenUsage）；无 contextUsagePercentage → input 降级估算请求文本。
+    expect(resp.model).toBe('claude-sonnet-4-5')
+    expect(resp.content).toEqual([{ type: 'text', text: 'hi back' }])
+    expect(resp.stopReason).toBe('end_turn')
+    expect(resp.usage.outputTokens).toBeGreaterThan(0)
+    expect(resp.usage.inputTokens).toBeGreaterThanOrEqual(1)
     // 走了 dispatcher 解析（runWithDispatcher 外包）。
     expect(dispatcherCalls).toEqual(['acc-1'])
     // Authorization 用解密 token；invocation-id 来自 requestId（确定性）。
@@ -121,11 +121,15 @@ describe('KiroAdapter.chatStream', () => {
     const { adapter, dispatcherCalls } = makeAdapter(f.impl)
     const out: CanonicalStreamEvent[] = []
     for await (const ev of adapter.chatStream({ ...REQ, stream: true }, CTX)) out.push(ev)
-    expect(out).toEqual<CanonicalStreamEvent[]>([
-      { type: 'text_delta', text: 'stream hi' },
-      { type: 'usage', usage: { inputTokens: 3, outputTokens: 1 } },
-      { type: 'message_stop', stopReason: 'end_turn' },
-    ])
+    // M3c：事件序保持；末 usage 事件被本地估算替换（不取上游 tokenUsage）。
+    expect(out[0]).toEqual({ type: 'text_delta', text: 'stream hi' })
+    expect(out[2]).toEqual({ type: 'message_stop', stopReason: 'end_turn' })
+    const usageEv = out[1]
+    expect(usageEv.type).toBe('usage')
+    if (usageEv.type === 'usage') {
+      expect(usageEv.usage.outputTokens).toBeGreaterThan(0)
+      expect(usageEv.usage.inputTokens).toBeGreaterThanOrEqual(1)
+    }
     expect(dispatcherCalls).toEqual(['acc-1'])
   })
 })

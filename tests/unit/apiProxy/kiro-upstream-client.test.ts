@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   KiroUpstreamClient,
   endpointsForRegion,
+  foldEventsToResponse,
   type KiroFetchImpl,
   type KiroFetchResponse,
   type KiroCallContext,
@@ -9,7 +10,14 @@ import {
 import { encodeKiroEventStream } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-event-stream'
 import type { KiroTokenRefresher, KiroCredential, RefreshedKiroToken } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
 import type { ConversationStateEnvelope } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-wire-types'
-import type { CanonicalResponse, CanonicalStreamEvent } from '../../../src/main/contexts/apiProxy/domain/canonical'
+import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent } from '../../../src/main/contexts/apiProxy/domain/canonical'
+
+// 最小请求：usage 估算降级路径用其文本反推 input。
+const REQ: CanonicalRequest = {
+  model: 'claude-sonnet-4.5',
+  messages: [{ role: 'user', content: [{ type: 'text', text: 'x' }] }],
+  stream: false,
+}
 
 const ENVELOPE: ConversationStateEnvelope = {
   conversationState: {
@@ -115,13 +123,13 @@ describe('KiroUpstreamClient.chat — success folding', () => {
       ]),
     ])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')
-    expect(resp).toEqual<CanonicalResponse>({
-      model: 'claude-sonnet-4.5',
-      content: [{ type: 'text', text: 'Hello world' }],
-      stopReason: 'end_turn',
-      usage: { inputTokens: 10, outputTokens: 5 },
-    })
+    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)
+    // M3c：usage 不再取上游 tokenUsage，而是本地估算（output 数输出文本；无 pct 时 input 降级估算请求文本）。
+    expect(resp.model).toBe('claude-sonnet-4.5')
+    expect(resp.content).toEqual([{ type: 'text', text: 'Hello world' }])
+    expect(resp.stopReason).toBe('end_turn')
+    expect(resp.usage.outputTokens).toBeGreaterThan(0)
+    expect(resp.usage.inputTokens).toBeGreaterThanOrEqual(1)
     expect(f.calls).toHaveLength(1)
   })
 
@@ -136,7 +144,7 @@ describe('KiroUpstreamClient.chat — success folding', () => {
       ]),
     ])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')
+    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)
     expect(resp.stopReason).toBe('tool_use')
     expect(resp.content).toEqual([
       { type: 'text', text: 'use tool' },
@@ -155,7 +163,7 @@ describe('KiroUpstreamClient.chat — 401 refresh retry', () => {
       refresher: refresherTo({ token: 'tok-2', refreshToken: 'refresh-2' }),
       fetchImpl: f.impl,
     })
-    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')
+    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)
     expect(resp.content).toEqual([{ type: 'text', text: 'ok' }])
     // 第一次用旧 token，刷新后第二次用新 token；两次都打 AmazonQ（同端点）。
     expect(f.calls[0].headers['Authorization']).toBe('Bearer tok-1')
@@ -167,7 +175,7 @@ describe('KiroUpstreamClient.chat — 401 refresh retry', () => {
   it('does not retry when refresher returns undefined — throws auth error', async () => {
     const f = scriptedFetch([errResp(403, 'forbidden')])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')).rejects.toThrow(/auth/i)
+    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)).rejects.toThrow(/auth/i)
     expect(f.calls).toHaveLength(1)
   })
 })
@@ -180,7 +188,7 @@ describe('KiroUpstreamClient.chat — single AmazonQ endpoint (no fallback)', ()
       okBytes([{ eventType: 'assistantResponseEvent', payload: { content: 'second' } }]),
     ])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')).rejects.toThrow(/429/)
+    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)).rejects.toThrow(/429/)
     // 只打了一次（AmazonQ），未消费第二个脚本响应。
     expect(f.calls).toHaveLength(1)
     expect(f.calls[0].url).toContain('q.us-east-1')
@@ -189,7 +197,7 @@ describe('KiroUpstreamClient.chat — single AmazonQ endpoint (no fallback)', ()
   it('throws on non-2xx (no other endpoint to try)', async () => {
     const f = scriptedFetch([errResp(500, 'boom')])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')).rejects.toThrow(/500/)
+    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)).rejects.toThrow(/500/)
     expect(f.calls).toHaveLength(1)
   })
 })
@@ -204,11 +212,65 @@ describe('KiroUpstreamClient.chatStream', () => {
     ])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
     const out: CanonicalStreamEvent[] = []
-    for await (const ev of client.chatStream(ENVELOPE, CTX)) out.push(ev)
-    expect(out).toEqual<CanonicalStreamEvent[]>([
-      { type: 'text_delta', text: 'Hi' },
-      { type: 'usage', usage: { inputTokens: 2, outputTokens: 1 } },
-      { type: 'message_stop', stopReason: 'end_turn' },
+    for await (const ev of client.chatStream(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)) out.push(ev)
+    // 事件序保持不变；末 usage 事件被本地估算替换（output 数 'Hi'；无 pct → input 降级估算）。
+    expect(out[0]).toEqual({ type: 'text_delta', text: 'Hi' })
+    expect(out[2]).toEqual({ type: 'message_stop', stopReason: 'end_turn' })
+    const usageEv = out[1]
+    expect(usageEv.type).toBe('usage')
+    if (usageEv.type === 'usage') {
+      expect(usageEv.usage.outputTokens).toBeGreaterThan(0)
+      expect(usageEv.usage.inputTokens).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('替换末 usage 为按 contextUsagePercentage 反推（减 output）的估算', async () => {
+    const f = scriptedFetch([
+      okBytes([
+        { eventType: 'assistantResponseEvent', payload: { content: 'Hello world' } },
+        { eventType: 'contextUsageEvent', payload: { contextUsagePercentage: 1 } },
+      ]),
     ])
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
+    const out: CanonicalStreamEvent[] = []
+    for await (const ev of client.chatStream(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)) out.push(ev)
+    const usageEv = out.find((e) => e.type === 'usage')
+    expect(usageEv?.type).toBe('usage')
+    if (usageEv?.type === 'usage') {
+      // 透传百分比，且 input = 200000×1% − output。
+      expect(usageEv.contextUsagePercentage).toBe(1)
+      expect(usageEv.usage.outputTokens).toBeGreaterThan(0)
+      expect(usageEv.usage.inputTokens).toBe(Math.max(0, 2000 - usageEv.usage.outputTokens))
+    }
+  })
+})
+
+describe('foldEventsToResponse — usage 估算', () => {
+  const REQ4: CanonicalRequest = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+    stream: false,
+  }
+
+  it('有 contextUsagePercentage：input = 窗口×pct/100 − output', () => {
+    const events: CanonicalStreamEvent[] = [
+      { type: 'text_delta', text: 'Hello world' },
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 }, contextUsagePercentage: 1 },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ]
+    const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', REQ4)
+    expect(resp.usage.outputTokens).toBeGreaterThan(0)
+    expect(resp.usage.inputTokens).toBe(Math.max(0, 2000 - resp.usage.outputTokens)) // 200000×1%
+  })
+
+  it('无 contextUsagePercentage：input 降级为估算请求文本', () => {
+    const events: CanonicalStreamEvent[] = [
+      { type: 'text_delta', text: 'Hello' },
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ]
+    const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', REQ4)
+    expect(resp.usage.inputTokens).toBeGreaterThanOrEqual(1)
+    expect(resp.usage.outputTokens).toBeGreaterThan(0)
   })
 })

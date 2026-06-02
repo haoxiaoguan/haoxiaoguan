@@ -11,9 +11,12 @@ import { fetch as undiciFetch } from 'undici'
 import { currentDispatcher } from '../../../../../platform/net/dispatcher-context'
 import { runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-identity-client'
 import { parseKiroEventStream } from './kiro-event-stream'
+import { countTextTokens, estimateRequestInputTokens } from './token-estimator'
+import { getContextTokensForModel } from './model-context-window'
 import type { ConversationStateEnvelope } from './kiro-wire-types'
 import type { KiroTokenRefresher } from './kiro-ports'
 import type {
+  CanonicalRequest,
   CanonicalResponse,
   CanonicalStreamEvent,
   ContentBlock,
@@ -186,18 +189,44 @@ export class KiroUpstreamClient {
     return { url: endpoint.url, method: 'POST', headers: buildHeaders(ctx), body: JSON.stringify(envelope) }
   }
 
-  /** 非流式：端点回退 + 401/403 刷新重试一次 → 全量 buffer → 解析 → 折叠 CanonicalResponse。 */
-  async chat(envelope: ConversationStateEnvelope, ctx: KiroCallContext, model: string): Promise<CanonicalResponse> {
+  /** 非流式：端点回退 + 401/403 刷新重试一次 → 全量 buffer → 解析 → 折叠 CanonicalResponse（含 usage 估算）。 */
+  async chat(
+    envelope: ConversationStateEnvelope,
+    ctx: KiroCallContext,
+    model: string,
+    request: CanonicalRequest,
+  ): Promise<CanonicalResponse> {
     const bytes = await this.send(envelope, ctx)
     const events = parseKiroEventStream(bytes)
-    return foldEventsToResponse(events, model)
+    return foldEventsToResponse(events, model, request)
   }
 
-  /** 流式（M3b：全量 buffer 后逐个 yield 已解析事件；真增量逐 token 透传留 M4）。 */
-  async *chatStream(envelope: ConversationStateEnvelope, ctx: KiroCallContext): AsyncIterable<CanonicalStreamEvent> {
+  /**
+   * 流式（M3b：全量 buffer 后逐个 yield 已解析事件；真增量逐 token 透传留 M4）。
+   * M3c：先扫一遍事件估算 usage（output 数输出文本；input 按百分比反推或降级），再逐个 yield，
+   * 把上游零值的末 usage 事件替换为本地估算（保留 contextUsagePercentage 透传）。
+   */
+  async *chatStream(
+    envelope: ConversationStateEnvelope,
+    ctx: KiroCallContext,
+    model: string,
+    request: CanonicalRequest,
+  ): AsyncIterable<CanonicalStreamEvent> {
     const bytes = await this.send(envelope, ctx)
     const events = parseKiroEventStream(bytes)
-    for (const ev of events) yield ev
+    let outputText = ''
+    let contextPct: number | undefined
+    for (const ev of events) {
+      if (ev.type === 'text_delta' || ev.type === 'thinking_delta') outputText += ev.text
+      else if (ev.type === 'tool_use_delta') outputText += ev.partialJson
+      else if (ev.type === 'usage') contextPct = ev.contextUsagePercentage
+    }
+    const usage = estimateUsage(model, request, outputText, contextPct)
+    for (const ev of events) {
+      yield ev.type === 'usage'
+        ? { type: 'usage', usage, ...(contextPct !== undefined ? { contextUsagePercentage: contextPct } : {}) }
+        : ev
+    }
   }
 
   // 端点回退 + 401/403 单次刷新重试 → 返回全量响应字节。
@@ -283,12 +312,19 @@ interface ToolFold {
 /**
  * 把 parseKiroEventStream 的事件序列折叠为非流式 CanonicalResponse。
  * 连续 text/thinking 各并为单块；tool_use_start 开块、tool_use_delta 累积 JSON，结束统一 parse。
- * content 块按首次出现顺序保序。usage/stopReason 取流末事件。
+ * content 块按首次出现顺序保序。stopReason 取流末事件。
+ * usage 不取上游零值，而由 estimateUsage 本地估算（output 数输出文本；input 按 contextUsagePercentage
+ * 反推减 output，无百分比时降级估算请求文本）。
  */
-export function foldEventsToResponse(events: CanonicalStreamEvent[], model: string): CanonicalResponse {
+export function foldEventsToResponse(
+  events: CanonicalStreamEvent[],
+  model: string,
+  request: CanonicalRequest,
+): CanonicalResponse {
   const content: ContentBlock[] = []
-  let usage: Usage = { inputTokens: 0, outputTokens: 0 }
   let stopReason: StopReason = 'end_turn'
+  let outputChars = ''
+  let contextPct: number | undefined
 
   let textBuf: { type: 'text'; text: string } | null = null
   let thinkBuf: { type: 'thinking'; text: string } | null = null
@@ -312,10 +348,12 @@ export function foldEventsToResponse(events: CanonicalStreamEvent[], model: stri
       flushThink()
       if (textBuf === null) textBuf = { type: 'text', text: '' }
       textBuf.text += ev.text
+      outputChars += ev.text
     } else if (ev.type === 'thinking_delta') {
       flushText()
       if (thinkBuf === null) thinkBuf = { type: 'thinking', text: '' }
       thinkBuf.text += ev.text
+      outputChars += ev.text
     } else if (ev.type === 'tool_use_start') {
       flushText()
       flushThink()
@@ -326,8 +364,9 @@ export function foldEventsToResponse(events: CanonicalStreamEvent[], model: stri
     } else if (ev.type === 'tool_use_delta') {
       const fold = tools.get(ev.index)
       if (fold !== undefined) fold.json += ev.partialJson
+      outputChars += ev.partialJson
     } else if (ev.type === 'usage') {
-      usage = ev.usage
+      contextPct = ev.contextUsagePercentage
     } else if (ev.type === 'message_stop') {
       stopReason = ev.stopReason
     }
@@ -354,5 +393,29 @@ export function foldEventsToResponse(events: CanonicalStreamEvent[], model: stri
     }
   }
 
+  const usage = estimateUsage(model, request, outputChars, contextPct)
   return { model, content, stopReason, usage }
+}
+
+/**
+ * usage 估算（纯函数）。
+ * - output：数本次响应输出文本（text/thinking/tool 入参 JSON 累积）的 token。
+ * - input：优先按上游 contextUsagePercentage 反推（窗口×pct/100 − output，下限 0）；
+ *   无百分比时降级估算请求文本（estimateRequestInputTokens）。
+ */
+export function estimateUsage(
+  model: string,
+  request: CanonicalRequest,
+  outputText: string,
+  contextPct: number | undefined,
+): Usage {
+  const outputTokens = outputText.length > 0 ? countTextTokens(outputText) : 0
+  let inputTokens: number
+  if (contextPct !== undefined && contextPct > 0) {
+    const total = Math.round((getContextTokensForModel(model) * contextPct) / 100)
+    inputTokens = Math.max(0, total - outputTokens)
+  } else {
+    inputTokens = estimateRequestInputTokens(request)
+  }
+  return { inputTokens, outputTokens }
 }

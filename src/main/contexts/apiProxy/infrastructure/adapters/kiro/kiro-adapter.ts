@@ -76,7 +76,7 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
   async chat(ir: CanonicalRequest, ctx: UpstreamCtx): Promise<CanonicalResponse> {
     const prepared = await this.prepare(ir, ctx)
     const dispatcher = await this.deps.dispatchers.dispatcherForAccount(prepared.accountId)
-    return runWithDispatcher(dispatcher, () => this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model))
+    return runWithDispatcher(dispatcher, () => this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model, ir))
   }
 
   chatStream(ir: CanonicalRequest, ctx: UpstreamCtx): AsyncIterable<CanonicalStreamEvent> {
@@ -88,7 +88,7 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
       const dispatcher = await self.deps.dispatchers.dispatcherForAccount(prepared.accountId)
       const events = await runWithDispatcher(dispatcher, async () => {
         const out: CanonicalStreamEvent[] = []
-        for await (const ev of self.deps.client.chatStream(prepared.envelope, prepared.callCtx)) out.push(ev)
+        for await (const ev of self.deps.client.chatStream(prepared.envelope, prepared.callCtx, ir.model, ir)) out.push(ev)
         return out
       })
       for (const ev of events) yield ev
