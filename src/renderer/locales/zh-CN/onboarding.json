@@ -19,6 +19,13 @@
     "email": "邮箱",
     "user_id": "用户 ID"
   },
+  "binding": {
+    "group": "加入分组",
+    "groupNone": "不加入分组",
+    "proxy": "绑定代理",
+    "proxyNone": "不绑定代理",
+    "failed": "账号已导入，但绑定分组/代理失败"
+  },
   "batch": {
     "placeholder": "每行一个账号，卡密格式：\n邮箱----密码----RefreshToken----ClientId----ClientSecret----provider\n也支持粘贴 JSON 数组",
     "hint": "分隔符支持 ---- / Tab / 多个空格；# 开头的行会被忽略。仅 RefreshToken 必填。",

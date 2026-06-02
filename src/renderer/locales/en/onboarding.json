@@ -19,6 +19,13 @@
     "email": "Email",
     "user_id": "User ID"
   },
+  "binding": {
+    "group": "Add to group",
+    "groupNone": "No group",
+    "proxy": "Bind proxy",
+    "proxyNone": "No proxy",
+    "failed": "Account imported, but group/proxy binding failed"
+  },
   "batch": {
     "placeholder": "One account per line, card-key format:\nemail----password----RefreshToken----ClientId----ClientSecret----provider\nA JSON array is also accepted",
     "hint": "Delimiters: ---- / Tab / 2+ spaces; lines starting with # are ignored. Only RefreshToken is required.",

@@ -3,6 +3,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -16,14 +17,26 @@ import {
 import { SegmentedOptions } from '@/components/ui/segmented-options';
 import { BentoInnerPanel } from '@/components/ui/bento-inner-panel';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   credentialService,
   type ImportedCredentialMaterial,
   type OAuthMode,
 } from '../services/tauri';
-import { useAccountStore, usePlatformStore, useOnboardingStore } from '../stores';
+import { useAccountStore, usePlatformStore, useOnboardingStore, useAccountGroupStore } from '../stores';
+import { useProxyStore } from '../stores/proxyStore';
 import type { OnboardingMethod } from '../stores/onboardingStore';
 import { parseCredentialBatch, toTokenJson } from '../lib/parseCredentialBatch';
 import type { PlatformId } from '../types';
+
+// Sentinel for "not assigned / not bound" in the group/proxy selects (same value
+// as EditAccountDialog so behavior matches).
+const NONE = '__none__';
 
 interface AddAccountSheetProps {
   open: boolean;
@@ -60,6 +73,13 @@ export default function AddAccountSheet({
   const { getDisplayName } = usePlatformStore();
   const onboarding = useOnboardingStore();
 
+  const groups = useAccountGroupStore((s) => s.groups);
+  const fetchGroups = useAccountGroupStore((s) => s.fetchGroups);
+  const addMembers = useAccountGroupStore((s) => s.addMembers);
+  const proxies = useProxyStore((s) => s.proxies);
+  const fetchProxies = useProxyStore((s) => s.fetchAll);
+  const bindAccountToProxy = useProxyStore((s) => s.bindAccountToProxy);
+
   const platform = defaultPlatform || 'kiro';
   const [method, setMethod] = useState<OnboardingMethod>('oauth');
   const [tokenJson, setTokenJson] = useState('');
@@ -70,6 +90,9 @@ export default function AddAccountSheet({
     failed: number;
     errors: string[];
   } | null>(null);
+  // Group / proxy to bind every imported account to (NONE = leave unbound).
+  const [groupId, setGroupId] = useState<string>(NONE);
+  const [proxyId, setProxyId] = useState<string>(NONE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [material, setMaterial] = useState<ImportedCredentialMaterial | null>(null);
@@ -86,8 +109,12 @@ export default function AddAccountSheet({
     setMethod('oauth');
     setTokenJson('');
     setBatchText('');
+    setGroupId(NONE);
+    setProxyId(NONE);
+    void fetchGroups();
+    void fetchProxies();
     reset();
-  }, [open, platform]);
+  }, [open, platform, fetchGroups, fetchProxies]);
 
   const closeAndReset = (next: boolean) => {
     if (!next) {
@@ -96,8 +123,23 @@ export default function AddAccountSheet({
       setMethod('oauth');
       setTokenJson('');
       setBatchText('');
+      setGroupId(NONE);
+      setProxyId(NONE);
     }
     onOpenChange(next);
+  };
+
+  // Bind a freshly-imported account to the selected group / proxy. The account
+  // already exists, so a binding failure must not fail the import — surface it
+  // as a soft warning and let the user fix it later in the edit dialog.
+  const applyBindings = async (accountId: string): Promise<string | null> => {
+    try {
+      if (groupId !== NONE) await addMembers(groupId, [accountId]);
+      if (proxyId !== NONE) await bindAccountToProxy(accountId, proxyId);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
   };
 
   const startMethod = async () => {
@@ -146,7 +188,7 @@ export default function AddAccountSheet({
     setBusy(true);
     setError(null);
     try {
-      await importAccount({
+      const account = await importAccount({
         platform: material.provider,
         email: material.email,
         token: material.access_token,
@@ -155,9 +197,11 @@ export default function AddAccountSheet({
         rawMetadata: material.raw_metadata,
         tags: [],
       });
+      const bindErr = await applyBindings(account.id);
       onboarding.finish();
       onSuccess();
       closeAndReset(false);
+      if (bindErr) toast.warning(t('binding.failed'), { description: bindErr });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -185,7 +229,7 @@ export default function AddAccountSheet({
       const label = cred.email || `#${i + 1}`;
       try {
         const m = await credentialService.importTokenJson(backendPlatform, toTokenJson(cred));
-        await importAccount({
+        const account = await importAccount({
           platform: m.provider,
           email: m.email,
           token: m.access_token,
@@ -195,6 +239,9 @@ export default function AddAccountSheet({
           tags: [],
         });
         result.success += 1;
+        // Account is imported; a binding failure is a soft warning, not a row failure.
+        const bindErr = await applyBindings(account.id);
+        if (bindErr) result.errors.push(`${label} (${t('binding.failed')}): ${bindErr}`);
       } catch (e) {
         result.failed += 1;
         result.errors.push(`${label}: ${String(e)}`);
@@ -236,6 +283,42 @@ export default function AddAccountSheet({
                 reset();
               }}
             />
+          </div>
+
+          {/* 分组 / 代理绑定（所有导入方式共用；导入成功后统一绑定） */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[12px] text-muted-foreground">{t('binding.group')}</label>
+              <Select value={groupId} onValueChange={setGroupId} disabled={busy}>
+                <SelectTrigger className="h-9 rounded-[8px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>{t('binding.groupNone')}</SelectItem>
+                  {groups.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[12px] text-muted-foreground">{t('binding.proxy')}</label>
+              <Select value={proxyId} onValueChange={setProxyId} disabled={busy}>
+                <SelectTrigger className="h-9 rounded-[8px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>{t('binding.proxyNone')}</SelectItem>
+                  {proxies.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label || p.displayUrl}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* 方式特定输入 */}
