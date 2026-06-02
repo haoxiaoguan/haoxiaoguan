@@ -29,6 +29,16 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.wsPort
   }
 
+  /** 反代服务是否随应用就绪自启（默认 false）。 */
+  getApiProxyEnabled(): boolean {
+    return this.file.loadSync().runtime.apiProxyEnabled
+  }
+
+  /** 反代服务监听端口（默认 8788）。 */
+  getApiProxyPort(): number {
+    return this.file.loadSync().runtime.apiProxyPort
+  }
+
   getAllowStaleKiroImport(): boolean {
     return this.file.loadSync().runtime.allowStaleKiroImport
   }

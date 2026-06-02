@@ -94,6 +94,11 @@ import { defaultSsotRoot } from './contexts/skill/application/skill-application-
 import { WsServer } from './platform/websocket/ws-server'
 import { WebSocketApplicationService } from './contexts/websocket/application/websocket-service'
 
+// apiProxy context — local AI API reverse-proxy HTTP service (M1: /health only).
+import { ApiHttpServer } from './contexts/apiProxy/infrastructure/http/api-http-server'
+import { createApiRequestListener } from './contexts/apiProxy/infrastructure/http/hono-app'
+import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
+
 // Proxy context — outbound proxy IP management. ProxyResolver is injected into
 // QuotaService so per-account quota fetches route through the bound proxy.
 import { MikroOrmProxyRepository } from './contexts/proxy/infrastructure/mikro-orm-proxy-repository'
@@ -351,6 +356,14 @@ export async function buildContainer(): Promise<Container> {
   const wsServer = new WsServer({ port: settings.getWsPort() })
   const websocket = new WebSocketApplicationService(wsServer)
 
+  // 11. apiProxy 上下文。监听器绑定 settings 的 apiProxyPort（默认 8788），
+  //     端口被占时 ApiHttpServer 自动回退 +1。不在此自启——main.ts 依据
+  //     apiProxyEnabled 决定 whenReady 后是否 start()。
+  const apiHttpServer = new ApiHttpServer(createApiRequestListener(), {
+    port: settings.getApiProxyPort(),
+  })
+  const apiProxyService = new ApiProxyService(apiHttpServer)
+
   return {
     settings,
     agents,
@@ -375,6 +388,7 @@ export async function buildContainer(): Promise<Container> {
     websocket,
     proxyService,
     accountGroupService,
+    apiProxyService,
     tokenRefreshScheduler,
     platformQuotaScheduler,
   }
