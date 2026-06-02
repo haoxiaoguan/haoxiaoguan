@@ -22,8 +22,9 @@ import type {
   KiroCredential,
   KiroAccountInfo,
 } from './kiro-ports'
+import type { PromptCacheTracker } from './prompt-cache-tracker'
 import type { PlatformUpstreamAdapter, UpstreamCtx, ModelInfo } from '../../../domain/platform-adapter'
-import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent } from '../../../domain/canonical'
+import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent, Usage } from '../../../domain/canonical'
 import type { BuildConversationStateOpts } from './kiro-wire-types'
 
 // Kiro 对外暴露的模型集（spec §12：Kiro 支持的 Claude 模型）。供 /v1/models 与裸路由模型感知。
@@ -50,6 +51,7 @@ export interface KiroAdapterDeps {
   accounts: KiroAccountPort
   dispatchers: KiroDispatcherPort
   client: KiroUpstreamClient
+  cacheTracker: PromptCacheTracker
 }
 
 // 已解析的一次调用所需路由信息（account + envelope + callCtx）。
@@ -76,7 +78,30 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
   async chat(ir: CanonicalRequest, ctx: UpstreamCtx): Promise<CanonicalResponse> {
     const prepared = await this.prepare(ir, ctx)
     const dispatcher = await this.deps.dispatchers.dispatcherForAccount(prepared.accountId)
-    return runWithDispatcher(dispatcher, () => this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model, ir))
+    const resp = await runWithDispatcher(dispatcher, () =>
+      this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model, ir),
+    )
+    return this.applyCache(ir, prepared.accountId, resp)
+  }
+
+  // M3c：cache 计费后处理（非流式）。拿 ir.cacheControl（仅 Anthropic 入站填充）+ accountId 调
+  // tracker：compute 读命中 → update 写账号级指纹表（请求成功后），把命中填进 usage，并把
+  // inputTokens 改成扣除 cache 命中后的未缓存部分（billed）。无 cacheControl → 原样返回。
+  private applyCache(ir: CanonicalRequest, accountId: string, resp: CanonicalResponse): CanonicalResponse {
+    if (ir.cacheControl === undefined || ir.cacheControl.length === 0) return resp
+    const profile = this.deps.cacheTracker.buildProfile(ir.cacheControl, resp.usage.inputTokens, ir.model)
+    if (profile === null) return resp
+    const now = Date.now()
+    const cu = this.deps.cacheTracker.compute(accountId, profile, now)
+    this.deps.cacheTracker.update(accountId, profile, now)
+    const billed = Math.max(resp.usage.inputTokens - cu.cacheCreationInputTokens - cu.cacheReadInputTokens, 0)
+    const usage: Usage = {
+      inputTokens: billed,
+      outputTokens: resp.usage.outputTokens,
+      ...(cu.cacheReadInputTokens > 0 ? { cacheReadTokens: cu.cacheReadInputTokens } : {}),
+      ...(cu.cacheCreationInputTokens > 0 ? { cacheWriteTokens: cu.cacheCreationInputTokens } : {}),
+    }
+    return { ...resp, usage }
   }
 
   chatStream(ir: CanonicalRequest, ctx: UpstreamCtx): AsyncIterable<CanonicalStreamEvent> {
@@ -91,7 +116,29 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
         for await (const ev of self.deps.client.chatStream(prepared.envelope, prepared.callCtx, ir.model, ir)) out.push(ev)
         return out
       })
-      for (const ev of events) yield ev
+      // M3c：对末 usage 事件做 cache 计费后处理（与 chat 同语义），其余事件原样透传。
+      for (const ev of events) {
+        if (ev.type === 'usage' && ir.cacheControl !== undefined && ir.cacheControl.length > 0) {
+          const profile = self.deps.cacheTracker.buildProfile(ir.cacheControl, ev.usage.inputTokens, ir.model)
+          if (profile !== null) {
+            const now = Date.now()
+            const cu = self.deps.cacheTracker.compute(prepared.accountId, profile, now)
+            self.deps.cacheTracker.update(prepared.accountId, profile, now)
+            const billed = Math.max(ev.usage.inputTokens - cu.cacheCreationInputTokens - cu.cacheReadInputTokens, 0)
+            yield {
+              type: 'usage',
+              usage: {
+                inputTokens: billed,
+                outputTokens: ev.usage.outputTokens,
+                ...(cu.cacheReadInputTokens > 0 ? { cacheReadTokens: cu.cacheReadInputTokens } : {}),
+                ...(cu.cacheCreationInputTokens > 0 ? { cacheWriteTokens: cu.cacheCreationInputTokens } : {}),
+              },
+            }
+            continue
+          }
+        }
+        yield ev
+      }
     }
     return gen()
   }

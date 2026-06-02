@@ -103,6 +103,7 @@ import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-re
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 // KiroAdapter（'kiro' 上游）+ 4 个窄 port 类型。container 用现成 repo/resolver 实例适配这些 port。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
+import { PromptCacheTracker } from './contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
 import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
 import type {
   KiroCredentialPort,
@@ -453,12 +454,14 @@ export async function buildContainer(): Promise<Container> {
     },
   }
   const kiroUpstreamClient = new KiroUpstreamClient({ refresher: kiroTokenRefresher })
+  const kiroCacheTracker = new PromptCacheTracker()
   platformRegistry.register(
     new KiroAdapter({
       credentials: kiroCredentialPort,
       accounts: kiroAccountPort,
       dispatchers: kiroDispatcherPort,
       client: kiroUpstreamClient,
+      cacheTracker: kiroCacheTracker,
     }),
   )
 

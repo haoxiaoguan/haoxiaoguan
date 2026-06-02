@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { KiroAdapter, NoKiroAccountError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { KiroUpstreamClient, type KiroFetchImpl, type KiroFetchResponse } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
 import { encodeKiroEventStream } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-event-stream'
+import { PromptCacheTracker } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
 import type {
   KiroCredentialPort,
   KiroAccountPort,
@@ -51,7 +52,13 @@ function fetchReturning(list: { eventType: string; payload: unknown }[]): { impl
 function makeAdapter(fetchImpl: KiroFetchImpl, over = {}) {
   const p = ports(over)
   const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl })
-  const adapter = new KiroAdapter({ credentials: p.credentials, accounts: p.accounts, dispatchers: p.dispatchers, client })
+  const adapter = new KiroAdapter({
+    credentials: p.credentials,
+    accounts: p.accounts,
+    dispatchers: p.dispatchers,
+    client,
+    cacheTracker: new PromptCacheTracker(),
+  })
   return { adapter, ...p }
 }
 
@@ -109,6 +116,26 @@ describe('KiroAdapter.chat', () => {
   it('throws NoKiroAccountError when credential missing', async () => {
     const { adapter } = makeAdapter(fetchReturning([]).impl, { cred: null })
     await expect(adapter.chat(REQ, CTX)).rejects.toBeInstanceOf(NoKiroAccountError)
+  })
+})
+
+describe('KiroAdapter cache billing', () => {
+  it('cache_control 请求：首次 creation，update 后二次 read 命中', async () => {
+    const events = [
+      { eventType: 'assistantResponseEvent', payload: { content: 'hi' } },
+      { eventType: 'contextUsageEvent', payload: { contextUsagePercentage: 50 } },
+    ]
+    const { adapter } = makeAdapter(fetchReturning(events).impl)
+    const ir: CanonicalRequest = {
+      model: 'claude-sonnet-4.5',
+      stream: false,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+      cacheControl: [{ value: 's', tokens: 2000, ttl: 300000, isMessageEnd: true }],
+    }
+    const r1 = await adapter.chat(ir, { requestId: 'r1' } as UpstreamCtx)
+    expect(r1.usage.cacheReadTokens ?? 0).toBe(0)
+    const r2 = await adapter.chat(ir, { requestId: 'r2' } as UpstreamCtx)
+    expect(r2.usage.cacheReadTokens ?? 0).toBeGreaterThan(0)
   })
 })
 
