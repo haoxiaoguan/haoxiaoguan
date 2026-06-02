@@ -28,6 +28,11 @@ export interface RuntimeSettings {
   // online (degraded to a placeholder, never the stale local identity). Default
   // false: import is blocked until a live getUsageLimits succeeds.
   allowStaleKiroImport: boolean
+  // 本地 AI API 反代服务（apiProxy 上下文）是否随应用就绪自启。默认 false：
+  // 尊重用户在「API 服务」页的开关，不强制自启。
+  apiProxyEnabled: boolean
+  // 反代服务监听端口（127.0.0.1）。默认 8788；被占用时 ApiHttpServer 自动回退 +1。
+  apiProxyPort: number
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -46,6 +51,8 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   idePaths: {},
   quotaRefreshConcurrency: 3,
   allowStaleKiroImport: false,
+  apiProxyEnabled: false,
+  apiProxyPort: 8788,
 }
 
 export class AppSettings {
@@ -92,6 +99,8 @@ export class AppSettings {
       autostart: String(this.runtime.autostart),
       quota_refresh_concurrency: String(this.runtime.quotaRefreshConcurrency),
       allow_stale_kiro_import: String(this.runtime.allowStaleKiroImport),
+      api_proxy_enabled: String(this.runtime.apiProxyEnabled),
+      api_proxy_port: String(this.runtime.apiProxyPort),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -121,7 +130,11 @@ export class AppSettings {
         const n = Number(v)
         if (Number.isInteger(n) && n >= 1 && n <= 100) this.runtime.quotaRefreshConcurrency = n
       } else if (k === 'allow_stale_kiro_import') this.runtime.allowStaleKiroImport = v === 'true'
-      else if (k.startsWith('refresh_interval_')) {
+      else if (k === 'api_proxy_enabled') this.runtime.apiProxyEnabled = v === 'true'
+      else if (k === 'api_proxy_port') {
+        const n = Number(v)
+        if (Number.isInteger(n) && n >= 1024) this.runtime.apiProxyPort = n
+      } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)
         if (Number.isInteger(n) && n >= 2 && n <= 30) this.runtime.refreshIntervals[platform] = n

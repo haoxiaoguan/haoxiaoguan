@@ -98,4 +98,29 @@ describe('AppSettings', () => {
     s.applyFlatKv({ quota_refresh_concurrency: '100' }) // ceiling is valid
     expect(s.runtime.quotaRefreshConcurrency).toBe(100)
   })
+
+  it('defaults apiProxyEnabled to false and apiProxyPort to 8788', () => {
+    const s = AppSettings.fromJson({})
+    expect(s.runtime.apiProxyEnabled).toBe(false)
+    expect(s.runtime.apiProxyPort).toBe(8788)
+    expect(s.toFlatKv().api_proxy_enabled).toBe('false')
+    expect(s.toFlatKv().api_proxy_port).toBe('8788')
+  })
+
+  it('applies api_proxy flat KV and round-trips through toJson/fromJson', () => {
+    const s = AppSettings.fromJson({})
+    s.applyFlatKv({ api_proxy_enabled: 'true', api_proxy_port: '9090' })
+    expect(s.runtime.apiProxyEnabled).toBe(true)
+    expect(s.runtime.apiProxyPort).toBe(9090)
+
+    const again = AppSettings.fromJson(s.toJson())
+    expect(again.runtime.apiProxyEnabled).toBe(true)
+    expect(again.runtime.apiProxyPort).toBe(9090)
+  })
+
+  it('drops an out-of-range api_proxy_port (below 1024)', () => {
+    const s = AppSettings.fromJson({})
+    s.applyFlatKv({ api_proxy_port: '80' }) // below the 1024 floor
+    expect(s.runtime.apiProxyPort).toBe(8788) // unchanged
+  })
 })
