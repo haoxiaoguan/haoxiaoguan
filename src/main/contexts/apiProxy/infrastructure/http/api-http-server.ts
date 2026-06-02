@@ -117,7 +117,9 @@ export class ApiHttpServer {
       const onListening = () => {
         httpServer.removeListener('error', onError)
         this.httpServer = httpServer
-        resolve(port)
+        // 用真实绑定端口：port:0 时 OS 分配临时端口；固定端口时即等于请求端口。
+        const address = httpServer.address()
+        resolve(typeof address === 'object' && address !== null ? address.port : port)
       }
 
       httpServer.once('error', onError)
