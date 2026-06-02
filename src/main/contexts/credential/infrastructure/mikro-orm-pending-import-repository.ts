@@ -4,8 +4,8 @@ import { platformFromAgentIdOrCursor, platformToAgentId } from '../../account/do
 import { CredentialError } from '../domain/credential-error'
 import type { PendingImport, PendingImportRepository } from '../domain/pending-repository'
 
-// MikroORM-backed PendingImportRepository. 对应 sea-orm
-// PendingImportRepository: upsert-on-conflict by id, purge by expires_at < now.
+// MikroORM-backed PendingImportRepository: upsert-on-conflict by id, purge by
+// expires_at < now.
 
 interface PendingImportRow {
   id: string

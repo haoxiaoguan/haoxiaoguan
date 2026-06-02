@@ -5,7 +5,7 @@ import AdmZip from 'adm-zip'
 import { SyncError } from '../domain/sync-error'
 
 // Skills archive — deterministic packing + safe extraction of the SSOT skills
-// directory. 对应 modules/sync/application/skills_archive.rs.
+// directory.
 //
 // pack: sorted file names + fixed timestamp + skip hidden files + skip
 //   out-of-root symlinks → byte-deterministic zip (so SHA-256 matches across

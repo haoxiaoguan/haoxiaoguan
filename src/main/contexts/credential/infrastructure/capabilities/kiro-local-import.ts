@@ -17,7 +17,7 @@ import { readVscdbItem } from '../vscdb-reader'
 import { enrichKiroMaterial } from './kiro-identity-enrichment'
 import type { FetchImpl } from '../../../../platform/net/kiro/kiro-identity-client'
 
-// Kiro local-scan capability — ported from quota/infrastructure/local/Rust模块.
+// Kiro local-scan capability.
 //
 // IMPORTANT: Kiro is an AWS-backed IDE, NOT a generic VSCode-SecretStorage app.
 // Its credential lives in a PLAIN JSON file at
@@ -26,9 +26,9 @@ import type { FetchImpl } from '../../../../platform/net/kiro/kiro-identity-clie
 // the email/profile mirrored in Kiro's globalStorage profile.json and usage
 // telemetry in the state.vscdb PLAIN item `kiro.kiroAgent` (not a secret:// blob).
 //
-// The earlier port wired Kiro to the generic VsCodeSecretLocalImportCapability,
-// which looked for a non-existent secret:// SecretStorage entry and silently
-// returned [] ("无法导入本地账号"). This dedicated reader matches the source.
+// A generic VsCodeSecretLocalImportCapability would look for a non-existent
+// secret:// SecretStorage entry and silently return [] ("无法导入本地账号"). This
+// dedicated reader targets the actual on-disk layout instead.
 //
 // REGION / ENTERPRISE: Builder ID accounts pin us-east-1, but Enterprise (AWS
 // IdC) accounts live in whatever region their IdC instance runs — and the live

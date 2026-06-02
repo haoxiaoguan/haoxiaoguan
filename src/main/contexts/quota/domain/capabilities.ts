@@ -1,11 +1,11 @@
 // Capability layer value objects + the 7 capability interfaces.
 //
-// 对应 modules/quota/domain/capabilities.rs. The ProviderRegistry keys
+// The ProviderRegistry keys
 // these by PlatformId. QuotaFetchResult is the product of a live fetch; its
 // provider_payload is normalised by the quota-state parsers and updatedCredential
 // (NOT serialised) is persisted by the application service.
 //
-// Enum string forms are snake_case (serde rename_all = "snake_case").
+// Enum string forms are snake_case.
 
 import type { JsonValue } from '../../account/domain/platform-account-profile'
 import type { Credential } from '../../account/domain/credential'

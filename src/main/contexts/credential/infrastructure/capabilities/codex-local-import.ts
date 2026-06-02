@@ -7,11 +7,11 @@ import type { ImportedCredentialMaterial } from '../../domain/capability-types'
 import { CredentialError } from '../../domain/credential-error'
 import { homeDir, jwtClaimString, jwtPayload, parseExpiresAt, pickString } from '../scan-helpers'
 
-// Codex local-scan capability — ported from quota/infrastructure/local/codex.rs.
-// Reads ~/.codex/auth.json (or $CODEX_HOME/auth.json). Handles both API-key and
-// ChatGPT-OAuth auth modes, extracting claims from the id/access JWTs. The macOS
-// Keychain fallback (Codex Auth, account = "cli|" + sha256(canonical home)[..16])
-// is NOT ported here (see manifest TODO) — auth.json covers the common path.
+// Codex local-scan capability. Reads ~/.codex/auth.json (or
+// $CODEX_HOME/auth.json). Handles both API-key and ChatGPT-OAuth auth modes,
+// extracting claims from the id/access JWTs. The macOS Keychain fallback (Codex
+// Auth, account = "cli|" + sha256(canonical home)[..16]) is NOT implemented here
+// (see manifest TODO) — auth.json covers the common path.
 
 const API_KEY_AUTH_MODE = 'apikey'
 

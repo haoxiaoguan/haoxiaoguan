@@ -6,10 +6,9 @@ import { SyncError } from '../domain/sync-error'
 import { getSafeStorage } from './secret-store'
 
 // KeychainMasterKeyStore — production MasterKeyStore implementation.
-// 对应 modules/sync/infrastructure/keychain_master_key_store.rs, which
-// delegates to AesGcmCryptoService.load_global_key / import_global_key.
+// Delegates to the AES-GCM crypto service's global-key load/import.
 //
-// In this Electron port the "global key" is exactly what
+// The "global key" is exactly what
 // platform/crypto/crypto-service.ts::loadOrCreateMasterKey() persists: a 32-byte
 // AES master key stored at appDataDir()/master.key.enc, encrypted with Electron
 // safeStorage (raw base64 fallback when unavailable). This store reads/writes the

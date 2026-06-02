@@ -5,9 +5,8 @@ import { currentDispatcher } from '../dispatcher-context'
 import { getMachineId } from '../../identity/machine-id'
 
 // Context-neutral transport for Kiro (AWS CodeWhisperer) identity/usage calls.
-// Mirrors the request shapes of the upstream Kiro IDE (see the Rust reference
-// Rust模块 token_manager): region-routed endpoints, AWS-SDK-style User-Agent
-// headers, and the IdC-vs-Social token-refresh split.
+// Mirrors the request shapes of the upstream Kiro IDE: region-routed endpoints,
+// AWS-SDK-style User-Agent headers, and the IdC-vs-Social token-refresh split.
 //
 // Why a shared platform module: both the quota context (live usage refresh) and
 // the credential context (import-time identity enrichment) need the exact same
@@ -79,7 +78,7 @@ class KiroHttpError extends Error {
 
 // --- auth-method resolution ---
 
-/** Classify a credential's auth flow from its rawMetadata (mirrors Rust模块). */
+/** Classify a credential's auth flow from its rawMetadata. */
 export function resolveKiroAuthMethod(rawMetadata: unknown): KiroAuthMethod {
   const meta = isObject(rawMetadata) ? rawMetadata : {}
   const explicit = pickStr(meta, ['auth_method', 'authMethod'])?.toLowerCase()
@@ -87,7 +86,7 @@ export function resolveKiroAuthMethod(rawMetadata: unknown): KiroAuthMethod {
   if (explicit === 'api_key' || explicit === 'apikey') return 'api_key'
   if (explicit === 'social' || explicit === 'builderid') return 'social'
   if (pickStr(meta, ['kiroApiKey', 'kiro_api_key', 'apiKey']) !== undefined) return 'api_key'
-  // The reference uses a `provider` field: Github/Google are social logins;
+  // Some accounts carry a `provider` field: Github/Google are social logins;
   // BuilderId/Enterprise are AWS SSO (IdC). Honor it before the pair heuristic.
   const provider = pickStr(meta, ['provider'])?.toLowerCase()
   if (provider === 'github' || provider === 'google') return 'social'
@@ -101,9 +100,9 @@ export function resolveKiroAuthMethod(rawMetadata: unknown): KiroAuthMethod {
 // --- profileArn defaults ---
 
 // Well-known CodeWhisperer profile ARNs the Kiro IDE uses when an account has no
-// explicit profileArn (e.g. a social/Builder-ID device login). Mirrors the
-// reference 参考实现 (index.ts): social logins resolve to the social
-// profile, everything else to the Builder-ID profile. Without one, getUsageLimits
+// explicit profileArn (e.g. a social/Builder-ID device login): social logins
+// resolve to the social profile, everything else to the Builder-ID profile.
+// Without one, getUsageLimits
 // still works for some accounts but Enterprise/runtime routing expects it, so we
 // supply the canonical default rather than omitting it.
 export const KIRO_SOCIAL_PROFILE_ARN =
@@ -176,7 +175,7 @@ function idcOidcEndpointForRegion(region: string): string {
   return `https://oidc.${region}.amazonaws.com`
 }
 
-// --- User-Agent headers (mirror Rust模块) ---
+// --- User-Agent headers ---
 
 function osToken(): string {
   // e.g. "darwin#24.6.0" / "win32#10.0.22631"

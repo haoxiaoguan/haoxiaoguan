@@ -2,7 +2,7 @@
 //   user 起、user 止、严格交替、每个 assistant.toolUses 都有紧邻 user.toolResults 配对（缺失合成失败占位）、
 //   无空 content 的 user（除非带 toolResults）。
 // 同时把 IR 多轮映射成 Kiro history，并提供 toolResult 文本字节截断。
-// 参考：参考实现 线协议模块 的 sanitizeConversation 及其子步骤（按线协议重写）。
+// 会话清洗 sanitizeConversation 及其子步骤（按 Kiro 线协议实现）。
 import type { CanonicalMessage, ContentBlock } from '../../../domain/canonical'
 import type {
   KiroHistoryMessage,
@@ -10,7 +10,7 @@ import type {
   KiroToolUse,
 } from './kiro-wire-types'
 
-// ---- 占位消息（与参考同义） ----
+// ---- 占位消息 ----
 const HELLO_USER: KiroHistoryMessage = { userInputMessage: { content: 'Hello' } }
 const CONTINUE_USER: KiroHistoryMessage = { userInputMessage: { content: 'Continue' } }
 const UNDERSTOOD_ASSIST: KiroHistoryMessage = { assistantResponseMessage: { content: 'understood' } }
@@ -263,7 +263,7 @@ export function truncateToolResultText(
 // CodeWhisperer 对「history 含未在当前消息 tools 声明的结构化 toolUse」返回 400。
 // 当 history 引用了「当前请求未声明」的工具时，把所有结构化 toolUses/toolResults 拍平成
 // <tool_use>/<tool_result> 文本嵌入 content，并清除结构化字段，让模型仍能据文本上下文推理。
-// 参考：参考实现 线协议模块 的 normalizeToolHistory（按线协议重写）。
+// normalizeToolHistory（按 Kiro 线协议实现）。
 
 function stringifyToolInput(input: unknown): string {
   if (input === undefined) return ''

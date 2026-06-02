@@ -1,4 +1,4 @@
-// Qoder live quota fetch. 对应 quota/infrastructure/quota/qoder.rs.
+// Qoder live quota fetch.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import type { Credential } from '../../../account/domain/credential'

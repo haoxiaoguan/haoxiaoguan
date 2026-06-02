@@ -3,11 +3,11 @@ import type { Credential } from './credential'
 import type { StoredEnvelope } from './envelope'
 
 // CredentialRepository port — owned by the credential context. Persists the
-// AES-GCM envelope keyed by accountId. 对应 SqliteCredentialRepository
-// envelope path (save_envelope / load_envelope), and additionally provides the
-// account context's CredentialStorePort surface (store/retrieve/delete of the
-// plaintext Credential) so it can REPLACE the account context's TEMP
-// MikroOrmCredentialStore at integration.
+// AES-GCM envelope keyed by accountId via the envelope path (save_envelope /
+// load_envelope), and additionally provides the account context's
+// CredentialStorePort surface (store/retrieve/delete of the plaintext
+// Credential) so it can REPLACE the account context's TEMP MikroOrmCredentialStore
+// at integration.
 
 export interface CredentialRepository {
   /** Encrypt + persist the credential for an account (builds the envelope). */

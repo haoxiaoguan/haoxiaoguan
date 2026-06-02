@@ -5,11 +5,11 @@ import type { CredentialValidationResult } from '../../domain/capability-types'
 import type { StoredEnvelope } from '../../domain/envelope'
 import type { CryptoService } from '../../../../platform/crypto/crypto-service'
 
-// Generic, network-free credential validation by token expiry. The Rust source
-// shipped only a stub validator (returns unsupported), so every account showed
-// 未支持 in the top-right corner regardless of platform. This classifies any
-// stored credential WITHOUT a network call, which is correct for every
-// token/API-key provider:
+// Generic, network-free credential validation by token expiry. Without this, a
+// stub validator (returns unsupported) would make every account show 未支持 in
+// the top-right corner regardless of platform. This classifies any stored
+// credential WITHOUT a network call, which is correct for every token/API-key
+// provider:
 //   - no expiry (e.g. API keys)     → valid (does not expire)
 //   - not yet expired               → valid
 //   - expired but has refresh token → valid (auto-refreshes on next use)

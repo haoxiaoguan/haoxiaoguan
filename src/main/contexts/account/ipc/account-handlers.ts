@@ -314,8 +314,7 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
   })
 }
 
-// Parse an RFC3339 string to a Date; throw a clear error on a bad value
-// (对应 parse_optional_datetime).
+// Parse an RFC3339 string to a Date; throw a clear error on a bad value.
 function parseRfc3339(value: string): Date {
   const ms = Date.parse(value)
   if (Number.isNaN(ms)) {

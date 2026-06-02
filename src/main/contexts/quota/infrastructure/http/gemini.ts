@@ -1,4 +1,4 @@
-// Gemini CLI live quota fetch. 对应 quota/infrastructure/quota/gemini.rs.
+// Gemini CLI live quota fetch.
 //
 // Refresh on expiry (form-encoded, embedded installed-app client_id/secret) →
 // loadCodeAssist → userinfo + retrieveUserQuota (project-scoped). provider_payload
@@ -24,7 +24,7 @@ const LOAD_CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com/v1interna
 const RETRIEVE_USER_QUOTA_ENDPOINT =
   'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota'
 const CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com'
-// Public installed-app secret (same pattern as gcloud CLI). See manifest porting note.
+// Public installed-app secret (same pattern as gcloud CLI).
 const CLIENT_SECRET = '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'
 
 export async function fetch(

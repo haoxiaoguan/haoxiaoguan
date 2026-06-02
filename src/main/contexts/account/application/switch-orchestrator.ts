@@ -5,10 +5,9 @@ import type { AccountRepository } from '../domain/account-repository'
 import type { CredentialStorePort } from '../domain/ports'
 
 /**
- * SwitchOrchestrator — capability-path switch (source application::
- * switch_orchestrator, used by switch_account_v2). Resolves the injector by the
- * account's platform and injects the decrypted credential, honoring
- * launch_on_switch / executable_override via LaunchOptions.
+ * SwitchOrchestrator — capability-path switch (used by switch_account_v2).
+ * Resolves the injector by the account's platform and injects the decrypted
+ * credential, honoring launch_on_switch / executable_override via LaunchOptions.
  *
  * Unlike SwitchService it does NOT mutate account active-state; it is the
  * Phase-6 capability path that the frontend can use in parallel.

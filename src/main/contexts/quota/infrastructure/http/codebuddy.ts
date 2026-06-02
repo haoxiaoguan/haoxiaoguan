@@ -1,4 +1,4 @@
-// CodeBuddy live quota fetch. 对应 quota/infrastructure/quota/codebuddy.rs.
+// CodeBuddy live quota fetch.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import { Credential } from '../../../account/domain/credential'
@@ -44,7 +44,7 @@ export async function fetch(
       const expTs = pickI64Http(token, [['expiresAt'], ['expires_at']])
       if (expTs !== undefined) expiresAt = timestampToDate(expTs)
     } catch {
-      // refresh failures are non-fatal (source uses `if let Ok(...)`)
+      // refresh failures are non-fatal
     }
   }
 

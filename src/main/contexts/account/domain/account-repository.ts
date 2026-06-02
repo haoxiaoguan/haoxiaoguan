@@ -2,7 +2,6 @@ import type { Account } from './account'
 import type { PlatformId } from './platform-id'
 
 // AccountRepository port — implemented in infrastructure (MikroORM).
-// 对应 AccountRepository trait.
 export interface AccountRepository {
   findById(id: string): Promise<Account | null>
   findByPlatform(platform: PlatformId): Promise<Account[]>

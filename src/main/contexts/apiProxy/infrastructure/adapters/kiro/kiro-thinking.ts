@@ -2,7 +2,6 @@
 //   1) 系统提示标签注入：<thinking_mode>enabled</thinking_mode> + <max_thinking_length>，塞进 current message content 前缀。
 //   2) 模型请求字段：additionalModelRequestFields.thinking = { type:'enabled', budget_tokens }。
 // 另提供把上游误混进正文的 <thinking>…</thinking> 文本解析回 thinking 块的辅助（供 M3b 上游解析用）。
-// 参考：参考实现 线协议模块 的 THINKING_MODE_PROMPT 注入（按线协议重写）。
 import type { ThinkingConfig } from '../../../domain/canonical'
 
 export const DEFAULT_MAX_THINKING_LENGTH = 200000

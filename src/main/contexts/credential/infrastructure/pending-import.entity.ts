@@ -1,6 +1,6 @@
 import { Entity, PrimaryKey, Property } from '@mikro-orm/core'
 
-// pending_import table — 对应 sea-orm pending_import Model.
+// pending_import table.
 //   id TEXT PK, provider TEXT, payload_json TEXT, created_at TEXT RFC3339,
 //   expires_at TEXT RFC3339.
 

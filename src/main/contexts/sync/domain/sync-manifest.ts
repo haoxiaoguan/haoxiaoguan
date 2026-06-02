@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { SyncError } from './sync-error'
 
-// Sync manifest (manifest.json) — 对应 modules/sync/domain/manifest.rs.
+// Sync manifest (manifest.json).
 //
 // Holds metadata + each artifact's SHA-256 + byte size + protocol version. On
 // upload it is built from artifact bytes and shipped alongside; on download the

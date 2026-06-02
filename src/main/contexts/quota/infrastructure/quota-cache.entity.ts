@@ -1,8 +1,8 @@
 import { Entity, ManyToOne, PrimaryKeyProp, Property } from '@mikro-orm/core'
 import { AccountEntity } from '../../account/infrastructure/account.entity'
 
-// quota_cache table — composite PK (account_id, model). 对应 sea-orm
-// Model: used/total are INTEGER, reset_at TEXT? (RFC3339), fetched_at TEXT
+// quota_cache table — composite PK (account_id, model). used/total are INTEGER,
+// reset_at TEXT? (RFC3339), fetched_at TEXT
 // (RFC3339). FK account_id → accounts ON DELETE CASCADE (cascade relies on
 // PRAGMA foreign_keys = ON, set in database.ts). Save does delete-all-for-account
 // then re-insert each model (wrapped in a transaction by the repository).

@@ -1,4 +1,4 @@
-// Kiro live quota fetch. 对应 quota/infrastructure/quota/Rust模块.
+// Kiro live quota fetch.
 //
 // Region-routed getUsageLimits (endpoint derived from the profilePayload region
 // or the profileArn region segment). On failure, refresh the token and retry
@@ -40,8 +40,8 @@ export async function fetch(
   let expiresAt = credential.expiresAt
   const authMethod = resolveKiroAuthMethod(credential.rawMetadata)
   // profileArn is optional: social / device-login accounts carry none. Fall back
-  // to the canonical per-auth-method default (mirrors the reference) so we never
-  // reject the refresh and the persisted payload always has a usable ARN.
+  // to the canonical per-auth-method default so we never reject the refresh and
+  // the persisted payload always has a usable ARN.
   const profileArn =
     extractProfileArn(credential.rawMetadata, profilePayload) ?? defaultProfileArnFor(authMethod)
   // Region precedence: explicit profilePayload/rawMetadata region (set at import

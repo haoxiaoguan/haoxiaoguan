@@ -3,15 +3,15 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { CredentialError } from '../domain/credential-error'
 
-// VSCode SecretStorage decryption — 对应 quota local/common.rs
-// SafeStorage logic (PBKDF2-HMAC-SHA1 + AES-128-CBC, v10/v11 prefix).
+// VSCode SecretStorage decryption — SafeStorage logic (PBKDF2-HMAC-SHA1 +
+// AES-128-CBC, v10/v11 prefix).
 //
 //   - macOS: key = PBKDF2-SHA1(safeStoragePassword, "saltysalt", 1003) → AES-128-CBC
 //            v10 prefix. safeStoragePassword comes from `security
 //            find-generic-password -w -s "<App> Safe Storage" [-a <account>]`.
 //   - Linux: v11 = PBKDF2-SHA1(secret-tool lookup application <app>, salt, 1) ;
 //            v10 = hardcoded LINUX_V10_KEY ; both fall back to LINUX_EMPTY_KEY.
-//   - Windows: DPAPI not implemented → throws unsupported error (matches source).
+//   - Windows: DPAPI not implemented → throws unsupported error.
 //
 // The CBC IV is 16 spaces (0x20). Padding is PKCS7. The encrypted SecretStorage
 // value in state.vscdb may be a JSON Buffer ({type:'Buffer',data:[...]}) — the
@@ -24,7 +24,7 @@ const CBC_IV = Buffer.alloc(16, 0x20) // 16 spaces
 const V10_PREFIX = Buffer.from('v10', 'utf8')
 const V11_PREFIX = Buffer.from('v11', 'utf8')
 
-// Linux hardcoded keys (对应 LINUX_V10_KEY / LINUX_EMPTY_KEY).
+// Linux hardcoded keys (LINUX_V10_KEY / LINUX_EMPTY_KEY).
 const LINUX_V10_KEY = Buffer.from([
   0xfd, 0x62, 0x1f, 0xe5, 0xa2, 0xb4, 0x02, 0x53, 0x9d, 0xfa, 0x14, 0x7c, 0xa9, 0x27, 0x27, 0x78,
 ])
@@ -116,8 +116,8 @@ async function macosSafeStoragePassword(mode: SafeStorageMode): Promise<string |
 }
 
 async function linuxV11Key(): Promise<Buffer | null> {
-  // The source looks up the secret service entry by application name; the
-  // default app for VSCode-family SecretStorage is "code".
+  // Look up the secret service entry by application name; the default app for
+  // VSCode-family SecretStorage is "code".
   const password = await runCommandTrimmed('secret-tool', ['lookup', 'application', 'code'])
   if (password === null) return null
   return pbkdf2Sha1Key(password, 1)
@@ -176,7 +176,6 @@ export async function decryptSecretPayload(
  *   - a JSON object { data: number[] } (Buffer) → decrypt,
  *   - a JSON object with a string body → return it,
  *   - a plain string → return it.
- * 对应 decode_secret_storage_value.
  */
 export async function decodeSecretStorageValue(
   rawValue: string,

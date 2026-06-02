@@ -1,8 +1,8 @@
 // Export/import data structures for export_accounts / import_accounts.
 //
-// IMPORTANT: these JSON shapes use snake_case keys to mirror the source serde
-// default on ExportData/ExportAccount/ExportCredential (NOT camelCase). The
-// export string must round-trip through import_from_json byte-compatibly.
+// IMPORTANT: these JSON shapes use snake_case keys on
+// ExportData/ExportAccount/ExportCredential (NOT camelCase). The export string
+// must round-trip through import_from_json byte-compatibly.
 
 export interface ExportCredential {
   token: string
@@ -19,7 +19,7 @@ export interface ExportAccount {
   is_active: boolean
   created_at: string
   last_used_at?: string | null
-  // Omitted from the serialized output when undefined (serde skip_serializing_if).
+  // Omitted from the serialized output when undefined.
   credential?: ExportCredential
 }
 

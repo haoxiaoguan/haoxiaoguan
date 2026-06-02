@@ -1,6 +1,5 @@
 // Batch credential parser for the account-import "card-key / batch" method.
-// Mirrors the reference 参考实现 (AddAccountDialog handleOidcBatchAdd):
-// accepts either a JSON array / single object, or one-per-line "card-key" rows:
+// Accepts either a JSON array / single object, or one-per-line "card-key" rows:
 //
 //   email----password----RefreshToken----ClientId----ClientSecret[----provider]
 //
@@ -49,7 +48,6 @@ function fromObject(o: Record<string, unknown>): ParsedCred | null {
  * credentials) and prepending a stray "-" to the next field (→ provider becomes
  * "-BuilderId" → auth method mis-detected). So we match the delimiter as
  * /-{4,}/ and give the extra (N-4) dashes back to the PRECEDING field.
- * Mirrors the reference splitCredentialLine (参考实现 v1.7.2).
  */
 function splitLine(line: string): string[] {
   if (line.includes('----')) {

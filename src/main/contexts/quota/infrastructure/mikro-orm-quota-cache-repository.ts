@@ -6,13 +6,12 @@ import type { QuotaCacheRepository } from '../domain/ports'
 import { QuotaCacheEntity } from './quota-cache.entity'
 import { AccountEntity } from '../../account/infrastructure/account.entity'
 
-// MikroORM implementation of QuotaCacheRepository (source SqliteQuotaCacheRepository).
+// MikroORM implementation of QuotaCacheRepository.
 //
 // save() deletes all rows for the account, then re-inserts one row per model,
-// wrapped in a transaction (the source did delete + insert without a tx; the
-// migration convention asks us to wrap it so we never leave partial state on a
-// failed insert — see manifest porting notes). Empty models list inserts nothing
-// (so get() returns null afterwards, matching source semantics). Timestamps are
+// wrapped in a transaction so we never leave partial state on a
+// failed insert. Empty models list inserts nothing
+// (so get() returns null afterwards). Timestamps are
 // RFC3339 strings; fetched_at is taken from the first row on read.
 
 function repoErr(prefix: string, e: unknown): QuotaError {

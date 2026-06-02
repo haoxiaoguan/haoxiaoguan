@@ -1,5 +1,5 @@
 // Kiro 模型映射（纯函数，无副作用）。把客户端给的模型名归一化到 Kiro CodeWhisperer 接受的形态。
-// 参考：参考实现 线协议模块 的 MODEL_ID_MAP / normalizeClaudeVersion / mapModelId（按线协议重写，不拷贝）。
+// 含模型 ID 映射表 / normalizeClaudeVersion / mapModelId（按线协议实现）。
 
 // 模型 ID 映射表：客户端别名 → Kiro 接受的点号版本。default 兜底用最新 sonnet。
 const MODEL_ID_MAP: Record<string, string> = {

@@ -32,11 +32,10 @@ export interface ImportAccountInput {
 }
 
 /**
- * AccountApplicationService — orchestrates account use cases.
- *
- * 对应 AccountApplicationService: import (two-phase write with
- * rollback), switch (deactivate current → inject → activate → persist), delete
- * (credential-first cascade), batch delete, filter, export, import-from-json.
+ * AccountApplicationService — orchestrates account use cases: import (two-phase
+ * write with rollback), switch (deactivate current → inject → activate →
+ * persist), delete (credential-first cascade), batch delete, filter, export,
+ * import-from-json.
  */
 export class AccountApplicationService {
   constructor(
@@ -48,7 +47,7 @@ export class AccountApplicationService {
   /**
    * Import: derive profile → duplicate check → create aggregate → persist
    * account → encrypt+store credential (rollback account row on credential
-   * failure). 对应 import_account.
+   * failure).
    */
   async importAccount(input: ImportAccountInput): Promise<Account> {
     const profile = profileFromImportMaterial(
@@ -183,7 +182,7 @@ export class AccountApplicationService {
 
   /**
    * Switch: load target → deactivate current active for platform → inject via
-   * SwitchService → activate target → persist. 对应 switch_account.
+   * SwitchService → activate target → persist.
    */
   async switchAccount(accountId: string): Promise<void> {
     const account = await this.accountRepo.findById(accountId)
@@ -206,7 +205,7 @@ export class AccountApplicationService {
 
   /**
    * Delete: verify exists → delete credential first (cascade) → delete account
-   * (tags cascade via DB FK). 对应 delete_account.
+   * (tags cascade via DB FK).
    */
   async deleteAccount(accountId: string): Promise<void> {
     const account = await this.accountRepo.findById(accountId)
@@ -219,7 +218,7 @@ export class AccountApplicationService {
 
   /**
    * Batch delete: iterate, skip NotFound, count successes; propagate any other
-   * error. 对应 batch_delete.
+   * error.
    */
   async batchDelete(accountIds: string[]): Promise<number> {
     let deleted = 0
@@ -237,7 +236,6 @@ export class AccountApplicationService {
 
   /**
    * Filter: platform+tags intersection / platform only / tags only / empty.
-   * 对应 filter_accounts.
    */
   async filterAccounts(
     platform: PlatformId | undefined,
@@ -260,7 +258,7 @@ export class AccountApplicationService {
 
   /**
    * Export: serialize accounts to ExportData; optionally decrypt+include
-   * credentials. 对应 export_accounts.
+   * credentials.
    */
   async exportAccounts(accountIds: string[], includeCredentials: boolean): Promise<ExportData> {
     const exportAccounts: ExportAccount[] = []
@@ -283,9 +281,8 @@ export class AccountApplicationService {
 
       exportAccounts.push({
         id: account.id,
-        // Source uses {:?} on PlatformId here (debug form), but the frontend id
-        // is the stable, round-trippable representation; import_from_json parses
-        // it case-insensitively. We emit the frontend id.
+        // The frontend id is the stable, round-trippable representation;
+        // import_from_json parses it case-insensitively. We emit the frontend id.
         platform: platformToFrontendId(parsePlatformAgent(account.agentId)),
         email: account.email,
         name: account.name?.asStr() ?? null,
@@ -308,7 +305,6 @@ export class AccountApplicationService {
   /**
    * Import-from-json: parse → validate required fields (id/platform/email) →
    * apply conflict strategy (skip/overwrite/keep_both) → import each.
-   * 对应 import_from_json.
    */
   async importFromJson(data: string, conflictStrategy: ConflictStrategy): Promise<ImportResult> {
     let exportData: ExportData
@@ -360,8 +356,8 @@ export class AccountApplicationService {
         continue
       }
 
-      // Conflict check uses the raw email as the identity (source passes
-      // export_account.email to exists_by_identifier, which normalizes it).
+      // Conflict check uses the raw email as the identity; existsByIdentifier
+      // normalizes it.
       let exists = false
       try {
         exists = await this.accountRepo.existsByIdentifier(platform, exportAccount.email)

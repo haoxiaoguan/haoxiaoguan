@@ -6,14 +6,12 @@ const DEFAULT_TICK_MS = 60_000
 const DEFAULT_CONCURRENCY = 4
 
 /**
- * TokenRefreshScheduler — periodic health-scan scheduler (source
- * application::token_refresh_scheduler). Ticks every 60s: enumerate all
- * accounts across all platforms and run ValidationService.validateBatch with
- * concurrency 4.
+ * TokenRefreshScheduler — periodic health-scan scheduler. Ticks every 60s:
+ * enumerate all accounts across all platforms and run
+ * ValidationService.validateBatch with concurrency 4.
  *
  * Currently a health-scan (no actual token refresh — deferred to capability
- * impls, matching the source). Uses setInterval + a guard flag for graceful
- * shutdown (the Electron equivalent of tokio watch channel).
+ * impls). Uses setInterval + a guard flag for graceful shutdown.
  */
 export class TokenRefreshScheduler {
   private timer: ReturnType<typeof setInterval> | null = null

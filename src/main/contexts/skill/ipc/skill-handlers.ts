@@ -8,7 +8,7 @@
 //     (install_skill_unified, toggle_skill_app, search_skills_sh,
 //      add_skill_repo, remove_skill_repo, import_skills_from_apps)
 //
-// Return casing: snake_case for skill context (对应).
+// Return casing: snake_case for skill context.
 
 import { ipcMain } from 'electron'
 import { dialog } from 'electron'

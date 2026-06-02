@@ -1,7 +1,7 @@
-// Sync error taxonomy — 对应 modules/sync/domain/error.rs.
+// Sync error taxonomy.
 //
-// Display messages are Chinese (shown directly to the user, matching the Rust
-// `Display`); localizedEn() provides the English equivalent for locale-aware
+// Display messages are Chinese (shown directly to the user);
+// localizedEn() provides the English equivalent for locale-aware
 // frontends. Network errors are sub-classed Timeout/Connect/Request so the
 // frontend can give targeted hints and persist last_error_source.
 //

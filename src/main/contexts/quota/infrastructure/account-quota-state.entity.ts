@@ -1,8 +1,8 @@
 import { Entity, ManyToOne, PrimaryKeyProp, Property } from '@mikro-orm/core'
 import { AccountEntity } from '../../account/infrastructure/account.entity'
 
-// account_quota_state table — single row per account (PK account_id). Mirrors
-// source sea-orm Model: summary columns (quota_status TEXT, primary_metric_key/
+// account_quota_state table — single row per account (PK account_id).
+// summary columns (quota_status TEXT, primary_metric_key/
 // primary_label/primary_value TEXT?, primary_percent REAL?, primary_unit TEXT,
 // reset_at/fetched_at TEXT?) plus quota_payload_json TEXT (sanitised
 // AccountQuotaState JSON). Upsert on conflict(account_id). FK → accounts ON

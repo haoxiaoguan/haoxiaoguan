@@ -4,8 +4,7 @@ import type { ImportedCredentialMaterial } from '../domain/capability-types'
 import type { ProviderRegistry } from '../domain/provider-registry'
 
 // ImportService — unified entry for the three non-OAuth import paths
-// (TokenJson / LocalScan / DeepLink). 对应
-// credential::application::import_service::ImportService.
+// (TokenJson / LocalScan / DeepLink).
 //
 // This service does NOT persist credentials — writing the envelope into the
 // CredentialRepository is the account import flow's job. It only normalises

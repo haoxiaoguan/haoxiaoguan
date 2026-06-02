@@ -1,7 +1,6 @@
 import type { JsonValue } from '../../account/domain/platform-account-profile'
 
 // Credential value object — decrypted secret material for an account.
-// 对应 credential::domain::credential::Credential.
 //
 // The JSON form uses snake_case (token / refresh_token / expires_at /
 // raw_metadata; expires_at is RFC3339). This is byte-for-byte identical to the
@@ -28,7 +27,7 @@ export class Credential {
     this.rawMetadata = rawMetadata
   }
 
-  /** True if expires_at is set and now >= it. Source Credential::is_expired. */
+  /** True if expires_at is set and now >= it. */
   isExpired(): boolean {
     if (!this.expiresAt) return false
     return new Date() >= this.expiresAt

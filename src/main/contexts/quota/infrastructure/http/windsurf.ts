@@ -1,4 +1,4 @@
-// Windsurf live quota fetch. 对应 quota/infrastructure/quota/windsurf.rs.
+// Windsurf live quota fetch.
 //
 // SeatManagementService GetCurrentUser/GetPlanStatus/GetUserStatus calls. The
 // snapshots are packed under copilot_quota_snapshots so the shared copilot parser

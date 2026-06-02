@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { parsePlatformLoose, type PlatformId } from '../../contexts/account/domain/platform-id'
 
 // Per-platform, per-OS candidate install locations for the editor/IDE/app each
-// account platform launches into. Ported from cockpit-tools' process detection.
+// account platform launches into.
 //
 // Conventions:
 //  - darwin entries are .app BUNDLE ROOTS (what we store + show); existence is

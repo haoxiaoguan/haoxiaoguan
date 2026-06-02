@@ -26,8 +26,7 @@ import {
 } from '../domain/webdav-client'
 
 // Sync orchestration — ties WebDAV client + crypto + SQL export/apply + skills
-// archive into the upload/download flows. 对应
-// modules/sync/application/sync_service.rs.
+// archive into the upload/download flows.
 //
 // upload:   export db.sql → pack skills.zip → wrap master key → compute manifest
 //           → ensure dirs → PUT artifacts then manifest.
@@ -279,8 +278,7 @@ async function getAndVerify(
 
 /**
  * Map a crypto-layer error to a SyncError. Decrypt failures become Password
- * errors (prompt re-entry); everything else is Crypto. Mirrors the Rust
- * `From<SyncCryptoError> for SyncError` conversion.
+ * errors (prompt re-entry); everything else is Crypto.
  */
 function mapCryptoError(e: unknown): never {
   if (e instanceof SyncCryptoError) {

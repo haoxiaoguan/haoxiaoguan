@@ -15,7 +15,7 @@ import type { QuotaApplicationService } from '../application/quota-service'
 //   refresh_quota, refresh_all_quotas, get_quota, get_quota_state,
 //   refresh_quota_state.
 // Each handler unwraps the renderer arg shape ({ accountId } — camelCase
-// top-level, matching the source Tauri invoke contract), calls the application
+// top-level), calls the application
 // service, reshapes the result to the camelCase wire DTO, and wraps thrown
 // errors via toIpcError so the rejection is a plain string.
 

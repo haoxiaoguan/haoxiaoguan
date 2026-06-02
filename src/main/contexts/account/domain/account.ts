@@ -3,7 +3,7 @@ import { Notes } from './notes'
 import { Tags } from './tags'
 import { PlatformAccountProfile, type JsonValue } from './platform-account-profile'
 
-// Domain event emitted by Account.activate(). Mirrors AccountSwitched.
+// Domain event emitted by Account.activate().
 export interface AccountSwitched {
   agentId: string
   accountId: string
@@ -36,7 +36,6 @@ function isPlainObject(value: JsonValue): value is { [key: string]: JsonValue } 
 }
 
 // Pull the first non-empty string/number/bool projection for the given keys.
-// Mirrors account.rs payload_string.
 function payloadString(payload: JsonValue, keys: string[]): string | undefined {
   if (!isPlainObject(payload)) return undefined
   for (const key of keys) {
@@ -218,7 +217,7 @@ export class Account {
 
   /**
    * Merge a new payload and re-derive login_provider/plan_name/plan_tier/
-   * status/status_reason. 对应 update_profile_payload.
+   * status/status_reason.
    */
   updateProfilePayload(nextPayload: JsonValue): void {
     if (isPlainObject(this._profilePayload) && isPlainObject(nextPayload)) {

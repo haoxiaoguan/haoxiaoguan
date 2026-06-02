@@ -1,4 +1,4 @@
-// PlatformAccountProfile value object — 对应 PlatformAccountProfile.
+// PlatformAccountProfile value object.
 //
 // Carries the platform-specific identity + sanitized metadata derived from raw
 // import material. identity_key is always lowercased+trimmed; the payload must
@@ -24,7 +24,7 @@ export interface PlatformProfileFields {
 }
 
 function normalizeIdentityKey(value: string): string {
-  // Rust: value.trim().to_ascii_lowercase()
+  // Trim, then ASCII-lowercase.
   return value.trim().toLowerCase()
 }
 
@@ -59,7 +59,7 @@ export class PlatformAccountProfile {
     this.profilePayload = fields.profilePayload
   }
 
-  /** Build a bare profile from a single identifier (source from_identifier). */
+  /** Build a bare profile from a single identifier. */
   static fromIdentifier(identifier: string): PlatformAccountProfile {
     const normalized = normalizeIdentityKey(identifier)
     return new PlatformAccountProfile({

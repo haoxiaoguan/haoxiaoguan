@@ -1,12 +1,11 @@
 import type { JsonValue } from './platform-account-profile'
 
 // Credential value object — the decrypted secret material for an account.
-// 对应 credential::domain::credential::Credential. This is the
-// plaintext that gets JSON-serialized and then envelope-encrypted before
-// storage in the credential context's `credentials` table.
+// This is the plaintext that gets JSON-serialized and then envelope-encrypted
+// before storage in the credential context's `credentials` table.
 //
-// Serialized field names use snake_case to mirror the source serde default
-// (token / refresh_token / expires_at / raw_metadata); expires_at is RFC3339.
+// Serialized field names use snake_case (token / refresh_token / expires_at /
+// raw_metadata); expires_at is RFC3339.
 
 export interface CredentialJson {
   token: string

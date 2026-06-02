@@ -12,7 +12,7 @@ import {
 import { AccountQuotaStateEntity } from './account-quota-state.entity'
 import { AccountEntity } from '../../account/infrastructure/account.entity'
 
-// MikroORM implementation of QuotaStateRepository (source SqliteQuotaStateRepository).
+// MikroORM implementation of QuotaStateRepository.
 //
 // save() upserts a single row keyed by account_id. The summary columns mirror
 // state.summary(account_id); quota_payload_json holds the sanitised

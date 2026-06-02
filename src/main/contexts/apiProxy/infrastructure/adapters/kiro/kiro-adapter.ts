@@ -132,7 +132,7 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
   }
 }
 
-// --- 路由解析辅助（参考 resolveProfileArn；优先级与 quota/http/kiro.ts 一致） ---
+// --- 路由解析辅助（profileArn 解析；优先级与 quota/http/kiro.ts 一致） ---
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined

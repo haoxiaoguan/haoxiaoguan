@@ -1,5 +1,5 @@
 // SwitchHistory domain — append-only record of switch operations.
-// 对应 switch_history_repository (TriggerType + SwitchHistoryEntry).
+// Defines TriggerType + SwitchHistoryEntry.
 
 import type { PlatformId } from './platform-id'
 

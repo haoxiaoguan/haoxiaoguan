@@ -5,7 +5,7 @@
 // ④ 全量 buffer 响应字节（禁逐 chunk，否则丢尾帧）→ parseKiroEventStream（M3a）；
 // ⑤ chat 折叠事件流为 CanonicalResponse，chatStream 逐个 yield 已解析事件（M3b 非真增量）。
 // 代理出站不在此层：KiroAdapter 用 runWithDispatcher 包住调用，defaultKiroFetch 读 currentDispatcher。
-// 鉴权头/端点/agentMode 参考：参考实现 线协议模块 的 getAuthHeaders/KIRO_ENDPOINTS（按线协议重写）。
+// 鉴权头/端点/agentMode 按线协议实现。
 import { release } from 'node:os'
 import { fetch as undiciFetch } from 'undici'
 import { currentDispatcher } from '../../../../../platform/net/dispatcher-context'
@@ -24,7 +24,7 @@ import type {
 // Amazon 可失效指纹（跟随官方 IDE / AWS SDK 更新；不硬编码进密钥，作模块级常量便于一处更新）。
 const AWS_SDK_VERSION = '1.0.34'
 const AWS_STREAMING_API_VERSION = '1.0.34'
-// 聊天端点专用 IDE 版本：来源参考 KIRO_VERSION（线协议模块），聊天端点可能拒旧版本。
+// 聊天端点专用 IDE 版本（聊天端点可能拒旧版本）。
 // 注意与 kiro-identity-client 的 KIRO_IDE_VERSION（额度路径 0.11.107）分离，互不影响。
 const KIRO_CHAT_IDE_VERSION = '0.12.155'
 const HTTP_TIMEOUT_MS = 120_000 // 聊天补全可能较慢，给足超时（额度 GET 用 25s，这里放宽）。
@@ -101,16 +101,16 @@ async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroF
   }
 }
 
-// --- UA 头构造（参考 getKiroUserAgent / getKiroAmzUserAgent） ---
+// --- UA 头构造 ---
 
 function osToken(): string {
   return `${process.platform}#${release()}`
 }
 
 function buildHeaders(ctx: KiroCallContext): Record<string, string> {
-  // 两个 UA 头格式不同（逐字对照参考 线协议模块）：
-  //   user-agent（getKiroUserAgent）后缀用破折号：`KiroIDE-${V}-${mid}`
-  //   x-amz-user-agent（getKiroAmzUserAgent）后缀用空格：`KiroIDE ${V} ${mid}`
+  // 两个 UA 头格式不同：
+  //   user-agent 后缀用破折号：`KiroIDE-${V}-${mid}`
+  //   x-amz-user-agent 后缀用空格：`KiroIDE ${V} ${mid}`
   const dashSuffix = `KiroIDE-${KIRO_CHAT_IDE_VERSION}-${ctx.machineId}`
   const spaceSuffix = `KiroIDE ${KIRO_CHAT_IDE_VERSION} ${ctx.machineId}`
   return {

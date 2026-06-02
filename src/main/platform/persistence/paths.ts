@@ -1,9 +1,9 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-// 对应 path_resolver: macOS ~/Library/Application Support/<name>,
+// macOS ~/Library/Application Support/<name>,
 // Linux ~/.config/<name>, Windows %APPDATA%\<name>. These target OTHER apps'
-// config dirs (Cursor, Kiro, ...), so they must match the source exactly.
+// config dirs (Cursor, Kiro, ...), so they must match those apps' conventions exactly.
 export function appSupportDir(name: string): string {
   const home = homedir()
   switch (process.platform) {

@@ -153,7 +153,7 @@ export const LOCAL_BACKUP_CHANNELS = {
   saveConfig: 'local_backup_save_config',
 } as const
 
-// Sync (WebDAV E2EE) context. Channel string VALUES are the exact source Tauri
+// Sync (WebDAV E2EE) context. Channel string VALUES are the canonical
 // command names (snake_case) per the sync manifest §3.
 export const SYNC_CHANNELS = {
   getConfig: 'webdav_get_config',
@@ -164,7 +164,7 @@ export const SYNC_CHANNELS = {
   fetchRemoteInfo: 'webdav_fetch_remote_info',
 } as const
 
-// WebSocket push-server context. Source Tauri command names get_ws_status /
+// WebSocket push-server context. Command names get_ws_status /
 // toggle_ws.
 export const WS_CHANNELS = {
   getWsStatus: 'get_ws_status',

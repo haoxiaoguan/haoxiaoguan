@@ -1,4 +1,4 @@
-// Cursor live quota fetch. 对应 quota/infrastructure/quota/cursor.rs.
+// Cursor live quota fetch.
 //
 // Token refresh (if JWT near-expiry) → GetUserMeta + stripe profile + usage
 // summary (cookie auth via WorkOS user_id from the JWT sub claim). Merges all
@@ -47,7 +47,7 @@ export async function fetch(
           refreshToken = pickStringHttp(token, [['refreshToken'], ['refresh_token']]) ?? refreshToken
         }
       } catch {
-        // refresh failures are non-fatal here (source uses `if let Ok(...)`)
+        // refresh failures are non-fatal here
       }
     }
   }

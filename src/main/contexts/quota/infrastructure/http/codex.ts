@@ -1,4 +1,4 @@
-// Codex live quota fetch. 对应 quota/infrastructure/quota/codex.rs.
+// Codex live quota fetch.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import { Credential } from '../../../account/domain/credential'

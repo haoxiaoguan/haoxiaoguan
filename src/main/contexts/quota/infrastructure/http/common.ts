@@ -1,9 +1,9 @@
-// Shared HTTP-fetcher helpers. 对应 quota/infrastructure/quota/common.rs.
+// Shared HTTP-fetcher helpers.
 //
 // All quota fetchers build a fresh request per call with a 25s timeout (via
 // AbortController). JWT decode is base64url (no verification). success_result
 // runs the per-platform profile parser to derive models from the normalised
-// state, exactly like the source.
+// state.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import { Credential } from '../../../account/domain/credential'
@@ -167,7 +167,7 @@ function isPlainObject(value: JsonValue | undefined): value is { [key: string]: 
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Shallow-merge two JSON objects (right wins). Mirrors common::merge_payload. */
+/** Shallow-merge two JSON objects (right wins). */
 export function mergePayload(left: JsonValue | undefined, right: JsonValue): JsonValue {
   const merged: { [key: string]: JsonValue } = isPlainObject(left) ? { ...left } : {}
   if (isPlainObject(right)) {

@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs'
 import Database from 'better-sqlite3'
 import { CredentialError } from '../domain/credential-error'
 
-// state.vscdb reader — 对应 read_vscdb_item (rusqlite). Opens a
-// VSCode-family ItemTable (key TEXT, value BLOB) sqlite file read-only and reads
-// a single key. Returns null when the file is absent or the key is missing.
+// state.vscdb reader. Opens a VSCode-family ItemTable (key TEXT, value BLOB)
+// sqlite file read-only and reads a single key. Returns null when the file is
+// absent or the key is missing.
 //
 // Uses better-sqlite3 (synchronous), the codebase's installed sqlite driver. The
 // DB may be locked by a running IDE; we open read-only to minimise contention.

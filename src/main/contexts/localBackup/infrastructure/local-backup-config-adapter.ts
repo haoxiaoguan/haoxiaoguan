@@ -1,6 +1,6 @@
 // LocalBackupConfigAdapter — reads/writes only the local_backup section of settings.json.
 // Uses SettingsFileService.mutate() for merge-write (does not clobber other sections).
-// Mirrors the Rust pattern: LocalBackupConfig lives inside AppSettings.local_backup.
+// LocalBackupConfig lives inside AppSettings.local_backup.
 
 import type { SettingsFileService } from '../../settings/infrastructure/settings-file-service'
 import { LocalBackupConfig } from '../domain/local-backup-config'

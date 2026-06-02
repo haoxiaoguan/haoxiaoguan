@@ -5,8 +5,7 @@ import type { ImportedCredentialMaterial } from '../../domain/capability-types'
 import { CredentialError } from '../../domain/credential-error'
 import { jwtClaimString, parseExpiresAt, pickString } from '../scan-helpers'
 
-// Generic token-JSON file-import capability. The source registers file-import as
-// a per-provider stub (UnsupportedSource), but the IPC channel + frontend
+// Generic token-JSON file-import capability. The IPC channel + frontend
 // contract (import_token_json) are real, so this provides a portable normaliser:
 // it parses pasted token JSON into ImportedCredentialMaterial, accepting the
 // common field spellings (access_token/accessToken/token, refresh_token, email,

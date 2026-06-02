@@ -1,7 +1,7 @@
 import { AccountError } from './account-error'
 import { byteLen } from './account-name'
 
-// Notes value object — max 256 bytes. 对应 Notes.
+// Notes value object — max 256 bytes.
 export class Notes {
   static readonly MAX_LENGTH = 256
 

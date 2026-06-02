@@ -2,14 +2,14 @@ import type { PlatformId } from '../../account/domain/platform-id'
 import { platformToAgentId } from '../../account/domain/platform-id'
 import type { ImportMethod } from './import-method'
 
-// Credential domain errors. 对应 CredentialError enum (13 variants).
+// Credential domain errors — CredentialError (13 variants).
 //
-// The source serialises with serde tag "kind" in snake_case, but the renderer's
-// catch blocks only ever see the stringified message (Tauri invoke rejects with a
-// string). Each `#[error(...)]` thiserror display string is reproduced
-// byte-for-byte so the renderer error handling behaves identically. The `kind`
-// and structured payload fields are kept as properties for any in-process
-// consumer (validation/import services) and for the IPC layer's discretion.
+// The error carries a "kind" tag in snake_case, but the renderer's catch blocks
+// only ever see the stringified message (IPC invoke rejects with a string). Each
+// display string is fixed so the renderer error handling behaves consistently.
+// The `kind` and structured payload fields are kept as properties for any
+// in-process consumer (validation/import services) and for the IPC layer's
+// discretion.
 
 export type CredentialErrorKind =
   | 'invalid_credential'

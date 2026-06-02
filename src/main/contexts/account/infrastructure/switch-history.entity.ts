@@ -1,6 +1,6 @@
 import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/core'
 
-// switch_history table — append-only audit log. 对应 sea-orm Model.
+// switch_history table — append-only audit log.
 // id INTEGER PK AUTOINCREMENT; account_id/agent_id/trigger_type TEXT; success
 // BOOL; error_message TEXT?; switched_at RFC3339 STRING. Index on switched_at.
 

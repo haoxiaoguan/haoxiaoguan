@@ -17,12 +17,11 @@ import type {
 import { CredentialError } from '../../domain/credential-error'
 import { jwtPayload, parseExpiresAt, pickString } from '../scan-helpers'
 
-// Kiro OAuth capability — ported from quota/infrastructure/oauth/Rust模块 onto the
-// platform LoopbackServer (replaces Rust tiny_http + busy-poll). start_oauth
-// binds a candidate port, builds the app.kiro.dev/signin authorize URL (PKCE
-// S256), and registers the /oauth/callback route. complete_oauth awaits the
-// callback Promise (event-driven, no polling), then POSTs the code to the Kiro
-// token endpoint and normalises the response.
+// Kiro OAuth capability built on the platform LoopbackServer (event-driven, no
+// busy-poll). start_oauth binds a candidate port, builds the app.kiro.dev/signin
+// authorize URL (PKCE S256), and registers the /oauth/callback route.
+// complete_oauth awaits the callback Promise (event-driven, no polling), then
+// POSTs the code to the Kiro token endpoint and normalises the response.
 //
 // Token endpoint overridable via HAOXIAOGUAN_KIRO_TOKEN_ENDPOINT.
 

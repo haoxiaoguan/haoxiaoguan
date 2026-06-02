@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
-// Reusable OAuth loopback HTTP server (replaces Rust tiny_http + oneshot).
+// Reusable OAuth loopback HTTP server.
 //
-// 对应 OAuthCallbackServer (map_primitives.md):
+// Behavior:
 //  - binds 127.0.0.1 on the first free port from a candidate list (EADDRINUSE
 //    is treated as "try next", any other error rejects),
 //  - registerPath(path) returns a Promise that resolves with the URL-decoded

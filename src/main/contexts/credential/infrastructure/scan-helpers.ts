@@ -1,9 +1,8 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-// Shared helpers for credential capabilities — 对应 quota
-// local/common.rs + oauth/common.rs portable utilities (JWT decode, path
-// resolution, pick_string). No network, no electron import.
+// Shared helpers for credential capabilities — portable utilities (JWT decode,
+// path resolution, pick_string). No network, no electron import.
 
 export interface JsonObject {
   [key: string]: unknown
@@ -31,7 +30,7 @@ export function jwtClaimString(token: string, key: string): string | undefined {
 
 /**
  * pick_string — walk a list of key paths against a root object, returning the
- * first string/number value found. Mirrors the Rust pick_string helper.
+ * first string/number value found.
  */
 export function pickString(root: unknown, paths: string[][]): string | undefined {
   if (root === null || root === undefined) return undefined
@@ -57,13 +56,13 @@ export function pickString(root: unknown, paths: string[][]): string | undefined
   return undefined
 }
 
-/** Home directory (mirrors home_dir). */
+/** Home directory. */
 export function homeDir(): string {
   return homedir()
 }
 
 /**
- * Cross-OS app data dir for ANOTHER app's config (对应 app_data_dir):
+ * Cross-OS app data dir for ANOTHER app's config:
  *   macOS  ~/Library/Application Support/<name>
  *   Windows %APPDATA%/<name>
  *   Linux  $XDG_CONFIG_HOME/<name> or ~/.config/<name>

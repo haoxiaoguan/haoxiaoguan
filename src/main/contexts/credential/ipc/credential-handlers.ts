@@ -22,7 +22,7 @@ import type { ValidationService } from '../application/validation-service'
 // concurrency). Returns are snake_case (pending_id, access_token, checked_at,
 // account_id) — the *ToJson helpers produce the exact wire shapes. state and
 // code_verifier are stripped from OAuthPending. Every handler wraps thrown errors
-// with toIpcError so the rejection is a plain string (Tauri parity).
+// with toIpcError so the rejection is a plain string.
 
 export interface CredentialServices {
   oauthService: OAuthService

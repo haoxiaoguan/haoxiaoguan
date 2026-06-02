@@ -1,6 +1,6 @@
 // HttpLiveQuotaFetcher — dispatches a live HTTP quota fetch per platform.
 //
-// 对应 quota/infrastructure/quota/mod.rs. Antigravity and the 5
+// Antigravity and the 5
 // CLI-only agents (claude/claude_desktop/gemini/opencode/hermes) return an
 // Unsupported result. Each platform module handles its own token refresh inline.
 

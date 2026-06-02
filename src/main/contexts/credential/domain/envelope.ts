@@ -4,11 +4,10 @@ import type { PlatformId } from '../../account/domain/platform-id'
 
 // CredentialEnvelope domain — the persisted, encrypted form of a credential.
 //
-// IMPORTANT (spec §5.2 + CONVENTIONS): the Electron port uses the platform
-// CryptoService whose AAD is the JSON bytes of {provider, accountId, createdAt}
-// (NOT Rust bincode). There is no data-compat requirement with old Tauri
-// envelopes, so we adopt the portable platform envelope shape rather than
-// re-implementing bincode. The persisted JSON column (`envelope_json`) wraps the
+// IMPORTANT (spec §5.2 + CONVENTIONS): uses the platform CryptoService whose AAD
+// is the JSON bytes of {provider, accountId, createdAt}. There is no data-compat
+// requirement with any legacy envelope format, so we adopt the portable platform
+// envelope shape. The persisted JSON column (`envelope_json`) wraps the
 // platform CryptoService envelope plus its AAD so decryption is self-contained:
 //
 //   { aad: { provider, accountId, createdAt }, envelope: { v, iv, ciphertext, tag } }

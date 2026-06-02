@@ -1,6 +1,6 @@
 // AWS CodeWhisperer（Kiro 上游）线格式 TS 类型。M3a 多个 kiro 模块共享。
-// 参考：参考实现 线协议模块 的 KiroPayload / KiroUserInputMessage / KiroHistoryMessage 等
-// （按线协议重写，剔除 cachePoint/documents/editorState 等本里程碑不用的字段）。
+// 含 payload / userInputMessage / historyMessage 等线协议类型
+// （按线协议实现，剔除 cachePoint/documents/editorState 等本里程碑不用的字段）。
 
 /** Kiro 图片格式（与 CodeWhisperer 取值一致；IR mediaType 'image/png' 等映射到此短名）。 */
 export type KiroImageFormat = 'png' | 'jpeg' | 'gif' | 'webp'

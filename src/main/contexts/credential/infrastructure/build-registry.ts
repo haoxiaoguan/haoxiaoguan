@@ -16,11 +16,10 @@ import {
   type VsCodeSecretScanConfig,
 } from './capabilities/vscode-secret-local-import'
 
-// build-registry — assembles the credential ProviderRegistry. 对应
-// build_default_registry: register the real capabilities, leaving providers
-// without an implementation to surface a typed UnsupportedSource error from the
-// services (the source uses explicit stubs; here an absent map entry is the
-// equivalent and avoids dead stub objects).
+// build-registry — assembles the credential ProviderRegistry: register the real
+// capabilities, leaving providers without an implementation to surface a typed
+// UnsupportedSource error from the services (an absent map entry is the
+// equivalent of a stub and avoids dead stub objects).
 //
 // Implemented for real:
 //   - OAuth:        cursor (poll), kiro (loopback), github_copilot (device flow)
@@ -31,12 +30,12 @@ import {
 //   - TokenJson:    all 12 importable providers (generic normaliser)
 //   - DeepLink:     all 12 importable providers (haoxiaoguan://import/... parser)
 //
-// OAuth for windsurf/trae/zed/qoder/codebuddy(_cn)/gemini/codex is NOT ported
-// (their authorize URLs / token endpoints carry provider-specific client ids and
-// signing the source obtains from live endpoints) — those start_oauth calls
-// surface UnsupportedSource until ported. See manifest TODO(verify).
+// OAuth for windsurf/trae/zed/qoder/codebuddy(_cn)/gemini/codex is NOT yet
+// implemented (their authorize URLs / token endpoints carry provider-specific
+// client ids and signing obtained from live endpoints) — those start_oauth calls
+// surface UnsupportedSource until implemented. See manifest TODO(verify).
 
-// The 12 importable platforms (commands.rs parse_platform set).
+// The 12 importable platforms.
 const IMPORTABLE: readonly PlatformId[] = [
   'cursor',
   'windsurf',
@@ -53,8 +52,8 @@ const IMPORTABLE: readonly PlatformId[] = [
 ]
 
 // VSCode-family SecretStorage scan configs. The extension-id/secret-key values
-// mirror the source local scanners where known; entries marked TODO(verify)
-// use the best-known shape and should be confirmed against a live install.
+// use the known shape where confirmed; entries marked TODO(verify) use the
+// best-known shape and should be confirmed against a live install.
 const VSCODE_SECRET_CONFIGS: VsCodeSecretScanConfig[] = [
   // TODO(verify): exact extensionId/secretKey per provider against a live install.
   { platform: 'windsurf', appDir: 'Windsurf', extensionId: 'codeium.windsurf', secretKey: 'windsurf.auth', mode: 'default' },

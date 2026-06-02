@@ -2,7 +2,7 @@ import { SyncError, type NetworkKind } from '../domain/sync-error'
 import type { WebDavAuth, WebDavClient } from '../domain/webdav-client'
 
 // FetchWebDavClient — Node `fetch`-based WebDAV client.
-// 对应 modules/sync/infrastructure/reqwest_webdav.rs:
+// Behavior:
 //   - custom PROPFIND / MKCOL methods + standard PUT / GET / HEAD,
 //   - tiered timeouts (30s for PROPFIND/MKCOL/HEAD, 300s for PUT/GET) via
 //     AbortController,

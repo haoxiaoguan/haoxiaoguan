@@ -6,17 +6,17 @@ import { jwtClaimString, parseExpiresAt, pickString, stateVscdbPath } from '../s
 import { decodeSecretStorageValue, type SafeStorageMode } from '../vscode-secret-storage'
 import { buildSecretStorageItemKey, normalizeNonEmpty, readVscdbItem } from '../vscdb-reader'
 
-// Generic VSCode-family SecretStorage local-import capability. Mirrors the shared
-// pattern used by the Rust VSCode-family local scanners (Windsurf, Kiro,
-// Codebuddy, Qoder, Trae, Antigravity, GitHub Copilot): read a secret:// key from
-// the app's state.vscdb, decrypt it via the SafeStorage AES-128-CBC path, then
-// normalise the decrypted JSON token blob.
+// Generic VSCode-family SecretStorage local-import capability. Implements the
+// shared pattern for VSCode-family local scanners (Windsurf, Kiro, Codebuddy,
+// Qoder, Trae, Antigravity, GitHub Copilot): read a secret:// key from the app's
+// state.vscdb, decrypt it via the SafeStorage AES-128-CBC path, then normalise
+// the decrypted JSON token blob.
 //
 // Each provider supplies its app dir, extension id, secret key, and SafeStorage
-// mode. The exact extension-id/key/auth-shape varies per provider in the source;
-// this generic reader covers the common "decrypt secret → parse token JSON"
-// path. Providers whose source scanner has bespoke multi-key logic are wired with
-// the closest matching config and flagged in the manifest as // TODO(verify).
+// mode. The exact extension-id/key/auth-shape varies per provider; this generic
+// reader covers the common "decrypt secret → parse token JSON" path. Providers
+// whose scanner needs bespoke multi-key logic are wired with the closest matching
+// config and flagged in the manifest as // TODO(verify).
 
 export interface VsCodeSecretScanConfig {
   platform: PlatformId

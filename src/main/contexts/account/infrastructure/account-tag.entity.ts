@@ -7,8 +7,8 @@ import { AccountEntity } from './account.entity'
 
 @Entity({ tableName: 'account_tags' })
 export class AccountTagEntity {
-  // ManyToOne with the FK column named account_id; deleteRule cascade mirrors
-  // the source ON DELETE CASCADE.
+  // ManyToOne with the FK column named account_id; deleteRule cascade maps to
+  // ON DELETE CASCADE.
   @ManyToOne(() => AccountEntity, {
     fieldName: 'account_id',
     deleteRule: 'cascade',

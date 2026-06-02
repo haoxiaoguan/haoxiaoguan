@@ -2,7 +2,7 @@ import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/core'
 
 // credentials table — OWNED BY THE CREDENTIAL CONTEXT (authoritative entity).
 //
-// 对应 sea-orm credential_entity Model exactly:
+// Columns:
 //   account_id TEXT PK, envelope_json TEXT, key_id TEXT, version INT, updated_at
 //   TEXT (RFC3339). FK → accounts ON DELETE CASCADE (cascade relies on
 //   PRAGMA foreign_keys = ON, set in platform/persistence/database.ts).

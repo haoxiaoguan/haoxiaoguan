@@ -1,8 +1,7 @@
 // Quota-state dispatch — fromAccountProfile + fromFetchResultForPlatform.
 //
-// 对应 quota_state.rs from_account_profile / from_fetch_result_for_platform.
-// Re-exports the model + types so consumers import from one place
-// (the TS analogue of the Rust quota_state module root).
+// Re-exports the model + types so consumers import the quota-state module from
+// one place.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import type { PlatformId } from '../platform-id'
@@ -36,8 +35,8 @@ function isJsonNull(value: JsonValue): boolean {
 }
 
 /**
- * Dispatch profile-payload parsing per platform. 对应
- * from_account_profile. Antigravity + the 5 CLI-only agents return undefined.
+ * Dispatch profile-payload parsing per platform.
+ * Antigravity + the 5 CLI-only agents return undefined.
  */
 export function fromAccountProfile(
   platform: PlatformId,
@@ -73,8 +72,7 @@ export function fromAccountProfile(
 
 /**
  * Build state from a live fetch result, preferring the per-platform profile
- * parser when provider_payload is a non-empty object. 对应
- * from_fetch_result_for_platform.
+ * parser when provider_payload is a non-empty object.
  */
 export function fromFetchResultForPlatform(
   platform: PlatformId,

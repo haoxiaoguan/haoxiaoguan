@@ -9,8 +9,7 @@ import type {
 } from '../../domain/capability-types'
 import { CredentialError } from '../../domain/credential-error'
 
-// GitHub Copilot OAuth capability — ported from
-// quota/infrastructure/oauth/github_copilot.rs. Uses GitHub's device flow:
+// GitHub Copilot OAuth capability. Uses GitHub's device flow:
 // start_oauth requests a device code (returns the verification URI as the
 // authorize URL + the user_code as state); complete_oauth polls the token
 // endpoint until the user authorises, then fetches the GitHub user + Copilot

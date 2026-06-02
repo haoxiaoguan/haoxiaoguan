@@ -2,12 +2,11 @@ import type { JsonValue } from '../../account/domain/platform-account-profile'
 import type { PlatformId } from '../../account/domain/platform-id'
 import { platformToAgentId } from '../../account/domain/platform-id'
 
-// Shared credential capability DTOs — 对应
-// quota::domain::capabilities value objects that the credential module depends
+// Shared credential capability value objects that the credential module depends
 // on (OAuthMode, OAuthPending, ImportSource, ImportedCredentialMaterial,
-// ValidationState, CredentialValidationResult). In the Rust source these live in
-// the quota module; here they live with the credential context that owns the
-// import/oauth flows. The quota context (when ported) re-uses these types.
+// ValidationState, CredentialValidationResult). They live with the credential
+// context that owns the import/oauth flows; the quota context re-uses these
+// types.
 
 // ---------------------------------------------------------------------------
 // OAuth

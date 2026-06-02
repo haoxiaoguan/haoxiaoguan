@@ -58,9 +58,8 @@ const DEFAULT_REMOTE_ROOT = 'haoxiaoguan-sync'
 const DEFAULT_PROFILE = 'default'
 
 /**
- * WebDAV sync configuration (no passwords). Default factory 对应
- * `WebdavConfig::default()` (`enabled=false`, `remoteRoot='haoxiaoguan-sync'`,
- * `profile='default'`).
+ * WebDAV sync configuration (no passwords). Default factory yields
+ * `enabled=false`, `remoteRoot='haoxiaoguan-sync'`, `profile='default'`.
  */
 export class WebdavConfig {
   enabled: boolean

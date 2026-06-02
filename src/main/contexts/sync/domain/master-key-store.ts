@@ -1,7 +1,6 @@
 import { SyncError } from './sync-error'
 
 // MasterKeyStore — port for reading/writing the 32-byte global encryption key.
-// 对应 modules/sync/domain/master_key_store.rs.
 //
 // On upload, load() returns the runtime master key to wrap into master.key.enc;
 // on download (cross-device restore) store() writes the recovered key back. The

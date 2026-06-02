@@ -27,7 +27,7 @@ function parseProfilePayload(json: string): JsonValue {
 }
 
 /**
- * MikroORM implementation of AccountRepository (source SqliteAccountRepository).
+ * MikroORM implementation of AccountRepository.
  *
  * Write path uses a transaction: upsert the accounts row + replace account_tags
  * wholesale (delete-then-insert). Reads reconstruct the Account aggregate via

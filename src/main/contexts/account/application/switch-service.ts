@@ -3,14 +3,14 @@ import { AccountError } from '../domain/account-error'
 import { platformFromAgentIdOrCursor } from '../domain/platform-id'
 import type { CredentialStorePort, CredentialInjectorRegistry } from '../domain/ports'
 
-// Result of a switch operation. 对应 SwitchResult.
+// Result of a switch operation.
 export interface SwitchResult {
   success: boolean
   platformLaunched: boolean
 }
 
 /**
- * SwitchService — core switch business logic (source domain::switch_service).
+ * SwitchService — core switch business logic.
  *
  * Steps: retrieve encrypted credential → decrypt → validate not expired → get
  * platform injector → inject into platform config file. Atomic: any failure

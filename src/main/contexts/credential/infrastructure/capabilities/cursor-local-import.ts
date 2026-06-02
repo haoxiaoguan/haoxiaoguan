@@ -5,8 +5,7 @@ import type { ImportedCredentialMaterial } from '../../domain/capability-types'
 import { normalizeNonEmpty, readVscdbItem } from '../vscdb-reader'
 import { stateVscdbPath } from '../scan-helpers'
 
-// Cursor local-scan capability — ported 1:1 from the Rust
-// quota/infrastructure/local/cursor.rs. Reads cursorAuth/* keys from Cursor's
+// Cursor local-scan capability. Reads cursorAuth/* keys from Cursor's
 // state.vscdb. Requires accessToken + cachedEmail; returns [] otherwise.
 
 const CURSOR_APP_DIR = 'Cursor'

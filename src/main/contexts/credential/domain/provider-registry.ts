@@ -7,8 +7,7 @@ import type {
   OAuthCapability,
 } from './capabilities'
 
-// ProviderRegistry — per-platform capability lookup. 对应
-// quota::domain::provider_registry::ProviderRegistry. OAuthService / ImportService
+// ProviderRegistry — per-platform capability lookup. OAuthService / ImportService
 // resolve a capability by PlatformId; a missing entry yields undefined, which the
 // services translate into a typed UnsupportedSource error.
 

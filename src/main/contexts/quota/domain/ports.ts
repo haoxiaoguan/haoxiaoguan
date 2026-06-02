@@ -1,7 +1,7 @@
 // Domain repository ports + cross-context ports for the quota application service.
 //
-// 对应: QuotaCacheRepository, QuotaStateRepository, LiveQuotaFetcher,
-// plus the slices of AccountRepository / CredentialRepository / CryptoServiceTrait
+// Defines QuotaCacheRepository, QuotaStateRepository, LiveQuotaFetcher,
+// plus the slices of the account / credential / crypto services
 // the quota service depends on. The account/credential contexts implement the
 // cross-context ports; quota implements the two cache repositories itself.
 
@@ -28,7 +28,7 @@ export interface QuotaStateRepository {
   delete(accountId: string): Promise<void>
 }
 
-/** Live quota fetch request. 对应 QuotaFetchRequest. */
+/** Live quota fetch request. */
 export interface QuotaFetchRequest {
   accountId: string
   platform: PlatformId
@@ -36,7 +36,7 @@ export interface QuotaFetchRequest {
   profilePayload: JsonValue
 }
 
-/** Dispatches a per-platform live HTTP fetch. 对应 LiveQuotaFetcher. */
+/** Dispatches a per-platform live HTTP fetch. */
 export interface LiveQuotaFetcher {
   fetch(request: QuotaFetchRequest): Promise<QuotaFetchResult>
 }

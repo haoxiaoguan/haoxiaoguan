@@ -31,8 +31,7 @@ import {
 } from './helpers'
 
 // ---------------------------------------------------------------------------
-// Per-platform profile derivation. Faithful 1:1 port of the source
-// platform_profile/<platform>.rs modules. Each returns a PlatformAccountProfile
+// Per-platform profile derivation. Each function returns a PlatformAccountProfile
 // with the identity, plan/status fields, and a sanitized profile payload.
 // ---------------------------------------------------------------------------
 
@@ -961,9 +960,8 @@ function zedProfile(email: string, raw: JsonValue | undefined, tokenHint: string
 }
 
 /**
- * Dispatch to the platform-specific profile derivation, mirroring source
- * platform_profile::profile_from_import_material. Non-importable platforms fall
- * back to a bare identity profile (source `_ => from_identifier(email)`).
+ * Dispatch to the platform-specific profile derivation. Non-importable platforms
+ * fall back to a bare identity profile built from the email.
  */
 export function profileFromImportMaterial(
   platform: PlatformId,

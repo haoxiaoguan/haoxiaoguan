@@ -1,7 +1,7 @@
 // AWS vnd.amazon.eventstream 帧解析（纯函数）。把 CodeWhisperer 流式响应字节解成 CanonicalStreamEvent[]。
 // 帧布局：4B 总长(BE) | 4B 头长(BE) | 4B prelude CRC | headers | JSON payload | 4B msg CRC。
 // header 项：1B nameLen | name | 1B valueType | value（valueType=7 为 string：2B len | bytes）。
-// 参考：参考实现 线协议模块 的 parseEventStream/extractEventType（按线协议重写，剔除 token 估算/tiktoken/UI 事件）。
+// AWS event-stream 帧解析 / event-type 提取（按线协议实现，不含 token 估算/UI 事件）。
 import type { CanonicalStreamEvent, StopReason, Usage } from '../../../domain/canonical'
 
 const PRELUDE_BYTES = 12 // 4B 总长 + 4B 头长 + 4B prelude CRC

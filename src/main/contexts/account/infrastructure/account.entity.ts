@@ -1,13 +1,13 @@
 import { Entity, PrimaryKey, Property, Unique, Index } from '@mikro-orm/core'
 
-// accounts table — 对应 sea-orm Model exactly.
+// accounts table.
 //
 // Columns are all TEXT except is_active (boolean). Timestamps are RFC3339
-// STRINGS (created_at / last_used_at), NOT integers — per the source and the
-// migration convention (accounts/credentials use ISO strings). profile_payload
-// is stored as a JSON string in a TEXT column (profile_payload_json), matching
-// the source; we keep it as a string here and (de)serialize in the repository
-// to preserve byte-for-byte column shape.
+// STRINGS (created_at / last_used_at), NOT integers — per the migration
+// convention (accounts/credentials use ISO strings). profile_payload is stored
+// as a JSON string in a TEXT column (profile_payload_json); we keep it as a
+// string here and (de)serialize in the repository to preserve byte-for-byte
+// column shape.
 //
 // Indexes: UNIQUE (agent_id, identity_key); INDEX (agent_id, is_active) — per
 // map_frontend_ipc infrastructure notes.

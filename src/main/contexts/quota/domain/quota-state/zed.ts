@@ -1,4 +1,4 @@
-// Zed profile-payload parser. 对应 quota_state/zed.rs.
+// Zed profile-payload parser.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import {

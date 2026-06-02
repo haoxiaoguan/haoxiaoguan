@@ -7,11 +7,11 @@ import type {
 } from './capability-types'
 import type { StoredEnvelope } from './envelope'
 
-// Credential capability traits — 对应 quota::domain::capabilities
-// async traits that the credential module dispatches through ProviderRegistry.
-// Each provider implements only the capabilities it supports; the registry
-// returns undefined when a provider has no implementation for a capability,
-// which the application services translate into a typed UnsupportedSource error.
+// Credential capability interfaces that the credential module dispatches through
+// ProviderRegistry. Each provider implements only the capabilities it supports;
+// the registry returns undefined when a provider has no implementation for a
+// capability, which the application services translate into a typed
+// UnsupportedSource error.
 
 /** OAuth capability: start authorization + exchange callback for tokens. */
 export interface OAuthCapability {

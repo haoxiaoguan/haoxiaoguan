@@ -1,14 +1,12 @@
 import type { PlatformId } from '../domain/platform-id'
 import type { JsonValue } from '../domain/platform-account-profile'
 
-// Capability ports for validation / quota / health. These mirror the source
-// ProviderRegistry capability traits (CredentialValidationCapability,
-// QuotaFetchCapability) and are implemented by the quota/agents layers at
-// integration. Defined here as consumer ports so the account application
-// services compile and unit-test in isolation.
+// Capability ports for validation / quota / health (CredentialValidationCapability,
+// QuotaFetchCapability), implemented by the quota/agents layers at integration.
+// Defined here as consumer ports so the account application services compile and
+// unit-test in isolation.
 
-// ValidationState — 8-state enum from the source capabilities module. Wire form
-// is snake_case (serde rename_all = "snake_case").
+// ValidationState — 8-state enum. Wire form is snake_case.
 export type ValidationState =
   | 'valid'
   | 'expired'
@@ -20,7 +18,7 @@ export type ValidationState =
   | 'pending'
 
 // CredentialValidationResult — wire shape is snake_case (health/credential
-// services use snake_case per map_frontend_ipc).
+// services use snake_case on the wire).
 export interface CredentialValidationResult {
   state: ValidationState
   checked_at: string
@@ -44,7 +42,7 @@ export interface QuotaFetchResult {
   error?: string
 }
 
-// HealthSnapshot — wire shape snake_case. 对应 HealthSnapshot.
+// HealthSnapshot — wire shape snake_case.
 export interface HealthSnapshot {
   account_id: string
   validation: CredentialValidationResult

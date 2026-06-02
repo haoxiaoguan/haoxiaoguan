@@ -1,4 +1,4 @@
-// Cursor profile-payload parser. 对应 quota_state/cursor.rs.
+// Cursor profile-payload parser.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import {

@@ -5,8 +5,7 @@ import type { ImportedCredentialMaterial, OAuthMode, OAuthPending } from '../dom
 import type { ProviderRegistry } from '../domain/provider-registry'
 import type { PendingOAuth, PendingOAuthRepository } from '../domain/pending-repository'
 
-// OAuthService — cross-provider OAuth flow orchestrator. 对应
-// credential::application::oauth_service::OAuthService.
+// OAuthService — cross-provider OAuth flow orchestrator.
 //
 // Responsibilities:
 //   1. dispatch to the provider's OAuthCapability to start the flow + build the

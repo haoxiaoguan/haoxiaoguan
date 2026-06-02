@@ -1,8 +1,8 @@
-// Account domain errors. 对应 AccountError enum.
+// Account domain errors.
 //
 // In the IPC layer these are stringified via toIpcError(); the message strings
-// here match the source thiserror #[error(...)] formats byte-for-byte so the
-// renderer's error-handling (which only sees strings) behaves identically.
+// here match the wire error formats byte-for-byte so the renderer's
+// error-handling (which only sees strings) behaves identically.
 
 export type AccountErrorKind =
   | 'NameTooLong'

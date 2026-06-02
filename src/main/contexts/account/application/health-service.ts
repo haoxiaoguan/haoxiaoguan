@@ -9,9 +9,9 @@ import type {
 /**
  * AccountHealthService — combine validation + quota into one HealthSnapshot.
  *
- * 对应 AccountHealthService::snapshot: run validation; if Valid, also
- * fetch quota. Validation errors are normalized to UnknownError rather than
- * propagated, so a missing capability never crashes the health call.
+ * Run validation; if Valid, also fetch quota. Validation errors are normalized
+ * to UnknownError rather than propagated, so a missing capability never crashes
+ * the health call.
  */
 export class AccountHealthService {
   constructor(

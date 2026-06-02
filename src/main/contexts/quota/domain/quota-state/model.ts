@@ -1,8 +1,8 @@
 // Quota-state normalisation model + shared helpers.
 //
-// 对应 modules/quota/domain/quota_state.rs (the parts NOT specific to a
-// single platform). Per-platform parsers live in ./<platform>.ts and import the
-// helpers exported here (the TS equivalent of Rust `use super::*`).
+// Holds the parts NOT specific to a
+// single platform. Per-platform parsers live in ./<platform>.ts and import the
+// helpers exported here.
 //
 // Enum wire forms are snake_case; QuotaMetric/AccountQuotaState serialise camelCase
 // at the IPC boundary (the handler/response layer maps Date → RFC3339 string and
@@ -89,13 +89,13 @@ export class AccountQuotaState {
     this.providerPayload = fields.providerPayload
   }
 
-  /** Strip sensitive keys from providerPayload, in place. Source sanitized(). */
+  /** Strip sensitive keys from providerPayload, in place. */
   sanitized(): AccountQuotaState {
     this.providerPayload = sanitizeProviderPayload(this.providerPayload)
     return this
   }
 
-  /** Column projection for account_quota_state. Source summary(account_id). */
+  /** Column projection for account_quota_state. */
   summary(accountId: string): AccountQuotaSummary {
     const primary =
       (this.primaryMetricKey !== undefined
@@ -117,7 +117,7 @@ export class AccountQuotaState {
     }
   }
 
-  /** Build from the legacy per-model QuotaInfo. Source from_legacy_quota. */
+  /** Build from the legacy per-model QuotaInfo. */
   static fromLegacyQuota(quota: QuotaInfo): AccountQuotaState {
     const metrics = quota.models.map(metricFromModel)
     const primary = choosePrimaryMetric(metrics)
@@ -132,7 +132,7 @@ export class AccountQuotaState {
     })
   }
 
-  /** Build from a generic (non-platform-routed) fetch result. Source from_fetch_result. */
+  /** Build from a generic (non-platform-routed) fetch result. */
   static fromFetchResult(result: QuotaFetchResult): AccountQuotaState {
     if (result.outcome === 'success' || result.outcome === 'stale') {
       const quota: QuotaInfo = {
@@ -486,7 +486,7 @@ function formatCompactNumber(value: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// JSON path pickers (object-key-first traversal — matches quota_state get_path_value).
+// JSON path pickers (object-key-first traversal).
 // ---------------------------------------------------------------------------
 
 function isPlainObject(value: JsonValue | undefined): value is { [key: string]: JsonValue } {

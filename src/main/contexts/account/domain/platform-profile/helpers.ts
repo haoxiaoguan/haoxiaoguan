@@ -2,10 +2,9 @@ import { createHash } from 'node:crypto'
 import { PlatformAccountProfile, type JsonValue } from '../platform-account-profile'
 import { type PlatformId, platformIdentityPrefix } from '../platform-id'
 
-// Shared profile-derivation helpers. Faithful port of the source
-// `platform_profile` mod.rs free functions. These operate on a JSON value tree
-// (raw_metadata) using path lookups; numbers/strings/bools are coerced exactly
-// as the Rust pick_* helpers do.
+// Shared profile-derivation helpers. These operate on a JSON value tree
+// (raw_metadata) using path lookups; numbers/strings/bools are coerced via the
+// pick_* helpers.
 
 type JsonObject = { [key: string]: JsonValue }
 
@@ -18,7 +17,6 @@ export function emptyPayload(): JsonValue {
 }
 
 // Resolve a path (object keys or numeric array indices) into the tree.
-// Mirrors get_path_value.
 export function getPathValue(root: JsonValue | undefined, path: string[]): JsonValue | undefined {
   if (root === undefined) return undefined
   let current: JsonValue = root
@@ -45,7 +43,7 @@ export function normalizeNonEmpty(value: string): string | undefined {
 }
 
 // pick_string: first path yielding a non-empty string, or an integer coerced to
-// its decimal string. Mirrors Rust (as_str→trim→non-empty; as_i64; as_u64).
+// its decimal string (as_str→trim→non-empty; as_i64; as_u64).
 export function pickString(root: JsonValue | undefined, paths: string[][]): string | undefined {
   if (root === undefined) return undefined
   for (const path of paths) {
@@ -400,7 +398,7 @@ export function upsertReferenceTimestamps(payload: { value: JsonValue }, raw: Js
 }
 
 // A mutable payload cell, so the upsert_* helpers can reassign when the value
-// is not an object (mirrors Rust's `&mut Value`).
+// is not an object.
 export type PayloadCell = { value: JsonValue }
 
 export function makeProfile(fields: {

@@ -1,6 +1,6 @@
 // QuotaApplicationService — orchestrates quota refresh, caching, and normalisation.
 //
-// 对应 modules/quota/application/quota_service.rs. Use cases:
+// Use cases:
 //  - refreshQuota: load account → decrypt credential → live fetch → merge refresh
 //    metadata → persist updated credential + account profile_payload → save
 //    quota_cache + account_quota_state (state save is fire-and-forget).
@@ -41,7 +41,7 @@ export interface QuotaRefreshResult {
   error?: string
 }
 
-/** The 12 platforms HttpLiveQuotaFetcher can fetch (source list_supported when all
+/** The 12 platforms HttpLiveQuotaFetcher can fetch (the supported list when all
  *  adapters registered). refreshAll enumerates accounts across these. */
 export const QUOTA_FETCH_PLATFORMS: readonly PlatformId[] = [
   'cursor',
@@ -145,7 +145,7 @@ export class QuotaApplicationService {
         const accounts = await this.accountRepo.findByPlatform(platform)
         allAccounts.push(...accounts)
       } catch {
-        // skip platforms with repo errors (source: `Err(_) => continue`)
+        // skip platforms with repo errors
       }
     }
 
@@ -310,13 +310,13 @@ export class QuotaApplicationService {
     try {
       await this.quotaStateCache.save(accountId, state)
     } catch {
-      // quota_state save failures are non-fatal (fire-and-forget), per source.
+      // quota_state save failures are non-fatal (fire-and-forget).
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// module helpers (mirror the free functions in quota_service.rs)
+// module helpers
 // ---------------------------------------------------------------------------
 
 function providerPayloadWithRefreshMetadata(payload: JsonValue, fetchedAt: Date): JsonValue {

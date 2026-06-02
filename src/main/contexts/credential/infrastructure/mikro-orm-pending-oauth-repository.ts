@@ -4,10 +4,10 @@ import { platformFromAgentIdOrCursor, platformToAgentId } from '../../account/do
 import { CredentialError } from '../domain/credential-error'
 import type { PendingOAuth, PendingOAuthRepository } from '../domain/pending-repository'
 
-// MikroORM-backed PendingOAuthRepository. 对应 sea-orm
-// PendingOAuthRepository: upsert-on-conflict by id, purge by expires_at < now.
-// Uses raw SQL via the underlying connection (parameterised) for the ON CONFLICT
-// upsert, matching the skill-repo repository pattern in this codebase.
+// MikroORM-backed PendingOAuthRepository: upsert-on-conflict by id, purge by
+// expires_at < now. Uses raw SQL via the underlying connection (parameterised)
+// for the ON CONFLICT upsert, matching the skill-repo repository pattern in this
+// codebase.
 
 interface PendingOAuthRow {
   id: string

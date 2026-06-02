@@ -18,8 +18,7 @@ export interface BatchValidationItem {
  *
  * Resolves the per-platform validation capability via the provider registry,
  * feeds the account through it, and returns a CredentialValidationResult.
- * Batch validation bounds concurrency (default 4) with a semaphore (createLimit),
- * mirroring the source tokio Semaphore + FuturesUnordered.
+ * Batch validation bounds concurrency (default 4) with a semaphore (createLimit).
  */
 export class ValidationService {
   constructor(
@@ -60,7 +59,7 @@ export class ValidationService {
     )
   }
 
-  /** Normalize an HTTP status to a ValidationState. Source map_http_to_state. */
+  /** Normalize an HTTP status to a ValidationState. */
   static mapHttpToState(status: number): ValidationState {
     if (status >= 200 && status <= 299) return 'valid'
     if (status === 401) return 'expired'

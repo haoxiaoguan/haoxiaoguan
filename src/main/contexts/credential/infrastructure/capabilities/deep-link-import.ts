@@ -7,10 +7,9 @@ import { CredentialError } from '../../domain/credential-error'
 import { jwtClaimString, parseExpiresAt } from '../scan-helpers'
 
 // Deep-link import capability — handles haoxiaoguan://import/{provider}?token=...
-// URLs. The source registers deep-link as a per-provider stub, but the IPC
-// channel (import_deeplink) + scheme are real, so this provides a portable
-// parser: it validates the URL host/path matches the provider, then extracts the
-// token + optional refresh_token/email/expires_at query params.
+// URLs. The IPC channel (import_deeplink) + scheme are real, so this provides a
+// portable parser: it validates the URL host/path matches the provider, then
+// extracts the token + optional refresh_token/email/expires_at query params.
 //
 // Construct one per provider so the registry can key it by PlatformId.
 

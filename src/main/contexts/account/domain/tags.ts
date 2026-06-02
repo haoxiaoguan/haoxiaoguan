@@ -1,7 +1,7 @@
 import { AccountError } from './account-error'
 import { byteLen } from './account-name'
 
-// Tags value object — max 10 tags, each max 32 bytes. 对应 Tags.
+// Tags value object — max 10 tags, each max 32 bytes.
 export class Tags {
   static readonly MAX_COUNT = 10
   static readonly MAX_TAG_LENGTH = 32

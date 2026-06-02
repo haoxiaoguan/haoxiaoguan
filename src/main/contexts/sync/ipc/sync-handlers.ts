@@ -1,5 +1,5 @@
 // registerSyncHandlers — wires all 6 WebDAV sync IPC channels.
-// Channel names come from SYNC_CHANNELS (source Tauri command names).
+// Channel names come from SYNC_CHANNELS (canonical command names).
 // Arg/return shapes are fixed by the frontend contract (map_sync.md +
 // src/renderer/services/tauri.ts syncService).
 //

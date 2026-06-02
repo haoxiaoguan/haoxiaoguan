@@ -9,8 +9,8 @@ export interface WsStatusResponse {
 }
 
 // Application service for the local WebSocket push server. Wraps the platform
-// WsServer with start/stop/toggle + a status projection. 对应
-// WebSocketService use cases (get_ws_status / toggle_ws).
+// WsServer with start/stop/toggle + a status projection
+// (get_ws_status / toggle_ws use cases).
 export class WebSocketApplicationService {
   constructor(private readonly server: WsServer) {}
 

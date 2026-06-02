@@ -1,8 +1,7 @@
 // AccountQuotaState <-> JSON (de)serialisation.
 //
-// The wire/persisted form 对应 serde output: camelCase keys,
-// Dates as RFC3339 strings, optional fields omitted when undefined
-// (serde skip_serializing_if = "Option::is_none"). Used by:
+// The wire/persisted form uses camelCase keys,
+// Dates as RFC3339 strings, and optional fields omitted when undefined. Used by:
 //  - the account_quota_state repository (quota_payload_json column),
 //  - the IPC response mappers (AccountQuotaStateResponse).
 // This is the single authoritative projection so persisted JSON round-trips

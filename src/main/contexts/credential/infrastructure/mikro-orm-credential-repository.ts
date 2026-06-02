@@ -19,8 +19,8 @@ import { CredentialEntity } from './credential.entity'
 // the account `CredentialStorePort` interface.
 //
 // On read, both shapes are handled: the current `{ aad, envelope }` wrapper and
-// a defensive fallback. Legacy Tauri bincode envelopes are NOT supported (no
-// data-compat requirement per spec §5.2 — fresh schema, fresh master key).
+// a defensive fallback. No legacy envelope formats are supported (no data-compat
+// requirement per spec §5.2 — fresh schema, fresh master key).
 
 const KEY_ID = 'local'
 

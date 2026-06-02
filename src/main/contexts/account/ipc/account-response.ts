@@ -2,12 +2,11 @@ import type { Account } from '../domain/account'
 import type { JsonValue } from '../domain/platform-account-profile'
 import { platformFromAgentIdOrCursor, platformToFrontendId } from '../domain/platform-id'
 
-// AccountResponse — the wire DTO returned to the renderer. The source DTO uses
-// #[serde(rename_all = "camelCase")], so EVERY field is camelCase on the wire
-// (identityKey, displayIdentifier, profilePayload, loginProvider, planName,
-// planTier, statusReason, isActive, createdAt, lastUsedAt). `platform` is the
-// frontend kebab id. Optional fields are omitted (undefined) when absent,
-// matching serde Option → missing/null. Timestamps are RFC3339.
+// AccountResponse — the wire DTO returned to the renderer. EVERY field is
+// camelCase on the wire (identityKey, displayIdentifier, profilePayload,
+// loginProvider, planName, planTier, statusReason, isActive, createdAt,
+// lastUsedAt). `platform` is the frontend kebab id. Optional fields are omitted
+// (undefined) when absent. Timestamps are RFC3339.
 export interface AccountResponse {
   id: string
   platform: string
@@ -28,7 +27,7 @@ export interface AccountResponse {
   lastUsedAt?: string
 }
 
-/** Map an Account aggregate to its camelCase wire DTO (source AccountResponse::from). */
+/** Map an Account aggregate to its camelCase wire DTO. */
 export function toAccountResponse(account: Account): AccountResponse {
   return {
     id: account.id,

@@ -42,7 +42,7 @@ export interface CredentialInjectionPort {
 
 // ---------------------------------------------------------------------------
 // CredentialInjectorRegistry — resolves the injection capability per platform.
-// 对应 ProviderRegistry::injector lookup used by switch paths.
+// Used by switch paths to look up the per-platform injector.
 // ---------------------------------------------------------------------------
 export interface CredentialInjectorRegistry {
   /** Returns the injector for a platform, or undefined if unsupported. */

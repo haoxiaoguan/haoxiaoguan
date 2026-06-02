@@ -7,7 +7,7 @@
 //   - Channels with a `request` wrapper: inner fields are snake_case
 //     (upsert_mcp_server, toggle_mcp_app, import_selected_mcp)
 //
-// Return casing: snake_case (对应).
+// Return casing: snake_case.
 
 import { ipcMain } from 'electron'
 import { toIpcError } from '../../../ipc/error'

@@ -1,6 +1,6 @@
 import { SyncError } from '../domain/sync-error'
 
-// Config export/apply — 对应 modules/sync/application/config_port.rs.
+// Config export/apply.
 //
 // export: dump every non-local table's rows as INSERT statements (db.sql) using
 //   SQLite's quote() for safe value escaping (a SQLite builtin, NOT reconstructed

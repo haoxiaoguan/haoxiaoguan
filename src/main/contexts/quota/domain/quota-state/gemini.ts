@@ -1,4 +1,4 @@
-// Gemini CLI profile-payload parser. 对应 quota_state/gemini.rs.
+// Gemini CLI profile-payload parser.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import {

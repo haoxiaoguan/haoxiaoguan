@@ -1,6 +1,6 @@
 // ProviderRegistry — composition container of the 7 capability maps.
 //
-// 对应 modules/quota/domain/provider_registry.rs. The application
+// The application
 // service queries `registry.quota(platform)` (etc.) to obtain a capability
 // without per-platform if/else branches. registeredProviders() returns the
 // union of all keys, sorted (stable, by the canonical AgentId string).

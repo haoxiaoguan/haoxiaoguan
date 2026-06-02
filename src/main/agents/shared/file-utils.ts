@@ -1,6 +1,6 @@
 /**
  * Shared file-reading utilities for agent adapters.
- * Mirrors the Rust jsonl_reader shared helpers.
+ * Shared JSONL reader helpers.
  */
 import { readFileSync, statSync } from 'node:fs'
 import { readdirSync } from 'node:fs'

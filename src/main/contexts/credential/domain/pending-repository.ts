@@ -1,10 +1,9 @@
 import type { PlatformId } from '../../account/domain/platform-id'
 
 // Pending OAuth + pending import domain entities and their repository ports.
-// Mirror the source PendingOAuth / PendingImport structs and the sea-orm
-// repositories (pending_oauth / pending_import tables). Implemented in
-// infrastructure (MikroORM). Default pending TTL is 10 minutes; rows are purged
-// by purgeExpired and deleted on success to prevent replay.
+// PendingOAuth / PendingImport back the pending_oauth / pending_import tables,
+// implemented in infrastructure (MikroORM). Default pending TTL is 10 minutes;
+// rows are purged by purgeExpired and deleted on success to prevent replay.
 
 export interface PendingOAuth {
   id: string

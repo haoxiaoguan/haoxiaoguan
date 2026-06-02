@@ -8,19 +8,18 @@ import type { CredentialRepository } from '../domain/credential-repository'
 import type { ProviderRegistry } from '../domain/provider-registry'
 import { platformFromAgentIdOrCursor } from '../../account/domain/platform-id'
 
-// ValidationService — credential liveness checks. 对应
-// validate_credential / validate_batch command paths.
+// ValidationService — credential liveness checks for the validate-credential /
+// validate-batch paths.
 //
 // validate(accountId): load the stored envelope, look up the provider from its
 // AAD, dispatch to the provider's CredentialValidationCapability. A provider
-// without a validation capability returns state="unsupported" (graceful, matches
-// the source stub which returns unsupported_now()). A missing envelope is an
-// error (the account has no credential to validate).
+// without a validation capability returns state="unsupported" (graceful, via
+// unsupported_now()). A missing envelope is an error (the account has no
+// credential to validate).
 //
 // validateBatch runs the per-account validations with bounded concurrency
 // (default 4, via createLimit), isolating per-account errors into the result array
-// exactly like the source (each item is either {account_id, result} or
-// {account_id, error}).
+// (each item is either {account_id, result} or {account_id, error}).
 
 export interface BatchValidationItem {
   accountId: string

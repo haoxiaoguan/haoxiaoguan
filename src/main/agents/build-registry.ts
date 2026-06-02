@@ -1,5 +1,5 @@
 // Registry builder — constructs the AgentRegistry with all 17 adapters in the
-// canonical AgentId order (对应 bootstrap registration order) and
+// canonical AgentId order (the bootstrap registration order) and
 // runtime-asserts the count is exactly 17. This is the single place the agents
 // layer is assembled; the container/IPC wiring consumes the result.
 

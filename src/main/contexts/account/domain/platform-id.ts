@@ -1,17 +1,16 @@
 // PlatformId — agent platform identity used by the account context.
 //
-// The source represents this as the `AgentId` enum (re-exported as PlatformId).
 // Three string projections matter and are NOT the same:
 //   1. canonical DB form (agent_id column / switch_history.agent_id) — snake_case
 //      (e.g. "github_copilot", "gemini_cli", "codebuddy_cn"). This is what the
-//      aggregate stores and what serde produces (AgentId::as_str()).
+//      aggregate stores and what serializes to the wire.
 //   2. frontend id (AccountResponse.platform on the wire) — kebab for multi-word
 //      ids (e.g. "github-copilot", "gemini-cli", "codebuddy-cn", "claude-desktop").
 //   3. identity prefix used when synthesising an identity_key fallback — kebab,
 //      defined only for the 12 importable platforms.
 //
-// parsePlatform() mirrors commands.rs parse_platform: case-insensitive, accepts
-// hyphen/underscore/concatenated spellings, and ONLY the 12 importable platforms.
+// parsePlatform() is case-insensitive, accepts hyphen/underscore/concatenated
+// spellings, and ONLY the 12 importable platforms.
 
 export type PlatformId =
   | 'cursor'
@@ -32,7 +31,7 @@ export type PlatformId =
   | 'opencode'
   | 'hermes'
 
-// All 17 agent ids in canonical snake_case form (AgentId::all() order).
+// All 17 agent ids in canonical snake_case form.
 export const ALL_PLATFORM_IDS: readonly PlatformId[] = [
   'cursor',
   'windsurf',
@@ -53,7 +52,7 @@ export const ALL_PLATFORM_IDS: readonly PlatformId[] = [
   'hermes',
 ]
 
-// The 12 platforms account import/switch accepts (commands.rs parse_platform).
+// The 12 platforms account import/switch accepts.
 const IMPORTABLE_PLATFORMS: readonly PlatformId[] = [
   'cursor',
   'windsurf',
@@ -70,7 +69,7 @@ const IMPORTABLE_PLATFORMS: readonly PlatformId[] = [
 ]
 const IMPORTABLE_SET = new Set<string>(IMPORTABLE_PLATFORMS)
 
-// Frontend id projection (dto.rs platform_to_frontend_id). Full 17-platform map.
+// Frontend id projection. Full 17-platform map.
 const FRONTEND_ID: Record<PlatformId, string> = {
   cursor: 'cursor',
   windsurf: 'windsurf',
@@ -109,9 +108,9 @@ const IDENTITY_PREFIX: Partial<Record<PlatformId, string>> = {
 }
 
 /**
- * Parse a platform string into its canonical snake_case PlatformId.
- * Mirrors commands.rs parse_platform (case-insensitive; hyphen/underscore/
- * concatenated variants). Throws "Unknown platform: {input}" on miss.
+ * Parse a platform string into its canonical snake_case PlatformId
+ * (case-insensitive; hyphen/underscore/concatenated variants). Throws
+ * "Unknown platform: {input}" on miss.
  */
 export function parsePlatform(input: string): PlatformId {
   switch (input.toLowerCase()) {
@@ -153,8 +152,7 @@ export function parsePlatform(input: string): PlatformId {
 }
 
 /**
- * Parse the platform string used by import_from_json (service.rs
- * parse_platform_from_str): same set, returns a Result-like — throws
+ * Parse the platform string used by import_from_json: same set — throws
  * `Unknown platform: {input}` so the import loop can record the error.
  */
 export function parsePlatformLoose(input: string): PlatformId {
@@ -183,8 +181,7 @@ export function isImportablePlatform(agentId: string): boolean {
 
 /**
  * Reconstruct a PlatformId from a stored agent_id string (DB read path).
- * Falls back to 'cursor' on an unknown value, mirroring source
- * Account::platform() (`.unwrap_or(PlatformId::Cursor)`).
+ * Falls back to 'cursor' on an unknown value.
  */
 export function platformFromAgentIdOrCursor(agentId: string): PlatformId {
   return (ALL_PLATFORM_IDS as readonly string[]).includes(agentId)

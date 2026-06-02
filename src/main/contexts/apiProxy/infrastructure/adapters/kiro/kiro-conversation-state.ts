@@ -2,7 +2,7 @@
 // 把 CanonicalRequest 转成 ConversationStateEnvelope：currentMessage（含 system/thinking 前缀 + tools + toolResults + images）
 // + 清洗后的 history + inferenceConfig + additionalModelRequestFields。
 // 所有指纹/路由信息由 opts 注入；本层不读凭据/时钟/随机。
-// 参考：参考实现 线协议模块 的 buildKiroPayload（按线协议重写，剔除 token 估算/缓存/网络）。
+// buildKiroPayload（按 Kiro 线协议实现，不含 token 估算/缓存/网络）。
 import type {
   CanonicalRequest,
   CanonicalMessage,

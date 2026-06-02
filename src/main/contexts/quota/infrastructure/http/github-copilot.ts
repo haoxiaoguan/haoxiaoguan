@@ -1,4 +1,4 @@
-// GitHub Copilot live quota fetch. 对应 quota/infrastructure/quota/github_copilot.rs.
+// GitHub Copilot live quota fetch.
 
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import type { Credential } from '../../../account/domain/credential'

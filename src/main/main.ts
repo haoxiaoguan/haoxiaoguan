@@ -133,7 +133,7 @@ function refreshCloseBehavior(): void {
 
 // Apply the OS login-item state with two-phase rollback: set → verify via
 // getLoginItemSettings → on mismatch, roll back to the previous state and throw
-// so the caller can surface the failure (对应 two-phase autostart).
+// so the caller can surface the failure.
 function applyAutostart(enabled: boolean): void {
   if (process.platform === 'linux') {
     // setLoginItemSettings is a no-op on Linux in Electron; nothing to verify.

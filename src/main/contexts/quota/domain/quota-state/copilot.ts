@@ -1,4 +1,4 @@
-// GitHub Copilot / Windsurf profile-payload parser. 对应 quota_state/copilot.rs.
+// GitHub Copilot / Windsurf profile-payload parser.
 // Used for both PlatformId Cursor's sibling GithubCopilot and Windsurf (snapshots
 // schema is shared).
 

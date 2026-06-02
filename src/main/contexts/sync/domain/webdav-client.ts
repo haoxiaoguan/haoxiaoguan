@@ -1,10 +1,9 @@
 import { SyncError } from './sync-error'
 
-// WebDAV client port (interface) + pure URL/auth helpers — 对应
-// modules/sync/domain/webdav_client.rs.
+// WebDAV client port (interface) + pure URL/auth helpers.
 //
-// The interface is implemented in infrastructure (ReqwestWebDavClient → here a
-// Node fetch-based client). Keeping it a port lets the application orchestration
+// The interface is implemented in infrastructure (a Node fetch-based client).
+// Keeping it a port lets the application orchestration
 // be tested with an in-memory fake. All URLs passed to the client are absolute.
 
 /** Basic-auth credentials; null means no auth (empty username). */

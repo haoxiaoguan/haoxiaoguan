@@ -2,8 +2,8 @@ import { pbkdf2, randomBytes, createCipheriv, createDecipheriv } from 'node:cryp
 import { promisify } from 'node:util'
 
 // Sync crypto — wraps the 32-byte master key under the user's sync password.
-// 对应 modules/sync/domain/sync_crypto.rs EXACTLY for cross-device
-// compatibility with keys wrapped by the Rust app:
+// The wrapping scheme is fixed EXACTLY as below for cross-device
+// compatibility with keys wrapped by other clients:
 //   DEK = PBKDF2-HMAC-SHA256(syncPassword, salt, 600_000, 32 bytes)
 //   ciphertext = AES-256-GCM(DEK, nonce, masterKey, AAD = "v{version}:{keyId}")
 //

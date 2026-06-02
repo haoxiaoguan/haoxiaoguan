@@ -1,8 +1,8 @@
-// Quota value objects — QuotaError mirrors the slice of source AccountError that
-// the quota module raises (RepositoryError / NotFound / InvalidCredentialFormat
+// Quota value objects — QuotaError covers the error kinds the quota module
+// raises (RepositoryError / NotFound / InvalidCredentialFormat
 // / CryptoError). The IPC layer stringifies these via toIpcError so the renderer
-// rejection message is a plain string matching Tauri invoke semantics. Message
-// strings match the source thiserror #[error(...)] formats byte-for-byte.
+// rejection message is a plain string. Message
+// strings follow a stable, fixed format.
 
 export type QuotaErrorKind =
   | 'NotFound'

@@ -9,7 +9,7 @@ import type {
 } from '../../domain/capability-types'
 import { CredentialError } from '../../domain/credential-error'
 
-// Cursor OAuth capability — ported from quota/infrastructure/oauth/cursor.rs.
+// Cursor OAuth capability.
 //
 // Cursor uses a poll-based flow (no loopback server): start_oauth builds a
 // loginDeepControl URL with a PKCE challenge + login uuid; complete_oauth polls

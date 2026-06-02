@@ -1,14 +1,14 @@
 import { AccountError } from './account-error'
 
-// Shared UTF-8 byte length helper. Rust's String::len() counts bytes, not chars,
-// so the value-object length invariants are byte-based. TextEncoder is a Web/Node
+// Shared UTF-8 byte length helper. The value-object length invariants are
+// byte-based (counting UTF-8 bytes, not chars). TextEncoder is a Web/Node
 // standard (no Node-specific import), keeping the domain layer pure.
 const encoder = new TextEncoder()
 export function byteLen(value: string): number {
   return encoder.encode(value).length
 }
 
-// AccountName value object — max 64 bytes. 对应 AccountName.
+// AccountName value object — max 64 bytes.
 export class AccountName {
   static readonly MAX_LENGTH = 64
 
