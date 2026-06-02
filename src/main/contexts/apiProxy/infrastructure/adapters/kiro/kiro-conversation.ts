@@ -258,3 +258,94 @@ export function truncateToolResultText(
     }
   })
 }
+
+// ============ 未声明工具拍平（normalizeToolHistory） ============
+// CodeWhisperer 对「history 含未在当前消息 tools 声明的结构化 toolUse」返回 400。
+// 当 history 引用了「当前请求未声明」的工具时，把所有结构化 toolUses/toolResults 拍平成
+// <tool_use>/<tool_result> 文本嵌入 content，并清除结构化字段，让模型仍能据文本上下文推理。
+// 参考：参考实现 线协议模块 的 normalizeToolHistory（按线协议重写）。
+
+function stringifyToolInput(input: unknown): string {
+  if (input === undefined) return ''
+  if (typeof input === 'string') return input
+  try {
+    return JSON.stringify(input)
+  } catch {
+    return String(input)
+  }
+}
+
+// content 与 extra 之间以空行拼接（任一为空则取另一个）。
+function flattenContent(content: string, extra: string): string {
+  const trimmed = content.trim()
+  if (trimmed.length === 0) return extra
+  if (extra.length === 0) return trimmed
+  return `${trimmed}\n\n${extra}`
+}
+
+function formatToolUses(toolUses: KiroToolUse[]): string {
+  return toolUses
+    .map((tu) =>
+      [`<tool_use id="${tu.toolUseId}" name="${tu.name}">`, stringifyToolInput(tu.input), '</tool_use>']
+        .filter((s) => s.length > 0)
+        .join('\n'),
+    )
+    .join('\n\n')
+}
+
+function formatToolResults(toolResults: KiroToolResult[]): string {
+  return toolResults
+    .map((tr) =>
+      [
+        `<tool_result id="${tr.toolUseId}" status="${tr.status}">`,
+        tr.content.map((c) => c.text ?? '').join('\n'),
+        '</tool_result>',
+      ]
+        .filter((s) => s.length > 0)
+        .join('\n'),
+    )
+    .join('\n\n')
+}
+
+/**
+ * 若 history 任一 assistant.toolUses 引用了不在 declaredToolNames 的工具名，则把整段 history 的
+ * 结构化 toolUses/toolResults 全部拍平成文本（清除结构化字段）。否则原样返回（引用透传）。
+ */
+export function normalizeToolHistory(
+  messages: KiroHistoryMessage[],
+  declaredToolNames: ReadonlySet<string>,
+): KiroHistoryMessage[] {
+  const hasUnknownToolUse = messages.some(
+    (m) => m.assistantResponseMessage?.toolUses?.some((tu) => !declaredToolNames.has(tu.name)) ?? false,
+  )
+  if (!hasUnknownToolUse) return messages
+
+  return messages.map((m) => {
+    if (m.assistantResponseMessage?.toolUses?.length) {
+      return {
+        assistantResponseMessage: {
+          content: flattenContent(
+            m.assistantResponseMessage.content,
+            formatToolUses(m.assistantResponseMessage.toolUses),
+          ),
+        },
+      }
+    }
+    if (m.userInputMessage?.userInputMessageContext?.toolResults?.length) {
+      const { toolResults: _drop, ...restCtx } = m.userInputMessage.userInputMessageContext
+      void _drop
+      const hasRestCtx = Object.keys(restCtx).length > 0
+      return {
+        userInputMessage: {
+          ...m.userInputMessage,
+          content: flattenContent(
+            m.userInputMessage.content,
+            formatToolResults(m.userInputMessage.userInputMessageContext.toolResults),
+          ),
+          ...(hasRestCtx ? { userInputMessageContext: restCtx } : { userInputMessageContext: undefined }),
+        },
+      }
+    }
+    return m
+  })
+}

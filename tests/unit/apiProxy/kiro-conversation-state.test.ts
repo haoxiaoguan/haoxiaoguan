@@ -111,6 +111,10 @@ describe('buildConversationState — tools + history', () => {
         { role: 'user', content: [{ type: 'tool_result', toolUseId: 'tu_1', content: [{ type: 'text', text: '72F' }] }] },
         { role: 'user', content: [{ type: 'text', text: 'thanks' }] },
       ],
+      // M3b：history 的 get_weather 必须在当前请求 tools 中声明，否则 normalizeToolHistory 会把
+      // 结构化 toolUse/toolResult 拍平成文本（CodeWhisperer 对未声明工具的结构化 toolUse 返回 400）。
+      // 声明后本场景为 no-op，结构化 toolUses/toolResults 原样保留——本用例正是验证该配对路径。
+      tools: [{ name: 'get_weather', inputSchema: { type: 'object' } }],
       stream: false,
     }
     const env = buildConversationState(ir, OPTS)

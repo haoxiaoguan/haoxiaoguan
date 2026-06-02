@@ -23,6 +23,7 @@ import type {
 } from './kiro-wire-types'
 import {
   irMessagesToKiroHistory,
+  normalizeToolHistory,
   sanitizeConversation,
   truncateToolResultText,
 } from './kiro-conversation'
@@ -162,9 +163,12 @@ export function buildConversationState(
   const historySource =
     lastUserIdx >= 0 ? ir.messages.slice(0, lastUserIdx) : ir.messages.slice()
 
-  // history：IR → Kiro → 清洗（保证 user 起止/交替/toolUse 配对）→ 字节截断。
+  // history：IR → Kiro → 未声明工具拍平 → 清洗（user 起止/交替/toolUse 配对）→ 字节截断。
+  // declaredNames = 当前请求声明的工具集；history 引用其外的结构化 toolUse 会被拍平成文本（否则 CodeWhisperer 400）。
+  const declaredNames = new Set<string>((ir.tools ?? []).map((t) => t.name))
   let history: KiroHistoryMessage[] = irMessagesToKiroHistory(historySource)
   if (history.length > 0) {
+    history = normalizeToolHistory(history, declaredNames)
     history = sanitizeConversation(history)
     history = truncateToolResultText(history, maxBytes)
   }
