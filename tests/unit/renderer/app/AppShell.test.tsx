@@ -230,4 +230,27 @@ describe('AppShell', () => {
     const nav = within(sidebar).getByRole('navigation');
     expect(within(nav).queryByText('nav:platforms')).not.toBeInTheDocument();
   });
+
+  it('renders the API 服务 nav item in the sidebar on main routes', () => {
+    renderShell('macos');
+    const sidebar = screen.getByTestId('app-shell-sidebar');
+    const navigation = within(sidebar).getByRole('navigation');
+    expect(within(navigation).getAllByText('nav:apiService').length).toBeGreaterThan(0);
+  });
+
+  it('shows the API 服务 title on the /api-service route', () => {
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/api-service']}>
+          <Routes>
+            <Route element={<AppShell shell="macos" />}>
+              <Route path="/api-service" element={<div>api-service-page</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('app-shell-title')).toHaveTextContent('nav:apiService');
+    expect(screen.getByText('api-service-page')).toBeInTheDocument();
+  });
 });

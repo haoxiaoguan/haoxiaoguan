@@ -5,6 +5,7 @@ import {
   Headphones,
   Info,
   LayoutGrid,
+  Plug,
   Puzzle,
   RefreshCw,
   Server,
@@ -61,6 +62,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
+  { to: '/api-service', labelKey: 'nav:apiService', icon: Plug },
 ];
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [
@@ -83,6 +85,7 @@ function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
   if (pathname.startsWith('/skills')) return 'nav:skills';
   if (pathname.startsWith('/mcp')) return 'nav:mcp';
+  if (pathname.startsWith('/api-service')) return 'nav:apiService';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';
   if (pathname.startsWith('/settings/advanced')) return 'nav:settings.menu.advanced';

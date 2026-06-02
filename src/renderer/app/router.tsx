@@ -3,6 +3,7 @@ import Dashboard from '../pages/Dashboard';
 import Accounts from '../pages/Accounts';
 import Skills from '../pages/Skills';
 import Mcp from '../pages/Mcp';
+import ApiProxy from '../pages/ApiProxy';
 import Proxies from '../pages/Proxies';
 import Groups from '../pages/Groups';
 import Analytics from '../pages/Analytics';
@@ -31,6 +32,7 @@ export function AppRouter() {
           </Route>
           <Route path="skills" element={<Skills />} />
           <Route path="mcp" element={<Mcp />} />
+          <Route path="api-service" element={<ApiProxy />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="settings" element={<Settings />}>
             <Route index element={<Navigate to="general" replace />} />
