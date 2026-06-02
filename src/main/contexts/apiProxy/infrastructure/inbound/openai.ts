@@ -3,11 +3,14 @@
 // 本层平台无关、确定性纯函数：不注入时间戳/提示词（那是上游适配器的职责）。
 import type {
   CanonicalRequest,
+  CanonicalResponse,
   CanonicalMessage,
+  CanonicalStreamEvent,
   ContentBlock,
   ToolResultContent,
   ToolDef,
   ToolChoice,
+  StopReason,
 } from '../../domain/canonical'
 
 // ============ OpenAI 线协议类型（仅本转换器需要的子集） ============
@@ -196,4 +199,216 @@ export function openaiToIR(req: OpenAIChatRequest): CanonicalRequest {
   if (toolChoice) ir.toolChoice = toolChoice
   if (req.metadata !== undefined) ir.metadata = req.metadata
   return ir
+}
+
+// ============ IR → OpenAI（响应） ============
+
+export interface OpenAIResponseToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+export interface OpenAIUsage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  prompt_tokens_details?: { cached_tokens: number }
+}
+
+export interface OpenAIChatCompletion {
+  id: string
+  object: 'chat.completion'
+  created: number
+  model: string
+  choices: {
+    index: number
+    message: {
+      role: 'assistant'
+      content: string | null
+      tool_calls?: OpenAIResponseToolCall[]
+    }
+    finish_reason: 'stop' | 'length' | 'tool_calls'
+  }[]
+  usage: OpenAIUsage
+}
+
+/** id/created 注入项（不变量 9：转换器不读时钟/随机）。 */
+export interface OpenAIResponseOpts {
+  id?: string
+  created?: number
+}
+
+// IR StopReason → OpenAI finish_reason（不变量 6）。
+function stopReasonToOpenAI(reason: StopReason): 'stop' | 'length' | 'tool_calls' {
+  switch (reason) {
+    case 'max_tokens':
+      return 'length'
+    case 'tool_use':
+      return 'tool_calls'
+    case 'end_turn':
+    case 'stop_sequence':
+      return 'stop'
+  }
+}
+
+// IR Usage → OpenAI usage（不变量 7）。
+function usageToOpenAI(usage: CanonicalResponse['usage']): OpenAIUsage {
+  const out: OpenAIUsage = {
+    prompt_tokens: usage.inputTokens,
+    completion_tokens: usage.outputTokens,
+    total_tokens: usage.inputTokens + usage.outputTokens,
+  }
+  if (usage.cacheReadTokens !== undefined) {
+    out.prompt_tokens_details = { cached_tokens: usage.cacheReadTokens }
+  }
+  return out
+}
+
+/**
+ * CanonicalResponse → OpenAI chat.completion 对象。
+ * - text 块拼成 message.content；tool_use 块转 tool_calls（input JSON.stringify）。
+ * - 有 tool_calls 时 content 置 null（OpenAI 惯例）；否则 content 为拼接文本（可能为空串）。
+ * - thinking 块在 OpenAI Chat 无原生承载，丢弃（不变量：显式丢弃并注释）。
+ */
+export function irToOpenAIResponse(
+  resp: CanonicalResponse,
+  opts: OpenAIResponseOpts = {},
+): OpenAIChatCompletion {
+  let text = ''
+  const toolCalls: OpenAIResponseToolCall[] = []
+  for (const block of resp.content) {
+    if (block.type === 'text') {
+      text += block.text
+    } else if (block.type === 'tool_use') {
+      toolCalls.push({
+        id: block.id,
+        type: 'function',
+        function: { name: block.name, arguments: JSON.stringify(block.input) },
+      })
+    }
+    // image/tool_result 不会出现在响应侧；thinking 在 OpenAI Chat 无字段承载，丢弃。
+  }
+  const hasToolCalls = toolCalls.length > 0
+  return {
+    id: opts.id ?? 'chatcmpl-0',
+    object: 'chat.completion',
+    created: opts.created ?? 0,
+    model: resp.model,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: hasToolCalls ? null : text,
+          ...(hasToolCalls ? { tool_calls: toolCalls } : {}),
+        },
+        finish_reason: stopReasonToOpenAI(resp.stopReason),
+      },
+    ],
+    usage: usageToOpenAI(resp.usage),
+  }
+}
+
+// ============ IR → OpenAI（流式 SSE） ============
+
+/** 流式注入项（不变量 9）。 */
+export interface OpenAIStreamOpts {
+  id?: string
+  created?: number
+}
+
+interface OpenAIStreamChunk {
+  id: string
+  object: 'chat.completion.chunk'
+  created: number
+  model: string
+  choices: {
+    index: number
+    delta: {
+      role?: 'assistant'
+      content?: string
+      tool_calls?: {
+        index: number
+        id?: string
+        type?: 'function'
+        function?: { name?: string; arguments?: string }
+      }[]
+    }
+    finish_reason: 'stop' | 'length' | 'tool_calls' | null
+  }[]
+  usage?: OpenAIUsage
+}
+
+// 把一个 chunk 对象包成一条 SSE 帧文本。
+function sseFrame(chunk: OpenAIStreamChunk): string {
+  return `data: ${JSON.stringify(chunk)}\n\n`
+}
+
+/**
+ * IR 事件序列 → OpenAI SSE chat.completion.chunk 帧字符串数组。
+ * 帧序：首帧（delta.role=assistant）→ 文本/思考/工具增量帧 → 收尾帧（delta 空 + finish_reason）→ `data: [DONE]`。
+ * - text_delta → delta.content；thinking_delta 在 OpenAI Chat 无原生字段，丢弃（注释说明）。
+ * - tool_use_start → delta.tool_calls[{ index, id, function.name, arguments:'' }]；tool_use_delta → arguments 片段。
+ * - usage 事件 → 追加一条仅含 usage 的帧（OpenAI stream_options.include_usage 风格）。
+ * - message_stop → 决定收尾帧 finish_reason（不变量 6）。
+ * 纯函数：id/created 来自 opts，缺省 'chatcmpl-0'/0。
+ */
+export function serializeOpenAIStream(
+  events: CanonicalStreamEvent[],
+  model: string,
+  opts: OpenAIStreamOpts = {},
+): string[] {
+  const id = opts.id ?? 'chatcmpl-0'
+  const created = opts.created ?? 0
+  const base = (
+    delta: OpenAIStreamChunk['choices'][0]['delta'],
+    finishReason: OpenAIStreamChunk['choices'][0]['finish_reason'],
+    usage?: OpenAIUsage,
+  ): OpenAIStreamChunk => ({
+    id,
+    object: 'chat.completion.chunk',
+    created,
+    model,
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    ...(usage ? { usage } : {}),
+  })
+
+  const frames: string[] = []
+  // 首帧：宣告 assistant 角色。
+  frames.push(sseFrame(base({ role: 'assistant' }, null)))
+
+  let finishReason: 'stop' | 'length' | 'tool_calls' = 'stop'
+  for (const ev of events) {
+    if (ev.type === 'text_delta') {
+      frames.push(sseFrame(base({ content: ev.text }, null)))
+    } else if (ev.type === 'thinking_delta') {
+      // OpenAI Chat Completions 无 thinking 流字段，丢弃以免产出非法帧。
+    } else if (ev.type === 'tool_use_start') {
+      // 首工具帧只带 id + name（对齐 OpenAI 线格式：arguments 在后续 delta 帧累积，
+      // 这里不放空串 arguments，否则会和真正的 arguments 片段混在一起难以区分）。
+      frames.push(
+        sseFrame(
+          base(
+            { tool_calls: [{ index: ev.index, id: ev.id, type: 'function', function: { name: ev.name } }] },
+            null,
+          ),
+        ),
+      )
+    } else if (ev.type === 'tool_use_delta') {
+      frames.push(
+        sseFrame(base({ tool_calls: [{ index: ev.index, function: { arguments: ev.partialJson } }] }, null)),
+      )
+    } else if (ev.type === 'usage') {
+      frames.push(sseFrame(base({}, null, usageToOpenAI(ev.usage))))
+    } else {
+      // message_stop：记录最终 finish_reason，收尾帧在循环后统一发。
+      finishReason = stopReasonToOpenAI(ev.stopReason)
+    }
+  }
+
+  // 收尾帧：空 delta + finish_reason。
+  frames.push(sseFrame(base({}, finishReason)))
+  frames.push('data: [DONE]\n\n')
+  return frames
 }
