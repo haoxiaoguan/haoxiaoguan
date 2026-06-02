@@ -107,24 +107,42 @@ async function drainStream(
 export class ApiProxyService {
   private readonly registry?: PlatformRegistry
   private readonly converters: InboundConverters
+  // server 可后置注入（解循环依赖：container 先建 service 再建 listener+server，最后 attachServer）。
+  // M1 单参构造 new ApiProxyService(server) 仍合法——server 既可构造传入也可 attach。
+  private server?: ApiHttpServer
 
   constructor(
-    private readonly server: ApiHttpServer,
+    server?: ApiHttpServer,
     deps: { registry?: PlatformRegistry; converters?: InboundConverters } = {},
   ) {
+    this.server = server
     this.registry = deps.registry
     this.converters = deps.converters ?? DEFAULT_INBOUND_CONVERTERS
   }
 
+  /**
+   * 后置绑定 HTTP 监听器（解循环依赖：listener 需 service，service 又需 server）。
+   * container 顺序：建 registry → 建 service（无 server）→ 建 listener（闭包引用 service）→
+   * 建 ApiHttpServer(listener) → service.attachServer(server)。
+   */
+  attachServer(server: ApiHttpServer): void {
+    this.server = server
+  }
+
   async start(): Promise<void> {
+    if (!this.server) throw new Error('ApiProxyService: server not attached')
     await this.server.start()
   }
 
   async stop(): Promise<void> {
+    // server 未 attach 时 stop 是安全 no-op（语义同「本就未启动」）。
+    if (!this.server) return
     await this.server.stop()
   }
 
   getStatus(): ApiProxyStatus {
+    // server 未 attach 时报 stopped、无端口（安全降级，不抛错）。
+    if (!this.server) return { state: 'stopped' }
     const port = this.server.port
     const status: ApiProxyStatus = { state: this.server.getState() }
     if (port !== null) status.port = port

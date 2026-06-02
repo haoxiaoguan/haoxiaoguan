@@ -94,10 +94,13 @@ import { defaultSsotRoot } from './contexts/skill/application/skill-application-
 import { WsServer } from './platform/websocket/ws-server'
 import { WebSocketApplicationService } from './contexts/websocket/application/websocket-service'
 
-// apiProxy context — local AI API reverse-proxy HTTP service (M1: /health only).
+// apiProxy context — local AI API reverse-proxy HTTP service
+// (M2b: 中间件链 + 三协议路由 + Echo 占位上游)。
 import { ApiHttpServer } from './contexts/apiProxy/infrastructure/http/api-http-server'
 import { createApiRequestListener } from './contexts/apiProxy/infrastructure/http/hono-app'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
+import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
+import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 
 // Proxy context — outbound proxy IP management. ProxyResolver is injected into
 // QuotaService so per-account quota fetches route through the bound proxy.
@@ -359,10 +362,25 @@ export async function buildContainer(): Promise<Container> {
   // 11. apiProxy 上下文。监听器绑定 settings 的 apiProxyPort（默认 8788），
   //     端口被占时 ApiHttpServer 自动回退 +1。不在此自启——main.ts 依据
   //     apiProxyEnabled 决定 whenReady 后是否 start()。
-  const apiHttpServer = new ApiHttpServer(createApiRequestListener(), {
-    port: settings.getApiProxyPort(),
-  })
-  const apiProxyService = new ApiProxyService(apiHttpServer)
+  //
+  //     循环依赖（listener 需 service，service 又需 server）用方案 B（attachServer）打破，
+  //     装配顺序固定：建 registry → 建 service（无 server）→ 建 listener（闭包引用 service）→
+  //     建 ApiHttpServer(listener) → service.attachServer(server)。
+  const platformRegistry = new PlatformRegistry()
+  platformRegistry.register(new EchoUpstreamAdapter()) // M2b 仅注册 Echo 占位（M3 增 KiroAdapter）。
+  const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry })
+  const apiHttpServer = new ApiHttpServer(
+    createApiRequestListener({
+      service: apiProxyService,
+      auth: {
+        keys: settings.getApiProxyClientKeys(),
+        allowAnonymousLoopback: settings.getApiProxyAllowAnonymousLoopback(),
+      },
+      knownPlatforms: platformRegistry.knownPlatforms(),
+    }),
+    { port: settings.getApiProxyPort() },
+  )
+  apiProxyService.attachServer(apiHttpServer)
 
   return {
     settings,
