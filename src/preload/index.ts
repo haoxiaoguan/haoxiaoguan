@@ -64,6 +64,7 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_CHANNELS.getAccountHealth, { accountId }),
     validateBatch: (accountIds, concurrency) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.validateBatch, { accountIds, concurrency }),
+    detectActiveAccounts: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.detectActiveAccounts),
   },
   credential: {
     startOauth: (provider, mode) =>

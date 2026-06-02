@@ -23,6 +23,7 @@ import type {
   WsStatus,
   AppDirs,
   AppPathInfo,
+  ActiveDetectionResult,
   ExportAccountsRequest,
   ImportAccountsRequest,
   ImportResultResponse,
@@ -39,6 +40,9 @@ export const accountService = {
 
   switchAccount: (accountId: string) =>
     bridge().account.switchAccount(accountId),
+
+  detectActiveAccounts: () =>
+    bridge().account.detectActiveAccounts() as Promise<ActiveDetectionResult[]>,
 
   deleteAccount: (accountId: string) =>
     bridge().account.deleteAccount(accountId),

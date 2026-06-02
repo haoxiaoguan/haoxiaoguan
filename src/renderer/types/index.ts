@@ -255,6 +255,12 @@ export interface AppPathInfo {
   suggestion: string;
 }
 
+export interface ActiveDetectionResult {
+  platform: string;
+  activeAccountId: string | null;
+  matched: boolean;
+}
+
 // ============================================================================
 // Agent Types
 // ============================================================================

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   switchAccount: vi.fn(async () => {}),
   deleteAccount: vi.fn(async () => {}),
   batchDelete: vi.fn(async () => {}),
+  detectActiveAccounts: vi.fn(async () => {}),
   fetchPlatforms: vi.fn(async () => {}),
   refreshBatch: vi.fn(async () => {}),
   addAccountSheetProps: [] as Array<{ open: boolean; defaultPlatform?: string }>,
@@ -57,6 +58,7 @@ vi.mock('@/stores', () => ({
     switchAccount: (id: string) => Promise<void>;
     deleteAccount: (id: string) => Promise<void>;
     batchDelete: (ids: string[]) => Promise<void>;
+    detectActiveAccounts: () => Promise<void>;
   }) => unknown) => {
     const state = {
       accounts: mocks.accounts,
@@ -65,6 +67,7 @@ vi.mock('@/stores', () => ({
       switchAccount: mocks.switchAccount,
       deleteAccount: mocks.deleteAccount,
       batchDelete: mocks.batchDelete,
+      detectActiveAccounts: mocks.detectActiveAccounts,
     };
     return selector ? selector(state) : state;
   },

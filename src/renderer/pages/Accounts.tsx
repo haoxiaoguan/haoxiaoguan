@@ -111,6 +111,7 @@ export default function Accounts() {
   const { t: tCommon } = useTranslation('translation');
   const { accounts, loading, fetchAccounts, switchAccount, deleteAccount, batchDelete } =
     useAccountStore();
+  const detectActiveAccounts = useAccountStore((s) => s.detectActiveAccounts);
   const { getDisplayName, fetchPlatforms } = usePlatformStore();
   const { refreshBatch, snapshots } = useHealthStore();
   const quotaStates = useQuotaStateStore((s) => s.states);
@@ -141,6 +142,12 @@ export default function Accounts() {
     fetchPlatforms();
     ALL_PLATFORMS.forEach((item) => fetchAccounts(item));
   }, [fetchAccounts, fetchPlatforms]);
+
+  // On entering the page, reverse-detect which account each IDE is actually
+  // logged into and reconcile the "in use" badges with reality. Best-effort.
+  useEffect(() => {
+    void detectActiveAccounts();
+  }, [detectActiveAccounts]);
 
   useEffect(() => {
     if (isAgentId(platform)) setSelectedPlatform(platform);
@@ -295,6 +302,8 @@ export default function Accounts() {
       const results = await Promise.allSettled(ids.map((id) => refreshQuotaState(id)));
       // 刷新结束后重新拉取该平台账号,使会员计划/有效期等账号字段同步更新
       await fetchAccounts(selectedPlatform);
+      // 同时探测各 agent 真机当前登录的账号,回写「使用中」状态(尽力而为,失败不影响额度刷新结果)
+      await detectActiveAccounts().catch(() => {});
       const failed = results.filter((result) => result.status === 'rejected').length;
       if (failed > 0) {
         toast.error(t('refreshFailed'), {

@@ -31,6 +31,17 @@ export interface AppPathInfo {
   suggestion: string
 }
 
+// Per-platform outcome of account.detectActiveAccounts — which stored account
+// each IDE is actually logged into (reverse-detected from local login state).
+export interface ActiveDetectionResult {
+  /** Frontend (kebab) platform id. */
+  platform: string
+  /** The account id now marked active for this platform, or null. */
+  activeAccountId: string | null
+  /** True when the detected local identity matched a stored account. */
+  matched: boolean
+}
+
 // ── Agent DTO (agents manifest §6) ───────────────────────────────────────────
 export interface AgentInfo {
   id: string
@@ -440,6 +451,7 @@ export interface HxgApi {
         | { account_id: string; error: string }
       >
     >
+    detectActiveAccounts(): Promise<ActiveDetectionResult[]>
   }
   credential: {
     startOauth(provider: string, mode: string): Promise<OAuthPending>

@@ -18,6 +18,7 @@ import { RepositoryAccountPlatformLookup } from './contexts/account/infrastructu
 import { AccountApplicationService } from './contexts/account/application/account-service'
 import { SwitchService } from './contexts/account/application/switch-service'
 import { SwitchOrchestrator } from './contexts/account/application/switch-orchestrator'
+import { ActiveDetectionService } from './contexts/account/application/active-detection-service'
 import { ValidationService } from './contexts/account/application/validation-service'
 import { AccountHealthService } from './contexts/account/application/health-service'
 import { TokenRefreshScheduler } from './contexts/account/application/token-refresh-scheduler'
@@ -221,6 +222,10 @@ export async function buildContainer(): Promise<Container> {
   const credentialImport = new ImportService(credentialRegistry)
   const credentialValidation = new CredentialValidationService(credentialStore, credentialRegistry)
 
+  // Reverse-detect which account each IDE is actually logged into (reuses the
+  // credential import's local scanners), rewriting accounts.is_active to match.
+  const accountActiveDetection = new ActiveDetectionService(accountRepo, credentialImport)
+
   // 4c. Quota context — cache/state repos + live HTTP fetcher + application
   //     service. Depends on the account repo + credential store built above.
   //     The proxy ProxyResolver (built here) is injected so per-account quota
@@ -353,6 +358,7 @@ export async function buildContainer(): Promise<Container> {
     accountSwitchOrchestrator,
     accountValidation,
     accountHealth,
+    accountActiveDetection,
     credentialOAuth,
     credentialImport,
     credentialValidation,

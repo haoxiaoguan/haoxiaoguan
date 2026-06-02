@@ -83,6 +83,7 @@ export const ACCOUNT_CHANNELS = {
   getAccountHealth: 'account:getAccountHealth',
   validateCredential: 'account:validateCredential',
   validateBatch: 'account:validateBatch',
+  detectActiveAccounts: 'account:detectActiveAccounts',
 } as const
 
 // Account-group context — cross-platform account grouping with optional proxy

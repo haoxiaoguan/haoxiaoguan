@@ -16,6 +16,8 @@ interface AccountState {
   fetchAccounts: (agentId: AgentId) => Promise<void>;
   /** Switch to a different account */
   switchAccount: (agentId: AgentId, accountId: string) => Promise<void>;
+  /** Reverse-detect which account each IDE is actually using; rewrites isActive */
+  detectActiveAccounts: () => Promise<void>;
   /** Delete a single account */
   deleteAccount: (accountId: string) => Promise<void>;
   /** Batch delete accounts */
@@ -88,6 +90,36 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       set({ activeAccounts, accounts: currentAccounts, loading: false });
     } catch (err) {
       set({ loading: false, error: String(err) });
+    }
+  },
+
+  detectActiveAccounts: async () => {
+    // Main process reads each IDE's real login state and rewrites is_active in
+    // the DB. We then re-fetch every loaded platform and rebuild activeAccounts
+    // from the fresh isActive flags (also clearing platforms that lost their
+    // active account). Failures are swallowed — detection is best-effort.
+    try {
+      await accountService.detectActiveAccounts();
+    } catch {
+      return;
+    }
+    const agentIds = Array.from(get().accounts.keys());
+    if (agentIds.length === 0) return;
+    try {
+      const lists = await Promise.all(
+        agentIds.map(async (agentId) => [agentId, await accountService.getAccountsByAgent(agentId)] as const),
+      );
+      const accounts = new Map(get().accounts);
+      const activeAccounts = new Map(get().activeAccounts);
+      for (const [agentId, list] of lists) {
+        accounts.set(agentId, list);
+        const active = list.find((a) => a.isActive);
+        if (active) activeAccounts.set(agentId, active.id);
+        else activeAccounts.delete(agentId);
+      }
+      set({ accounts, activeAccounts });
+    } catch {
+      // leave state as-is on a re-fetch failure
     }
   },
 

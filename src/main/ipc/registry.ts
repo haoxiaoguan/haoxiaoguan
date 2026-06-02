@@ -8,6 +8,7 @@ import type { AccountApplicationService } from '../contexts/account/application/
 import type { SwitchOrchestrator } from '../contexts/account/application/switch-orchestrator'
 import type { ValidationService } from '../contexts/account/application/validation-service'
 import type { AccountHealthService } from '../contexts/account/application/health-service'
+import type { ActiveDetectionService } from '../contexts/account/application/active-detection-service'
 import { registerAccountHandlers } from '../contexts/account/ipc/account-handlers'
 
 import type { SkillApplicationService } from '../contexts/skill/application/skill-application-service'
@@ -62,6 +63,7 @@ export interface Services {
   accountSwitchOrchestrator: SwitchOrchestrator
   accountValidation: ValidationService
   accountHealth: AccountHealthService
+  accountActiveDetection: ActiveDetectionService
 
   // credential context (OAuth / import / envelope-aware validation)
   credentialOAuth: OAuthService
@@ -109,6 +111,7 @@ export function registerAllHandlers(services: Services): void {
     switchOrchestrator: services.accountSwitchOrchestrator,
     validationService: services.accountValidation,
     healthService: services.accountHealth,
+    activeDetection: services.accountActiveDetection,
   })
   registerCredentialHandlers({
     oauthService: services.credentialOAuth,

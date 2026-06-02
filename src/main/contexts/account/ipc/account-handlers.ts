@@ -8,6 +8,7 @@ import type { AccountApplicationService } from '../application/account-service'
 import type { SwitchOrchestrator } from '../application/switch-orchestrator'
 import type { ValidationService } from '../application/validation-service'
 import type { AccountHealthService } from '../application/health-service'
+import type { ActiveDetectionService } from '../application/active-detection-service'
 import type { ConflictStrategy } from '../application/export-types'
 
 // Request DTOs as the renderer sends them (src/renderer/services/tauri.ts +
@@ -67,6 +68,7 @@ export interface AccountHandlerDeps {
   switchOrchestrator: SwitchOrchestrator
   validationService: ValidationService
   healthService: AccountHealthService
+  activeDetection: ActiveDetectionService
 }
 
 /**
@@ -76,7 +78,7 @@ export interface AccountHandlerDeps {
  * rejection is a plain string, matching Tauri invoke semantics).
  */
 export function registerAccountHandlers(deps: AccountHandlerDeps): void {
-  const { accountService, switchOrchestrator, validationService, healthService } = deps
+  const { accountService, switchOrchestrator, validationService, healthService, activeDetection } = deps
 
   // import_account — args: { request: ImportAccountRequest } → AccountResponse
   ipcMain.handle(
@@ -300,6 +302,16 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
       }
     },
   )
+
+  // detect_active_accounts — reverse-detect which account each IDE is actually
+  // logged into, rewrite is_active, and return the per-platform outcome.
+  ipcMain.handle(ACCOUNT_CHANNELS.detectActiveAccounts, async () => {
+    try {
+      return await activeDetection.detectAll()
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
 }
 
 // Parse an RFC3339 string to a Date; throw a clear error on a bad value
