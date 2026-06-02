@@ -85,12 +85,16 @@ export class ApiHttpServer {
       this.boundPort = null
       return
     }
-    await new Promise<void>((resolve, reject) => {
-      httpServer.close((err) => (err ? reject(err) : resolve()))
-    })
-    this.httpServer = null
-    this.boundPort = null
-    this.state = 'stopped'
+    try {
+      await new Promise<void>((resolve, reject) => {
+        httpServer.close((err) => (err ? reject(err) : resolve()))
+      })
+    } finally {
+      // 无论 close 成功与否都复位状态机，避免异常下停在 running 且持有半关闭句柄。
+      this.httpServer = null
+      this.boundPort = null
+      this.state = 'stopped'
+    }
   }
 
   private listen(port: number): Promise<number> {
@@ -101,7 +105,6 @@ export class ApiHttpServer {
         fetch: undefined as never, // 占位：实际请求处理走下面挂的 'request' handler。
         hostname: this.config.host,
         port,
-        // serverOptions 不暴露 fetch 时的便捷路径，这里改用 createServer 等价手法：
       }) as unknown as Server
 
       // serve() 已基于 fetch 创建 server；为支持注入纯 node handler（便于测试），
