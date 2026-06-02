@@ -16,6 +16,7 @@ export type {
   ToolChoice,
   ThinkingConfig,
   CanonicalRequest,
+  CacheBreakpointInput,
 } from './canonical-request'
 
 export type { StopReason, Usage, CanonicalResponse } from './canonical-response'

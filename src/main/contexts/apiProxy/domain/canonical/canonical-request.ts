@@ -32,9 +32,18 @@ export type ThinkingConfig =
   | { type: 'enabled'; budgetTokens?: number }
   | { type: 'disabled' }
 
+/** prompt cache 断点输入（旁路元信息，仅 Anthropic 入站填充；其余协议留空）。 */
+export interface CacheBreakpointInput {
+  value: string
+  tokens: number
+  ttl: number
+  isMessageEnd: boolean
+}
+
 /**
  * 规范请求 —— 入站三协议归一化的统一目标，也是平台适配器的输入（M2b+）。
  * system 收敛为单一字符串（多段以 '\n' 连接）；stream 必填（入站缺省 false）。
+ * cacheControl 为旁路元信息：仅 Anthropic 入站在出现 cache_control 时填充，供下游缓存计费模拟使用。
  */
 export interface CanonicalRequest {
   model: string
@@ -48,4 +57,5 @@ export interface CanonicalRequest {
   stream: boolean
   thinking?: ThinkingConfig
   metadata?: Record<string, unknown>
+  cacheControl?: CacheBreakpointInput[]
 }

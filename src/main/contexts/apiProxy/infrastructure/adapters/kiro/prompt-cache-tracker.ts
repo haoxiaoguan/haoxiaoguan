@@ -1,6 +1,10 @@
 // Anthropic prompt-cache 计费的反代侧本地模拟（有状态）。
 // 账号级 sha256 指纹表 + TTL；compute（读，算命中）与 update（写，请求成功后）分离，避免自命中。
 import { createHash } from 'node:crypto'
+import type { CacheBreakpointInput } from '../../../domain/canonical'
+
+// CacheBreakpointInput 权威定义在 domain/canonical；此处 re-export 保持本模块对外 API 不变。
+export type { CacheBreakpointInput }
 
 const ONE_HOUR = 60 * 60 * 1000
 const DEFAULT_TTL = 5 * 60 * 1000
@@ -9,13 +13,6 @@ const OPUS_MIN_CACHEABLE = 4096
 const MAX_CACHE_RATIO = 0.85
 const MAX_ENTRIES_PER_ACCOUNT = 200
 const PRUNE_INTERVAL = 60 * 1000
-
-export interface CacheBreakpointInput {
-  value: string
-  tokens: number
-  ttl: number
-  isMessageEnd: boolean
-}
 
 export interface CacheUsage {
   cacheCreationInputTokens: number

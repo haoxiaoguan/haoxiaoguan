@@ -13,7 +13,9 @@ import type {
   ThinkingConfig,
   StopReason,
   Usage,
+  CacheBreakpointInput,
 } from '../../domain/canonical'
+import { countTextTokens } from '../adapters/kiro/token-estimator'
 
 // ============ Anthropic 线协议类型（子集） ============
 
@@ -35,6 +37,7 @@ export interface AnthropicContentBlock {
   tool_use_id?: string
   content?: string | AnthropicContentBlock[]
   is_error?: boolean
+  cache_control?: { type: string; ttl?: string }
 }
 
 export interface AnthropicMessageParam {
@@ -45,12 +48,14 @@ export interface AnthropicMessageParam {
 export interface AnthropicSystemBlock {
   type: 'text'
   text: string
+  cache_control?: { type: string; ttl?: string }
 }
 
 export interface AnthropicTool {
   name: string
   description?: string
   input_schema: Record<string, unknown>
+  cache_control?: { type: string; ttl?: string }
 }
 
 export type AnthropicToolChoice =
@@ -156,6 +161,57 @@ function mapAnthropicThinking(thinking: AnthropicThinking | undefined): Thinking
   return { type: 'disabled' }
 }
 
+// ============ prompt cache 断点提取 ============
+
+const DEFAULT_TTL_MS = 5 * 60 * 1000
+const ONE_HOUR_MS = 60 * 60 * 1000
+
+// cache_control → TTL（毫秒）。仅 ephemeral 生效；ttl='1h' 取 1 小时，否则默认 5 分钟。
+function extractTTL(cc: { type: string; ttl?: string } | undefined): number {
+  if (cc === undefined || String(cc.type).toLowerCase() !== 'ephemeral') return 0
+  if (cc.ttl === '1h') return ONE_HOUR_MS
+  return DEFAULT_TTL_MS
+}
+
+// 按 tools → system → messages 顺序展开缓存断点（旁路元信息，纯函数，不读时钟）。
+function extractCacheBlocks(req: AnthropicMessagesRequest): CacheBreakpointInput[] {
+  const out: CacheBreakpointInput[] = []
+  for (const t of req.tools ?? []) {
+    const v = JSON.stringify({ k: 'tool', name: t.name, desc: t.description, schema: t.input_schema })
+    out.push({
+      value: v,
+      tokens: countTextTokens(`${t.name} ${t.description ?? ''} ${JSON.stringify(t.input_schema)}`),
+      ttl: extractTTL(t.cache_control),
+      isMessageEnd: false,
+    })
+  }
+  if (Array.isArray(req.system)) {
+    for (const b of req.system) {
+      out.push({
+        value: JSON.stringify({ k: 'sys', text: b.text }),
+        tokens: countTextTokens(b.text),
+        ttl: extractTTL(b.cache_control),
+        isMessageEnd: false,
+      })
+    }
+  } else if (typeof req.system === 'string' && req.system.length > 0) {
+    out.push({ value: JSON.stringify({ k: 'sys', text: req.system }), tokens: countTextTokens(req.system), ttl: 0, isMessageEnd: false })
+  }
+  req.messages.forEach((m, mi) => {
+    const blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content } as AnthropicContentBlock] : m.content
+    blocks.forEach((b, bi) => {
+      const text = b.text ?? b.thinking ?? ''
+      out.push({
+        value: JSON.stringify({ k: 'msg', role: m.role, mi, bi, type: b.type, text }),
+        tokens: countTextTokens(text || JSON.stringify(b)),
+        ttl: extractTTL(b.cache_control),
+        isMessageEnd: bi === blocks.length - 1,
+      })
+    })
+  })
+  return out
+}
+
 // ============ anthropicToIR ============
 
 /** Anthropic Messages 请求 → CanonicalRequest（近恒等映射）。 */
@@ -181,6 +237,9 @@ export function anthropicToIR(req: AnthropicMessagesRequest): CanonicalRequest {
   const thinking = mapAnthropicThinking(req.thinking)
   if (thinking) ir.thinking = thinking
   if (req.metadata !== undefined) ir.metadata = req.metadata
+  // 仅当存在至少一个有效 TTL 断点时填充旁路 cacheControl（否则保持 undefined）。
+  const cacheBlocks = extractCacheBlocks(req)
+  if (cacheBlocks.some((b) => b.ttl > 0)) ir.cacheControl = cacheBlocks
   return ir
 }
 

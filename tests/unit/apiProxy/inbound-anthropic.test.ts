@@ -97,6 +97,27 @@ describe('anthropicToIR', () => {
     expect(ir.toolChoice).toEqual({ type: 'tool', name: 'f' })
     expect(ir.thinking).toEqual({ type: 'enabled', budgetTokens: 2048 })
   })
+
+  it('anthropicToIR 提取 cache_control 断点到 ir.cacheControl', () => {
+    const ir = anthropicToIR({
+      model: 'claude-sonnet-4.5',
+      max_tokens: 100,
+      system: [{ type: 'text', text: 'long system prompt', cache_control: { type: 'ephemeral' } }] as any,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+    })
+    expect(ir.cacheControl).toBeDefined()
+    expect(ir.cacheControl && ir.cacheControl.length).toBeGreaterThan(0)
+    expect(ir.cacheControl && ir.cacheControl[0].ttl).toBeGreaterThan(0)
+  })
+
+  it('无 cache_control 时 ir.cacheControl 为 undefined', () => {
+    const ir = anthropicToIR({
+      model: 'claude-sonnet-4.5',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+    })
+    expect(ir.cacheControl).toBeUndefined()
+  })
 })
 
 describe('irToAnthropicResponse', () => {
