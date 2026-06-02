@@ -21,6 +21,9 @@ export interface RuntimeSettings {
   platformRefreshIntervals: Record<string, number>
   // app/IDE launch path per platform (absolute path to the executable/.app).
   idePaths: Record<string, string>
+  // Max number of accounts refreshed in parallel during a whole-platform batch
+  // sweep. Global (shared across platforms). Default 3, range 1–100.
+  quotaRefreshConcurrency: number
   // When true, Kiro accounts import even when their identity cannot be confirmed
   // online (degraded to a placeholder, never the stale local identity). Default
   // false: import is blocked until a live getUsageLimits succeeds.
@@ -41,6 +44,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   refreshIntervals: {},
   platformRefreshIntervals: {},
   idePaths: {},
+  quotaRefreshConcurrency: 3,
   allowStaleKiroImport: false,
 }
 
@@ -86,6 +90,7 @@ export class AppSettings {
       ws_port: String(this.runtime.wsPort),
       silent_start: String(this.runtime.silentStart),
       autostart: String(this.runtime.autostart),
+      quota_refresh_concurrency: String(this.runtime.quotaRefreshConcurrency),
       allow_stale_kiro_import: String(this.runtime.allowStaleKiroImport),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
@@ -112,7 +117,10 @@ export class AppSettings {
         if (Number.isInteger(n) && n >= 1024) this.runtime.wsPort = n
       } else if (k === 'silent_start') this.runtime.silentStart = v === 'true'
       else if (k === 'autostart') this.runtime.autostart = v === 'true'
-      else if (k === 'allow_stale_kiro_import') this.runtime.allowStaleKiroImport = v === 'true'
+      else if (k === 'quota_refresh_concurrency') {
+        const n = Number(v)
+        if (Number.isInteger(n) && n >= 1 && n <= 100) this.runtime.quotaRefreshConcurrency = n
+      } else if (k === 'allow_stale_kiro_import') this.runtime.allowStaleKiroImport = v === 'true'
       else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

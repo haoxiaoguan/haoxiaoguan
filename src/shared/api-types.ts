@@ -12,6 +12,7 @@ export interface SettingsResponse {
   refreshIntervals: Record<string, number>
   platformRefreshIntervals: Record<string, number>
   idePaths: Record<string, string>
+  quotaRefreshConcurrency: number
   silentStart: boolean
   autostart: boolean
   utilityButtons: string

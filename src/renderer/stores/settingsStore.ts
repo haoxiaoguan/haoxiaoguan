@@ -13,6 +13,8 @@ interface SettingsState {
   platformRefreshIntervals: Map<PlatformId, number>;
   /** Per-platform app/IDE launch path */
   idePaths: Record<string, string>;
+  /** Max accounts refreshed in parallel during a batch sweep (global, 1–10) */
+  quotaRefreshConcurrency: number;
   /** Window close behavior */
   closeBehavior: CloseWindowBehavior;
   /** WebSocket port */
@@ -42,6 +44,8 @@ interface SettingsState {
   setPlatformRefreshInterval: (platform: PlatformId, minutes: number) => Promise<void>;
   /** Update the app/IDE launch path for a platform */
   setIdePath: (platform: PlatformId, path: string) => Promise<void>;
+  /** Update the global batch-sweep concurrency (1–100) */
+  setQuotaRefreshConcurrency: (count: number) => Promise<void>;
   /** Update close behavior */
   setCloseBehavior: (behavior: CloseWindowBehavior) => Promise<void>;
   /** Update WebSocket port */
@@ -62,6 +66,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   refreshIntervals: new Map(),
   platformRefreshIntervals: new Map(),
   idePaths: {},
+  quotaRefreshConcurrency: 3,
   closeBehavior: 'minimize',
   wsPort: 19528,
   silentStart: false,
@@ -91,6 +96,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         refreshIntervals,
         platformRefreshIntervals,
         idePaths: settings.idePaths ?? {},
+        quotaRefreshConcurrency: settings.quotaRefreshConcurrency ?? 3,
         silentStart: settings.silentStart,
         autostart: settings.autostart,
         utilityButtons: settings.utilityButtons,
@@ -155,6 +161,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       if (path.trim().length > 0) idePaths[platform] = path;
       else delete idePaths[platform];
       set({ idePaths });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setQuotaRefreshConcurrency: async (count: number) => {
+    const clamped = Math.min(100, Math.max(1, Math.round(count)));
+    try {
+      await settingsService.updateSettings({
+        settings: { quota_refresh_concurrency: String(clamped) },
+      });
+      set({ quotaRefreshConcurrency: clamped });
     } catch (err) {
       set({ error: String(err) });
     }

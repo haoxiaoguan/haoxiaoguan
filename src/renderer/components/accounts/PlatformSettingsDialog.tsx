@@ -46,18 +46,41 @@ export function PlatformSettingsDialog({ platform, open, onOpenChange }: Platfor
     refreshIntervals,
     platformRefreshIntervals,
     idePaths,
+    quotaRefreshConcurrency,
     setRefreshInterval,
     setPlatformRefreshInterval,
     setIdePath,
+    setQuotaRefreshConcurrency,
     allowStaleKiroImport,
     setAllowStaleKiroImport,
   } = useSettingsStore();
 
   const activeInterval = refreshIntervals.get(platform) ?? 5;
-  const batchInterval = platformRefreshIntervals.get(platform) ?? 0;
+  const batchInterval = platformRefreshIntervals.get(platform) ?? 10;
   const [pathDraft, setPathDraft] = useState('');
   const [suggestion, setSuggestion] = useState('');
   const [detecting, setDetecting] = useState(false);
+  // Local draft for the concurrency text box so typing doesn't fight the clamp;
+  // committed (clamped to 1–100) on blur / Enter.
+  const [concurrencyDraft, setConcurrencyDraft] = useState(String(quotaRefreshConcurrency));
+
+  // Keep the concurrency draft in sync when the dialog (re)opens or the stored
+  // value changes elsewhere.
+  useEffect(() => {
+    setConcurrencyDraft(String(quotaRefreshConcurrency));
+  }, [quotaRefreshConcurrency, open]);
+
+  const commitConcurrency = () => {
+    const n = Number(concurrencyDraft);
+    // Snap to the stored value if invalid, otherwise clamp into 1–100. Always
+    // write the normalized value back to the draft so out-of-range input (e.g.
+    // 111) can never linger in the box, even when the store value is unchanged.
+    const clamped = Number.isFinite(n) && n >= 1
+      ? Math.min(100, Math.max(1, Math.round(n)))
+      : quotaRefreshConcurrency;
+    setConcurrencyDraft(String(clamped));
+    void setQuotaRefreshConcurrency(clamped);
+  };
 
   // On open / platform change: sync the draft with the stored path and fetch a
   // platform+OS aware placeholder suggestion.
@@ -153,6 +176,38 @@ export function PlatformSettingsDialog({ platform, open, onOpenChange }: Platfor
               aria-label={t('platformSettings.autoRefresh.activeLabel')}
               className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
               onChange={(e) => void setRefreshInterval(platform, Number(e.target.value))}
+            />
+          </div>
+
+          {/* Batch sweep concurrency (global): input in the title row, slider below */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-[13px] text-foreground">
+                {t('platformSettings.autoRefresh.concurrencyLabel')}
+                <span className="ml-1 text-[11px] text-muted-foreground">
+                  {t('platformSettings.autoRefresh.global')}
+                </span>
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={concurrencyDraft}
+                aria-label={t('platformSettings.autoRefresh.concurrencyLabel')}
+                className="h-8 w-[72px] rounded-[8px] text-center text-[12px]"
+                onChange={(e) => setConcurrencyDraft(e.target.value)}
+                onBlur={commitConcurrency}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              />
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={quotaRefreshConcurrency}
+              aria-label={t('platformSettings.autoRefresh.concurrencyLabel')}
+              className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              onChange={(e) => void setQuotaRefreshConcurrency(Number(e.target.value))}
             />
           </div>
 

@@ -1,8 +1,17 @@
 import type { AccountRepository } from '../../account/domain/account-repository'
 import { platformToFrontendId, type PlatformId } from '../../account/domain/platform-id'
+import { createLimit } from '../../../platform/async/limit'
 import { QUOTA_FETCH_PLATFORMS } from './quota-service'
 
 const DEFAULT_TICK_MS = 60_000
+
+/** Default whole-platform batch interval (minutes) when a platform is unconfigured.
+ *  Batch refresh is ON by default for every platform; the user can disable a
+ *  platform by explicitly setting its interval to 0. */
+const DEFAULT_BATCH_MIN = 10
+
+/** Default parallelism for a batch sweep when settings omit it. */
+const DEFAULT_CONCURRENCY = 3
 
 /** The slice of QuotaService this scheduler needs (single-account refresh). */
 export interface QuotaRefresher {
@@ -15,6 +24,8 @@ export interface SchedulerSettings {
   getActiveRefreshIntervals(): Record<string, number>
   /** Whole-platform batch refresh intervals (minutes; 0 = disabled) by frontend id. */
   getPlatformRefreshIntervals(): Record<string, number>
+  /** Max accounts refreshed in parallel during a batch sweep (global, 1–10). */
+  getQuotaRefreshConcurrency(): number
 }
 
 interface PlatformTimers {
@@ -27,8 +38,9 @@ interface PlatformTimers {
  *
  * Two independent cadences per platform, both configured in settings:
  *  - BATCH: refresh every account of the platform every
- *    `platform_refresh_interval_<p>` minutes (0 = disabled, the default — we
- *    never sweep a whole platform unless the user opts in, to avoid rate limits).
+ *    `platform_refresh_interval_<p>` minutes. Defaults to 10 (ON) for every
+ *    platform; the user disables a platform by setting its interval to 0. The
+ *    sweep parallelism is bounded by the global `quota_refresh_concurrency`.
  *  - ACTIVE: refresh only the active account every `refresh_interval_<p>`
  *    minutes (default 5).
  *
@@ -97,6 +109,7 @@ export class PlatformQuotaScheduler {
     try {
       const activeIntervals = this.settings.getActiveRefreshIntervals()
       const batchIntervals = this.settings.getPlatformRefreshIntervals()
+      const concurrency = this.settings.getQuotaRefreshConcurrency()
       const refreshed: string[] = []
 
       for (const platform of this.platforms) {
@@ -104,7 +117,7 @@ export class PlatformQuotaScheduler {
         const timers = this.timersFor(platform)
         const nowMs = this.now()
 
-        const batchMin = batchIntervals[key] ?? 0
+        const batchMin = batchIntervals[key] ?? DEFAULT_BATCH_MIN
         const dueBatch = batchMin > 0 && nowMs - timers.lastBatchAt >= batchMin * 60_000
 
         const activeMin = activeIntervals[key] ?? 5
@@ -114,7 +127,7 @@ export class PlatformQuotaScheduler {
           timers.lastBatchAt = nowMs
           // Batch covers the active account too, so skip a redundant active pass.
           timers.lastActiveAt = nowMs
-          const ids = await this.refreshAllOfPlatform(platform)
+          const ids = await this.refreshAllOfPlatform(platform, concurrency)
           refreshed.push(...ids)
         } else if (dueActive) {
           timers.lastActiveAt = nowMs
@@ -141,23 +154,30 @@ export class PlatformQuotaScheduler {
     return t
   }
 
-  private async refreshAllOfPlatform(platform: PlatformId): Promise<string[]> {
+  private async refreshAllOfPlatform(platform: PlatformId, concurrency: number): Promise<string[]> {
     let accounts
     try {
       accounts = await this.accountRepo.findByPlatform(platform)
     } catch {
       return []
     }
-    const done: string[] = []
-    for (const account of accounts) {
-      try {
-        await this.quota.refreshQuota(account.id)
-        done.push(account.id)
-      } catch {
-        // Isolated: a single account's failure must not abort the sweep.
-      }
-    }
-    return done
+    // Bound parallelism by the global concurrency setting so a platform with
+    // many accounts doesn't fire every live fetch at once. Failures are
+    // isolated per account: one bad account never aborts the sweep.
+    const limit = createLimit(concurrency >= 1 ? concurrency : DEFAULT_CONCURRENCY)
+    const settled = await Promise.all(
+      accounts.map((account) =>
+        limit(async () => {
+          try {
+            await this.quota.refreshQuota(account.id)
+            return account.id
+          } catch {
+            return null
+          }
+        }),
+      ),
+    )
+    return settled.filter((id): id is string => id !== null)
   }
 
   private async refreshActiveOfPlatform(platform: PlatformId): Promise<string | null> {

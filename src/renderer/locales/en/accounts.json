@@ -205,6 +205,8 @@
       "batchLabel": "Platform accounts interval",
       "batchOff": "Off",
       "activeLabel": "Active account interval",
+      "concurrencyLabel": "Refresh concurrency",
+      "global": "(global)",
       "minutes": "{{count}} min"
     },
     "launch": {

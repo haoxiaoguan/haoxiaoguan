@@ -205,6 +205,8 @@
       "batchLabel": "平台账号刷新间隔",
       "batchOff": "关闭",
       "activeLabel": "当前账号刷新间隔",
+      "concurrencyLabel": "刷新并发数",
+      "global": "(全局)",
       "minutes": "{{count}} 分钟"
     },
     "launch": {

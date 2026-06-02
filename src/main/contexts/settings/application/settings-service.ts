@@ -43,6 +43,11 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.platformRefreshIntervals
   }
 
+  /** Max accounts refreshed in parallel during a batch sweep (global, 1–10). */
+  getQuotaRefreshConcurrency(): number {
+    return this.file.loadSync().runtime.quotaRefreshConcurrency
+  }
+
   /** Configured app/IDE launch path for a platform, or undefined. */
   getIdePath(platform: string): string | undefined {
     return this.file.loadSync().runtime.idePaths[platform]

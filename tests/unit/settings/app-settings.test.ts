@@ -76,4 +76,26 @@ describe('AppSettings', () => {
     s.applyFlatKv({ 'ide_path_cursor': '   ' }) // whitespace clears it
     expect(s.runtime.idePaths.cursor).toBeUndefined()
   })
+
+  it('defaults quota refresh concurrency to 3 and round-trips a valid value', () => {
+    const s = AppSettings.fromJson({})
+    expect(s.runtime.quotaRefreshConcurrency).toBe(3)
+    expect(s.toFlatKv().quota_refresh_concurrency).toBe('3')
+
+    s.applyFlatKv({ quota_refresh_concurrency: '6' })
+    expect(s.runtime.quotaRefreshConcurrency).toBe(6)
+
+    const again = AppSettings.fromJson(s.toJson())
+    expect(again.runtime.quotaRefreshConcurrency).toBe(6)
+  })
+
+  it('drops an out-of-range quota refresh concurrency', () => {
+    const s = AppSettings.fromJson({})
+    s.applyFlatKv({ quota_refresh_concurrency: '0' }) // below the floor of 1
+    expect(s.runtime.quotaRefreshConcurrency).toBe(3)
+    s.applyFlatKv({ quota_refresh_concurrency: '101' }) // above the ceiling of 100
+    expect(s.runtime.quotaRefreshConcurrency).toBe(3)
+    s.applyFlatKv({ quota_refresh_concurrency: '100' }) // ceiling is valid
+    expect(s.runtime.quotaRefreshConcurrency).toBe(100)
+  })
 })

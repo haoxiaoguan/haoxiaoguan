@@ -34,6 +34,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         refreshIntervals,
         platformRefreshIntervals,
         idePaths,
+        quotaRefreshConcurrency: Number(kv.quota_refresh_concurrency),
         silentStart: kv.silent_start === 'true',
         autostart: kv.autostart === 'true',
         utilityButtons: kv.utility_buttons,

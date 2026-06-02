@@ -114,9 +114,11 @@ vi.mock('@/stores', () => ({
       refreshIntervals: new Map<string, number>(),
       platformRefreshIntervals: new Map<string, number>(),
       idePaths: {} as Record<string, string>,
+      quotaRefreshConcurrency: 3,
       setRefreshInterval: vi.fn(async () => {}),
       setPlatformRefreshInterval: vi.fn(async () => {}),
       setIdePath: vi.fn(async () => {}),
+      setQuotaRefreshConcurrency: vi.fn(async () => {}),
       allowStaleKiroImport: false,
       setAllowStaleKiroImport: vi.fn(async () => {}),
     };
