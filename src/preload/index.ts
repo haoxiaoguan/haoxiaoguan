@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   SETTINGS_CHANNELS,
   SYSTEM_CHANNELS,
+  QUOTA_EVENTS,
   AGENT_CHANNELS,
   ACCOUNT_CHANNELS,
   ACCOUNT_GROUP_CHANNELS,
@@ -25,6 +26,13 @@ const api: HxgApi = {
   },
   system: {
     getAppDirs: () => ipcRenderer.invoke(SYSTEM_CHANNELS.getAppDirs),
+    pickPath: () => ipcRenderer.invoke(SYSTEM_CHANNELS.pickPath),
+    detectAppPath: (platform) => ipcRenderer.invoke(SYSTEM_CHANNELS.detectAppPath, platform),
+    onQuotaUpdated: (cb) => {
+      const listener = (_e: unknown, accountIds: string[]) => cb(accountIds)
+      ipcRenderer.on(QUOTA_EVENTS.updated, listener)
+      return () => ipcRenderer.removeListener(QUOTA_EVENTS.updated, listener)
+    },
   },
   agent: {
     listAgents: () => ipcRenderer.invoke(AGENT_CHANNELS.listAgents),

@@ -21,6 +21,7 @@ import { SwitchOrchestrator } from './contexts/account/application/switch-orches
 import { ValidationService } from './contexts/account/application/validation-service'
 import { AccountHealthService } from './contexts/account/application/health-service'
 import { TokenRefreshScheduler } from './contexts/account/application/token-refresh-scheduler'
+import { PlatformQuotaScheduler } from './contexts/quota/application/platform-quota-scheduler'
 import type {
   ProviderCapabilityRegistry,
   ValidationCapability,
@@ -167,6 +168,8 @@ function buildAccountCapabilityRegistry(
 export interface Container extends Services {
   /** Token-refresh / health-scan scheduler (start on ready, stop on quit). */
   tokenRefreshScheduler: TokenRefreshScheduler
+  /** Per-platform quota refresh scheduler (start on ready, stop on quit). */
+  platformQuotaScheduler: PlatformQuotaScheduler
 }
 
 // Builds and wires all service singletons (the Electron equivalent of the
@@ -269,6 +272,9 @@ export async function buildContainer(): Promise<Container> {
     platformLookup,
   )
   const tokenRefreshScheduler = new TokenRefreshScheduler(accountValidation, accountRepo)
+  // Per-platform quota scheduler. onRefreshed is wired by main.ts once the
+  // BrowserWindow exists (so it can push quota:updated to the renderer).
+  const platformQuotaScheduler = new PlatformQuotaScheduler(settings, accountRepo, quotaService)
 
   // 5. Skill context — depends on the shared agents registry (asSkillsSync).
   const installedSkillRepo = new MikroOrmInstalledSkillRepository()
@@ -364,5 +370,6 @@ export async function buildContainer(): Promise<Container> {
     proxyService,
     accountGroupService,
     tokenRefreshScheduler,
+    platformQuotaScheduler,
   }
 }

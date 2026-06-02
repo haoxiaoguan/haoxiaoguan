@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ComponentType, ReactNode } from 'react';
+import { forwardRef } from 'react';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
@@ -162,19 +163,17 @@ export function ManagementActionButton({
   );
 }
 
-export function ManagementIconButton({
-  label,
-  icon: Icon,
-  spin,
-  className,
-  ...props
-}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
-  label: string;
-  icon: ComponentType<LucideProps>;
-  spin?: boolean;
-}) {
+export const ManagementIconButton = forwardRef<
+  HTMLButtonElement,
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
+    label: string;
+    icon: ComponentType<LucideProps>;
+    spin?: boolean;
+  }
+>(function ManagementIconButton({ label, icon: Icon, spin, className, ...props }, ref) {
   return (
     <Button
+      ref={ref}
       type="button"
       variant="outline"
       size="icon"
@@ -186,7 +185,7 @@ export function ManagementIconButton({
       <Icon className={cn('size-3.5', spin && 'animate-spin')} strokeWidth={1.9} aria-hidden />
     </Button>
   );
-}
+});
 
 export function ManagementPaginationBar({
   total,

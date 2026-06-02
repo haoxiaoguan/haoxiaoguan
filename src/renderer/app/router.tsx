@@ -8,7 +8,6 @@ import Groups from '../pages/Groups';
 import Analytics from '../pages/Analytics';
 import Settings from '../pages/Settings';
 import GeneralSettings from '../components/settings/pages/GeneralSettings';
-import AgentSettings from '../components/settings/pages/AgentSettings';
 import SyncSettings from '../components/settings/pages/SyncSettings';
 import AdvancedSettings from '../components/settings/pages/AdvancedSettings';
 import AboutSettings from '../components/settings/pages/AboutSettings';
@@ -29,7 +28,6 @@ export function AppRouter() {
           <Route path="settings" element={<Settings />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<GeneralSettings />} />
-            <Route path="agent" element={<AgentSettings />} />
             <Route path="sync" element={<SyncSettings />} />
             <Route path="advanced" element={<AdvancedSettings />} />
             <Route path="about" element={<AboutSettings />} />

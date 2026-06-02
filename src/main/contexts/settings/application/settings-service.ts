@@ -32,4 +32,19 @@ export class SettingsApplicationService {
   getAllowStaleKiroImport(): boolean {
     return this.file.loadSync().runtime.allowStaleKiroImport
   }
+
+  /** Active-account refresh intervals (minutes) keyed by platform. */
+  getActiveRefreshIntervals(): Record<string, number> {
+    return this.file.loadSync().runtime.refreshIntervals
+  }
+
+  /** Whole-platform batch refresh intervals (minutes; 0 = disabled) by platform. */
+  getPlatformRefreshIntervals(): Record<string, number> {
+    return this.file.loadSync().runtime.platformRefreshIntervals
+  }
+
+  /** Configured app/IDE launch path for a platform, or undefined. */
+  getIdePath(platform: string): string | undefined {
+    return this.file.loadSync().runtime.idePaths[platform]
+  }
 }

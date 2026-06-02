@@ -1,8 +1,9 @@
-import { ipcMain, app } from 'electron'
+import { ipcMain, app, dialog } from 'electron'
 import { toIpcError } from '../../../ipc/error'
 import { SETTINGS_CHANNELS, SYSTEM_CHANNELS } from '../../../../shared/ipc-channels'
 import type { SettingsApplicationService, AppDirs } from '../application/settings-service'
 import { appDataDir, appConfigDir, appLogDir } from '../../../platform/persistence/paths'
+import { detectAppPath, type AppPathInfo } from '../../../platform/identity/app-paths'
 
 interface UpdateSettingsRequest {
   settings: Record<string, string>
@@ -14,9 +15,15 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
       const kv = svc.getAllSettings()
       // Reshape flat KV into the typed SettingsResponse the frontend expects.
       const refreshIntervals: Record<string, number> = {}
+      const platformRefreshIntervals: Record<string, number> = {}
+      const idePaths: Record<string, string> = {}
       for (const [k, v] of Object.entries(kv)) {
-        if (k.startsWith('refresh_interval_')) {
+        if (k.startsWith('platform_refresh_interval_')) {
+          platformRefreshIntervals[k.slice('platform_refresh_interval_'.length)] = Number(v)
+        } else if (k.startsWith('refresh_interval_')) {
           refreshIntervals[k.slice('refresh_interval_'.length)] = Number(v)
+        } else if (k.startsWith('ide_path_')) {
+          idePaths[k.slice('ide_path_'.length)] = v
         }
       }
       return {
@@ -25,6 +32,8 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         closeBehavior: kv.close_behavior,
         wsPort: Number(kv.ws_port),
         refreshIntervals,
+        platformRefreshIntervals,
+        idePaths,
         silentStart: kv.silent_start === 'true',
         autostart: kv.autostart === 'true',
         utilityButtons: kv.utility_buttons,
@@ -54,5 +63,23 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
 
   ipcMain.handle(SYSTEM_CHANNELS.getAppDirs, async (): Promise<AppDirs> => {
     return { dataDir: appDataDir(), configDir: appConfigDir(), logDir: appLogDir() }
+  })
+
+  // Native file picker for the per-platform app/IDE launch path. On macOS the
+  // dialog treats an .app bundle as a selectable file. Returns the chosen
+  // absolute path, or null if the user cancels.
+  ipcMain.handle(SYSTEM_CHANNELS.pickPath, async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  // Auto-detect the app/IDE install path for a platform on the current OS. Pure
+  // filesystem probing of well-known locations (no launch, no shell) — returns
+  // the first existing candidate plus a placeholder suggestion for the UI.
+  ipcMain.handle(SYSTEM_CHANNELS.detectAppPath, async (_e, platform: string): Promise<AppPathInfo> => {
+    return detectAppPath(platform)
   })
 }

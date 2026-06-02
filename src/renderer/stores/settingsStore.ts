@@ -9,6 +9,10 @@ interface SettingsState {
   language: string;
   /** Per-platform refresh intervals in minutes */
   refreshIntervals: Map<PlatformId, number>;
+  /** Per-platform whole-platform batch refresh intervals in minutes (0 = off) */
+  platformRefreshIntervals: Map<PlatformId, number>;
+  /** Per-platform app/IDE launch path */
+  idePaths: Record<string, string>;
   /** Window close behavior */
   closeBehavior: CloseWindowBehavior;
   /** WebSocket port */
@@ -34,6 +38,10 @@ interface SettingsState {
   setLanguage: (language: string) => Promise<void>;
   /** Update refresh interval for a platform */
   setRefreshInterval: (platform: PlatformId, minutes: number) => Promise<void>;
+  /** Update whole-platform batch refresh interval (minutes; 0 disables) */
+  setPlatformRefreshInterval: (platform: PlatformId, minutes: number) => Promise<void>;
+  /** Update the app/IDE launch path for a platform */
+  setIdePath: (platform: PlatformId, path: string) => Promise<void>;
   /** Update close behavior */
   setCloseBehavior: (behavior: CloseWindowBehavior) => Promise<void>;
   /** Update WebSocket port */
@@ -52,6 +60,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: 'system',
   language: 'en',
   refreshIntervals: new Map(),
+  platformRefreshIntervals: new Map(),
+  idePaths: {},
   closeBehavior: 'minimize',
   wsPort: 19528,
   silentStart: false,
@@ -69,12 +79,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       for (const [key, value] of Object.entries(settings.refreshIntervals)) {
         refreshIntervals.set(key as PlatformId, value);
       }
+      const platformRefreshIntervals = new Map<PlatformId, number>();
+      for (const [key, value] of Object.entries(settings.platformRefreshIntervals ?? {})) {
+        platformRefreshIntervals.set(key as PlatformId, value);
+      }
       set({
         theme: settings.theme as ThemeMode,
         language: settings.language,
         closeBehavior: settings.closeBehavior as CloseWindowBehavior,
         wsPort: settings.wsPort,
         refreshIntervals,
+        platformRefreshIntervals,
+        idePaths: settings.idePaths ?? {},
         silentStart: settings.silentStart,
         autostart: settings.autostart,
         utilityButtons: settings.utilityButtons,
@@ -112,6 +128,33 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const refreshIntervals = new Map(get().refreshIntervals);
       refreshIntervals.set(platform, minutes);
       set({ refreshIntervals });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setPlatformRefreshInterval: async (platform: PlatformId, minutes: number) => {
+    try {
+      await settingsService.updateSettings({
+        settings: { [`platform_refresh_interval_${platform}`]: String(minutes) },
+      });
+      const platformRefreshIntervals = new Map(get().platformRefreshIntervals);
+      platformRefreshIntervals.set(platform, minutes);
+      set({ platformRefreshIntervals });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setIdePath: async (platform: PlatformId, path: string) => {
+    try {
+      await settingsService.updateSettings({
+        settings: { [`ide_path_${platform}`]: path },
+      });
+      const idePaths = { ...get().idePaths };
+      if (path.trim().length > 0) idePaths[platform] = path;
+      else delete idePaths[platform];
+      set({ idePaths });
     } catch (err) {
       set({ error: String(err) });
     }

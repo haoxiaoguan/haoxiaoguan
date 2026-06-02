@@ -108,6 +108,20 @@ vi.mock('@/stores', () => ({
     };
     return selector ? selector(state) : state;
   },
+  // PlatformSettingsDialog (rendered by Accounts) reads the settings store.
+  useSettingsStore: (selector?: (state: Record<string, unknown>) => unknown) => {
+    const state = {
+      refreshIntervals: new Map<string, number>(),
+      platformRefreshIntervals: new Map<string, number>(),
+      idePaths: {} as Record<string, string>,
+      setRefreshInterval: vi.fn(async () => {}),
+      setPlatformRefreshInterval: vi.fn(async () => {}),
+      setIdePath: vi.fn(async () => {}),
+      allowStaleKiroImport: false,
+      setAllowStaleKiroImport: vi.fn(async () => {}),
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 // EditAccountDialog also reads the proxy store + proxy/account-group services.
@@ -126,6 +140,11 @@ vi.mock('@/services/tauri', () => ({
   accountGroupService: { listGroupsForAccount: vi.fn(async () => []) },
   proxyService: { getAccountBinding: vi.fn(async () => null) },
   credentialService: { startOAuth: vi.fn(), completeOAuth: vi.fn() },
+  systemService: {
+    pickPath: vi.fn(async () => null),
+    detectAppPath: vi.fn(async () => ({ detected: null, suggestion: '' })),
+    onQuotaUpdated: vi.fn(() => () => {}),
+  },
 }));
 
 describe('Accounts empty state layout', () => {
@@ -196,7 +215,7 @@ describe('Accounts empty state layout', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /windsurf/i }));
-    fireEvent.click(screen.getByLabelText('添加账号'));
+    fireEvent.click(screen.getByLabelText('tooltips.add'));
 
     expect(mocks.addAccountSheetProps[mocks.addAccountSheetProps.length - 1]).toMatchObject({
       open: true,
@@ -300,7 +319,7 @@ describe('Accounts empty state layout', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /cursor/i }));
-    fireEvent.click(screen.getByLabelText('表格'));
+    fireEvent.click(screen.getByLabelText('tooltips.viewTable'));
 
     const accountTable = screen.getByTestId('accounts-table');
     const tableScroll = accountTable.firstElementChild;

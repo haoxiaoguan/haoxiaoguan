@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   Bell,
   BookOpen,
-  Cpu,
   FolderTree,
   Headphones,
   Info,
@@ -70,7 +69,6 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [
   { to: '/settings/general', labelKey: 'nav:settings.menu.general', icon: SlidersHorizontal },
-  { to: '/settings/agent', labelKey: 'nav:settings.menu.agent', icon: Cpu },
   { to: '/settings/sync', labelKey: 'nav:settings.menu.sync', icon: RefreshCw },
   { to: '/settings/advanced', labelKey: 'nav:settings.menu.advanced', icon: Wrench },
   { to: '/settings/about', labelKey: 'nav:settings.menu.about', icon: Info },
@@ -91,7 +89,6 @@ function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/proxies')) return 'nav:proxies';
   if (pathname.startsWith('/groups')) return 'nav:groups';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
-  if (pathname.startsWith('/settings/agent')) return 'nav:settings.menu.agent';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';
   if (pathname.startsWith('/settings/advanced')) return 'nav:settings.menu.advanced';
   if (pathname.startsWith('/settings/about')) return 'nav:settings.menu.about';

@@ -12,7 +12,15 @@ export interface RuntimeSettings {
   wsPort: number
   silentStart: boolean
   autostart: boolean
+  // Active-account quota refresh interval per platform, in minutes (2–30). The
+  // active account is the one currently in use in the app/IDE.
   refreshIntervals: Record<string, number>
+  // Whole-platform batch quota refresh interval per platform, in minutes. 0
+  // means disabled (default), otherwise 10–240. Drives PlatformQuotaScheduler's
+  // batch sweep over every account of that platform.
+  platformRefreshIntervals: Record<string, number>
+  // app/IDE launch path per platform (absolute path to the executable/.app).
+  idePaths: Record<string, string>
   // When true, Kiro accounts import even when their identity cannot be confirmed
   // online (degraded to a placeholder, never the stale local identity). Default
   // false: import is blocked until a live getUsageLimits succeeds.
@@ -31,6 +39,8 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   silentStart: false,
   autostart: false,
   refreshIntervals: {},
+  platformRefreshIntervals: {},
+  idePaths: {},
   allowStaleKiroImport: false,
 }
 
@@ -56,6 +66,8 @@ export class AppSettings {
     const ui = { ...UI_DEFAULTS, ...(raw.ui ?? {}) }
     const runtime = { ...RUNTIME_DEFAULTS, ...(raw.runtime ?? {}) }
     runtime.refreshIntervals = { ...(raw.runtime?.refreshIntervals ?? {}) }
+    runtime.platformRefreshIntervals = { ...(raw.runtime?.platformRefreshIntervals ?? {}) }
+    runtime.idePaths = { ...(raw.runtime?.idePaths ?? {}) }
     return new AppSettings(ui, runtime, raw.webdav ?? {}, raw.localBackup ?? {})
   }
 
@@ -79,6 +91,12 @@ export class AppSettings {
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
     }
+    for (const [platform, minutes] of Object.entries(this.runtime.platformRefreshIntervals)) {
+      kv[`platform_refresh_interval_${platform}`] = String(minutes)
+    }
+    for (const [platform, path] of Object.entries(this.runtime.idePaths)) {
+      kv[`ide_path_${platform}`] = path
+    }
     return kv
   }
 
@@ -99,6 +117,19 @@ export class AppSettings {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)
         if (Number.isInteger(n) && n >= 2 && n <= 30) this.runtime.refreshIntervals[platform] = n
+      } else if (k.startsWith('platform_refresh_interval_')) {
+        const n = Number(v)
+        const platform = k.slice('platform_refresh_interval_'.length)
+        // 0 disables the batch sweep; otherwise 10–240 minutes.
+        if (Number.isInteger(n) && (n === 0 || (n >= 10 && n <= 240))) {
+          this.runtime.platformRefreshIntervals[platform] = n
+        }
+      } else if (k.startsWith('ide_path_')) {
+        const platform = k.slice('ide_path_'.length)
+        const path = v.trim()
+        // Empty clears the path; non-empty stores it.
+        if (path.length > 0) this.runtime.idePaths[platform] = path
+        else delete this.runtime.idePaths[platform]
       }
     }
   }

@@ -10,6 +10,15 @@ export const SETTINGS_CHANNELS = {
 
 export const SYSTEM_CHANNELS = {
   getAppDirs: 'system:getAppDirs',
+  pickPath: 'system:pickPath',
+  detectAppPath: 'system:detectAppPath',
+} as const
+
+// Main → renderer push events (webContents.send). Not request/response.
+export const QUOTA_EVENTS = {
+  // Fired by PlatformQuotaScheduler after a batch/active sweep refreshes
+  // accounts, so the renderer can re-pull the affected quota states.
+  updated: 'quota:updated',
 } as const
 
 export const SKILL_CHANNELS = {

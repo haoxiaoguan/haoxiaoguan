@@ -220,6 +220,8 @@ export interface Settings {
   closeBehavior: CloseWindowBehavior;
   wsPort: number;
   refreshIntervals: Record<string, number>;
+  platformRefreshIntervals: Record<string, number>;
+  idePaths: Record<string, string>;
   silentStart: boolean;
   autostart: boolean;
   utilityButtons: string;
@@ -245,6 +247,11 @@ export interface AppDirs {
   dataDir: string;
   configDir: string;
   logDir: string;
+}
+
+export interface AppPathInfo {
+  detected: string | null;
+  suggestion: string;
 }
 
 // ============================================================================

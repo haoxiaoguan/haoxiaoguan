@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
+import { QUOTA_EVENTS } from '../shared/ipc-channels'
 
 // userData location. Tests set HXG_USER_DATA_DIR to an isolated temp dir so
 // parallel/sequential e2e launches don't share a SingletonLock or DB. In
@@ -241,6 +242,13 @@ if (!gotLock) {
     // stopped on quit.
     services.tokenRefreshScheduler.start()
 
+    // Per-platform quota scheduler (60s tick). Push quota:updated to the renderer
+    // after each sweep so the UI re-pulls the affected quota states.
+    services.platformQuotaScheduler.setOnRefreshed((accountIds) => {
+      mainWindow?.webContents.send(QUOTA_EVENTS.updated, accountIds)
+    })
+    services.platformQuotaScheduler.start()
+
     // 30-minute periodic local backup. Run once immediately, then on interval.
     const runBackup = (): void => {
       services?.localBackup.periodicBackupIfNeeded().catch((e) => {
@@ -285,6 +293,7 @@ app.on('before-quit', () => {
     pendingOAuthPurgeTimer = null
   }
   services?.tokenRefreshScheduler.stop()
+  services?.platformQuotaScheduler.stop()
 })
 
 app.on('window-all-closed', () => {

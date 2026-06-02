@@ -10,14 +10,24 @@ export interface SettingsResponse {
   closeBehavior: string
   wsPort: number
   refreshIntervals: Record<string, number>
+  platformRefreshIntervals: Record<string, number>
+  idePaths: Record<string, string>
   silentStart: boolean
   autostart: boolean
   utilityButtons: string
+  allowStaleKiroImport: boolean
 }
 export interface AppDirs {
   dataDir: string
   configDir: string
   logDir: string
+}
+// Result of system.detectAppPath — auto-detected app/IDE path for a platform.
+export interface AppPathInfo {
+  /** First existing candidate on the current OS, or null if none found. */
+  detected: string | null
+  /** Representative placeholder path for the current platform+OS. */
+  suggestion: string
 }
 
 // ── Agent DTO (agents manifest §6) ───────────────────────────────────────────
@@ -374,6 +384,12 @@ export interface HxgApi {
   }
   system: {
     getAppDirs(): Promise<AppDirs>
+    /** Native open-file dialog; resolves to the chosen path or null on cancel. */
+    pickPath(): Promise<string | null>
+    /** Auto-detect the app/IDE install path for a platform on the current OS. */
+    detectAppPath(platform: string): Promise<AppPathInfo>
+    /** Subscribe to background quota-refresh events. Returns an unsubscribe fn. */
+    onQuotaUpdated(cb: (accountIds: string[]) => void): () => void
   }
   agent: {
     listAgents(): Promise<AgentInfo[]>

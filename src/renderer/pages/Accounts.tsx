@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, forwardRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -42,9 +42,11 @@ import {
 import AddAccountSheet from '../components/AddAccountSheet';
 import AccountCard from '../components/accounts/AccountCard';
 import EditAccountDialog from '../components/accounts/EditAccountDialog';
+import { PlatformSettingsDialog } from '../components/accounts/PlatformSettingsDialog';
 import { AccountDataTable } from '../components/accounts/AccountDataTable';
 import { PlatformIcon } from '../components/accounts/PlatformIcon';
 import { primaryMetric } from '../components/accounts/quota-display';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAccountStore, useHealthStore, usePlatformStore, useQuotaStateStore } from '../stores';
 import { cn } from '@/lib/utils';
 import type { Account, AccountQuotaState, AgentId } from '../types';
@@ -126,6 +128,7 @@ export default function Accounts() {
   const [searchText, setSearchText] = useState('');
   const [view, setView] = useState<ViewMode>('card');
   const [showImportSheet, setShowImportSheet] = useState(false);
+  const [showPlatformSettings, setShowPlatformSettings] = useState(false);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -384,29 +387,64 @@ export default function Accounts() {
             <div data-testid="accounts-header-actions" className="flex shrink-0 items-center gap-1">
               <InfoPill icon={Users} tone="blue" label={`${selectedStats.total} 个账号`} />
               <InfoPill icon={Bell} tone="orange" label={`${selectedStats.warning} 个告警`} />
-              <Button
-                className="size-8 rounded-[8px] p-0"
-                aria-label="添加账号"
-                title="添加账号"
-                onClick={() => setShowImportSheet(true)}
-              >
-                <Plus className="size-3.5" strokeWidth={2} />
-              </Button>
-              <HeaderIconButton
-                label={refreshing ? t('refreshing') : t('refresh')}
-                icon={RefreshCw}
-                spin={refreshing}
-                onClick={handleRefreshSelectedPlatform}
-              />
-              <HeaderIconButton label={t('actions.export')} icon={Upload} onClick={() => {}} />
-              <HeaderIconButton label="设置" icon={Settings} onClick={() => {}} />
-              <div
-                data-testid="accounts-view-toggle"
-                className="inline-flex h-8 shrink-0 overflow-hidden rounded-[8px] border border-input bg-card"
-              >
-                <ViewButton label="表格" active={view === 'table'} icon={Table2} onClick={() => setView('table')} />
-                <ViewButton label="卡片" active={view === 'card'} icon={LayoutGrid} onClick={() => setView('card')} />
-              </div>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className="size-8 rounded-[8px] p-0"
+                      aria-label={t('tooltips.add')}
+                      onClick={() => setShowImportSheet(true)}
+                    >
+                      <Plus className="size-3.5" strokeWidth={2} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('tooltips.add')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HeaderIconButton
+                      label={refreshing ? t('refreshing') : t('tooltips.refresh')}
+                      icon={RefreshCw}
+                      spin={refreshing}
+                      onClick={handleRefreshSelectedPlatform}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>{refreshing ? t('refreshing') : t('tooltips.refresh')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HeaderIconButton label={t('tooltips.export')} icon={Upload} onClick={() => {}} />
+                  </TooltipTrigger>
+                  <TooltipContent>{t('tooltips.export')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HeaderIconButton
+                      label={t('tooltips.settings')}
+                      icon={Settings}
+                      onClick={() => setShowPlatformSettings(true)}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>{t('tooltips.settings')}</TooltipContent>
+                </Tooltip>
+                <div
+                  data-testid="accounts-view-toggle"
+                  className="inline-flex h-8 shrink-0 overflow-hidden rounded-[8px] border border-input bg-card"
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ViewButton label={t('tooltips.viewTable')} active={view === 'table'} icon={Table2} onClick={() => setView('table')} />
+                    </TooltipTrigger>
+                    <TooltipContent>{t('tooltips.viewTable')}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ViewButton label={t('tooltips.viewCard')} active={view === 'card'} icon={LayoutGrid} onClick={() => setView('card')} />
+                    </TooltipTrigger>
+                    <TooltipContent>{t('tooltips.viewCard')}</TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
             </div>
           </div>
 
@@ -585,6 +623,12 @@ export default function Accounts() {
         onSaved={() => fetchAccounts(selectedPlatform)}
       />
 
+      <PlatformSettingsDialog
+        platform={selectedPlatform}
+        open={showPlatformSettings}
+        onOpenChange={setShowPlatformSettings}
+      />
+
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -608,19 +652,18 @@ export default function Accounts() {
   );
 }
 
-function ViewButton({
-  label,
-  active,
-  icon: Icon,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  icon: LucideIcon;
-  onClick: () => void;
-}) {
+const ViewButton = forwardRef<
+  HTMLButtonElement,
+  {
+    label: string;
+    active: boolean;
+    icon: LucideIcon;
+    onClick: () => void;
+  }
+>(function ViewButton({ label, active, icon: Icon, onClick }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-label={label}
       aria-pressed={active}
@@ -633,7 +676,7 @@ function ViewButton({
       <Icon className="size-3.5" strokeWidth={2} />
     </button>
   );
-}
+});
 
 function isAgentId(value: unknown): value is AgentId {
   return typeof value === 'string' && ALL_PLATFORMS.includes(value as AgentId);

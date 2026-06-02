@@ -191,6 +191,34 @@
     "active": "活跃",
     "inactive": "未激活"
   },
+  "tooltips": {
+    "add": "添加账号",
+    "refresh": "刷新当前平台账号",
+    "export": "导出账号",
+    "settings": "平台设置",
+    "viewTable": "表格视图",
+    "viewCard": "卡片视图"
+  },
+  "platformSettings": {
+    "title": "{{platform}} 设置",
+    "autoRefresh": {
+      "batchLabel": "平台账号刷新间隔",
+      "batchOff": "关闭",
+      "activeLabel": "当前账号刷新间隔",
+      "minutes": "{{count}} 分钟"
+    },
+    "launch": {
+      "title": "启动路径",
+      "placeholder": "未设置",
+      "browse": "浏览",
+      "detect": "自动检测",
+      "detected": "已检测到：{{path}}",
+      "notFound": "未找到该平台的应用，请手动选择"
+    },
+    "special": {
+      "kiroAllowStale": "允许在无法联网确认身份时导入"
+    }
+  },
   "switchSuccess": "切换成功",
   "switchFailed": "切换失败",
   "refreshSuccess": "刷新成功",

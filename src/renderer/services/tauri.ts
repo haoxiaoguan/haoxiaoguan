@@ -22,6 +22,7 @@ import type {
   UpdateSettingsRequest,
   WsStatus,
   AppDirs,
+  AppPathInfo,
   ExportAccountsRequest,
   ImportAccountsRequest,
   ImportResultResponse,
@@ -126,6 +127,9 @@ export const wsService = {
 
 export const systemService = {
   getAppDirs: () => bridge().system.getAppDirs() as Promise<AppDirs>,
+  pickPath: () => bridge().system.pickPath() as Promise<string | null>,
+  detectAppPath: (platform: string) => bridge().system.detectAppPath(platform) as Promise<AppPathInfo>,
+  onQuotaUpdated: (cb: (accountIds: string[]) => void) => bridge().system.onQuotaUpdated(cb),
 };
 
 // ============================================================================
