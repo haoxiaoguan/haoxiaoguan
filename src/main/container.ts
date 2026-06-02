@@ -101,6 +101,26 @@ import { createApiRequestListener } from './contexts/apiProxy/infrastructure/htt
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
+// KiroAdapter（'kiro' 上游）+ 4 个窄 port 类型。container 用现成 repo/resolver 实例适配这些 port。
+import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
+import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
+import type {
+  KiroCredentialPort,
+  KiroAccountPort,
+  KiroDispatcherPort,
+  KiroTokenRefresher,
+  KiroCredential,
+  KiroAccountInfo,
+  RefreshedKiroToken,
+} from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
+// 号小管 Kiro 身份 helper —— token 刷新 + auth-method/region/profileArn 解析（与额度路径同源）。
+import {
+  refreshKiroToken,
+  resolveKiroAuthMethod,
+  normalizeRegion,
+  parseRegionFromArn,
+  defaultProfileArnFor,
+} from './platform/net/kiro/kiro-identity-client'
 
 // Proxy context — outbound proxy IP management. ProxyResolver is injected into
 // QuotaService so per-account quota fetches route through the bound proxy.
@@ -367,7 +387,81 @@ export async function buildContainer(): Promise<Container> {
   //     装配顺序固定：建 registry → 建 service（无 server）→ 建 listener（闭包引用 service）→
   //     建 ApiHttpServer(listener) → service.attachServer(server)。
   const platformRegistry = new PlatformRegistry()
-  platformRegistry.register(new EchoUpstreamAdapter()) // M2b 仅注册 Echo 占位（M3 增 KiroAdapter）。
+  platformRegistry.register(new EchoUpstreamAdapter()) // 保留 Echo 占位（'echo'）。
+
+  // KiroAdapter（'kiro'）—— 复用已建的 credentialStore / accountRepo / proxyResolver。
+  // 4 个窄 port 用现成实例适配（KiroAdapter 不直接依赖任何 repo 类）。
+  const kiroCredentialPort: KiroCredentialPort = {
+    async retrieve(accountId: string): Promise<KiroCredential | null> {
+      const cred = await credentialStore.retrieve(accountId)
+      if (cred === null) return null
+      return {
+        token: cred.token,
+        ...(cred.refreshToken !== undefined ? { refreshToken: cred.refreshToken } : {}),
+        ...(cred.expiresAt !== undefined ? { expiresAt: cred.expiresAt } : {}),
+        ...(cred.rawMetadata !== undefined ? { rawMetadata: cred.rawMetadata } : {}),
+      }
+    },
+  }
+  const kiroAccountPort: KiroAccountPort = {
+    async findActiveKiroAccount(): Promise<KiroAccountInfo | null> {
+      const acc = await accountRepo.findActiveByPlatform('kiro')
+      if (acc === null) return null
+      return {
+        id: acc.id,
+        email: acc.email,
+        ...(acc.loginProvider !== undefined ? { loginProvider: acc.loginProvider } : {}),
+        profilePayload: acc.profilePayload,
+      }
+    },
+  }
+  const kiroDispatcherPort: KiroDispatcherPort = {
+    dispatcherForAccount(accountId: string) {
+      return proxyResolver.dispatcherForAccount(accountId)
+    },
+  }
+  const kiroTokenRefresher: KiroTokenRefresher = {
+    async refresh(cred: KiroCredential, region: string): Promise<RefreshedKiroToken | undefined> {
+      const refresh = cred.refreshToken
+      if (refresh === undefined || refresh.trim().length === 0) return undefined
+      const authMethod = resolveKiroAuthMethod(cred.rawMetadata)
+      if (authMethod === 'api_key') return undefined // api_key 模式不刷新。
+      // region：传入优先，否则按 profileArn 段兜底（与额度路径一致）。
+      const meta = (cred.rawMetadata ?? {}) as Record<string, unknown>
+      const profileArn =
+        typeof meta.profileArn === 'string'
+          ? meta.profileArn
+          : typeof meta.profile_arn === 'string'
+            ? (meta.profile_arn as string)
+            : defaultProfileArnFor(authMethod)
+      const useRegion = normalizeRegion(region || parseRegionFromArn(profileArn))
+      try {
+        if (authMethod === 'idc') {
+          const clientId = typeof meta.client_id === 'string' ? meta.client_id : (meta.clientId as string | undefined)
+          const clientSecret =
+            typeof meta.client_secret === 'string' ? meta.client_secret : (meta.clientSecret as string | undefined)
+          if (clientId === undefined || clientSecret === undefined) return undefined
+          const out = await refreshKiroToken({ kind: 'idc', clientId, clientSecret, refreshToken: refresh, region: useRegion })
+          return { token: out.accessToken, ...(out.refreshToken ? { refreshToken: out.refreshToken } : {}), ...(out.expiresAt ? { expiresAt: out.expiresAt } : {}) }
+        }
+        const out = await refreshKiroToken({ kind: 'social', refreshToken: refresh, region: useRegion })
+        return { token: out.accessToken, ...(out.refreshToken ? { refreshToken: out.refreshToken } : {}), ...(out.expiresAt ? { expiresAt: out.expiresAt } : {}) }
+      } catch {
+        // 刷新失败（含 invalid_grant 永久失效）→ 放弃重试，由上游抛鉴权错误。
+        return undefined
+      }
+    },
+  }
+  const kiroUpstreamClient = new KiroUpstreamClient({ refresher: kiroTokenRefresher })
+  platformRegistry.register(
+    new KiroAdapter({
+      credentials: kiroCredentialPort,
+      accounts: kiroAccountPort,
+      dispatchers: kiroDispatcherPort,
+      client: kiroUpstreamClient,
+    }),
+  )
+
   const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry })
   const apiHttpServer = new ApiHttpServer(
     createApiRequestListener({
