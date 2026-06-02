@@ -58,11 +58,17 @@ function refresherTo(tok: RefreshedKiroToken): KiroTokenRefresher {
 }
 
 describe('endpointsForRegion', () => {
-  it('returns CodeWhisperer first then region AmazonQ', () => {
+  // M3b：仅区域 AmazonQ 单端点（接受小写 modelId）；CodeWhisperer 端点（大写模型 ID）留 M4。
+  it('returns only the region AmazonQ endpoint', () => {
     const eps = endpointsForRegion('eu-central-1')
-    expect(eps.map((e) => e.name)).toEqual(['CodeWhisperer', 'AmazonQ'])
-    expect(eps[0].url).toBe('https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse')
-    expect(eps[1].url).toBe('https://q.eu-central-1.amazonaws.com/generateAssistantResponse')
+    expect(eps.map((e) => e.name)).toEqual(['AmazonQ'])
+    expect(eps[0].url).toBe('https://q.eu-central-1.amazonaws.com/generateAssistantResponse')
+  })
+
+  it('routes us-east-1 to the us-east-1 AmazonQ endpoint', () => {
+    const eps = endpointsForRegion('us-east-1')
+    expect(eps).toHaveLength(1)
+    expect(eps[0].url).toBe('https://q.us-east-1.amazonaws.com/generateAssistantResponse')
   })
 })
 
@@ -71,7 +77,7 @@ describe('KiroUpstreamClient.buildRequest', () => {
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
     const req = client.buildRequest(endpointsForRegion('us-east-1')[0], ENVELOPE, CTX)
     expect(req.method).toBe('POST')
-    expect(req.url).toBe('https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse')
+    expect(req.url).toBe('https://q.us-east-1.amazonaws.com/generateAssistantResponse')
     expect(req.headers['Authorization']).toBe('Bearer tok-1')
     expect(req.headers['x-amzn-kiro-agent-mode']).toBe('spec')
     expect(req.headers['amz-sdk-invocation-id']).toBe('inv-1')
@@ -79,6 +85,17 @@ describe('KiroUpstreamClient.buildRequest', () => {
     expect(req.headers['x-amz-user-agent']).toContain('mid-abc')
     expect(req.headers['user-agent']).toContain('codewhispererstreaming')
     expect(JSON.parse(req.body).conversationState.conversationId).toBe('conv-1')
+  })
+
+  it('uses space-separated KiroIDE suffix for x-amz-user-agent and dash-separated for user-agent (chat version 0.12.155)', () => {
+    // 逐字对照参考 线协议模块：getKiroAmzUserAgent 用空格、getKiroUserAgent 用破折号；聊天版本 0.12.155。
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const req = client.buildRequest(endpointsForRegion('us-east-1')[0], ENVELOPE, CTX)
+    // x-amz-user-agent：空格分隔 `KiroIDE 0.12.155 mid-abc`。
+    expect(req.headers['x-amz-user-agent']).toBe('aws-sdk-js/1.0.34 KiroIDE 0.12.155 mid-abc')
+    // user-agent：破折号分隔后缀 `KiroIDE-0.12.155-mid-abc`，且不含空格分隔的 KiroIDE token。
+    expect(req.headers['user-agent']).toContain('KiroIDE-0.12.155-mid-abc')
+    expect(req.headers['user-agent']).not.toContain('KiroIDE 0.12.155')
   })
 
   it('uses vibe agent-mode when ctx says so', () => {
@@ -140,10 +157,11 @@ describe('KiroUpstreamClient.chat — 401 refresh retry', () => {
     })
     const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')
     expect(resp.content).toEqual([{ type: 'text', text: 'ok' }])
-    // 第一次用旧 token，刷新后第二次用新 token；两次都打 CodeWhisperer（同端点）。
+    // 第一次用旧 token，刷新后第二次用新 token；两次都打 AmazonQ（同端点）。
     expect(f.calls[0].headers['Authorization']).toBe('Bearer tok-1')
     expect(f.calls[1].headers['Authorization']).toBe('Bearer tok-2')
     expect(f.calls[0].url).toBe(f.calls[1].url)
+    expect(f.calls[0].url).toContain('q.us-east-1')
   })
 
   it('does not retry when refresher returns undefined — throws auth error', async () => {
@@ -154,24 +172,25 @@ describe('KiroUpstreamClient.chat — 401 refresh retry', () => {
   })
 })
 
-describe('KiroUpstreamClient.chat — endpoint fallback', () => {
-  it('falls back to AmazonQ on 429 of CodeWhisperer', async () => {
+describe('KiroUpstreamClient.chat — single AmazonQ endpoint (no fallback)', () => {
+  // M3b 仅一个 AmazonQ 端点：429 无可回退端点 → 直接抛错（不再尝试其它端点）。
+  it('throws on 429 without falling back (only one endpoint)', async () => {
     const f = scriptedFetch([
       errResp(429, 'quota'),
       okBytes([{ eventType: 'assistantResponseEvent', payload: { content: 'second' } }]),
     ])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    const resp = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')
-    expect(resp.content).toEqual([{ type: 'text', text: 'second' }])
-    expect(f.calls[0].url).toContain('codewhisperer.us-east-1')
-    expect(f.calls[1].url).toContain('q.us-east-1')
+    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')).rejects.toThrow(/429/)
+    // 只打了一次（AmazonQ），未消费第二个脚本响应。
+    expect(f.calls).toHaveLength(1)
+    expect(f.calls[0].url).toContain('q.us-east-1')
   })
 
-  it('throws when all endpoints fail', async () => {
+  it('throws on non-2xx (no other endpoint to try)', async () => {
     const f = scriptedFetch([errResp(500, 'boom')])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
     await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5')).rejects.toThrow(/500/)
-    expect(f.calls.length).toBeGreaterThanOrEqual(2)
+    expect(f.calls).toHaveLength(1)
   })
 })
 

@@ -1,6 +1,7 @@
 // KiroUpstreamClient：CodeWhisperer generateAssistantResponse 调用的传输层。
 // 职责：① 按端点构建请求（url/headers/body=conversationState 信封）；② 经注入 fetchImpl 发送
-// （端点回退：CodeWhisperer → 区域 AmazonQ）；③ 401/403 调一次 refresher 后重试同端点；
+// （M3b 仅区域 AmazonQ 单端点，接受小写 modelId；CodeWhisperer 大写模型 ID 端点留 M4）；
+// ③ 401/403 调一次 refresher 后重试同端点；
 // ④ 全量 buffer 响应字节（禁逐 chunk，否则丢尾帧）→ parseKiroEventStream（M3a）；
 // ⑤ chat 折叠事件流为 CanonicalResponse，chatStream 逐个 yield 已解析事件（M3b 非真增量）。
 // 代理出站不在此层：KiroAdapter 用 runWithDispatcher 包住调用，defaultKiroFetch 读 currentDispatcher。
@@ -8,7 +9,7 @@
 import { release } from 'node:os'
 import { fetch as undiciFetch } from 'undici'
 import { currentDispatcher } from '../../../../../platform/net/dispatcher-context'
-import { KIRO_IDE_VERSION, runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-identity-client'
+import { runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-identity-client'
 import { parseKiroEventStream } from './kiro-event-stream'
 import type { ConversationStateEnvelope } from './kiro-wire-types'
 import type { KiroTokenRefresher } from './kiro-ports'
@@ -23,6 +24,9 @@ import type {
 // Amazon 可失效指纹（跟随官方 IDE / AWS SDK 更新；不硬编码进密钥，作模块级常量便于一处更新）。
 const AWS_SDK_VERSION = '1.0.34'
 const AWS_STREAMING_API_VERSION = '1.0.34'
+// 聊天端点专用 IDE 版本：来源参考 KIRO_VERSION（线协议模块），聊天端点可能拒旧版本。
+// 注意与 kiro-identity-client 的 KIRO_IDE_VERSION（额度路径 0.11.107）分离，互不影响。
+const KIRO_CHAT_IDE_VERSION = '0.12.155'
 const HTTP_TIMEOUT_MS = 120_000 // 聊天补全可能较慢，给足超时（额度 GET 用 25s，这里放宽）。
 
 // --- 端点表 ---
@@ -33,17 +37,14 @@ export interface KiroEndpoint {
   name: string
 }
 
-/** 顺序回退端点：CodeWhisperer（固定 us-east-1）→ 区域 AmazonQ（由 region 解析）。 */
+/**
+ * M3b 阶段端点：只返回区域 AmazonQ 端点（由 region 解析）。
+ * CodeWhisperer 端点需大写内部模型 ID（resolveCodeWhispererModelId via ListAvailableModels），
+ * 小写 modelId 会被 CodeWhisperer 端点 400，留 M4；M3b 用 AmazonQ 端点接受小写 modelId。
+ */
 export function endpointsForRegion(region: string): KiroEndpoint[] {
   const amazonQBase = runtimeEndpointForRegion(region).replace(/\/+$/, '')
-  return [
-    {
-      url: 'https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse',
-      origin: 'AI_EDITOR',
-      name: 'CodeWhisperer',
-    },
-    { url: `${amazonQBase}/generateAssistantResponse`, origin: 'AI_EDITOR', name: 'AmazonQ' },
-  ]
+  return [{ url: `${amazonQBase}/generateAssistantResponse`, origin: 'AI_EDITOR', name: 'AmazonQ' }]
 }
 
 // --- 注入 fetch 抽象（mock 友好；默认实现读 ambient dispatcher） ---
@@ -107,12 +108,16 @@ function osToken(): string {
 }
 
 function buildHeaders(ctx: KiroCallContext): Record<string, string> {
-  const suffix = `KiroIDE-${KIRO_IDE_VERSION}-${ctx.machineId}`
+  // 两个 UA 头格式不同（逐字对照参考 线协议模块）：
+  //   user-agent（getKiroUserAgent）后缀用破折号：`KiroIDE-${V}-${mid}`
+  //   x-amz-user-agent（getKiroAmzUserAgent）后缀用空格：`KiroIDE ${V} ${mid}`
+  const dashSuffix = `KiroIDE-${KIRO_CHAT_IDE_VERSION}-${ctx.machineId}`
+  const spaceSuffix = `KiroIDE ${KIRO_CHAT_IDE_VERSION} ${ctx.machineId}`
   return {
     'content-type': 'application/json',
     'x-amzn-kiro-agent-mode': ctx.agentMode,
-    'x-amz-user-agent': `aws-sdk-js/${AWS_SDK_VERSION} ${suffix}`,
-    'user-agent': `aws-sdk-js/${AWS_SDK_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${process.versions.node} api/codewhispererstreaming#${AWS_STREAMING_API_VERSION} m/E ${suffix}`,
+    'x-amz-user-agent': `aws-sdk-js/${AWS_SDK_VERSION} ${spaceSuffix}`,
+    'user-agent': `aws-sdk-js/${AWS_SDK_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${process.versions.node} api/codewhispererstreaming#${AWS_STREAMING_API_VERSION} m/E ${dashSuffix}`,
     'amz-sdk-invocation-id': ctx.invocationId,
     'amz-sdk-request': 'attempt=1; max=3',
     Authorization: `Bearer ${ctx.accessToken}`,
@@ -177,7 +182,7 @@ export class KiroUpstreamClient {
 
   /** 构建单端点请求（纯函数，无副作用；origin 已在 envelope 内，均 'AI_EDITOR'）。 */
   buildRequest(endpoint: KiroEndpoint, envelope: ConversationStateEnvelope, ctx: KiroCallContext): KiroHttpRequest {
-    void endpoint.origin // 当前两端点 origin 均 'AI_EDITOR'，envelope 内已设；保留字段以备 M4 端点差异。
+    void endpoint.origin // AmazonQ 端点 origin 'AI_EDITOR'，envelope 内已设；保留字段以备 M4 CodeWhisperer 端点差异。
     return { url: endpoint.url, method: 'POST', headers: buildHeaders(ctx), body: JSON.stringify(envelope) }
   }
 
@@ -196,6 +201,8 @@ export class KiroUpstreamClient {
   }
 
   // 端点回退 + 401/403 单次刷新重试 → 返回全量响应字节。
+  // M3b 端点表仅含 AmazonQ 单端点：429/其它非 2xx 记录后耗尽端点直接抛错（无回退）；
+  // 循环结构保持通用，M4 端点表恢复多端点后自动按序回退。
   private async send(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<Uint8Array> {
     const endpoints = endpointsForRegion(ctx.region)
     let lastError: Error | undefined
@@ -216,7 +223,7 @@ export class KiroUpstreamClient {
         if (resp.ok) return resp.bytes()
 
         if (resp.status === 429) {
-          // 配额耗尽：换下一个端点（不刷新）。
+          // 配额耗尽：记录错误并结束本端点（不刷新）；无更多端点时抛出。
           lastError = new KiroUpstreamError(`quota exhausted on ${endpoint.name} (429)`, 429)
           break
         }

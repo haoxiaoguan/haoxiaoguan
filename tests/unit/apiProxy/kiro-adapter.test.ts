@@ -79,7 +79,7 @@ describe('KiroAdapter.supportsModel / listModels', () => {
 })
 
 describe('KiroAdapter.chat', () => {
-  it('selects account, retrieves cred, calls CodeWhisperer, returns folded response', async () => {
+  it('selects account, retrieves cred, calls AmazonQ endpoint, returns folded response', async () => {
     const f = fetchReturning([
       { eventType: 'assistantResponseEvent', payload: { content: 'hi back' } },
       { eventType: 'messageMetadataEvent', payload: { tokenUsage: { uncachedInputTokens: 4, outputTokens: 2 } } },
@@ -97,8 +97,8 @@ describe('KiroAdapter.chat', () => {
     // Authorization 用解密 token；invocation-id 来自 requestId（确定性）。
     expect(f.calls[0].headers['Authorization']).toBe('Bearer tok-1')
     expect(f.calls[0].headers['amz-sdk-invocation-id']).toBe('req-1')
-    // social provider → 社交 profile ARN（从 profilePayload 取，region us-east-1）。
-    expect(f.calls[0].url).toContain('codewhisperer.us-east-1')
+    // M3b 端点：区域 AmazonQ（接受小写 modelId）；CodeWhisperer 大写模型 ID 端点留 M4。
+    expect(f.calls[0].url).toContain('q.us-east-1')
   })
 
   it('throws NoKiroAccountError when no active account', async () => {
