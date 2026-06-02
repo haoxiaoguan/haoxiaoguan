@@ -124,3 +124,35 @@ describe('AppSettings', () => {
     expect(s.runtime.apiProxyPort).toBe(8788) // unchanged
   })
 })
+
+describe('apiProxy client-key settings (M2b)', () => {
+  it('defaults: empty client keys + allowAnonymousLoopback=true', () => {
+    const s = AppSettings.fromJson({})
+    expect(s.runtime.apiProxyClientKeys).toEqual([])
+    expect(s.runtime.apiProxyAllowAnonymousLoopback).toBe(true)
+  })
+
+  it('flat KV round-trips client keys (newline-joined) + bool', () => {
+    const s = AppSettings.fromJson({})
+    s.applyFlatKv({
+      api_proxy_client_keys: 'k1\nk2\n  \nk3',
+      api_proxy_allow_anonymous_loopback: 'false',
+    })
+    expect(s.runtime.apiProxyClientKeys).toEqual(['k1', 'k2', 'k3'])
+    expect(s.runtime.apiProxyAllowAnonymousLoopback).toBe(false)
+    const kv = s.toFlatKv()
+    expect(kv.api_proxy_client_keys).toBe('k1\nk2\nk3')
+    expect(kv.api_proxy_allow_anonymous_loopback).toBe('false')
+  })
+
+  it('empty client-keys string clears the list', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyClientKeys: ['a'] } })
+    s.applyFlatKv({ api_proxy_client_keys: '' })
+    expect(s.runtime.apiProxyClientKeys).toEqual([])
+  })
+
+  it('fromJson sanitizes non-string entries', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyClientKeys: ['ok', 1, null, 'two'] } })
+    expect(s.runtime.apiProxyClientKeys).toEqual(['ok', 'two'])
+  })
+})

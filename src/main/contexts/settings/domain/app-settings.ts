@@ -33,6 +33,11 @@ export interface RuntimeSettings {
   apiProxyEnabled: boolean
   // 反代服务监听端口（127.0.0.1）。默认 8788；被占用时 ApiHttpServer 自动回退 +1。
   apiProxyPort: number
+  // 客户端 API Key（明文，M2b 简单版；加密多 Key 实体留 M5）。默认 []：未配置鉴权。
+  // 客户端经 Authorization: Bearer / x-api-key / x-goog-api-key / ?key= 之一携带。
+  apiProxyClientKeys: string[]
+  // 为 true 时本机回环（127.0.0.1/::1）在未配置 Key 情况下免鉴权，便于本地直连。默认 true。
+  apiProxyAllowAnonymousLoopback: boolean
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -53,6 +58,8 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   allowStaleKiroImport: false,
   apiProxyEnabled: false,
   apiProxyPort: 8788,
+  apiProxyClientKeys: [],
+  apiProxyAllowAnonymousLoopback: true,
 }
 
 export class AppSettings {
@@ -79,6 +86,9 @@ export class AppSettings {
     runtime.refreshIntervals = { ...(raw.runtime?.refreshIntervals ?? {}) }
     runtime.platformRefreshIntervals = { ...(raw.runtime?.platformRefreshIntervals ?? {}) }
     runtime.idePaths = { ...(raw.runtime?.idePaths ?? {}) }
+    runtime.apiProxyClientKeys = Array.isArray(raw.runtime?.apiProxyClientKeys)
+      ? raw.runtime.apiProxyClientKeys.filter((k: unknown): k is string => typeof k === 'string')
+      : []
     return new AppSettings(ui, runtime, raw.webdav ?? {}, raw.localBackup ?? {})
   }
 
@@ -101,6 +111,8 @@ export class AppSettings {
       allow_stale_kiro_import: String(this.runtime.allowStaleKiroImport),
       api_proxy_enabled: String(this.runtime.apiProxyEnabled),
       api_proxy_port: String(this.runtime.apiProxyPort),
+      api_proxy_client_keys: this.runtime.apiProxyClientKeys.join('\n'),
+      api_proxy_allow_anonymous_loopback: String(this.runtime.apiProxyAllowAnonymousLoopback),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -134,6 +146,14 @@ export class AppSettings {
       else if (k === 'api_proxy_port') {
         const n = Number(v)
         if (Number.isInteger(n) && n >= 1024) this.runtime.apiProxyPort = n
+      } else if (k === 'api_proxy_client_keys') {
+        // 空串 → 清空；否则按换行拆分、去空白、丢空行。
+        this.runtime.apiProxyClientKeys = v
+          .split('\n')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      } else if (k === 'api_proxy_allow_anonymous_loopback') {
+        this.runtime.apiProxyAllowAnonymousLoopback = v === 'true'
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

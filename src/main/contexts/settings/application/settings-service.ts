@@ -39,6 +39,16 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.apiProxyPort
   }
 
+  /** 客户端 API Key 列表（明文，M2b 简单版；默认 []）。 */
+  getApiProxyClientKeys(): string[] {
+    return this.file.loadSync().runtime.apiProxyClientKeys
+  }
+
+  /** 本机回环是否免鉴权（默认 true）。 */
+  getApiProxyAllowAnonymousLoopback(): boolean {
+    return this.file.loadSync().runtime.apiProxyAllowAnonymousLoopback
+  }
+
   getAllowStaleKiroImport(): boolean {
     return this.file.loadSync().runtime.allowStaleKiroImport
   }
