@@ -47,6 +47,9 @@ import { registerProxyHandlers } from '../contexts/proxy/ipc/proxy-handlers'
 import type { AccountGroupService } from '../contexts/accountGroup/application/account-group-service'
 import { registerAccountGroupHandlers } from '../contexts/accountGroup/ipc/account-group-handlers'
 
+import type { ApiProxyService } from '../contexts/apiProxy/application/api-proxy-service'
+import { registerApiProxyHandlers } from '../contexts/apiProxy/ipc/api-proxy-handlers'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
@@ -100,6 +103,9 @@ export interface Services {
 
   // account-group context (cross-platform account groupings + group→proxy binding)
   accountGroupService: AccountGroupService
+
+  // apiProxy context (local AI API reverse-proxy HTTP service)
+  apiProxyService: ApiProxyService
 }
 
 // Each context contributes a register*Handlers function.
@@ -132,4 +138,5 @@ export function registerAllHandlers(services: Services): void {
   registerWebSocketHandlers(services.websocket)
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
+  registerApiProxyHandlers(services.apiProxyService)
 }

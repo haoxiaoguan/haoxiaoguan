@@ -186,3 +186,11 @@ export const PROXY_CHANNELS = {
   bindAccountToProxy: 'proxy:bindAccountToProxy',
   unbindAccount: 'proxy:unbindAccount',
 } as const
+
+// API 反代服务上下文（apiProxy）—— 本地 HTTP 服务开关 + 状态。新功能，无 Tauri
+// 来源命令名，故 channel 取 "apiProxy:<method>"。
+export const API_PROXY_CHANNELS = {
+  start: 'apiProxy:start',
+  stop: 'apiProxy:stop',
+  getStatus: 'apiProxy:getStatus',
+} as const
