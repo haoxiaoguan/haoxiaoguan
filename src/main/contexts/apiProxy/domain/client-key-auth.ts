@@ -40,24 +40,24 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 /**
- * 鉴权决策（M2b 语义）：
- * - keys 为空 → 「未配置鉴权」，始终放行（allowAnonymousLoopback 仅影响“未配置时是否仍需本地”，
- *   M2b 不强制非回环，安全护栏留 M5）。即 keys.length===0 → { ok:true }。
- * - keys 非空 → 取到的 key ∈ keys 放行；取不到 → missing；取到但不匹配 → invalid。
+ * 鉴权决策（M5 语义，激活 loopback 护栏）：
+ * - keys 为空 → 未配置鉴权；allowAnonymousLoopback && isLoopback → 放行，否则拒（missing）。
+ * - keys 非空 → 没带 key：allowAnonymousLoopback && isLoopback → 免 key 放行，否则 missing；
+ *               带了 key：常量时间比对，匹配放行（keyId），否则 invalid。
  */
 export function authorizeClientKey(
   info: ClientKeyRequestInfo,
   config: ClientKeyAuthConfig,
 ): AuthDecision {
   if (config.keys.length === 0) {
-    // 未配置鉴权：放行。allowAnonymousLoopback=true 时本地直连本就免 Key；
-    // 即使该标志为 false，M2b 也不在“无配置 Key”时拦截（避免锁死本地调试），强制护栏留 M5。
-    return { ok: true }
+    if (config.allowAnonymousLoopback && info.isLoopback) return { ok: true }
+    return { ok: false, reason: 'missing' }
   }
   const provided = extractClientKey(info)
-  if (provided === undefined) return { ok: false, reason: 'missing' }
-  for (const k of config.keys) {
-    if (constantTimeEqual(k, provided)) return { ok: true, keyId: provided }
+  if (provided === undefined) {
+    if (config.allowAnonymousLoopback && info.isLoopback) return { ok: true }
+    return { ok: false, reason: 'missing' }
   }
+  for (const k of config.keys) if (constantTimeEqual(k, provided)) return { ok: true, keyId: provided }
   return { ok: false, reason: 'invalid' }
 }
