@@ -587,6 +587,8 @@ export interface HxgApi {
     setClientKeyActive(id: string, isActive: boolean): Promise<void>
     /** 删除客户端 Key。 */
     deleteClientKey(id: string): Promise<void>
+    /** 查询账号池运行态健康（合并持久化 meta + 内存运行态）。 */
+    getAccountPoolHealth(): Promise<AccountPoolHealthRow[]>
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>
@@ -617,6 +619,17 @@ export type ApiProxyState = 'stopped' | 'running' | 'failed'
 export interface ApiProxyStatus {
   state: ApiProxyState
   port?: number
+}
+
+// 账号池健康行（IPC 返回）：合并账号 meta + 运行态快照。
+export interface AccountPoolHealthRow {
+  accountId: string
+  email: string
+  status?: string
+  runtimeState: 'available' | 'cooldown' | 'quota_exhausted' | 'suspended'
+  failureCount: number
+  cooldownUntilMs?: number
+  quotaExhaustedAtMs?: number
 }
 
 // 客户端 Key 元信息（不含明文/密文）。

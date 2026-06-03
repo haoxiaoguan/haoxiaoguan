@@ -5,6 +5,7 @@ import type { ApiProxyService, ApiProxyStatus } from '../application/api-proxy-s
 import type { AccountHealthTracker } from '../domain/account-selection/account-health-tracker'
 import type { KiroAccountPort } from '../infrastructure/adapters/kiro/kiro-ports'
 import { makeClearSuspensionHandler } from '../application/clear-suspension-handler'
+import { makeAccountPoolHealthHandler } from '../application/account-pool-health-handler'
 import type { ApiProxyKeyService } from '../application/api-proxy-key-service'
 
 // 注册 apiProxy 的 IPC handlers：start / stop / getStatus / clearAccountSuspension。
@@ -46,6 +47,15 @@ export function registerApiProxyHandlers(
     ipcMain.handle(API_PROXY_CHANNELS.clearAccountSuspension, async (_e, accountId: string): Promise<void> => {
       try {
         await clearSuspensionHandler(accountId)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+
+    const poolHealthHandler = makeAccountPoolHealthHandler(health, accounts)
+    ipcMain.handle(API_PROXY_CHANNELS.getAccountPoolHealth, async () => {
+      try {
+        return await poolHealthHandler()
       } catch (e) {
         throw new Error(toIpcError(e))
       }

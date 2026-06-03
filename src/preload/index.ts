@@ -189,6 +189,7 @@ const api: HxgApi = {
     listClientKeys: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listClientKeys),
     setClientKeyActive: (id: string, isActive: boolean) => ipcRenderer.invoke(API_PROXY_CHANNELS.setClientKeyActive, id, isActive),
     deleteClientKey: (id: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteClientKey, id),
+    getAccountPoolHealth: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getAccountPoolHealth),
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),

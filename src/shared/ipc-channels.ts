@@ -198,4 +198,5 @@ export const API_PROXY_CHANNELS = {
   listClientKeys: 'apiProxy:listClientKeys',
   setClientKeyActive: 'apiProxy:setClientKeyActive',
   deleteClientKey: 'apiProxy:deleteClientKey',
+  getAccountPoolHealth: 'apiProxy:getAccountPoolHealth',
 } as const
