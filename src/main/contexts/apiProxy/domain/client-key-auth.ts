@@ -16,7 +16,7 @@ export interface ClientKeyRequestInfo {
   isLoopback: boolean
 }
 
-export type AuthDecision = { ok: true } | { ok: false; reason: 'missing' | 'invalid' }
+export type AuthDecision = { ok: true; keyId?: string } | { ok: false; reason: 'missing' | 'invalid' }
 
 /** 按优先级取客户端 Key；都没有则 undefined。 */
 export function extractClientKey(info: ClientKeyRequestInfo): string | undefined {
@@ -57,7 +57,7 @@ export function authorizeClientKey(
   const provided = extractClientKey(info)
   if (provided === undefined) return { ok: false, reason: 'missing' }
   for (const k of config.keys) {
-    if (constantTimeEqual(k, provided)) return { ok: true }
+    if (constantTimeEqual(k, provided)) return { ok: true, keyId: provided }
   }
   return { ok: false, reason: 'invalid' }
 }

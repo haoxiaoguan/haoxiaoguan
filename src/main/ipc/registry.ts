@@ -49,6 +49,8 @@ import { registerAccountGroupHandlers } from '../contexts/accountGroup/ipc/accou
 
 import type { ApiProxyService } from '../contexts/apiProxy/application/api-proxy-service'
 import { registerApiProxyHandlers } from '../contexts/apiProxy/ipc/api-proxy-handlers'
+import type { AccountHealthTracker } from '../contexts/apiProxy/domain/account-selection/account-health-tracker'
+import type { KiroAccountPort } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
 
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
@@ -106,6 +108,10 @@ export interface Services {
 
   // apiProxy context (local AI API reverse-proxy HTTP service)
   apiProxyService: ApiProxyService
+  /** 账号运行态健康跟踪（供 T10 IPC 手动解除挂起用）。 */
+  apiProxyHealth: AccountHealthTracker
+  /** Kiro 账号 port（供 T10 IPC 持久化 clearSuspension 用）。 */
+  kiroAccountPort: KiroAccountPort
 }
 
 // Each context contributes a register*Handlers function.

@@ -106,6 +106,9 @@ import { ResponsesStore } from './contexts/apiProxy/infrastructure/responses-sto
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { PromptCacheTracker } from './contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
 import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
+import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
+import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'
+import { FailoverAdapter } from './contexts/apiProxy/domain/account-selection/failover-adapter'
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
 import type {
   KiroCredentialPort,
@@ -444,14 +447,26 @@ export async function buildContainer(): Promise<Container> {
   }
   const kiroUpstreamClient = new KiroUpstreamClient({ refresher: kiroTokenRefresher })
   const kiroCacheTracker = new PromptCacheTracker()
-  // kiroCredentialPort / kiroAccountPort / kiroDispatcherPort 保留给 Task 9 的 FailoverAdapter 使用。
-  // KiroAdapter M4 版只需 client + cacheTracker（账号/凭据/代理经 ctx 由 FailoverAdapter 注入）。
-  platformRegistry.register(
-    new KiroAdapter({
-      client: kiroUpstreamClient,
-      cacheTracker: kiroCacheTracker,
-    }),
+  const apiProxyHealth = new AccountHealthTracker({
+    baseCooldownMs: settings.getApiProxyBaseCooldownMs(),
+    maxBackoffMultiplier: settings.getApiProxyMaxBackoffMultiplier(),
+    quotaResetMs: settings.getApiProxyQuotaResetMs(),
+    probabilisticRetryChance: settings.getApiProxyProbabilisticRetryChance(),
+  })
+  const apiProxySelector = new AccountPoolSelector(
+    {
+      strategy: settings.getApiProxySelectionStrategy(),
+      perAccountConcurrency: settings.getApiProxyPerAccountConcurrency(),
+      affinityTtlMs: settings.getApiProxyAffinityTtlMs(),
+    },
+    apiProxyHealth,
   )
+  const kiroInner = new KiroAdapter({ client: kiroUpstreamClient, cacheTracker: kiroCacheTracker })
+  platformRegistry.register(new FailoverAdapter({
+    inner: kiroInner, selector: apiProxySelector, health: apiProxyHealth,
+    accounts: kiroAccountPort, credentials: kiroCredentialPort, dispatchers: kiroDispatcherPort,
+    maxRetries: settings.getApiProxyMaxRetries(),
+  }))
 
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘），默认目录在 appDataDir()/responses。
   const responsesStore = new ResponsesStore()
@@ -494,6 +509,8 @@ export async function buildContainer(): Promise<Container> {
     proxyService,
     accountGroupService,
     apiProxyService,
+    apiProxyHealth,
+    kiroAccountPort,
     tokenRefreshScheduler,
     platformQuotaScheduler,
   }

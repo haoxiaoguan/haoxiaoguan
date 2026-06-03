@@ -72,4 +72,30 @@ export class SettingsApplicationService {
   getIdePath(platform: string): string | undefined {
     return this.file.loadSync().runtime.idePaths[platform]
   }
+
+  // ---- apiProxy 账号池 / 健康跟踪标量（M4）----
+  getApiProxySelectionStrategy(): 'sticky-lru' | 'round-robin' {
+    return this.file.loadSync().runtime.apiProxySelectionStrategy
+  }
+  getApiProxyAffinityTtlMs(): number {
+    return this.file.loadSync().runtime.apiProxyAffinityTtlMs
+  }
+  getApiProxyPerAccountConcurrency(): number {
+    return this.file.loadSync().runtime.apiProxyPerAccountConcurrency
+  }
+  getApiProxyMaxRetries(): number {
+    return this.file.loadSync().runtime.apiProxyMaxRetries
+  }
+  getApiProxyBaseCooldownMs(): number {
+    return this.file.loadSync().runtime.apiProxyBaseCooldownMs
+  }
+  getApiProxyMaxBackoffMultiplier(): number {
+    return this.file.loadSync().runtime.apiProxyMaxBackoffMultiplier
+  }
+  getApiProxyQuotaResetMs(): number {
+    return this.file.loadSync().runtime.apiProxyQuotaResetMs
+  }
+  getApiProxyProbabilisticRetryChance(): number {
+    return this.file.loadSync().runtime.apiProxyProbabilisticRetryChance
+  }
 }

@@ -72,9 +72,14 @@ function formatFromPath(path: string): RequestFormat {
   return 'openai'
 }
 
+// Hono 应用级变量（c.set/c.get 的类型安全声明）。
+type HonoVariables = {
+  apiProxyClientKeyId: string
+}
+
 // 组装 Hono app：中间件链 + 路由表 + onError。M1 的 GET /health 行为保持（200 { ok: true }）。
-export function createHonoApp(deps: HonoAppDeps): Hono {
-  const app = new Hono()
+export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariables }> {
+  const app = new Hono<{ Variables: HonoVariables }>()
   const parseIntent = makeRequestIntentParser(deps.knownPlatforms)
 
   // CORS：放行常见 AI 客户端头（含 anthropic-version / x-api-key / x-goog-api-key）。
@@ -114,6 +119,9 @@ export function createHonoApp(deps: HonoAppDeps): Hono {
       // 鉴权失败：missing/invalid 一律 401（M2b 不区分；安全护栏留 M5）。
       return c.json(errorBodyForFormat(formatFromPath(c.req.path), 401, 'Invalid or missing API key'), 401)
     }
+    if (decision.keyId !== undefined) {
+      c.set('apiProxyClientKeyId', decision.keyId)
+    }
     return next()
   })
 
@@ -136,10 +144,15 @@ export function createHonoApp(deps: HonoAppDeps): Hono {
     }
     // 稳定 requestId：从已有 header 取，缺省用确定性占位（适配器据此派生出站 id，不读时钟/随机）。
     const requestId = c.req.header('x-request-id') ?? 'apiproxy'
+    const headers: Record<string, string> = {}
+    for (const [k, v] of Object.entries(c.req.header())) headers[k.toLowerCase()] = v
+    const clientKeyId = c.get('apiProxyClientKeyId') as string | undefined
     const result = await deps.service.handleRequest({
       intent,
       body,
       requestId,
+      headers,
+      ...(clientKeyId ? { clientKeyId } : {}),
       // AbortSignal 透传：node 适配层在断连时 abort（M2b 可选，省略亦可）。
     })
     if (result.kind === 'json') {

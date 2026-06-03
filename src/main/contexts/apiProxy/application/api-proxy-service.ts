@@ -3,6 +3,7 @@ import type { PlatformRegistry } from '../infrastructure/platform-registry'
 import { NoUpstreamError } from '../infrastructure/platform-registry'
 import type { RequestIntent, RequestFormat } from '../domain/request-intent'
 import type { UpstreamCtx } from '../domain/platform-adapter'
+import { extractSessionHint } from '../domain/account-selection/session-hint'
 import type {
   CanonicalRequest,
   CanonicalResponse,
@@ -69,6 +70,8 @@ export interface HandleRequestInput {
   body: unknown
   requestId: string
   signal?: AbortSignal
+  headers?: Record<string, string>
+  clientKeyId?: string
 }
 
 // 非流式 / 错误结果：直接作为 JSON 响应体。
@@ -97,6 +100,26 @@ export class ApiProxyHttpError extends Error {
   ) {
     super(message)
     this.name = 'ApiProxyHttpError'
+  }
+}
+
+/** 上游错误 → 语义化 HTTP 状态（修掉"全落 500"）。FATAL(400/422) 透传原状态。 */
+export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHttpError {
+  if (err instanceof ApiProxyHttpError) return err
+  const e = err as { name?: string; status?: number; message?: string }
+  const msg = e?.message ?? 'upstream error'
+  switch (e?.name) {
+    case 'KiroUpstreamSuspendedError': return new ApiProxyHttpError(403, msg, format)
+    case 'KiroUpstreamAuthError': return new ApiProxyHttpError(401, msg, format)
+    case 'NoKiroAccountError':
+    case 'NoHealthyAccountError': return new ApiProxyHttpError(503, msg, format)
+    case 'KiroUpstreamError': {
+      const s = e.status
+      if (s === 429) return new ApiProxyHttpError(429, msg, format)
+      if (s === 400 || s === 422) return new ApiProxyHttpError(s, msg, format)
+      return new ApiProxyHttpError(502, msg, format)
+    }
+    default: return new ApiProxyHttpError(500, 'Internal server error', format)
   }
 }
 
@@ -196,13 +219,22 @@ export class ApiProxyService {
       throw e
     }
 
-    const ctx: UpstreamCtx = { ...(signal ? { signal } : {}), requestId }
+    const sessionHint = extractSessionHint(input.headers ?? {}, body, input.clientKeyId)
+    const ctx: UpstreamCtx = {
+      ...(signal ? { signal } : {}),
+      requestId,
+      ...(sessionHint !== undefined ? { sessionHint } : {}),
+    }
 
     if (intent.stream) {
-      const events = await drainStream(adapter.chatStream(ir, ctx))
+      let events
+      try { events = await drainStream(adapter.chatStream(ir, ctx)) }
+      catch (e) { throw classifyToHttp(e, intent.format) }
       return this.serializeStream(intent, ir, events, requestId)
     }
-    const resp = await adapter.chat(ir, ctx)
+    let resp
+    try { resp = await adapter.chat(ir, ctx) }
+    catch (e) { throw classifyToHttp(e, intent.format) }
     return { kind: 'json', status: 200, body: this.toResponseBody(intent, resp, requestId) }
   }
 
@@ -244,7 +276,9 @@ export class ApiProxyService {
     const itemId = (i: number): string => this.responsesStore!.generateItemId(i)
 
     if (intent.stream) {
-      const events = await drainStream(adapter.chatStream(ir, ctx))
+      let events
+      try { events = await drainStream(adapter.chatStream(ir, ctx)) }
+      catch (e) { throw classifyToHttp(e, 'openai-responses') }
       const resp = foldStreamForStore(events, ir.model)
       this.persistResponses(req, respId, resp, itemId)
       return {
@@ -254,7 +288,9 @@ export class ApiProxyService {
         frames: serializeResponsesStream(resp, events, { id: respId, itemId, createdAt: 0 }),
       }
     }
-    const resp = await adapter.chat(ir, ctx)
+    let resp
+    try { resp = await adapter.chat(ir, ctx) }
+    catch (e) { throw classifyToHttp(e, 'openai-responses') }
     this.persistResponses(req, respId, resp, itemId)
     return {
       kind: 'json',

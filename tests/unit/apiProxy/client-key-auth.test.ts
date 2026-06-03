@@ -30,7 +30,7 @@ describe('authorizeClientKey decisions', () => {
     expect(authorizeClientKey({ isLoopback: false }, { keys: [], allowAnonymousLoopback: true })).toEqual({ ok: true })
   })
   it('configured keys + matching Bearer → allow', () => {
-    expect(authorizeClientKey({ authorization: 'Bearer s3cret', isLoopback: false }, { keys: ['s3cret'], allowAnonymousLoopback: true })).toEqual({ ok: true })
+    expect(authorizeClientKey({ authorization: 'Bearer s3cret', isLoopback: false }, { keys: ['s3cret'], allowAnonymousLoopback: true })).toMatchObject({ ok: true })
   })
   it('configured keys + no key provided → missing', () => {
     expect(authorizeClientKey({ isLoopback: true }, { keys: ['s3cret'], allowAnonymousLoopback: true })).toEqual({ ok: false, reason: 'missing' })
@@ -39,7 +39,7 @@ describe('authorizeClientKey decisions', () => {
     expect(authorizeClientKey({ xApiKey: 'nope', isLoopback: false }, { keys: ['s3cret'], allowAnonymousLoopback: true })).toEqual({ ok: false, reason: 'invalid' })
   })
   it('matches via x-goog-api-key and ?key= too', () => {
-    expect(authorizeClientKey({ xGoogApiKey: 'k', isLoopback: false }, { keys: ['k'], allowAnonymousLoopback: false })).toEqual({ ok: true })
-    expect(authorizeClientKey({ queryKey: 'k', isLoopback: false }, { keys: ['k'], allowAnonymousLoopback: false })).toEqual({ ok: true })
+    expect(authorizeClientKey({ xGoogApiKey: 'k', isLoopback: false }, { keys: ['k'], allowAnonymousLoopback: false })).toMatchObject({ ok: true })
+    expect(authorizeClientKey({ queryKey: 'k', isLoopback: false }, { keys: ['k'], allowAnonymousLoopback: false })).toMatchObject({ ok: true })
   })
 })
