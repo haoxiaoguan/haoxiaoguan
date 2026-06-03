@@ -58,7 +58,7 @@ export class AccountPoolSelector {
     if (chosen === undefined) {
       chosen = this.opts.strategy === 'round-robin' ? this.roundRobin(usable) : this.leastLoadedLru(usable)
     }
-    return this.lease(chosen, ctx.hint)
+    return this.lease(chosen)
   }
 
   remember(hint: string, id: string): void {
@@ -97,9 +97,8 @@ export class AccountPoolSelector {
     return usable[idx]
   }
 
-  private lease(c: PoolCandidate, hint: string | undefined): AccountLease {
+  private lease(c: PoolCandidate): AccountLease {
     this.inflight.set(c.id, (this.inflight.get(c.id) ?? 0) + 1)
-    if (hint !== undefined) this.remember(hint, c.id)
     let released = false
     return {
       id: c.id,

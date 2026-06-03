@@ -74,7 +74,7 @@ function formatFromPath(path: string): RequestFormat {
 
 // Hono 应用级变量（c.set/c.get 的类型安全声明）。
 type HonoVariables = {
-  apiProxyClientKeyId: string
+  apiProxyClientKeyId?: string
 }
 
 // 组装 Hono app：中间件链 + 路由表 + onError。M1 的 GET /health 行为保持（200 { ok: true }）。
@@ -146,7 +146,7 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
     const requestId = c.req.header('x-request-id') ?? 'apiproxy'
     const headers: Record<string, string> = {}
     for (const [k, v] of Object.entries(c.req.header())) headers[k.toLowerCase()] = v
-    const clientKeyId = c.get('apiProxyClientKeyId') as string | undefined
+    const clientKeyId = c.get('apiProxyClientKeyId')
     const result = await deps.service.handleRequest({
       intent,
       body,

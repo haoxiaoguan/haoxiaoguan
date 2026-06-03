@@ -44,6 +44,7 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
         const innerCtx = await this.bindAccount(ctx, lease.id, pool.byId.get(lease.id)!)
         const resp = await this.deps.inner.chat(ir, innerCtx)
         this.deps.health.recordSuccess(lease.id)
+        const _hint = ctx.sessionHint; if (_hint !== undefined) this.deps.selector.remember(_hint, lease.id)
         lease.release()
         return resp
       } catch (err) {
@@ -73,6 +74,7 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
           const it = self.deps.inner.chatStream(ir, innerCtx)[Symbol.asyncIterator]()
           let next = await it.next()          // 首个 event：inner 整段 buffer+parse 完成或抛错（抛错时未吐字节，可切）
           self.deps.health.recordSuccess(lease.id)
+          const _hint = ctx.sessionHint; if (_hint !== undefined) self.deps.selector.remember(_hint, lease.id)
           started = true
           while (next.done !== true) { yield next.value; next = await it.next() }
           lease.release()
@@ -97,7 +99,7 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
 
   private async pool(): Promise<{ list: PoolCandidate[]; byId: Map<string, KiroAccountInfo> }> {
     const all = await this.deps.accounts.listByPlatform()
-    const usable = all.filter((a) => a.isActive && a.status !== 'SUSPENDED')
+    const usable = all.filter((a) => a.isActive && a.status !== 'SUSPENDED' && this.deps.health.isAvailable(a.id))
     return {
       list: usable.map((a) => ({ id: a.id, ...(a.lastUsedAt !== undefined ? { lastUsedAt: a.lastUsedAt } : {}) })),
       byId: new Map(usable.map((a) => [a.id, a])),
