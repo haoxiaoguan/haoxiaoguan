@@ -105,6 +105,7 @@ import { ResponsesStore } from './contexts/apiProxy/infrastructure/responses-sto
 import { ApiProxyKeyRepository } from './contexts/apiProxy/infrastructure/api-proxy-key.repository'
 import { ApiProxyKeyService } from './contexts/apiProxy/application/api-proxy-key-service'
 import { migrateClientKeys } from './contexts/apiProxy/application/migrate-client-keys'
+import { KeyRateLimiter } from './contexts/apiProxy/domain/key-rate-limiter'
 // KiroAdapter（'kiro' 上游）+ 窄 port 类型 + account port factory。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { PromptCacheTracker } from './contexts/apiProxy/domain/usage/prompt-cache-tracker'
@@ -489,6 +490,8 @@ export async function buildContainer(): Promise<Container> {
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘），默认目录在 appDataDir()/responses。
   const responsesStore = new ResponsesStore()
   const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry, responsesStore })
+  // 客户端 Key 令牌桶限流器（后续可接 settings 动态配置 capacity/refillPerMinute）。
+  const apiProxyKeyRateLimiter = new KeyRateLimiter({ capacity: 10, refillPerMinute: 10 })
   const apiHttpServer = new ApiHttpServer(
     createApiRequestListener({
       service: apiProxyService,
@@ -497,6 +500,7 @@ export async function buildContainer(): Promise<Container> {
         allowAnonymousLoopback: settings.getApiProxyAllowAnonymousLoopback(),
       },
       knownPlatforms: platformRegistry.knownPlatforms(),
+      keyRateLimiter: apiProxyKeyRateLimiter,
     }),
     { port: settings.getApiProxyPort() },
   )

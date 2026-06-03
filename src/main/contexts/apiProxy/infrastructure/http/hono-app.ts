@@ -12,12 +12,15 @@ import {
   authorizeClientKey,
   type ClientKeyRequestInfo,
 } from '../../domain/client-key-auth'
+import type { KeyRateLimiter } from '../../domain/key-rate-limiter'
 
 // Hono app 依赖：编排服务 + 鉴权配置 + 已注册平台名（喂路由意图解析的前缀剥离）。
 export interface HonoAppDeps {
   service: ApiProxyService
   auth: { keysProvider: () => Promise<readonly string[]>; allowAnonymousLoopback: boolean }
   knownPlatforms: ReadonlySet<string>
+  /** 可选：客户端 Key 令牌桶限流器；不传则不限流（向后兼容）。匿名回环请求（无 keyId）自动跳过。 */
+  keyRateLimiter?: KeyRateLimiter
 }
 
 // 远端地址是否回环。@hono/node-server 把底层 socket 暴露在 c.env.incoming（node IncomingMessage）。
@@ -130,6 +133,15 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
     }
     if (decision.keyId !== undefined) {
       c.set('apiProxyClientKeyId', decision.keyId)
+      // 令牌桶限流：仅对有 keyId 的已鉴权 key 生效；匿名回环（无 keyId）跳过。
+      if (deps.keyRateLimiter !== undefined) {
+        const rl = deps.keyRateLimiter.tryAcquire(decision.keyId)
+        if (!rl.ok) {
+          const path = c.req.path
+          c.header('Retry-After', String(rl.retryAfterSec))
+          return c.json(errorBodyForFormat(formatFromPath(path), 429, 'Rate limit exceeded'), 429)
+        }
+      }
     }
     return next()
   })
