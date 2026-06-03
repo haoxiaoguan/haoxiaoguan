@@ -295,3 +295,45 @@ describe('Phase2 惰性化 — Gemini/Responses drain 语义保留', () => {
     expect(savedDoc.status).toBe('completed')
   })
 })
+
+// ══════════════════════════════════════════════
+// 测试 6：端到端回收回归（prependFirst → 序列化器 → 底层 finally 传播）
+// ══════════════════════════════════════════════
+describe('Phase2 资源回收回归 — 客户端 break 时 it.return() 沿链传播到底层 generator', () => {
+  it('OpenAI 流：for-await 取 2 帧后 break → 底层 generator finally 执行（上游 reader 被回收）', async () => {
+    let innerFinalized = false
+
+    const adapter = makeMockAdapter(async function* () {
+      try {
+        // 产生足够多帧以确保客户端 break 前 generator 尚未耗尽
+        yield { type: 'text_delta', text: 'tok0' } as CanonicalStreamEvent
+        yield { type: 'text_delta', text: 'tok1' } as CanonicalStreamEvent
+        yield { type: 'text_delta', text: 'tok2' } as CanonicalStreamEvent
+        yield { type: 'text_delta', text: 'tok3' } as CanonicalStreamEvent
+        yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 4 } } as CanonicalStreamEvent
+        yield { type: 'message_stop', stopReason: 'end_turn' } as CanonicalStreamEvent
+      } finally {
+        innerFinalized = true
+      }
+    })
+    const svc = makeServiceWith(adapter)
+
+    const intent: RequestIntent = { format: 'openai', action: 'chat', model: 'mock-model', stream: true }
+    const result = await svc.handleRequest({
+      intent,
+      body: { model: 'mock-model', stream: true, messages: [{ role: 'user', content: 'hi' }] },
+      requestId: 'recycle-e2e',
+    })
+    expect(result.kind).toBe('stream')
+
+    // 取 2 帧后 break（模拟客户端断连）
+    let count = 0
+    for await (const _f of (result as { frames: AsyncIterable<string> }).frames) {
+      count++
+      if (count >= 2) break
+    }
+
+    // prependFirst 的 finally 转发 it.return() → 底层 generator finally 必须已执行
+    expect(innerFinalized).toBe(true)
+  })
+})

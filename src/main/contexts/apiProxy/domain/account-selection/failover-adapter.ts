@@ -79,9 +79,10 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
         const lease = self.deps.selector.acquire(pool.list, self.selCtx(ir, ctx, triedIds))
         if (lease === null) break
         let started = false
+        let it: AsyncIterator<CanonicalStreamEvent> | undefined
         try {
           const innerCtx = await self.bindAccount(ctx, lease.id, pool.byId.get(lease.id)!)
-          const it = self.deps.inner.chatStream(ir, innerCtx)[Symbol.asyncIterator]()
+          it = self.deps.inner.chatStream(ir, innerCtx)[Symbol.asyncIterator]()
           let next = await it.next()          // 首个 event：inner 已发起请求并解出首帧首事件，或在吐任何字节前抛错（抛错可安全切号，started 仍 false）
           self.deps.health.recordSuccess(lease.id)
           const _hint = ctx.sessionHint; if (_hint !== undefined) self.deps.selector.remember(_hint, lease.id)
@@ -99,6 +100,9 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
           if (cls === 'SERVER') await self.sleep(self.deps.retryDelayMs)
         } finally {
           lease.release()
+          if (it !== undefined && typeof it.return === 'function') {
+            try { await it.return() } catch { /* 忽略回收阶段错误 */ }
+          }
         }
       }
       throw lastError ?? new NoHealthyAccountError('no healthy account available')

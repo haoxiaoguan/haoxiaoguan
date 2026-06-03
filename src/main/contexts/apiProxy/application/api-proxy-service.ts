@@ -135,15 +135,22 @@ async function* arrayToAsyncIterable(arr: string[]): AsyncIterable<string> {
 }
 
 // 把 peek 出的首个 IteratorResult 和剩余 iterator 拼回一个完整 AsyncIterable。
+// 用 try/finally 转发 return()，确保客户端断连/取消时上游 reader 锁和 timer 能被回收。
 async function* prependFirst(
   first: IteratorResult<CanonicalStreamEvent>,
   it: AsyncIterator<CanonicalStreamEvent>,
 ): AsyncIterable<CanonicalStreamEvent> {
-  if (!first.done) yield first.value
-  while (true) {
-    const n = await it.next()
-    if (n.done) break
-    yield n.value
+  try {
+    if (!first.done) yield first.value
+    while (true) {
+      const n = await it.next()
+      if (n.done) break
+      yield n.value
+    }
+  } finally {
+    if (typeof it.return === 'function') {
+      try { await it.return() } catch { /* 忽略回收阶段错误 */ }
+    }
   }
 }
 

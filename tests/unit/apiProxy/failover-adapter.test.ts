@@ -1,6 +1,7 @@
 // tests/unit/apiProxy/failover-adapter.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { FailoverAdapter, NoHealthyAccountError } from '../../../src/main/contexts/apiProxy/domain/account-selection/failover-adapter'
+import type { CanonicalStreamEvent } from '../../../src/main/contexts/apiProxy/domain/canonical'
 import { AccountPoolSelector } from '../../../src/main/contexts/apiProxy/domain/account-selection/account-pool-selector'
 import { AccountHealthTracker } from '../../../src/main/contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { KiroUpstreamSuspendedError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-error'
@@ -103,5 +104,122 @@ describe('retryDelayMs / sleep', () => {
     )
     await fa.chat(ir, { requestId: 'r' })
     expect(sleep).not.toHaveBeenCalled()
+  })
+})
+
+// ══════════════════════════════════════════════════════════
+// 回收回归：chatStream 客户端提前断连时 inner generator 被转发 return()
+// ══════════════════════════════════════════════════════════
+describe('chatStream 资源回收回归', () => {
+  /**
+   * 构造支持 chatStream mock 的 deps。
+   * innerStreamGen: 给 inner.chatStream 的实现（返回 AsyncIterable）。
+   */
+  function streamDeps(
+    rows: any[],
+    innerStreamGen: (ir: any, ctx: any) => AsyncIterable<CanonicalStreamEvent>,
+    opts: { sleep?: (ms: number) => Promise<void> } = {},
+  ) {
+    const now = { t: 0 }
+    const health = new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
+    const selector = new AccountPoolSelector({ strategy: 'sticky-lru', perAccountConcurrency: 4, affinityTtlMs: 1000, clock: () => now.t }, health)
+    const inner = {
+      platform: 'kiro', supportsModel: () => true, listModels: () => [],
+      classifyError: (_e: any) => 'SERVER' as const,
+      chat: async () => okResp,
+      chatStream: innerStreamGen,
+    }
+    const accounts = {
+      async listByPlatform() { return rows },
+      async markSuspended() {},
+      async clearSuspension() {},
+    }
+    return new FailoverAdapter({
+      inner: inner as any, selector, health,
+      accounts: accounts as any,
+      credentials: { async retrieve(id: string) { return { token: `tk-${id}` } } } as any,
+      dispatchers: { async dispatcherForAccount() { return undefined } } as any,
+      maxRetries: 3,
+      retryDelayMs: 0,
+      sleep: opts.sleep ?? (() => Promise.resolve()),
+    })
+  }
+
+  it('客户端取 1 帧后 it.return() → inner generator finally 执行（上游 reader 被回收）', async () => {
+    let innerReturned = false
+
+    const fa = streamDeps([{ id: 'a', isActive: true }], async function* () {
+      try {
+        yield { type: 'text_delta', text: 'frame1' } as CanonicalStreamEvent
+        yield { type: 'text_delta', text: 'frame2' } as CanonicalStreamEvent
+        yield { type: 'message_stop', stopReason: 'end_turn' } as CanonicalStreamEvent
+      } finally {
+        innerReturned = true
+      }
+    })
+
+    const it = fa.chatStream(ir, { requestId: 'r' })[Symbol.asyncIterator]()
+    // 取首帧
+    const first = await it.next()
+    expect(first.done).toBe(false)
+    expect((first.value as { text: string }).text).toBe('frame1')
+
+    // 客户端主动断连
+    await it.return!()
+
+    // inner generator 的 finally 必须已被执行（return() 被转发）
+    expect(innerReturned).toBe(true)
+  })
+
+  it('客户端取 1 帧后 it.return() → lease.release 被调用', async () => {
+    // spy AccountPoolSelector.acquire，拿到 lease 对象后再 spy release
+    const now = { t: 0 }
+    const health = new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
+    const selector = new AccountPoolSelector({ strategy: 'sticky-lru', perAccountConcurrency: 4, affinityTtlMs: 1000, clock: () => now.t }, health)
+
+    // spy acquire 以捕获 lease
+    let capturedRelease: (() => void) | undefined
+    const origAcquire = selector.acquire.bind(selector)
+    const acquireSpy = vi.spyOn(selector, 'acquire').mockImplementation((...args) => {
+      const lease = origAcquire(...args)
+      if (lease !== null) {
+        const origRelease = lease.release.bind(lease)
+        capturedRelease = vi.fn(origRelease) as () => void
+        ;(lease as any).release = capturedRelease
+      }
+      return lease
+    })
+
+    const inner = {
+      platform: 'kiro', supportsModel: () => true, listModels: () => [],
+      classifyError: (_e: any) => 'SERVER' as const,
+      chat: async () => okResp,
+      chatStream: async function* () {
+        yield { type: 'text_delta', text: 'frame1' } as CanonicalStreamEvent
+        yield { type: 'text_delta', text: 'frame2' } as CanonicalStreamEvent
+      },
+    }
+    const accounts = {
+      async listByPlatform() { return [{ id: 'a', isActive: true }] },
+      async markSuspended() {},
+      async clearSuspension() {},
+    }
+    const fa = new FailoverAdapter({
+      inner: inner as any, selector, health,
+      accounts: accounts as any,
+      credentials: { async retrieve(id: string) { return { token: `tk-${id}` } } } as any,
+      dispatchers: { async dispatcherForAccount() { return undefined } } as any,
+      maxRetries: 3, retryDelayMs: 0,
+    })
+
+    const it = fa.chatStream(ir, { requestId: 'r' })[Symbol.asyncIterator]()
+    await it.next()   // 取首帧（触发 acquire + started=true）
+    await it.return!()
+
+    // lease.release 必须已被调用（finally 分支执行）
+    expect(capturedRelease).toBeDefined()
+    expect(capturedRelease!).toHaveBeenCalled()
+
+    acquireSpy.mockRestore()
   })
 })
