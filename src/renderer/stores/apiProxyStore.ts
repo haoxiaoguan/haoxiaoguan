@@ -1,21 +1,30 @@
 import { create } from 'zustand';
-import type { ApiProxyStatus } from '@shared/api-types';
+import type { ApiProxyStatus, ApiProxyKeyMeta } from '@shared/api-types';
 import { bridge } from '../services/bridge';
 
 interface ApiProxyState {
   status: ApiProxyStatus;
   loading: boolean;
   error: string | null;
+  keys: ApiProxyKeyMeta[];
+  newPlaintext: string | null;
 
   fetchStatus: () => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  fetchKeys: () => Promise<void>;
+  createKey: (name: string) => Promise<void>;
+  setKeyActive: (id: string, isActive: boolean) => Promise<void>;
+  deleteKey: (id: string) => Promise<void>;
+  clearNewPlaintext: () => void;
 }
 
-export const useApiProxyStore = create<ApiProxyState>((set) => ({
+export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
   status: { state: 'stopped' },
   loading: false,
   error: null,
+  keys: [],
+  newPlaintext: null,
 
   fetchStatus: async () => {
     try {
@@ -45,4 +54,42 @@ export const useApiProxyStore = create<ApiProxyState>((set) => ({
       set({ error: String(e), loading: false });
     }
   },
+
+  fetchKeys: async () => {
+    try {
+      set({ keys: await bridge().apiProxy.listClientKeys() });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  createKey: async (name: string) => {
+    try {
+      const { plaintext } = await bridge().apiProxy.createClientKey(name);
+      set({ newPlaintext: plaintext });
+      await get().fetchKeys();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  setKeyActive: async (id: string, isActive: boolean) => {
+    try {
+      await bridge().apiProxy.setClientKeyActive(id, isActive);
+      await get().fetchKeys();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  deleteKey: async (id: string) => {
+    try {
+      await bridge().apiProxy.deleteClientKey(id);
+      await get().fetchKeys();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  clearNewPlaintext: () => set({ newPlaintext: null }),
 }));
