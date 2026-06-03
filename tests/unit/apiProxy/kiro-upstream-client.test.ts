@@ -123,6 +123,32 @@ describe('KiroUpstreamClient.buildRequest', () => {
     const req = client.buildRequest(endpointsForRegion('us-east-1')[0], ENVELOPE, { ...CTX, agentMode: 'vibe' })
     expect(req.headers['x-amzn-kiro-agent-mode']).toBe('vibe')
   })
+
+  it('agentMode=vibe：user-agent 使用 aws-sdk-rust 格式，x-amz-user-agent 含 app/AmazonQ-For-CLI', () => {
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const req = client.buildRequest(endpointsForRegion('us-east-1')[0], ENVELOPE, { ...CTX, agentMode: 'vibe' })
+    // user-agent：aws-sdk-rust 系列，不含 aws-sdk-js
+    expect(req.headers['user-agent']).toContain('aws-sdk-rust/')
+    expect(req.headers['user-agent']).toContain('lang/rust/')
+    expect(req.headers['user-agent']).not.toContain('aws-sdk-js')
+    expect(req.headers['user-agent']).not.toContain('KiroIDE')
+    // x-amz-user-agent：含 AmazonQ-For-CLI 后缀
+    expect(req.headers['x-amz-user-agent']).toContain('aws-sdk-rust/')
+    expect(req.headers['x-amz-user-agent']).toContain('app/AmazonQ-For-CLI')
+    expect(req.headers['x-amz-user-agent']).not.toContain('aws-sdk-js')
+  })
+
+  it('agentMode=spec：user-agent 保持 aws-sdk-js 格式，x-amz-user-agent 无 AmazonQ-For-CLI', () => {
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const req = client.buildRequest(endpointsForRegion('us-east-1')[0], ENVELOPE, CTX) // CTX.agentMode='spec'
+    // user-agent：仍为 JS SDK 格式
+    expect(req.headers['user-agent']).toContain('aws-sdk-js/')
+    expect(req.headers['user-agent']).not.toContain('aws-sdk-rust')
+    // x-amz-user-agent：不含 AmazonQ-For-CLI
+    expect(req.headers['x-amz-user-agent']).toContain('aws-sdk-js/')
+    expect(req.headers['x-amz-user-agent']).not.toContain('AmazonQ-For-CLI')
+    expect(req.headers['x-amz-user-agent']).not.toContain('aws-sdk-rust')
+  })
 })
 
 describe('KiroUpstreamClient.chat — success folding', () => {

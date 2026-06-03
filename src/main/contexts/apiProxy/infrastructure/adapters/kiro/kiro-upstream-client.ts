@@ -31,6 +31,15 @@ const AWS_STREAMING_API_VERSION = '1.0.34'
 // 聊天端点专用 IDE 版本（聊天端点可能拒旧版本）。
 // 注意与 kiro-identity-client 的 KIRO_IDE_VERSION（额度路径 0.11.107）分离，互不影响。
 const KIRO_CHAT_IDE_VERSION = '0.12.155'
+
+// IDC 账号（agentMode=vibe）出站 UA 常量——官方 AmazonQ CLI（Rust 实现）采用的格式。
+// 版本号从当前发布版本对齐，需定期跟进（aws-sdk-rust / Rust 编译器 / ssooidc 版本均会随上游迭代）。
+const AWS_SDK_RUST_VERSION = '1.3.9'
+const RUST_LANG_VERSION = '1.87.0'
+const AWS_SSOOIDC_VERSION = '1.88.0'
+// Rust SDK UA 格式用 macos/linux/windows 三值（与 JS SDK 的 process.platform#release() 格式不同）。
+const CLI_OS_TOKEN: string = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
+
 const HTTP_TIMEOUT_MS = 120_000 // 聊天补全可能较慢，给足超时（额度 GET 用 25s，这里放宽）。
 
 // --- 端点表 ---
@@ -160,16 +169,30 @@ function osToken(): string {
 }
 
 function buildHeaders(ctx: KiroCallContext): Record<string, string> {
-  // 两个 UA 头格式不同：
-  //   user-agent 后缀用破折号：`KiroIDE-${V}-${mid}`
-  //   x-amz-user-agent 后缀用空格：`KiroIDE ${V} ${mid}`
-  const dashSuffix = `KiroIDE-${KIRO_CHAT_IDE_VERSION}-${ctx.machineId}`
-  const spaceSuffix = `KiroIDE ${KIRO_CHAT_IDE_VERSION} ${ctx.machineId}`
+  let userAgent: string
+  let amzUserAgent: string
+
+  if (ctx.agentMode === 'vibe') {
+    // IDC 账号：使用官方 AmazonQ CLI（Rust 实现）的 UA 格式。
+    // machineId 嵌入 x-amz-user-agent，与官方 CLI 行为一致。
+    userAgent = `aws-sdk-rust/${AWS_SDK_RUST_VERSION} os/${CLI_OS_TOKEN} lang/rust/${RUST_LANG_VERSION}`
+    amzUserAgent = `aws-sdk-rust/${AWS_SDK_RUST_VERSION} ua/2.1 api/ssooidc/${AWS_SSOOIDC_VERSION} os/${CLI_OS_TOKEN} lang/rust/${RUST_LANG_VERSION} m/E app/AmazonQ-For-CLI`
+  } else {
+    // Social/BuilderID 账号：保持现有 JS SDK UA 格式不变。
+    // 两个 UA 头格式不同：
+    //   user-agent 后缀用破折号：`KiroIDE-${V}-${mid}`
+    //   x-amz-user-agent 后缀用空格：`KiroIDE ${V} ${mid}`
+    const dashSuffix = `KiroIDE-${KIRO_CHAT_IDE_VERSION}-${ctx.machineId}`
+    const spaceSuffix = `KiroIDE ${KIRO_CHAT_IDE_VERSION} ${ctx.machineId}`
+    userAgent = `aws-sdk-js/${AWS_SDK_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${process.versions.node} api/codewhispererstreaming#${AWS_STREAMING_API_VERSION} m/E ${dashSuffix}`
+    amzUserAgent = `aws-sdk-js/${AWS_SDK_VERSION} ${spaceSuffix}`
+  }
+
   return {
     'content-type': 'application/json',
     'x-amzn-kiro-agent-mode': ctx.agentMode,
-    'x-amz-user-agent': `aws-sdk-js/${AWS_SDK_VERSION} ${spaceSuffix}`,
-    'user-agent': `aws-sdk-js/${AWS_SDK_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${process.versions.node} api/codewhispererstreaming#${AWS_STREAMING_API_VERSION} m/E ${dashSuffix}`,
+    'x-amz-user-agent': amzUserAgent,
+    'user-agent': userAgent,
     'amz-sdk-invocation-id': ctx.invocationId,
     'amz-sdk-request': 'attempt=1; max=3',
     Authorization: `Bearer ${ctx.accessToken}`,
