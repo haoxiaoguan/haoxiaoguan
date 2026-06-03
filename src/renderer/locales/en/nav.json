@@ -20,6 +20,19 @@
     "copyKey": "Copy Key",
     "close": "Close"
   },
+  "poolHealth": {
+    "title": "Account Pool Health",
+    "refresh": "Refresh",
+    "empty": "No accounts in pool.",
+    "failures": "Failures",
+    "clearSuspension": "Clear Suspension",
+    "state": {
+      "available": "Available",
+      "cooldown": "Cooldown",
+      "quota_exhausted": "Quota Exhausted",
+      "suspended": "Suspended"
+    }
+  },
   "proxies": "Proxies",
   "groups": "Groups",
   "analytics": "Analytics",

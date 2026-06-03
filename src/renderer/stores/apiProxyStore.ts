@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ApiProxyStatus, ApiProxyKeyMeta } from '@shared/api-types';
+import type { ApiProxyStatus, ApiProxyKeyMeta, AccountPoolHealthRow } from '@shared/api-types';
 import { bridge } from '../services/bridge';
 
 interface ApiProxyState {
@@ -8,6 +8,7 @@ interface ApiProxyState {
   error: string | null;
   keys: ApiProxyKeyMeta[];
   newPlaintext: string | null;
+  poolHealth: AccountPoolHealthRow[];
 
   fetchStatus: () => Promise<void>;
   start: () => Promise<void>;
@@ -17,6 +18,8 @@ interface ApiProxyState {
   setKeyActive: (id: string, isActive: boolean) => Promise<void>;
   deleteKey: (id: string) => Promise<void>;
   clearNewPlaintext: () => void;
+  fetchPoolHealth: () => Promise<void>;
+  clearSuspension: (accountId: string) => Promise<void>;
 }
 
 export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
@@ -25,6 +28,7 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
   error: null,
   keys: [],
   newPlaintext: null,
+  poolHealth: [],
 
   fetchStatus: async () => {
     try {
@@ -92,4 +96,21 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
   },
 
   clearNewPlaintext: () => set({ newPlaintext: null }),
+
+  fetchPoolHealth: async () => {
+    try {
+      set({ poolHealth: await bridge().apiProxy.getAccountPoolHealth() });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  clearSuspension: async (accountId: string) => {
+    try {
+      await bridge().apiProxy.clearAccountSuspension(accountId);
+      await get().fetchPoolHealth();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
 }));
