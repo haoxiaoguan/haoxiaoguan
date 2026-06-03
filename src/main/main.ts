@@ -5,6 +5,7 @@ import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
 import { QUOTA_EVENTS } from '../shared/ipc-channels'
+import { isOfficialTokenizerAvailable } from './contexts/apiProxy/domain/usage/token-estimator'
 
 // userData location. Tests set HXG_USER_DATA_DIR to an isolated temp dir so
 // parallel/sequential e2e launches don't share a SingletonLock or DB. In
@@ -248,6 +249,13 @@ if (!gotLock) {
       mainWindow?.webContents.send(QUOTA_EVENTS.updated, accountIds)
     })
     services.platformQuotaScheduler.start()
+
+    // tokenizer 加载自检（一次性，打包后可观测是否降级）。
+    if (isOfficialTokenizerAvailable()) {
+      console.info('[apiProxy] token 估算：官方 tokenizer 已加载')
+    } else {
+      console.warn('[apiProxy] token 估算：官方 tokenizer 不可用，降级字符分类估算（usage 计数为近似值）')
+    }
 
     // 本地 AI API 反代服务：尊重「API 服务」页开关，仅当 apiProxyEnabled 为 true
     // 时随就绪自启。启动失败（如端口耗尽）只记日志，不致命。

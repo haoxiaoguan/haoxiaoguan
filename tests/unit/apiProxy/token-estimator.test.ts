@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { countTextTokens, estimateRequestInputTokens } from '../../../src/main/contexts/apiProxy/domain/usage/token-estimator'
+import { countTextTokens, estimateRequestInputTokens, isOfficialTokenizerAvailable } from '../../../src/main/contexts/apiProxy/domain/usage/token-estimator'
 import type { CanonicalRequest } from '../../../src/main/contexts/apiProxy/domain/canonical'
+
+describe('isOfficialTokenizerAvailable', () => {
+  it('本机 Node 环境官方 tokenizer 可用，返回 true', () => {
+    // @anthropic-ai/tokenizer 纯 JS，无 WASM/native，Node 单测环境应正常加载。
+    // false 路径由 getOfficial() 的 try/catch 覆盖（require 失败时静默返回 null），
+    // 此处不强制 mock require 失败，避免过度侵入模块缓存。
+    expect(isOfficialTokenizerAvailable()).toBe(true)
+  })
+})
 
 describe('countTextTokens', () => {
   it('空串 = 0', () => { expect(countTextTokens('')).toBe(0) })

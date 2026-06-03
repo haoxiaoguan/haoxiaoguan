@@ -34,6 +34,11 @@ function getOfficial(): CountFn | null {
   return officialCounter
 }
 
+// 查询官方 tokenizer 是否可用（复用模块级缓存，不产生副作用）。
+export function isOfficialTokenizerAvailable(): boolean {
+  return getOfficial() !== null
+}
+
 export function countTextTokens(text: string): number {
   if (text.length === 0) return 0
   const official = getOfficial()
