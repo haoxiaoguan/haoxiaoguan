@@ -579,6 +579,14 @@ export interface HxgApi {
     getStatus(): Promise<ApiProxyStatus>
     /** 手动解除账号挂起：清运行态 + 持久化 status。 */
     clearAccountSuspension(accountId: string): Promise<void>
+    /** 创建客户端 Key（明文仅此次回显）。 */
+    createClientKey(name: string): Promise<{ meta: ApiProxyKeyMeta; plaintext: string }>
+    /** 列出所有客户端 Key 元信息（不含明文）。 */
+    listClientKeys(): Promise<ApiProxyKeyMeta[]>
+    /** 启用/禁用客户端 Key。 */
+    setClientKeyActive(id: string, isActive: boolean): Promise<void>
+    /** 删除客户端 Key。 */
+    deleteClientKey(id: string): Promise<void>
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>
@@ -609,6 +617,15 @@ export type ApiProxyState = 'stopped' | 'running' | 'failed'
 export interface ApiProxyStatus {
   state: ApiProxyState
   port?: number
+}
+
+// 客户端 Key 元信息（不含明文/密文）。
+export interface ApiProxyKeyMeta {
+  id: string
+  name: string
+  keyPrefix: string
+  isActive: boolean
+  createdAt: string
 }
 
 // ── Proxy DTOs (proxy context — outbound proxy IP management) ─────────────────

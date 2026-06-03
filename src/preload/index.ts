@@ -185,6 +185,10 @@ const api: HxgApi = {
     stop: () => ipcRenderer.invoke(API_PROXY_CHANNELS.stop),
     getStatus: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getStatus),
     clearAccountSuspension: (accountId: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.clearAccountSuspension, accountId),
+    createClientKey: (name: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.createClientKey, name),
+    listClientKeys: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listClientKeys),
+    setClientKeyActive: (id: string, isActive: boolean) => ipcRenderer.invoke(API_PROXY_CHANNELS.setClientKeyActive, id, isActive),
+    deleteClientKey: (id: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteClientKey, id),
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),

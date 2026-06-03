@@ -194,4 +194,8 @@ export const API_PROXY_CHANNELS = {
   stop: 'apiProxy:stop',
   getStatus: 'apiProxy:getStatus',
   clearAccountSuspension: 'apiProxy:clearAccountSuspension',
+  createClientKey: 'apiProxy:createClientKey',
+  listClientKeys: 'apiProxy:listClientKeys',
+  setClientKeyActive: 'apiProxy:setClientKeyActive',
+  deleteClientKey: 'apiProxy:deleteClientKey',
 } as const

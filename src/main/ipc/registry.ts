@@ -51,6 +51,7 @@ import type { ApiProxyService } from '../contexts/apiProxy/application/api-proxy
 import { registerApiProxyHandlers } from '../contexts/apiProxy/ipc/api-proxy-handlers'
 import type { AccountHealthTracker } from '../contexts/apiProxy/domain/account-selection/account-health-tracker'
 import type { KiroAccountPort } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
+import type { ApiProxyKeyService } from '../contexts/apiProxy/application/api-proxy-key-service'
 
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
@@ -112,6 +113,8 @@ export interface Services {
   apiProxyHealth: AccountHealthTracker
   /** Kiro 账号 port（供 T10 IPC 持久化 clearSuspension 用）。 */
   kiroAccountPort: KiroAccountPort
+  /** 客户端 Key 管理（可选，Task 6 container 注入后激活 IPC handler）。 */
+  apiProxyKeyService?: ApiProxyKeyService
 }
 
 // Each context contributes a register*Handlers function.
@@ -144,5 +147,5 @@ export function registerAllHandlers(services: Services): void {
   registerWebSocketHandlers(services.websocket)
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
-  registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort)
+  registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService)
 }
