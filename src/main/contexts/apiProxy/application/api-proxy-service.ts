@@ -199,7 +199,7 @@ export class ApiProxyService {
     // Responses 协议有专属编排（历史链 + store 落盘 + 语义 SSE），走独立分支，
     // 不复用下方 chat 类的 toIR/toResponseBody/serializeStream。
     if (intent.format === 'openai-responses') {
-      return this.handleResponses(intent, body, requestId, signal)
+      return this.handleResponses(intent, body, requestId, signal, input.headers, input.clientKeyId)
     }
 
     if (this.registry === undefined) {
@@ -242,12 +242,15 @@ export class ApiProxyService {
    * Responses 专属编排：previous_response_id 历史链重建 → responsesToIR → 选上游 →
    * chat/chatStream → irToResponsesResponse / serializeResponsesStream，并按 store 落盘。
    * id/itemId 由 responsesStore 生成（隔离随机/时钟）；落盘失败不阻断响应。
+   * headers/clientKeyId 用于注入 sessionHint，使 Responses 路径也具备会话粘性。
    */
   private async handleResponses(
     intent: RequestIntent,
     body: unknown,
     requestId: string,
     signal?: AbortSignal,
+    headers?: Record<string, string>,
+    clientKeyId?: string,
   ): Promise<HandleResult> {
     if (this.registry === undefined) {
       throw new ApiProxyHttpError(503, 'platform registry not configured', 'openai-responses')
@@ -271,7 +274,12 @@ export class ApiProxyService {
       }
       throw e
     }
-    const ctx: UpstreamCtx = { ...(signal ? { signal } : {}), requestId }
+    const sessionHint = extractSessionHint(headers ?? {}, body, clientKeyId)
+    const ctx: UpstreamCtx = {
+      ...(signal ? { signal } : {}),
+      requestId,
+      ...(sessionHint !== undefined ? { sessionHint } : {}),
+    }
     const respId = this.responsesStore.generateResponseId()
     const itemId = (i: number): string => this.responsesStore!.generateItemId(i)
 

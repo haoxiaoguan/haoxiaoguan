@@ -61,3 +61,29 @@ it('会话粘性：同 hint 两次命中同一账号', async () => {
   await svc.handleRequest({ intent, body: openaiBody, requestId: 'r2', headers })
   expect(seen[0]).toBe(seen[1]) // 粘性命中同一账号
 })
+
+it('Responses 路径 sessionHint 注入：ctx 传入 sessionHint', async () => {
+  // 验证 handleResponses 分支也把 headers 里的会话 hint 注入到 adapter ctx
+  const ctxCapture: any[] = []
+  const fa = buildFailover(
+    [{ id: 'a', isActive: true, lastUsedAt: 1 }],
+    async (ctx) => { ctxCapture.push(ctx); return okResp },
+  )
+  // 需要 responsesStore stub（最小实现：generateResponseId/generateItemId/load/save）
+  const responsesStoreStub = {
+    generateResponseId: () => 'resp_test',
+    generateItemId: (i: number) => `item_${i}`,
+    load: (_id: string) => undefined,
+    save: () => {},
+  } as any
+  const responsesIntent = { format: 'openai-responses', action: 'responses', stream: false, platform: 'kiro', model: 'claude-sonnet-4.5' } as any
+  const svc = new ApiProxyService(undefined, { registry: regWith(fa), responsesStore: responsesStoreStub })
+  await svc.handleRequest({
+    intent: responsesIntent,
+    body: { model: 'claude-sonnet-4.5', input: 'hi' },
+    requestId: 'rr1',
+    headers: { 'x-conversation-id': 'conv-resp-1' },
+  })
+  expect(ctxCapture[0]?.sessionHint).toBeDefined()
+  expect(ctxCapture[0].sessionHint).toContain('conv-resp-1')
+})

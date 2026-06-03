@@ -45,15 +45,15 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
         const resp = await this.deps.inner.chat(ir, innerCtx)
         this.deps.health.recordSuccess(lease.id)
         const _hint = ctx.sessionHint; if (_hint !== undefined) this.deps.selector.remember(_hint, lease.id)
-        lease.release()
         return resp
       } catch (err) {
-        lease.release()
         const cls = this.deps.inner.classifyError(err)
         await this.penalize(lease.id, cls)
         triedIds.add(lease.id)
         lastError = err
         if (cls === 'FATAL') throw err
+      } finally {
+        lease.release()
       }
     }
     throw lastError ?? new NoHealthyAccountError('no healthy account available')
@@ -77,16 +77,16 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
           const _hint = ctx.sessionHint; if (_hint !== undefined) self.deps.selector.remember(_hint, lease.id)
           started = true
           while (next.done !== true) { yield next.value; next = await it.next() }
-          lease.release()
           return
         } catch (err) {
-          lease.release()
           if (started) throw err              // 已吐首字节 → 不切，错误透出
           const cls = self.deps.inner.classifyError(err)
           await self.penalize(lease.id, cls)
           triedIds.add(lease.id)
           lastError = err
           if (cls === 'FATAL') throw err
+        } finally {
+          lease.release()
         }
       }
       throw lastError ?? new NoHealthyAccountError('no healthy account available')
