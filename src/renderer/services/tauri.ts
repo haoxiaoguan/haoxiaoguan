@@ -205,14 +205,14 @@ export const credentialService = {
   completeOAuth: (pendingId: string, code: string) =>
     bridge().credential.completeOauth(pendingId, code) as Promise<ImportedCredentialMaterial>,
 
-  importTokenJson: (provider: string, payload: string) =>
-    bridge().credential.importTokenJson(provider, payload) as Promise<ImportedCredentialMaterial>,
+  importTokenJson: (provider: string, payload: string, proxyId?: string) =>
+    bridge().credential.importTokenJson(provider, payload, proxyId) as Promise<ImportedCredentialMaterial>,
 
-  scanLocalCredentials: (provider: string) =>
-    bridge().credential.scanLocalCredentials(provider) as Promise<ImportedCredentialMaterial[]>,
+  scanLocalCredentials: (provider: string, proxyId?: string) =>
+    bridge().credential.scanLocalCredentials(provider, proxyId) as Promise<ImportedCredentialMaterial[]>,
 
-  importDeeplink: (provider: string, url: string) =>
-    bridge().credential.importDeeplink(provider, url) as Promise<ImportedCredentialMaterial>,
+  importDeeplink: (provider: string, url: string, proxyId?: string) =>
+    bridge().credential.importDeeplink(provider, url, proxyId) as Promise<ImportedCredentialMaterial>,
 };
 
 // ============================================================================

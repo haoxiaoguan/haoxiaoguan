@@ -548,6 +548,7 @@ export async function buildContainer(): Promise<Container> {
     sync,
     websocket,
     proxyService,
+    proxyResolver,
     accountGroupService,
     apiProxyService,
     apiProxyHealth,

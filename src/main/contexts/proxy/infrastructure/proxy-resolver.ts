@@ -64,6 +64,18 @@ export class ProxyResolver {
     return this.dispatcherFactory.dispatcherFor(proxy)
   }
 
+  /**
+   * Resolve a Dispatcher directly by proxyId — no accountId needed.
+   * Used during credential import when the account does not yet exist in the DB.
+   * Returns undefined when no factory, or when the proxy is not found.
+   */
+  async dispatcherForProxyId(proxyId: string): Promise<Dispatcher | undefined> {
+    if (this.dispatcherFactory === undefined) return undefined
+    const proxy = await this.store.getProxy(proxyId)
+    if (proxy === null || proxy === undefined) return undefined
+    return this.dispatcherFactory.dispatcherFor(proxy)
+  }
+
   // --- private ---
 
   /**
