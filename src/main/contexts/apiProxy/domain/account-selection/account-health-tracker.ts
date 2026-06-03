@@ -14,6 +14,14 @@ interface HealthState {
   suspended: boolean
 }
 
+export interface AccountRuntimeHealth {
+  accountId: string
+  runtimeState: 'available' | 'cooldown' | 'quota_exhausted' | 'suspended'
+  failureCount: number
+  cooldownUntilMs?: number
+  quotaExhaustedAtMs?: number
+}
+
 function fresh(): HealthState {
   return { failureCount: 0, cooldownUntil: 0, quotaExhaustedAt: -1, suspended: false }
 }
@@ -80,5 +88,24 @@ export class AccountHealthTracker {
     s.failureCount = 0
     s.cooldownUntil = 0
     s.quotaExhaustedAt = -1
+  }
+
+  /** 派生运行态（优先级 suspended > quota_exhausted > cooldown > available）。 */
+  snapshot(id: string): AccountRuntimeHealth {
+    const s = this.states.get(id)
+    if (s === undefined) return { accountId: id, runtimeState: 'available', failureCount: 0 }
+    if (s.suspended) return { accountId: id, runtimeState: 'suspended', failureCount: s.failureCount }
+    const now = this.clock()
+    if (s.quotaExhaustedAt >= 0 && now - s.quotaExhaustedAt < this.opts.quotaResetMs) {
+      return { accountId: id, runtimeState: 'quota_exhausted', failureCount: s.failureCount, quotaExhaustedAtMs: s.quotaExhaustedAt }
+    }
+    if (now < s.cooldownUntil) {
+      return { accountId: id, runtimeState: 'cooldown', failureCount: s.failureCount, cooldownUntilMs: s.cooldownUntil }
+    }
+    return { accountId: id, runtimeState: 'available', failureCount: s.failureCount }
+  }
+
+  snapshotAll(ids: string[]): AccountRuntimeHealth[] {
+    return ids.map((id) => this.snapshot(id))
   }
 }
