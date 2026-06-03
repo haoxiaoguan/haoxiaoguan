@@ -1,5 +1,6 @@
 // Kiro 模型映射（纯函数，无副作用）。把客户端给的模型名归一化到 Kiro CodeWhisperer 接受的形态。
 // 含模型 ID 映射表 / normalizeClaudeVersion / mapModelId（按线协议实现）。
+// resolveCodeWhispererModelId：从 ListAvailableModels 结果启发式匹配大写内部 ID（P1-6 步骤 2）。
 
 // 模型 ID 映射表：客户端别名 → Kiro 接受的点号版本。default 兜底用最新 sonnet。
 const MODEL_ID_MAP: Record<string, string> = {
@@ -58,4 +59,90 @@ export function mapModelId(model: string): string {
   if (MODEL_ID_MAP[lower] !== undefined) return MODEL_ID_MAP[lower]
   if (/^claude-(sonnet|haiku|opus)-/.test(lower)) return modelId
   return MODEL_ID_MAP.default
+}
+
+// --- CodeWhisperer 大写内部 ID 映射（P1-6 步骤 2）---
+// 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+// 当前作为实验路径，仅在 enableCodeWhisperer=true 时激活。
+
+/**
+ * 从 outwardId（对外模型名，如 `claude-sonnet-4.5`）提取匹配 token 集合：
+ * 小写化，按 `-`/`.`/`_` 拆分，过滤空串，取 family（sonnet/haiku/opus）和数字版本段。
+ * 例：`claude-sonnet-4-5` → tokens = ['claude','sonnet','4','5']
+ */
+function tokenize(id: string): string[] {
+  return id.toLowerCase().split(/[-._]+/).filter((t) => t.length > 0)
+}
+
+/**
+ * 计算两个 token 集合的重合度（交集大小除以候选集合大小），用于启发式排序。
+ * 优先要求 family（sonnet/haiku/opus）匹配，不匹配直接返回 -1。
+ */
+function overlapScore(queryTokens: string[], candidateTokens: string[]): number {
+  const FAMILIES = ['sonnet', 'haiku', 'opus']
+  const queryFamily = queryTokens.find((t) => FAMILIES.includes(t))
+  const candidateFamily = candidateTokens.find((t) => FAMILIES.includes(t))
+  // family 不匹配 → 直接排除
+  if (queryFamily === undefined || candidateFamily === undefined) return -1
+  if (queryFamily !== candidateFamily) return -1
+
+  const candidateSet = new Set(candidateTokens)
+  let hits = 0
+  for (const t of queryTokens) {
+    if (candidateSet.has(t)) hits++
+  }
+  return candidateSet.size > 0 ? hits / candidateSet.size : 0
+}
+
+/**
+ * 从 ListAvailableModels 结果中启发式匹配对外模型 ID 对应的 CodeWhisperer 大写内部 ID。
+ *
+ * 匹配策略：
+ * 1. 把 outwardId（如 `claude-sonnet-4.5`）和每个 modelId（如 `CLAUDE_SONNET_4_5_20250514_V1_0`）
+ *    都归一化为 token 集合（小写、按 `-`/`.`/`_` 拆分）。
+ * 2. 仅匹配 CodeWhisperer 原生大写 ID（isCodeWhispererModelId 为 true）。
+ * 3. family 必须匹配（sonnet/haiku/opus），否则排除。
+ * 4. 取 token 重合度（hits/candidateSize）最高的候选；并列时取列表中靠前的。
+ * 5. 无命中 → undefined（调用方回退到 AmazonQ 小写路径）。
+ *
+ * 纯函数，无副作用，可单测。
+ */
+export function resolveCodeWhispererModelId(
+  outwardId: string,
+  models: readonly { modelId: string }[],
+): string | undefined {
+  const queryTokens = tokenize(outwardId)
+  if (queryTokens.length === 0) return undefined
+
+  let best: string | undefined
+  let bestScore = -1
+
+  for (const m of models) {
+    if (!isCodeWhispererModelId(m.modelId)) continue
+    const candidateTokens = tokenize(m.modelId)
+    const score = overlapScore(queryTokens, candidateTokens)
+    if (score > bestScore) {
+      bestScore = score
+      best = m.modelId
+    }
+  }
+
+  return bestScore > 0 ? best : undefined
+}
+
+/**
+ * 反向映射：把 CodeWhisperer 大写内部 ID 转回可读对外名（供展示用）。
+ * 策略：小写化 + 把 `_` 替换为 `-`，截取 family 前缀部分。
+ * 例：`CLAUDE_SONNET_4_5_20250514_V1_0` → `claude-sonnet-4-5`（含版本，日期/V部分剥离）。
+ * 无法识别时原样返回。
+ */
+export function codeWhispererToOutward(modelId: string): string {
+  if (!isCodeWhispererModelId(modelId)) return modelId
+  // 小写 + 下划线转短横
+  const lower = modelId.toLowerCase().replace(/_/g, '-')
+  // 匹配 claude-{family}-{major}（可选 minor：1-2 位，且后面不跟更多数字）前缀。
+  // (?:-(\d{1,2})(?!\d))? 确保 minor 段不匹配日期数字（如 20250514 中的 20 是 2 位但后面跟 2 更多数字）。
+  // 用负向前瞻 (?!\\d) 确保 minor 后不紧跟数字，避免把日期前两位误当 minor。
+  const m = lower.match(/^(claude-(?:sonnet|haiku|opus)-\d+(?:-\d{1,2}(?!\d))?)/)
+  return m !== null ? m[1] : lower
 }

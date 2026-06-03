@@ -14,10 +14,10 @@ import {
   KIRO_SOCIAL_PROFILE_ARN,
   KIRO_BUILDER_ID_PROFILE_ARN,
 } from '../../../../../platform/net/kiro/kiro-identity-client'
-import { mapModelId, normalizeClaudeVersion } from './kiro-model-map'
+import { mapModelId, normalizeClaudeVersion, resolveCodeWhispererModelId } from './kiro-model-map'
 import { buildConversationState } from './kiro-conversation-state'
 import { classifyKiroError } from './kiro-error'
-import { KiroUpstreamClient, type KiroCallContext } from './kiro-upstream-client'
+import { KiroUpstreamClient, type KiroCallContext, type KiroSendOpts } from './kiro-upstream-client'
 import type {
   KiroCredential,
   KiroAccountInfo,
@@ -57,6 +57,18 @@ export interface KiroAdapterDeps {
   conversationIdCache?: ConversationIdCache
   /** conversationId 生成函数（默认 randomUUID）。 */
   genConversationId?: () => string
+  /**
+   * 是否启用 CodeWhisperer 端点（大写内部模型 ID）。默认 false。
+   * 仅当为 true 且 ListAvailableModels 结果能解析出大写 ID 时，才走 CodeWhisperer 端点；
+   * 否则完全保持现状（AmazonQ 单端点 + 小写 modelId）——零回归。
+   * 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+   */
+  enableCodeWhisperer?: boolean
+  /**
+   * 可用模型列表（来自 ListAvailableModels，用于 resolveCodeWhispererModelId）。
+   * 仅在 enableCodeWhisperer=true 时有意义；可按账号按需注入或通过 ModelListCache 刷新。
+   */
+  availableModels?: readonly { modelId: string }[]
 }
 
 // 已解析的一次调用所需路由信息（accountId + envelope + callCtx）。
@@ -64,6 +76,8 @@ interface PreparedCall {
   accountId: string
   callCtx: KiroCallContext
   envelope: ReturnType<typeof buildConversationState>
+  /** CodeWhisperer 大写内部模型 ID（仅 enableCodeWhisperer=true 且解析成功时有值）。 */
+  cwModelId?: string
 }
 
 export class KiroAdapter implements PlatformUpstreamAdapter {
@@ -92,8 +106,9 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
 
   async chat(ir: CanonicalRequest, ctx: UpstreamCtx): Promise<CanonicalResponse> {
     const prepared = this.prepare(ir, ctx)
+    const sendOpts = this.makeSendOpts(prepared)
     const resp = await runWithDispatcher(ctx.dispatcher, () =>
-      this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model, ir),
+      this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model, ir, sendOpts),
     )
     return { ...resp, usage: this.applyCacheToUsage(resp.usage, ir.cacheControl, prepared.accountId, ir.model) }
   }
@@ -108,8 +123,9 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
     const self = this
     async function* gen(): AsyncIterable<CanonicalStreamEvent> {
       const prepared = self.prepare(ir, ctx)
+      const sendOpts = self.makeSendOpts(prepared)
       const stream = await runWithDispatcher(ctx.dispatcher, () =>
-        self.deps.client.openStream(prepared.envelope, prepared.callCtx, ir.model, ir),
+        self.deps.client.openStream(prepared.envelope, prepared.callCtx, ir.model, ir, sendOpts),
       )
       for await (const ev of stream) {
         if (ev.type === 'usage') {
@@ -120,6 +136,12 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
       }
     }
     return gen()
+  }
+
+  /** 从 PreparedCall 构建 KiroSendOpts（仅 enableCodeWhisperer=true 且 cwModelId 存在时才激活 CW 路径）。 */
+  private makeSendOpts(prepared: PreparedCall): KiroSendOpts | undefined {
+    if (this.deps.enableCodeWhisperer !== true || prepared.cwModelId === undefined) return undefined
+    return { enableCodeWhisperer: true, cwModelId: prepared.cwModelId }
   }
 
   // cache 计费后处理：compute 读命中 → update 写账号级指纹表（请求成功后），把命中填进 usage，
@@ -164,8 +186,19 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
       ? this.deps.conversationIdCache.getOrCreate(cacheKey, this.genConversationId)
       : (ctx.requestId ?? 'conv')
 
+    // CodeWhisperer 实验路径（enableCodeWhisperer=true + 模型缓存解析出大写 ID）：
+    // 用大写内部 ID 构建 envelope，后续 buildRequest 按端点 modelIdStyle 选取。
+    // 默认（enableCodeWhisperer=false 或解析失败）：小写 ID，AmazonQ 路径，逐字不变。
+    // 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+    const lowercaseModelId = mapModelId(ir.model)
+    let resolvedCwModelId: string | undefined
+    if (this.deps.enableCodeWhisperer === true && this.deps.availableModels !== undefined) {
+      resolvedCwModelId = resolveCodeWhispererModelId(ir.model, this.deps.availableModels)
+    }
+
+    // envelope 始终用小写 modelId 构建（AmazonQ 兼容）；CodeWhisperer 端点在 buildRequest 时替换。
     const buildOpts: BuildConversationStateOpts = {
-      modelId: mapModelId(ir.model),
+      modelId: lowercaseModelId,
       origin: 'AI_EDITOR',
       conversationId,
       ...(profileArn !== undefined ? { profileArn } : {}),
@@ -182,7 +215,7 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
       invocationId,
       ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
     }
-    return { accountId: account.id, callCtx, envelope }
+    return { accountId: account.id, callCtx, envelope, cwModelId: resolvedCwModelId }
   }
 }
 

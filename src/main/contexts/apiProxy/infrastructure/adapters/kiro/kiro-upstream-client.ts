@@ -49,16 +49,54 @@ export interface KiroEndpoint {
   url: string
   origin: string
   name: string
+  /**
+   * modelId 样式：lowercase = AmazonQ 端点接受小写（如 `claude-sonnet-4.5`，默认）；
+   *              uppercase = CodeWhisperer 端点需大写内部 ID（如 `CLAUDE_SONNET_4_5_20250514_V1_0`）。
+   * 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+   */
+  modelIdStyle?: 'lowercase' | 'uppercase'
+}
+
+/** endpointsForRegion 选项：enableCodeWhisperer 默认 false → 仅返回 AmazonQ（现状逐字不变）。
+ * 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+ */
+export interface EndpointsForRegionOpts {
+  /** 是否在端点列表中追加 CodeWhisperer 端点（首选，大写 ID）。默认 false。 */
+  enableCodeWhisperer?: boolean
 }
 
 /**
- * M3b 阶段端点：只返回区域 AmazonQ 端点（由 region 解析）。
- * CodeWhisperer 端点需大写内部模型 ID（resolveCodeWhispererModelId via ListAvailableModels），
- * 小写 modelId 会被 CodeWhisperer 端点 400，留 M4；M3b 用 AmazonQ 端点接受小写 modelId。
+ * 区域端点列表。
+ * - enableCodeWhisperer=false（默认）：仅返回 AmazonQ 端点（接受小写 modelId）——现状逐字不变，零回归。
+ * - enableCodeWhisperer=true：返回 [CodeWhisperer(uppercase,首选), AmazonQ(lowercase,回退)]。
+ *   CodeWhisperer 端点行为（大写 ID 是否被接受、body 格式）留真机验证后启用。
  */
-export function endpointsForRegion(region: string): KiroEndpoint[] {
+export function endpointsForRegion(region: string, opts?: EndpointsForRegionOpts): KiroEndpoint[] {
   const amazonQBase = runtimeEndpointForRegion(region).replace(/\/+$/, '')
-  return [{ url: `${amazonQBase}/generateAssistantResponse`, origin: 'AI_EDITOR', name: 'AmazonQ' }]
+  const amazonQEndpoint: KiroEndpoint = {
+    url: `${amazonQBase}/generateAssistantResponse`,
+    origin: 'AI_EDITOR',
+    name: 'AmazonQ',
+    modelIdStyle: 'lowercase',
+  }
+
+  if (opts?.enableCodeWhisperer !== true) {
+    // 默认路径：仅 AmazonQ 单端点，与 M3b 完全一致（逐字不变）。
+    return [amazonQEndpoint]
+  }
+
+  // 实验路径（enableCodeWhisperer=true）：CodeWhisperer 首选 + AmazonQ 回退。
+  // 注意：CodeWhisperer 端点 `codewhisperer.<region>.amazonaws.com` 大写内部模型 ID；
+  //       端点 body 格式差异待真机验证后确认。
+  const cwBase = `https://codewhisperer.${region}.amazonaws.com`
+  const cwEndpoint: KiroEndpoint = {
+    url: `${cwBase}/generateAssistantResponse`,
+    origin: 'AI_EDITOR',
+    name: 'CodeWhisperer',
+    modelIdStyle: 'uppercase',
+  }
+
+  return [cwEndpoint, amazonQEndpoint]
 }
 
 // --- 注入 fetch 抽象（mock 友好；默认实现读 ambient dispatcher） ---
@@ -225,6 +263,18 @@ export interface KiroUpstreamClientOpts {
   refresher: KiroTokenRefresher
 }
 
+/**
+ * 每次发送调用的可选扩展选项（不影响现有调用签名）。
+ * enableCodeWhisperer / cwModelId 默认均 undefined → AmazonQ 单端点 + 小写 modelId，零回归。
+ * 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+ */
+export interface KiroSendOpts {
+  /** 是否启用 CodeWhisperer 端点（首选大写 ID）。默认 undefined=false。 */
+  enableCodeWhisperer?: boolean
+  /** CodeWhisperer 大写内部模型 ID（由 resolveCodeWhispererModelId 解析；有值才替换 envelope 内 modelId）。 */
+  cwModelId?: string
+}
+
 // 抛给上层的鉴权错误（刷新失败/无法刷新时）。
 export class KiroUpstreamAuthError extends Error {
   constructor(
@@ -256,10 +306,40 @@ export class KiroUpstreamClient {
     this.refresher = opts.refresher
   }
 
-  /** 构建单端点请求（纯函数，无副作用；origin 已在 envelope 内，均 'AI_EDITOR'）。 */
-  buildRequest(endpoint: KiroEndpoint, envelope: ConversationStateEnvelope, ctx: KiroCallContext): KiroHttpRequest {
-    void endpoint.origin // AmazonQ 端点 origin 'AI_EDITOR'，envelope 内已设；保留字段以备 M4 CodeWhisperer 端点差异。
-    return { url: endpoint.url, method: 'POST', headers: buildHeaders(ctx), body: JSON.stringify(envelope) }
+  /**
+   * 构建单端点请求（纯函数，无副作用）。
+   * 当 endpoint.modelIdStyle === 'uppercase' 且传入 modelIdOverride 时，
+   * 以 modelIdOverride 替换 envelope 内的 userInputMessage.modelId（CodeWhisperer 端点需大写内部 ID）。
+   * 其余情况（lowercase / 未传 override）envelope 原样序列化——AmazonQ 现状逐字不变。
+   * 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+   */
+  buildRequest(
+    endpoint: KiroEndpoint,
+    envelope: ConversationStateEnvelope,
+    ctx: KiroCallContext,
+    modelIdOverride?: string,
+  ): KiroHttpRequest {
+    let body: string
+    if (endpoint.modelIdStyle === 'uppercase' && modelIdOverride !== undefined) {
+      // 深拷贝 envelope 并替换 userInputMessage.modelId，不改变入参（纯函数）。
+      const patched: ConversationStateEnvelope = {
+        ...envelope,
+        conversationState: {
+          ...envelope.conversationState,
+          currentMessage: {
+            ...envelope.conversationState.currentMessage,
+            userInputMessage: {
+              ...envelope.conversationState.currentMessage.userInputMessage,
+              modelId: modelIdOverride,
+            },
+          },
+        },
+      }
+      body = JSON.stringify(patched)
+    } else {
+      body = JSON.stringify(envelope)
+    }
+    return { url: endpoint.url, method: 'POST', headers: buildHeaders(ctx), body }
   }
 
   /** 非流式：端点回退 + 401/403 刷新重试一次 → 全量 buffer → 解析 → 折叠 CanonicalResponse（含 usage 估算）。 */
@@ -268,8 +348,9 @@ export class KiroUpstreamClient {
     ctx: KiroCallContext,
     model: string,
     request: CanonicalRequest,
+    sendOpts?: KiroSendOpts,
   ): Promise<CanonicalResponse> {
-    const bytes = await this.send(envelope, ctx)
+    const bytes = await this.send(envelope, ctx, sendOpts)
     const events = parseKiroEventStream(bytes)
     return foldEventsToResponse(events, model, request)
   }
@@ -280,8 +361,9 @@ export class KiroUpstreamClient {
     ctx: KiroCallContext,
     model: string,
     request: CanonicalRequest,
+    sendOpts?: KiroSendOpts,
   ): AsyncIterable<CanonicalStreamEvent> {
-    yield* await this.openStream(envelope, ctx, model, request)
+    yield* await this.openStream(envelope, ctx, model, request, sendOpts)
   }
 
   /**
@@ -293,14 +375,15 @@ export class KiroUpstreamClient {
     ctx: KiroCallContext,
     model: string,
     request: CanonicalRequest,
+    sendOpts?: KiroSendOpts,
   ): Promise<AsyncIterable<CanonicalStreamEvent>> {
-    const body = await this.sendStream(envelope, ctx)
+    const body = await this.sendStream(envelope, ctx, sendOpts)
     return this.parseStream(body, model, request)
   }
 
   /** 非流式：端点回退 + 401/403 单次刷新重试 → 返回全量响应字节。 */
-  private async send(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<Uint8Array> {
-    const resp = await this.attemptSend(envelope, ctx)
+  private async send(envelope: ConversationStateEnvelope, ctx: KiroCallContext, sendOpts?: KiroSendOpts): Promise<Uint8Array> {
+    const resp = await this.attemptSend(envelope, ctx, sendOpts)
     return resp.bytes()
   }
 
@@ -308,18 +391,19 @@ export class KiroUpstreamClient {
    * 流式传输层：端点回退 + 401/403 单次刷新重试，与 send 完全相同的鉴权/封禁/429 分支，
    * 唯一区别：返回 resp.bytesStream() 而非 resp.bytes()。
    */
-  private async sendStream(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<AsyncIterable<Uint8Array>> {
-    const resp = await this.attemptSend(envelope, ctx)
+  private async sendStream(envelope: ConversationStateEnvelope, ctx: KiroCallContext, sendOpts?: KiroSendOpts): Promise<AsyncIterable<Uint8Array>> {
+    const resp = await this.attemptSend(envelope, ctx, sendOpts)
     return resp.bytesStream()
   }
 
   /**
    * 端点回退 + 401/403 单次刷新重试核心循环 → 返回 ok 的 KiroFetchResponse（调用方再选消费方式）。
    * 429/suspended/auth 失败分支与此前 send 的行为逐字一致；错误体 text() 在此读取（不在消费路径）。
-   * M3b 端点表仅含 AmazonQ 单端点；M4 多端点后自动按序回退。
+   * 默认仅含 AmazonQ 单端点（零回归）；sendOpts.enableCodeWhisperer=true 时启用双端点回退。
+   * 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
    */
-  private async attemptSend(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<KiroFetchResponse> {
-    const endpoints = endpointsForRegion(ctx.region)
+  private async attemptSend(envelope: ConversationStateEnvelope, ctx: KiroCallContext, sendOpts?: KiroSendOpts): Promise<KiroFetchResponse> {
+    const endpoints = endpointsForRegion(ctx.region, { enableCodeWhisperer: sendOpts?.enableCodeWhisperer })
     let lastError: Error | undefined
     let curCtx = ctx
     let refreshed = false
@@ -327,7 +411,7 @@ export class KiroUpstreamClient {
     for (const endpoint of endpoints) {
       // 每端点最多两轮：原始 → （401/403 且尚未刷新）刷新后重试同端点一次。
       for (let attempt = 0; attempt < 2; attempt++) {
-        const req = this.buildRequest(endpoint, envelope, curCtx)
+        const req = this.buildRequest(endpoint, envelope, curCtx, sendOpts?.cwModelId)
         let resp: KiroFetchResponse
         try {
           resp = await this.fetchImpl(req.url, {

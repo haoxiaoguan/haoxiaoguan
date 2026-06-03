@@ -78,17 +78,83 @@ function refresherTo(tok: RefreshedKiroToken): KiroTokenRefresher {
 }
 
 describe('endpointsForRegion', () => {
-  // M3b：仅区域 AmazonQ 单端点（接受小写 modelId）；CodeWhisperer 端点（大写模型 ID）留 M4。
-  it('returns only the region AmazonQ endpoint', () => {
+  // 默认（无 opts / enableCodeWhisperer=false）：仅区域 AmazonQ 单端点（接受小写 modelId）——零回归。
+  it('returns only the region AmazonQ endpoint (default, no opts)', () => {
     const eps = endpointsForRegion('eu-central-1')
     expect(eps.map((e) => e.name)).toEqual(['AmazonQ'])
     expect(eps[0].url).toBe('https://q.eu-central-1.amazonaws.com/generateAssistantResponse')
+    expect(eps[0].modelIdStyle).toBe('lowercase')
   })
 
   it('routes us-east-1 to the us-east-1 AmazonQ endpoint', () => {
     const eps = endpointsForRegion('us-east-1')
     expect(eps).toHaveLength(1)
     expect(eps[0].url).toBe('https://q.us-east-1.amazonaws.com/generateAssistantResponse')
+  })
+
+  it('enableCodeWhisperer=false 仍只返回 AmazonQ（零回归）', () => {
+    const eps = endpointsForRegion('us-east-1', { enableCodeWhisperer: false })
+    expect(eps).toHaveLength(1)
+    expect(eps[0].name).toBe('AmazonQ')
+    expect(eps[0].modelIdStyle).toBe('lowercase')
+  })
+
+  // P1-6 步骤 2：enableCodeWhisperer=true → [CodeWhisperer(uppercase,首选), AmazonQ(lowercase,回退)]。
+  // 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+  it('enableCodeWhisperer=true 返回双端点，CW 首选标 uppercase，AmazonQ 回退标 lowercase', () => {
+    const eps = endpointsForRegion('us-east-1', { enableCodeWhisperer: true })
+    expect(eps).toHaveLength(2)
+    expect(eps[0].name).toBe('CodeWhisperer')
+    expect(eps[0].modelIdStyle).toBe('uppercase')
+    expect(eps[0].url).toContain('codewhisperer.us-east-1.amazonaws.com')
+    expect(eps[1].name).toBe('AmazonQ')
+    expect(eps[1].modelIdStyle).toBe('lowercase')
+    expect(eps[1].url).toContain('q.us-east-1.amazonaws.com')
+  })
+
+  it('enableCodeWhisperer=true eu-central-1 → CW 端点含正确 region', () => {
+    const eps = endpointsForRegion('eu-central-1', { enableCodeWhisperer: true })
+    expect(eps[0].url).toContain('codewhisperer.eu-central-1.amazonaws.com')
+    expect(eps[1].url).toContain('q.eu-central-1.amazonaws.com')
+  })
+})
+
+describe('KiroUpstreamClient.buildRequest — modelIdStyle', () => {
+  // P1-6 步骤 2：buildRequest 按端点 modelIdStyle 决定 modelId。
+  // 注意：CodeWhisperer 端点行为待真实账号验证后默认启用。
+
+  it('lowercase 端点（AmazonQ）不替换 envelope modelId', () => {
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const ep = endpointsForRegion('us-east-1')[0] // modelIdStyle='lowercase'
+    const req = client.buildRequest(ep, ENVELOPE, CTX)
+    const parsed = JSON.parse(req.body)
+    expect(parsed.conversationState.currentMessage.userInputMessage.modelId).toBe('claude-sonnet-4.5')
+  })
+
+  it('uppercase 端点 + modelIdOverride → body 内 modelId 替换为大写 ID', () => {
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const cwEp = endpointsForRegion('us-east-1', { enableCodeWhisperer: true })[0] // CodeWhisperer uppercase
+    const req = client.buildRequest(cwEp, ENVELOPE, CTX, 'CLAUDE_SONNET_4_5_20250514_V1_0')
+    const parsed = JSON.parse(req.body)
+    expect(parsed.conversationState.currentMessage.userInputMessage.modelId).toBe('CLAUDE_SONNET_4_5_20250514_V1_0')
+    // 不影响原始 envelope（纯函数）
+    expect(ENVELOPE.conversationState.currentMessage.userInputMessage.modelId).toBe('claude-sonnet-4.5')
+  })
+
+  it('uppercase 端点但无 modelIdOverride → envelope 原样序列化（不替换）', () => {
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const cwEp = endpointsForRegion('us-east-1', { enableCodeWhisperer: true })[0]
+    const req = client.buildRequest(cwEp, ENVELOPE, CTX) // 无 override
+    const parsed = JSON.parse(req.body)
+    expect(parsed.conversationState.currentMessage.userInputMessage.modelId).toBe('claude-sonnet-4.5')
+  })
+
+  it('buildRequest 不修改传入 envelope 对象（纯函数）', () => {
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: scriptedFetch([]).impl })
+    const cwEp = endpointsForRegion('us-east-1', { enableCodeWhisperer: true })[0]
+    const originalModelId = ENVELOPE.conversationState.currentMessage.userInputMessage.modelId
+    client.buildRequest(cwEp, ENVELOPE, CTX, 'CLAUDE_SONNET_4_5_20250514_V1_0')
+    expect(ENVELOPE.conversationState.currentMessage.userInputMessage.modelId).toBe(originalModelId)
   })
 })
 
