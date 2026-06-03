@@ -5,8 +5,26 @@
   "mcp": "MCP",
   "apiService": "API Service",
   "copy": "Copy",
+  "service": {
+    "baseUrlLabel": "Base URL",
+    "endpointsTitle": "Available Endpoints",
+    "colPath": "Endpoint",
+    "colDesc": "Description",
+    "curlTitle": "Quick Start Example",
+    "curlCopy": "Copy Example",
+    "disabledHint": "Enable the service to use these endpoints",
+    "endpoints": {
+      "chatCompletions": "OpenAI-compatible · Chat Completions",
+      "messages": "Anthropic-compatible · Messages",
+      "responses": "OpenAI Responses API",
+      "models": "Model List",
+      "platformChat": "Platform-prefix · Chat Completions",
+      "platformMessages": "Platform-prefix · Messages"
+    }
+  },
   "clientKeys": {
     "title": "Client Keys",
+    "count": "{{count}} keys",
     "create": "New Key",
     "createTitle": "Create Client Key",
     "nameLabel": "Key Name",
@@ -14,24 +32,35 @@
     "confirm": "Create",
     "cancel": "Cancel",
     "delete": "Delete",
-    "empty": "No client keys yet.",
+    "empty": "No client keys yet",
+    "emptyHint": "Create a key to use it in the Authorization Bearer header",
     "plaintextTitle": "Key Created",
     "plaintextWarning": "This key will not be shown again. Copy it now.",
     "copyKey": "Copy Key",
-    "close": "Close"
+    "close": "Close",
+    "colName": "Name",
+    "colPrefix": "Key Prefix",
+    "colStatus": "Status",
+    "colActions": "Actions"
   },
   "poolHealth": {
     "title": "Account Pool Health",
+    "count": "{{count}} accounts",
     "refresh": "Refresh",
-    "empty": "No accounts in pool.",
-    "failures": "Failures",
+    "empty": "No Kiro accounts",
+    "emptyHint": "Add Kiro accounts in Account Management to see runtime state here",
+    "failures": "{{count}} failures",
     "clearSuspension": "Clear Suspension",
     "state": {
       "available": "Available",
       "cooldown": "Cooldown",
       "quota_exhausted": "Quota Exhausted",
       "suspended": "Suspended"
-    }
+    },
+    "colAccount": "Account",
+    "colState": "Runtime State",
+    "colFailures": "Failures",
+    "colActions": "Actions"
   },
   "proxies": "Proxies",
   "groups": "Groups",

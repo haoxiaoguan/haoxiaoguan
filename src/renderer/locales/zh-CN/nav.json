@@ -5,33 +5,62 @@
   "mcp": "MCP 管理",
   "apiService": "API 服务",
   "copy": "复制",
+  "service": {
+    "baseUrlLabel": "Base URL",
+    "endpointsTitle": "可用端点",
+    "colPath": "端点",
+    "colDesc": "说明",
+    "curlTitle": "快速接入示例",
+    "curlCopy": "复制示例",
+    "disabledHint": "开启服务后可用",
+    "endpoints": {
+      "chatCompletions": "OpenAI 兼容 · Chat Completions",
+      "messages": "Anthropic 兼容 · Messages",
+      "responses": "OpenAI Responses API",
+      "models": "模型列表",
+      "platformChat": "平台前缀 · Chat Completions",
+      "platformMessages": "平台前缀 · Messages"
+    }
+  },
   "clientKeys": {
     "title": "客户端 Key",
-    "create": "新建",
+    "count": "{{count}} 个 Key",
+    "create": "新建 Key",
     "createTitle": "创建客户端 Key",
     "nameLabel": "Key 名称",
     "namePlaceholder": "如 my-app",
     "confirm": "创建",
     "cancel": "取消",
     "delete": "删除",
-    "empty": "暂无客户端 Key。",
+    "empty": "暂无客户端 Key",
+    "emptyHint": "创建 Key 后，可将其用于 Authorization Bearer 头部认证",
     "plaintextTitle": "Key 已创建",
     "plaintextWarning": "此 Key 仅显示一次，请立即复制保存。",
     "copyKey": "复制 Key",
-    "close": "关闭"
+    "close": "关闭",
+    "colName": "名称",
+    "colPrefix": "Key 前缀",
+    "colStatus": "状态",
+    "colActions": "操作"
   },
   "poolHealth": {
     "title": "账号池健康",
+    "count": "{{count}} 个账号",
     "refresh": "刷新",
-    "empty": "暂无账号。",
-    "failures": "失败次数",
+    "empty": "暂无 Kiro 账号",
+    "emptyHint": "在账号管理中添加 Kiro 账号后，此处将显示运行态",
+    "failures": "失败 {{count}} 次",
     "clearSuspension": "解除挂起",
     "state": {
       "available": "可用",
       "cooldown": "冷却中",
       "quota_exhausted": "配额耗尽",
       "suspended": "已挂起"
-    }
+    },
+    "colAccount": "账号",
+    "colState": "运行态",
+    "colFailures": "失败次数",
+    "colActions": "操作"
   },
   "proxies": "代理管理",
   "groups": "分组管理",

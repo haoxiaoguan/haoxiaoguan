@@ -80,6 +80,7 @@ const navButtonClassName =
 
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
+type ApiServiceHeaderTab = 'service' | 'keys' | 'health';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
@@ -215,6 +216,12 @@ export function AppShell({ shell }: AppShellProps) {
     : location.pathname.startsWith('/accounts/proxies')
       ? 'proxies'
       : 'accounts';
+  const isApiServiceRoute = location.pathname.startsWith('/api-service');
+  const activeApiServiceTab: ApiServiceHeaderTab = location.pathname.startsWith('/api-service/keys')
+    ? 'keys'
+    : location.pathname.startsWith('/api-service/health')
+      ? 'health'
+      : 'service';
 
   return (
     <div
@@ -314,6 +321,16 @@ export function AppShell({ shell }: AppShellProps) {
                   { value: 'accounts', label: t('nav:accounts'), to: '/accounts' },
                   { value: 'groups', label: t('nav:groups'), to: '/accounts/groups' },
                   { value: 'proxies', label: t('nav:proxies'), to: '/accounts/proxies' },
+                ]}
+              />
+            ) : isApiServiceRoute ? (
+              <ManagementHeaderTabs
+                ariaLabel={t('nav:apiService')}
+                value={activeApiServiceTab}
+                tabs={[
+                  { value: 'service', label: t('nav:apiService'), to: '/api-service/service' },
+                  { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
+                  { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },
                 ]}
               />
             ) : (
