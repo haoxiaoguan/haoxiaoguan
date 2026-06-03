@@ -7,6 +7,9 @@ import type {
   CanonicalStreamEvent,
 } from './canonical'
 
+/** 上游错误分类（故障转移决策）。M4 错误转移/健康追踪。 */
+export type ErrorClass = 'SUSPENDED' | 'AUTH' | 'RATE_LIMIT' | 'SERVER' | 'FATAL'
+
 /** 模型信息（M2b 最小）。M3 可扩 contextWindow / maxOutputTokens / capabilities。 */
 export interface ModelInfo {
   id: string
