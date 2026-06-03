@@ -101,6 +101,7 @@ import { createApiRequestListener } from './contexts/apiProxy/infrastructure/htt
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
+import { ResponsesStore } from './contexts/apiProxy/infrastructure/responses-store/responses-store'
 // KiroAdapter（'kiro' 上游）+ 4 个窄 port 类型。container 用现成 repo/resolver 实例适配这些 port。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { PromptCacheTracker } from './contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
@@ -465,7 +466,9 @@ export async function buildContainer(): Promise<Container> {
     }),
   )
 
-  const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry })
+  // Responses 有状态持久化（previous_response_id 历史链 + store 落盘），默认目录在 appDataDir()/responses。
+  const responsesStore = new ResponsesStore()
+  const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry, responsesStore })
   const apiHttpServer = new ApiHttpServer(
     createApiRequestListener({
       service: apiProxyService,

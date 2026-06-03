@@ -23,6 +23,13 @@ import {
   irToGeminiResponse,
   serializeGeminiStream,
 } from '../infrastructure/inbound/gemini'
+import { responsesToIR } from '../infrastructure/inbound/responses/responses-input'
+import { irToResponsesResponse } from '../infrastructure/inbound/responses/responses-response'
+import { serializeResponsesStream } from '../infrastructure/inbound/responses/responses-stream'
+import { expandPreviousResponseHistory } from '../infrastructure/responses-store/responses-history'
+import type { ResponsesStore, StoredResponseDoc } from '../infrastructure/responses-store/responses-store'
+import type { ResponsesRequest } from '../infrastructure/inbound/responses/responses-types'
+import type { ContentBlock } from '../domain/canonical'
 
 // 返回给 renderer 的状态投影（spec §13：apiProxy:getStatus → { state, port? }）。
 // M1 只含 state + 可选 port；M2+ 再扩 startedAt/accountsHealthy/accountsTotal。
@@ -107,17 +114,20 @@ async function drainStream(
 export class ApiProxyService {
   private readonly registry?: PlatformRegistry
   private readonly converters: InboundConverters
+  // Responses 有状态持久化（previous_response_id 历史链 + store 落盘）；仅 /v1/responses 用。
+  private readonly responsesStore?: ResponsesStore
   // server 可后置注入（解循环依赖：container 先建 service 再建 listener+server，最后 attachServer）。
   // M1 单参构造 new ApiProxyService(server) 仍合法——server 既可构造传入也可 attach。
   private server?: ApiHttpServer
 
   constructor(
     server?: ApiHttpServer,
-    deps: { registry?: PlatformRegistry; converters?: InboundConverters } = {},
+    deps: { registry?: PlatformRegistry; converters?: InboundConverters; responsesStore?: ResponsesStore } = {},
   ) {
     this.server = server
     this.registry = deps.registry
     this.converters = deps.converters ?? DEFAULT_INBOUND_CONVERTERS
+    this.responsesStore = deps.responsesStore
   }
 
   /**
@@ -163,6 +173,12 @@ export class ApiProxyService {
       return { kind: 'json', status: 200, body: this.buildModelsBody(intent) }
     }
 
+    // Responses 协议有专属编排（历史链 + store 落盘 + 语义 SSE），走独立分支，
+    // 不复用下方 chat 类的 toIR/toResponseBody/serializeStream。
+    if (intent.format === 'openai-responses') {
+      return this.handleResponses(intent, body, requestId, signal)
+    }
+
     if (this.registry === undefined) {
       throw new ApiProxyHttpError(503, 'platform registry not configured', intent.format)
     }
@@ -190,6 +206,101 @@ export class ApiProxyService {
     return { kind: 'json', status: 200, body: this.toResponseBody(intent, resp, requestId) }
   }
 
+  /**
+   * Responses 专属编排：previous_response_id 历史链重建 → responsesToIR → 选上游 →
+   * chat/chatStream → irToResponsesResponse / serializeResponsesStream，并按 store 落盘。
+   * id/itemId 由 responsesStore 生成（隔离随机/时钟）；落盘失败不阻断响应。
+   */
+  private async handleResponses(
+    intent: RequestIntent,
+    body: unknown,
+    requestId: string,
+    signal?: AbortSignal,
+  ): Promise<HandleResult> {
+    if (this.registry === undefined) {
+      throw new ApiProxyHttpError(503, 'platform registry not configured', 'openai-responses')
+    }
+    if (this.responsesStore === undefined) {
+      throw new ApiProxyHttpError(503, 'responses store not configured', 'openai-responses')
+    }
+    const req = (body ?? {}) as ResponsesRequest
+
+    const historyMessages = req.previous_response_id
+      ? expandPreviousResponseHistory(req.previous_response_id, (id) => this.responsesStore!.load(id))
+      : undefined
+    const ir = responsesToIR(req, { ...(historyMessages ? { historyMessages } : {}) })
+
+    let adapter
+    try {
+      adapter = this.registry.selectAdapter(intent)
+    } catch (e) {
+      if (e instanceof NoUpstreamError) {
+        throw new ApiProxyHttpError(404, e.message, 'openai-responses')
+      }
+      throw e
+    }
+    const ctx: UpstreamCtx = { ...(signal ? { signal } : {}), requestId }
+    const respId = this.responsesStore.generateResponseId()
+    const itemId = (i: number): string => this.responsesStore!.generateItemId(i)
+
+    if (intent.stream) {
+      const events = await drainStream(adapter.chatStream(ir, ctx))
+      const resp = foldStreamForStore(events, ir.model)
+      this.persistResponses(req, respId, resp, itemId)
+      return {
+        kind: 'stream',
+        status: 200,
+        contentType: 'text/event-stream',
+        frames: serializeResponsesStream(resp, events, { id: respId, itemId, createdAt: 0 }),
+      }
+    }
+    const resp = await adapter.chat(ir, ctx)
+    this.persistResponses(req, respId, resp, itemId)
+    return {
+      kind: 'json',
+      status: 200,
+      body: irToResponsesResponse(resp, {
+        id: respId,
+        itemId,
+        createdAt: 0,
+        ...(req.previous_response_id ? { previousResponseId: req.previous_response_id } : {}),
+      }),
+    }
+  }
+
+  /** 按 store 标志落盘一条响应（store===false 显式跳过）；I/O 失败吞掉，不影响已生成的响应体。 */
+  private persistResponses(
+    req: ResponsesRequest,
+    id: string,
+    resp: CanonicalResponse,
+    itemId: (i: number) => string,
+  ): void {
+    if (req.store === false || this.responsesStore === undefined) return
+    const obj = irToResponsesResponse(resp, {
+      id,
+      itemId,
+      createdAt: 0,
+      ...(req.previous_response_id ? { previousResponseId: req.previous_response_id } : {}),
+    })
+    const doc: StoredResponseDoc = {
+      id,
+      createdAt: 0,
+      status: 'completed',
+      model: resp.model,
+      output: obj.output,
+      usage: obj.usage,
+      ...(req.previous_response_id ? { previousResponseId: req.previous_response_id } : {}),
+      ...(req.instructions ? { instructions: req.instructions } : {}),
+      storedInput: req.input,
+      storedAt: Math.floor(Date.now() / 1000),
+    }
+    try {
+      this.responsesStore.save(doc)
+    } catch {
+      /* 落盘失败不阻断响应 */
+    }
+  }
+
   // ---- 内部：入站 IR ----
   private toIR(intent: RequestIntent, body: unknown): CanonicalRequest {
     switch (intent.format) {
@@ -205,7 +316,9 @@ export class ApiProxyService {
         return this.converters.gemini.toIR(body as Parameters<typeof geminiToIR>[0], model)
       }
       case 'openai-responses':
-        throw new ApiProxyHttpError(501, 'responses not wired yet', 'openai-responses')
+        // 不可达：handleRequest 已在上游把 openai-responses 分流到 handleResponses。
+        // 保留分支仅为 switch 穷尽（RequestFormat 含此值），命中即编排不变量被破坏。
+        throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
     }
   }
 
@@ -219,7 +332,8 @@ export class ApiProxyService {
       case 'gemini':
         return this.converters.gemini.toResponse(resp)
       case 'openai-responses':
-        throw new ApiProxyHttpError(501, 'responses not wired yet', 'openai-responses')
+        // 不可达：openai-responses 走 handleResponses，不进 chat 类出站序列化（见上 toIR 注释）。
+        throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
     }
   }
 
@@ -264,7 +378,8 @@ export class ApiProxyService {
           frames: this.converters.gemini.serializeStream(events),
         }
       case 'openai-responses':
-        throw new ApiProxyHttpError(501, 'responses not wired yet', 'openai-responses')
+        // 不可达：openai-responses 走 handleResponses 的 serializeResponsesStream（见上 toIR 注释）。
+        throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
     }
   }
 
@@ -278,4 +393,37 @@ export class ApiProxyService {
     // OpenAI/Anthropic: { object:'list', data:[{ id, object:'model' }] }
     return { object: 'list', data: models.map((m) => ({ id: m.id, object: 'model' })) }
   }
+}
+
+/**
+ * 把流式事件折叠回一个 CanonicalResponse —— 仅供 Responses 落盘（store）与 SSE 头部
+ * 的 model/usage 种子用。文本拼接、tool_use 入参 JSON 累积后解析；usage/stopReason 取末值。
+ */
+function foldStreamForStore(events: CanonicalStreamEvent[], model: string): CanonicalResponse {
+  const content: ContentBlock[] = []
+  let text = ''
+  const tools = new Map<number, { id: string; name: string; json: string }>()
+  let usage: CanonicalResponse['usage'] = { inputTokens: 0, outputTokens: 0 }
+  let stopReason: CanonicalResponse['stopReason'] = 'end_turn'
+  for (const ev of events) {
+    if (ev.type === 'text_delta') text += ev.text
+    else if (ev.type === 'tool_use_start') tools.set(ev.index, { id: ev.id, name: ev.name, json: '' })
+    else if (ev.type === 'tool_use_delta') {
+      const t = tools.get(ev.index)
+      if (t) t.json += ev.partialJson
+    } else if (ev.type === 'usage') usage = ev.usage
+    else if (ev.type === 'message_stop') stopReason = ev.stopReason
+  }
+  if (text) content.push({ type: 'text', text })
+  for (const t of tools.values()) {
+    let input: Record<string, unknown> = {}
+    try {
+      const p = JSON.parse(t.json || '{}')
+      if (p && typeof p === 'object') input = p as Record<string, unknown>
+    } catch {
+      input = {}
+    }
+    content.push({ type: 'tool_use', id: t.id, name: t.name, input })
+  }
+  return { model, content, stopReason, usage }
 }
