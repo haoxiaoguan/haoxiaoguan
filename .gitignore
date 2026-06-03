@@ -34,3 +34,5 @@ data/
 test-results/
 playwright-report/
 tmp
+# npm lock — project uses pnpm; npm install corrupts node_modules
+package-lock.json
