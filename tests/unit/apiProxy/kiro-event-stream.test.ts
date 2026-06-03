@@ -3,6 +3,7 @@ import {
   parseKiroEventStream,
   encodeKiroEventStream,
   extractEventType,
+  createKiroEventStreamParser,
 } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-event-stream'
 import type { CanonicalStreamEvent } from '../../../src/main/contexts/apiProxy/domain/canonical'
 
@@ -152,6 +153,65 @@ describe('parseKiroEventStream — robustness', () => {
       { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
       { type: 'message_stop', stopReason: 'end_turn' },
     ])
+  })
+})
+
+describe('createKiroEventStreamParser', () => {
+  it('分片喂入与整段解析结果一致（切在帧中间）', () => {
+    const bytes = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'Hel' } },
+      { eventType: 'assistantResponseEvent', payload: { content: 'lo' } },
+      { eventType: 'messageMetadataEvent', payload: { tokenUsage: { uncachedInputTokens: 10, outputTokens: 5 } } },
+    ])
+    const whole = parseKiroEventStream(bytes)
+    // 用累进 offset 切成多片（含帧中间位置）逐片 push，最后 flush
+    const p = createKiroEventStreamParser()
+    const got: ReturnType<typeof parseKiroEventStream> = []
+    const cuts = [1, 7, 13, 20, bytes.length]
+    let prev = 0
+    for (const cut of cuts) {
+      const end = Math.min(cut, bytes.length)
+      if (end > prev) {
+        got.push(...p.push(bytes.slice(prev, end)))
+      }
+      prev = end
+    }
+    got.push(...p.flush())
+    expect(got).toEqual(whole)
+  })
+
+  it('push 不发 usage/message_stop，flush 才补', () => {
+    const bytes = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'hi' } },
+      { eventType: 'messageMetadataEvent', payload: { tokenUsage: { uncachedInputTokens: 3, outputTokens: 2 } } },
+    ])
+    const p = createKiroEventStreamParser()
+    const fromPush = p.push(bytes)
+    // push 阶段只含 text_delta，不含 usage/message_stop
+    expect(fromPush).toEqual([{ type: 'text_delta', text: 'hi' }])
+    const fromFlush = p.flush()
+    // flush 补 usage + message_stop
+    expect(fromFlush).toEqual([
+      { type: 'usage', usage: { inputTokens: 3, outputTokens: 2 } },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ])
+  })
+
+  it('未完成半帧暂存，补齐后解出', () => {
+    const bytes = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'abc' } },
+    ])
+    // 只喂前半截 → 不完整，什么都不返回
+    const mid = Math.floor(bytes.length / 2)
+    const p = createKiroEventStreamParser()
+    const fromHalf = p.push(bytes.slice(0, mid))
+    expect(fromHalf).toEqual([])
+    // 喂剩余 → 完整帧解出
+    const fromRest = p.push(bytes.slice(mid))
+    expect(fromRest).toEqual([{ type: 'text_delta', text: 'abc' }])
+    const fromFlush = p.flush()
+    expect(fromFlush[0]).toMatchObject({ type: 'usage' })
+    expect(fromFlush[1]).toEqual({ type: 'message_stop', stopReason: 'end_turn' })
   })
 })
 

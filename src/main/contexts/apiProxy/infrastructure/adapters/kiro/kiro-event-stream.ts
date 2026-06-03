@@ -83,111 +83,141 @@ function parseUsage(body: Record<string, unknown>): Partial<Usage> {
   return out
 }
 
+/** 有状态增量解析器接口。push 喂字节（返回本批完整帧解出的 delta 事件），flush 流末收口。 */
+export interface KiroEventStreamParser {
+  push(chunk: Uint8Array): CanonicalStreamEvent[]
+  flush(): CanonicalStreamEvent[]
+}
+
+/**
+ * 创建有状态的增量 AWS event-stream 解析器。
+ * push(chunk) 喂入任意分片字节，返回本批已完整帧解出的 text/thinking/tool delta 事件；
+ * usage 类元信息只累积进内部 state，push 阶段不 emit。
+ * flush() 在流末调用：收口未闭合 tool，返回 usage 事件 + message_stop。
+ */
+export function createKiroEventStreamParser(): KiroEventStreamParser {
+  let buffer = new Uint8Array(0)
+  const usage: Usage = { inputTokens: 0, outputTokens: 0 }
+  let sawToolUse = false
+  let contextUsagePercentage: number | undefined
+  let tool: ToolAccum | null = null
+  let nextToolIndex = 0
+
+  const closeTool = (): void => {
+    tool = null
+  }
+
+  function push(chunk: Uint8Array): CanonicalStreamEvent[] {
+    // concat buffer + chunk
+    const merged = new Uint8Array(buffer.length + chunk.length)
+    merged.set(buffer)
+    merged.set(chunk, buffer.length)
+    buffer = merged
+
+    const out: CanonicalStreamEvent[] = []
+    const bytes = buffer
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    let pos = 0
+
+    while (bytes.length - pos >= PRELUDE_BYTES) {
+      const totalLen = dv.getUint32(pos, false)
+      if (totalLen < PRELUDE_BYTES + MSG_CRC_BYTES || bytes.length - pos < totalLen) break
+      const headersLen = dv.getUint32(pos + 4, false)
+      const headersStart = pos + PRELUDE_BYTES
+      const headersEnd = headersStart + headersLen
+      const payloadStart = headersEnd
+      const payloadEnd = pos + totalLen - MSG_CRC_BYTES
+      if (headersEnd > bytes.length || payloadEnd > bytes.length || payloadStart > payloadEnd) break
+
+      const eventType = extractEventType(bytes.subarray(headersStart, headersEnd))
+      const payloadBytes = bytes.subarray(payloadStart, payloadEnd)
+
+      if (payloadBytes.length > 0) {
+        let payload: unknown
+        try {
+          payload = JSON.parse(decoder.decode(payloadBytes))
+        } catch {
+          payload = undefined
+        }
+        if (payload !== null && typeof payload === 'object') {
+          const obj = payload as Record<string, unknown>
+          const body = pickEventBody(eventType, obj)
+
+          if (eventType === 'assistantResponseEvent' || eventType === 'codeEvent') {
+            const content = body.content
+            if (typeof content === 'string' && content.length > 0) {
+              closeTool()
+              out.push({ type: 'text_delta', text: content })
+            }
+          } else if (eventType === 'reasoningContentEvent') {
+            const text = body.text
+            if (typeof text === 'string' && text.length > 0) {
+              closeTool()
+              out.push({ type: 'thinking_delta', text })
+            }
+          } else if (eventType === 'toolUseEvent') {
+            const toolUseId = typeof body.toolUseId === 'string' ? body.toolUseId : undefined
+            const name = typeof body.name === 'string' ? body.name : undefined
+            const stop = body.stop === true
+            const input = body.input
+
+            if (toolUseId !== undefined && (tool === null || tool.id !== toolUseId)) {
+              if (tool !== null) closeTool()
+              if (name !== undefined) {
+                tool = { id: toolUseId, index: nextToolIndex++ }
+                sawToolUse = true
+                out.push({ type: 'tool_use_start', index: tool.index, id: toolUseId, name })
+              }
+            }
+            if (tool !== null) {
+              if (typeof input === 'string' && input.length > 0) {
+                out.push({ type: 'tool_use_delta', index: tool.index, partialJson: input })
+              } else if (input !== null && typeof input === 'object') {
+                out.push({ type: 'tool_use_delta', index: tool.index, partialJson: JSON.stringify(input) })
+              }
+              if (stop) closeTool()
+            }
+          } else if (eventType === 'messageMetadataEvent') {
+            const u = parseUsage(body)
+            if (u.inputTokens !== undefined) usage.inputTokens = u.inputTokens
+            if (u.outputTokens !== undefined) usage.outputTokens = u.outputTokens
+            if (u.cacheReadTokens !== undefined) usage.cacheReadTokens = u.cacheReadTokens
+            if (u.cacheWriteTokens !== undefined) usage.cacheWriteTokens = u.cacheWriteTokens
+          } else if (eventType === 'contextUsageEvent') {
+            const pct = body.contextUsagePercentage
+            if (typeof pct === 'number' && Number.isFinite(pct)) contextUsagePercentage = pct
+          }
+          // 其它 event-type 忽略。
+        }
+      }
+
+      pos += totalLen
+    }
+
+    // 保留未消费的半帧字节
+    buffer = buffer.subarray(pos)
+    return out
+  }
+
+  function flush(): CanonicalStreamEvent[] {
+    closeTool()
+    const stopReason: StopReason = sawToolUse ? 'tool_use' : 'end_turn'
+    return [
+      { type: 'usage', usage, ...(contextUsagePercentage !== undefined ? { contextUsagePercentage } : {}) },
+      { type: 'message_stop', stopReason },
+    ]
+  }
+
+  return { push, flush }
+}
+
 /**
  * 解析整段 AWS event-stream 字节为 IR 流事件序列。
  * 流末固定补一次 usage 事件 + 一次 message_stop（stopReason：出现过完成的 toolUse → 'tool_use'，否则 'end_turn'）。
  */
 export function parseKiroEventStream(bytes: Uint8Array): CanonicalStreamEvent[] {
-  const out: CanonicalStreamEvent[] = []
-  const usage: Usage = { inputTokens: 0, outputTokens: 0 }
-  let usageSeen = false
-  let sawToolUse = false
-  let contextUsagePercentage: number | undefined
-
-  let tool: ToolAccum | null = null
-  let nextToolIndex = 0
-
-  // 换工具/结束时收口（M3a 只记标记，不补发尾 delta）。
-  const closeTool = (): void => {
-    tool = null
-  }
-
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  let pos = 0
-  while (bytes.length - pos >= PRELUDE_BYTES) {
-    const totalLen = dv.getUint32(pos, false)
-    if (totalLen < PRELUDE_BYTES + MSG_CRC_BYTES || bytes.length - pos < totalLen) break // 不完整/非法长度
-    const headersLen = dv.getUint32(pos + 4, false)
-    const headersStart = pos + PRELUDE_BYTES
-    const headersEnd = headersStart + headersLen
-    const payloadStart = headersEnd
-    const payloadEnd = pos + totalLen - MSG_CRC_BYTES
-    if (headersEnd > bytes.length || payloadEnd > bytes.length || payloadStart > payloadEnd) break
-
-    const eventType = extractEventType(bytes.subarray(headersStart, headersEnd))
-    const payloadBytes = bytes.subarray(payloadStart, payloadEnd)
-
-    if (payloadBytes.length > 0) {
-      let payload: unknown
-      try {
-        payload = JSON.parse(decoder.decode(payloadBytes))
-      } catch {
-        payload = undefined // 非法 JSON → 跳过该帧
-      }
-      if (payload !== null && typeof payload === 'object') {
-        const obj = payload as Record<string, unknown>
-        const body = pickEventBody(eventType, obj)
-
-        if (eventType === 'assistantResponseEvent' || eventType === 'codeEvent') {
-          const content = body.content
-          if (typeof content === 'string' && content.length > 0) {
-            closeTool()
-            out.push({ type: 'text_delta', text: content })
-          }
-        } else if (eventType === 'reasoningContentEvent') {
-          const text = body.text
-          if (typeof text === 'string' && text.length > 0) {
-            closeTool()
-            out.push({ type: 'thinking_delta', text })
-          }
-        } else if (eventType === 'toolUseEvent') {
-          const toolUseId = typeof body.toolUseId === 'string' ? body.toolUseId : undefined
-          const name = typeof body.name === 'string' ? body.name : undefined
-          const stop = body.stop === true
-          const input = body.input
-
-          if (toolUseId !== undefined && (tool === null || tool.id !== toolUseId)) {
-            // 新工具开始（或换了 id）：收口旧的，开新的。
-            if (tool !== null) closeTool()
-            if (name !== undefined) {
-              tool = { id: toolUseId, index: nextToolIndex++ }
-              sawToolUse = true
-              out.push({ type: 'tool_use_start', index: tool.index, id: toolUseId, name })
-            }
-          }
-          if (tool !== null) {
-            if (typeof input === 'string' && input.length > 0) {
-              out.push({ type: 'tool_use_delta', index: tool.index, partialJson: input })
-            } else if (input !== null && typeof input === 'object') {
-              out.push({ type: 'tool_use_delta', index: tool.index, partialJson: JSON.stringify(input) })
-            }
-            if (stop) closeTool()
-          }
-        } else if (eventType === 'messageMetadataEvent') {
-          const u = parseUsage(body)
-          if (u.inputTokens !== undefined) usage.inputTokens = u.inputTokens
-          if (u.outputTokens !== undefined) usage.outputTokens = u.outputTokens
-          if (u.cacheReadTokens !== undefined) usage.cacheReadTokens = u.cacheReadTokens
-          if (u.cacheWriteTokens !== undefined) usage.cacheWriteTokens = u.cacheWriteTokens
-          usageSeen = true
-        } else if (eventType === 'contextUsageEvent') {
-          const pct = body.contextUsagePercentage
-          if (typeof pct === 'number' && Number.isFinite(pct)) contextUsagePercentage = pct
-        }
-        // 其它 event-type（metering/codeReference/followup/citation 等）M3a 忽略。
-      }
-    }
-
-    pos += totalLen
-  }
-
-  closeTool()
-  // 流末统一补 usage + message_stop（即使无 metadata 也补一个零 usage，保证下游有收尾）。
-  void usageSeen
-  out.push({ type: 'usage', usage, ...(contextUsagePercentage !== undefined ? { contextUsagePercentage } : {}) })
-  const stopReason: StopReason = sawToolUse ? 'tool_use' : 'end_turn'
-  out.push({ type: 'message_stop', stopReason })
-  return out
+  const p = createKiroEventStreamParser()
+  return [...p.push(bytes), ...p.flush()]
 }
 
 /**
