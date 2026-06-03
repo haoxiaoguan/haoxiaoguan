@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { release } from 'node:os'
-import { fetch as undiciFetch } from 'undici'
-import { currentDispatcher } from '../dispatcher-context'
+import { createKiroTransport } from '../kiro-transport'
 import { getMachineId } from '../../identity/machine-id'
 
 // Context-neutral transport for Kiro (AWS CodeWhisperer) identity/usage calls.
@@ -301,22 +300,20 @@ export async function fetchKiroUsageLimits(
   return safeJson(text)
 }
 
-// --- default transport (undici + ambient proxy dispatcher + 25s timeout) ---
+// --- default transport（统一 kiro-transport：undici + ambient proxy dispatcher + 短期 TLS 调整 + 超时）---
+//
+// 与 kiro-upstream-client 共用同一底层实现（createKiroTransport），消除两份重复的 undici+dispatcher 逻辑。
+// 刷新/额度/模型路径（refreshKiroToken / fetchKiroUsageLimits / fetchAvailableModels）均经此 transport 出站，
+// 保证全出站 JA3 降级覆盖（聊天路径经 kiro-upstream-client 的 defaultKiroFetch → 同一 kiroTransport）。
+//
+// 注：timeout 由 controller 在此层管理；底层 transport 不重复设超时（dispatcher 已带 TLS 选项）。
+const identityKiroTransport = createKiroTransport()
 
 async function defaultFetch(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS)
-  const dispatcher = currentDispatcher()
   try {
-    if (dispatcher !== undefined) {
-      const response = await undiciFetch(url, {
-        ...(init as Parameters<typeof undiciFetch>[1]),
-        signal: controller.signal,
-        dispatcher,
-      })
-      return response as unknown as Response
-    }
-    return await fetch(url, { ...init, signal: controller.signal })
+    return await identityKiroTransport.fetch(url, { ...init, signal: controller.signal })
   } finally {
     clearTimeout(timer)
   }

@@ -7,9 +7,8 @@
 // 代理出站不在此层：KiroAdapter 用 runWithDispatcher 包住调用，defaultKiroFetch 读 currentDispatcher。
 // 鉴权头/端点/agentMode 按线协议实现。
 import { release } from 'node:os'
-import { fetch as undiciFetch } from 'undici'
 import { isSuspendedResponse, KiroUpstreamSuspendedError } from './kiro-error'
-import { currentDispatcher } from '../../../../../platform/net/dispatcher-context'
+import { createKiroTransport } from '../../../../../platform/net/kiro-transport'
 import { runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-identity-client'
 import { createKiroEventStreamParser, parseKiroEventStream } from './kiro-event-stream'
 import { countTextTokens, estimateRequestInputTokens } from '../../../domain/usage/token-estimator'
@@ -42,6 +41,11 @@ const AWS_SSOOIDC_VERSION = '1.88.0'
 const CLI_OS_TOKEN: string = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
 
 const HTTP_TIMEOUT_MS = 120_000 // 聊天补全可能较慢，给足超时（额度 GET 用 25s，这里放宽）。
+
+// 模块级默认 transport（共用统一出站实现：undici + per-account dispatcher + 短期 TLS 调整）。
+// 聊天路径在 defaultKiroFetch 中包装为 KiroFetchResponse；刷新/额度/模型路径由 kiro-identity-client 直接使用。
+// container 通过注入 fetchImpl 覆盖，此处仅作 defaultKiroFetch 的底层委托。
+const kiroTransport = createKiroTransport()
 
 // --- 端点表 ---
 
@@ -122,9 +126,13 @@ export interface KiroFetchResponse {
   bytesStream(): AsyncIterable<Uint8Array>
 }
 
-// 默认传输：undici fetch（经 ambient proxy dispatcher）+ 超时 controller 覆盖至 body 读完。
+// 默认传输：经统一 kiro-transport（undici + ambient proxy dispatcher + 短期 TLS 调整）+
+// 超时 controller 覆盖至 body 读完。
 // timer 生命周期延至消费路径（bytes/bytesStream/text）各自调 cleanup()，而非 fetch resolve 后立刻清。
 // 三条消费路径：① bytes()  ② bytesStream() generator finally  ③ text()（错误体）。
+// 注：底层 transport 统一由 createKiroTransport() 提供，与 kiro-identity-client 共用同一实现，
+//     消除两份重复的 undici+dispatcher 逻辑。container 在 defaultKiroFetch 外层注入 fetchImpl，
+//     可替换为 mock 或 sidecar 实现。
 async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroFetchResponse> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS)
@@ -144,19 +152,15 @@ async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroF
     if (init.signal !== undefined) init.signal.removeEventListener('abort', onAbort)
   }
 
-  const dispatcher = currentDispatcher()
+  // 委托统一 transport（经 currentDispatcher + 短期 TLS 调整）。
   let resp: Response
   try {
-    resp =
-      dispatcher !== undefined
-        ? ((await undiciFetch(url, {
-            method: init.method,
-            headers: init.headers,
-            body: init.body,
-            signal: controller.signal,
-            dispatcher,
-          })) as unknown as Response)
-        : await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: controller.signal })
+    resp = await kiroTransport.fetch(url, {
+      method: init.method,
+      headers: init.headers,
+      body: init.body,
+      signal: controller.signal,
+    })
   } catch (e) {
     cleanup()
     throw e
