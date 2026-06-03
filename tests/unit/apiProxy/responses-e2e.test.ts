@@ -33,4 +33,52 @@ describe('/v1/responses 经 Echo', () => {
     expect(obj.id.startsWith('resp_')).toBe(true)
     expect(obj.output.some((o) => o.type === 'message')).toBe(true)
   })
+
+  it('流式 string input → 语义 SSE + [DONE]', async () => {
+    const { svc } = makeService()
+    const r = await svc.handleRequest({
+      intent: { platform: 'echo', format: 'openai-responses', action: 'responses', model: 'echo-1', stream: true },
+      body: { model: 'echo-1', input: 'hi', stream: true },
+      requestId: 'req2',
+    })
+    expect(r.kind).toBe('stream')
+    const joined = (r as { frames: string[] }).frames.join('')
+    expect(joined).toContain('event: response.created')
+    expect(joined).toContain('event: response.completed')
+    expect(joined).toContain('data: [DONE]')
+  })
+
+  it('previous_response_id 链：二轮带上一轮历史', async () => {
+    // 同一个 svc 实例 → 同一个 ResponsesStore 落盘目录；r1 store:true 落盘后 r2 可载回。
+    const { svc } = makeService()
+    const r1 = await svc.handleRequest({
+      intent: { platform: 'echo', format: 'openai-responses', action: 'responses', model: 'echo-1', stream: false },
+      body: { model: 'echo-1', input: 'first', store: true },
+      requestId: 'r1',
+    })
+    const id1 = (r1 as { body: { id: string } }).body.id
+    const r2 = await svc.handleRequest({
+      intent: { platform: 'echo', format: 'openai-responses', action: 'responses', model: 'echo-1', stream: false },
+      body: { model: 'echo-1', input: 'second', previous_response_id: id1, store: true },
+      requestId: 'r2',
+    })
+    expect((r2 as { body: { previous_response_id?: string } }).body.previous_response_id).toBe(id1)
+  })
+
+  it('typed items input：function_call_output 配对', async () => {
+    const { svc } = makeService()
+    const r = await svc.handleRequest({
+      intent: { platform: 'echo', format: 'openai-responses', action: 'responses', model: 'echo-1', stream: false },
+      body: {
+        model: 'echo-1',
+        input: [
+          { type: 'message', role: 'user', content: 'q' },
+          { type: 'function_call', call_id: 'c1', name: 'f', arguments: '{}' },
+          { type: 'function_call_output', call_id: 'c1', output: 'r' },
+        ],
+      },
+      requestId: 'r3',
+    })
+    expect(r.kind).toBe('json')
+  })
 })
