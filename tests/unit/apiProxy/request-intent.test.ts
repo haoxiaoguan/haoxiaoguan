@@ -28,6 +28,11 @@ describe('parseRequestIntent — bare routes', () => {
       format: 'anthropic', action: 'messages', model: 'echo-1', stream: true,
     })
   })
+  it('POST /v1/responses → format openai-responses, action responses', () => {
+    expect(parse('POST', '/v1/responses', { model: 'gpt-4.1', stream: true })).toEqual({
+      format: 'openai-responses', action: 'responses', model: 'gpt-4.1', stream: true,
+    })
+  })
   it('POST /v1beta/models/{model}:generateContent', () => {
     expect(parse('POST', '/v1beta/models/echo-1:generateContent', { contents: [] })).toEqual({
       format: 'gemini', action: 'generateContent', model: 'echo-1', stream: false,
@@ -54,6 +59,11 @@ describe('parseRequestIntent — platform-prefixed routes', () => {
   it('POST /kiro/v1/messages sets platform=kiro', () => {
     expect(parse('POST', '/kiro/v1/messages', { model: 'claude' })).toEqual({
       platform: 'kiro', format: 'anthropic', action: 'messages', model: 'claude', stream: false,
+    })
+  })
+  it('POST /kiro/v1/responses → platform-lock', () => {
+    expect(parse('POST', '/kiro/v1/responses', { model: 'x' })).toEqual({
+      platform: 'kiro', format: 'openai-responses', action: 'responses', model: 'x', stream: false,
     })
   })
   it('POST /echo/v1beta/models/echo-1:generateContent', () => {

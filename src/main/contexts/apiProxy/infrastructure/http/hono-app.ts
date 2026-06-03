@@ -67,6 +67,7 @@ function geminiErrorStatus(status: number): string {
 // 鉴权失败时还没解析 intent，用路径关键字粗判 format（仅决定错误体形状）。
 function formatFromPath(path: string): RequestFormat {
   if (path.includes('/messages')) return 'anthropic'
+  if (path.includes('/responses')) return 'openai'
   if (path.includes('/v1beta/')) return 'gemini'
   return 'openai'
 }
@@ -165,11 +166,13 @@ export function createHonoApp(deps: HonoAppDeps): Hono {
   app.get('/health', (c) => c.json({ ok: true }))
   app.all('/v1/chat/completions', handle)
   app.all('/v1/messages', handle)
+  app.all('/v1/responses', handle)
   app.all('/v1/models', handle)
   app.all('/v1beta/models', handle)
   app.all('/v1beta/models/:tail', handle)
   app.all('/:platform/v1/chat/completions', handle)
   app.all('/:platform/v1/messages', handle)
+  app.all('/:platform/v1/responses', handle)
   app.all('/:platform/v1/models', handle)
   app.all('/:platform/v1beta/models', handle)
   app.all('/:platform/v1beta/models/:tail', handle)

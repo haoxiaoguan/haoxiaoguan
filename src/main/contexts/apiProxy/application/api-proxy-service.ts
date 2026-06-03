@@ -204,6 +204,8 @@ export class ApiProxyService {
         }
         return this.converters.gemini.toIR(body as Parameters<typeof geminiToIR>[0], model)
       }
+      case 'openai-responses':
+        throw new ApiProxyHttpError(501, 'responses not wired yet', 'openai-responses')
     }
   }
 
@@ -216,6 +218,8 @@ export class ApiProxyService {
         return this.converters.anthropic.toResponse(resp, { id: `msg_${requestId}` })
       case 'gemini':
         return this.converters.gemini.toResponse(resp)
+      case 'openai-responses':
+        throw new ApiProxyHttpError(501, 'responses not wired yet', 'openai-responses')
     }
   }
 
@@ -259,6 +263,8 @@ export class ApiProxyService {
           contentType: 'application/json',
           frames: this.converters.gemini.serializeStream(events),
         }
+      case 'openai-responses':
+        throw new ApiProxyHttpError(501, 'responses not wired yet', 'openai-responses')
     }
   }
 

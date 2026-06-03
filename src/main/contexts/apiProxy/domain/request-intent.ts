@@ -2,8 +2,8 @@
 // 识别两类入口：裸 /v1.. /v1beta..（platform 留空）与 /{platform}/v1.. （首段命中已注册平台名才剥离）。
 // 不认识的 path 或未注册的平台前缀 → 返回 null（调用方据此 404；spec §5 明确不回退裸路由）。
 
-export type RequestFormat = 'openai' | 'anthropic' | 'gemini'
-export type RequestAction = 'chat' | 'messages' | 'generateContent' | 'models' | 'health'
+export type RequestFormat = 'openai' | 'anthropic' | 'gemini' | 'openai-responses'
+export type RequestAction = 'chat' | 'messages' | 'generateContent' | 'models' | 'health' | 'responses'
 
 export interface RequestIntent {
   /** 命中 /{platform}/ 前缀且 platform 已注册时填；裸路由为 undefined。 */
@@ -119,6 +119,16 @@ export function makeRequestIntentParser(
           ...(platform ? { platform } : {}),
           format: 'anthropic',
           action: 'messages',
+          ...(bodyString(body, 'model') !== undefined ? { model: bodyString(body, 'model') } : {}),
+          stream: bodyBool(body, 'stream'),
+        }
+      }
+      // /v1/responses
+      if (segs.length === 2 && segs[1] === 'responses' && m === 'POST') {
+        return {
+          ...(platform ? { platform } : {}),
+          format: 'openai-responses',
+          action: 'responses',
           ...(bodyString(body, 'model') !== undefined ? { model: bodyString(body, 'model') } : {}),
           stream: bodyBool(body, 'stream'),
         }
