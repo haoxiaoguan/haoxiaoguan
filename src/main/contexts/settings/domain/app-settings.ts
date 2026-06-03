@@ -111,6 +111,8 @@ export class AppSettings {
     if (raw.runtime?.apiProxySelectionStrategy !== 'sticky-lru' && raw.runtime?.apiProxySelectionStrategy !== 'round-robin') {
       runtime.apiProxySelectionStrategy = 'sticky-lru'
     }
+    if (!Number.isInteger(runtime.apiProxyMaxRetries) || runtime.apiProxyMaxRetries < 1) runtime.apiProxyMaxRetries = 3
+    if (!Number.isInteger(runtime.apiProxyPerAccountConcurrency) || runtime.apiProxyPerAccountConcurrency < 1) runtime.apiProxyPerAccountConcurrency = 4
     return new AppSettings(ui, runtime, raw.webdav ?? {}, raw.localBackup ?? {})
   }
 

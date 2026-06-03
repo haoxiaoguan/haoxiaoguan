@@ -42,3 +42,34 @@ describe('M4 settings 标量', () => {
     expect(s.runtime.apiProxyPerAccountConcurrency).toBe(4)
   })
 })
+
+describe('M4 settings fromJson clamp', () => {
+  it('apiProxyMaxRetries=0 时回落默认值 3', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyMaxRetries: 0 } })
+    expect(s.runtime.apiProxyMaxRetries).toBe(3)
+  })
+  it('apiProxyMaxRetries=-1 时回落默认值 3', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyMaxRetries: -1 } })
+    expect(s.runtime.apiProxyMaxRetries).toBe(3)
+  })
+  it('apiProxyMaxRetries=1.5（非整数）时回落默认值 3', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyMaxRetries: 1.5 } })
+    expect(s.runtime.apiProxyMaxRetries).toBe(3)
+  })
+  it('apiProxyMaxRetries=5 合法时保留', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyMaxRetries: 5 } })
+    expect(s.runtime.apiProxyMaxRetries).toBe(5)
+  })
+  it('apiProxyPerAccountConcurrency=0 时回落默认值 4', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyPerAccountConcurrency: 0 } })
+    expect(s.runtime.apiProxyPerAccountConcurrency).toBe(4)
+  })
+  it('apiProxyPerAccountConcurrency=-2 时回落默认值 4', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyPerAccountConcurrency: -2 } })
+    expect(s.runtime.apiProxyPerAccountConcurrency).toBe(4)
+  })
+  it('apiProxyPerAccountConcurrency=8 合法时保留', () => {
+    const s = AppSettings.fromJson({ runtime: { apiProxyPerAccountConcurrency: 8 } })
+    expect(s.runtime.apiProxyPerAccountConcurrency).toBe(8)
+  })
+})

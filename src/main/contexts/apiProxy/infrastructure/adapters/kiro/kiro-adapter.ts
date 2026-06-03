@@ -48,6 +48,8 @@ export class NoKiroAccountError extends Error {
 export interface KiroAdapterDeps {
   client: KiroUpstreamClient
   cacheTracker: PromptCacheTracker
+  /** 注入时钟（默认 Date.now）；便于测试注入固定时间戳。 */
+  clock?: () => number
 }
 
 // 已解析的一次调用所需路由信息（accountId + envelope + callCtx）。
@@ -59,8 +61,11 @@ interface PreparedCall {
 
 export class KiroAdapter implements PlatformUpstreamAdapter {
   readonly platform = 'kiro'
+  private readonly clock: () => number
 
-  constructor(private readonly deps: KiroAdapterDeps) {}
+  constructor(private readonly deps: KiroAdapterDeps) {
+    this.clock = deps.clock ?? Date.now
+  }
 
   supportsModel(model: string): boolean {
     const norm = normalizeClaudeVersion(model.trim().toLowerCase())
@@ -95,6 +100,9 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
         return out
       })
       // M3c：对末 usage 事件做 cache 计费后处理（与 chat 同语义），其余事件原样透传。
+      // 假设每个流只有一个 usage 事件（kiro-event-stream 流末补一次）；若上游改发多个 usage
+      // 事件，每个都会触发 cacheTracker.update，导致后续 compute 把前次 update 当命中、
+      // cache 重复计费。当前上游行为安全。
       for (const ev of events) {
         if (ev.type === 'usage') {
           yield { type: 'usage', usage: self.applyCacheToUsage(ev.usage, ir.cacheControl, prepared.accountId, ir.model) }
@@ -112,7 +120,7 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
     if (cacheControl === undefined || cacheControl.length === 0) return usage
     const profile = this.deps.cacheTracker.buildProfile(cacheControl, usage.inputTokens, model)
     if (profile === null) return usage
-    const now = Date.now()
+    const now = this.clock()
     const cu = this.deps.cacheTracker.compute(accountId, profile, now)
     this.deps.cacheTracker.update(accountId, profile, now)
     const billed = Math.max(usage.inputTokens - cu.cacheCreationInputTokens - cu.cacheReadInputTokens, 0)

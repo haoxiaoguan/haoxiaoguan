@@ -42,7 +42,7 @@ export class AccountHealthTracker {
     this.random = opts.random ?? Math.random
   }
 
-  private get(id: string): HealthState {
+  private getOrCreate(id: string): HealthState {
     let s = this.states.get(id)
     if (s === undefined) { s = fresh(); this.states.set(id, s) }
     return s
@@ -61,7 +61,7 @@ export class AccountHealthTracker {
   }
 
   recordSuccess(id: string): void {
-    const s = this.get(id)
+    const s = this.getOrCreate(id)
     s.failureCount = 0
     s.cooldownUntil = 0
     s.quotaExhaustedAt = -1
@@ -86,22 +86,22 @@ export class AccountHealthTracker {
   }
 
   markFailure(id: string): void {
-    const s = this.get(id)
+    const s = this.getOrCreate(id)
     s.failureCount += 1
     const mult = Math.min(2 ** (s.failureCount - 1), this.opts.maxBackoffMultiplier)
     s.cooldownUntil = this.clock() + this.opts.baseCooldownMs * mult
   }
 
   markRateLimited(id: string): void {
-    this.get(id).quotaExhaustedAt = this.clock()
+    this.getOrCreate(id).quotaExhaustedAt = this.clock()
   }
 
   markSuspended(id: string): void {
-    this.get(id).suspended = true
+    this.getOrCreate(id).suspended = true
   }
 
   clearSuspension(id: string): void {
-    const s = this.get(id)
+    const s = this.getOrCreate(id)
     s.suspended = false
     s.failureCount = 0
     s.cooldownUntil = 0
