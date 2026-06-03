@@ -65,6 +65,24 @@ export class AccountHealthTracker {
     s.failureCount = 0
     s.cooldownUntil = 0
     s.quotaExhaustedAt = -1
+    // 健康账号无需长期占 entry：状态已 fresh 且未 suspended 则删除。
+    if (!s.suspended) this.states.delete(id)
+  }
+
+  /**
+   * 惰性清理：删除已完全恢复（非 suspended、冷却期已过、配额已恢复、失败归零）的 entry。
+   * 调用方可在低频定时任务中调用，防止长跑进程 states Map 无限增长。
+   */
+  sweep(): void {
+    const now = this.clock()
+    for (const [id, s] of this.states) {
+      if (s.suspended) continue
+      if (s.failureCount !== 0) continue
+      if (now < s.cooldownUntil) continue
+      const quotaCleared = s.quotaExhaustedAt < 0 || now - s.quotaExhaustedAt >= this.opts.quotaResetMs
+      if (!quotaCleared) continue
+      this.states.delete(id)
+    }
   }
 
   markFailure(id: string): void {

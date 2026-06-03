@@ -86,6 +86,9 @@ export class SettingsApplicationService {
   getApiProxyMaxRetries(): number {
     return this.file.loadSync().runtime.apiProxyMaxRetries
   }
+  getApiProxyRetryDelayMs(): number {
+    return this.file.loadSync().runtime.apiProxyRetryDelayMs
+  }
   getApiProxyBaseCooldownMs(): number {
     return this.file.loadSync().runtime.apiProxyBaseCooldownMs
   }

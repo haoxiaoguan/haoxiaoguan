@@ -21,8 +21,12 @@ export interface HonoAppDeps {
 }
 
 // 远端地址是否回环。@hono/node-server 把底层 socket 暴露在 c.env.incoming（node IncomingMessage）。
+// 若取不到 remote（某些反代/协议场景），保守当非 loopback，并记 warn 供排查鉴权问题。
 function isLoopbackRemote(remote: string | undefined): boolean {
-  if (!remote) return false
+  if (!remote) {
+    console.warn('[apiProxy] remote address unavailable, treating as non-loopback')
+    return false
+  }
   const r = remote.startsWith('::ffff:') ? remote.slice(7) : remote
   return r === '127.0.0.1' || r === '::1' || r === 'localhost'
 }

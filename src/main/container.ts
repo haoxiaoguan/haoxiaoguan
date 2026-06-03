@@ -469,6 +469,7 @@ export async function buildContainer(): Promise<Container> {
     inner: kiroInner, selector: apiProxySelector, health: apiProxyHealth,
     accounts: kiroAccountPort, credentials: kiroCredentialPort, dispatchers: kiroDispatcherPort,
     maxRetries: settings.getApiProxyMaxRetries(),
+    retryDelayMs: settings.getApiProxyRetryDelayMs(),
   }))
 
   // M5 Key 加密存储：复用已有 cryptoService（不建第二个 master key）。

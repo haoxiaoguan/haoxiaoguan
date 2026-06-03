@@ -19,6 +19,10 @@ export interface FailoverDeps {
   credentials: KiroCredentialPort
   dispatchers: KiroDispatcherPort
   maxRetries: number
+  /** SERVER 类错误切号前等待时长（ms），给上游喘息。默认 100ms。 */
+  retryDelayMs: number
+  /** 可注入 sleep 函数（测试用），默认 setTimeout。 */
+  sleep?: (ms: number) => Promise<void>
 }
 
 /**
@@ -26,7 +30,11 @@ export interface FailoverDeps {
  * 注册进 PlatformRegistry 后，handleRequest 一视同仁调 chat/chatStream，故障转移对上层透明。
  */
 export class FailoverAdapter implements PlatformUpstreamAdapter {
-  constructor(private readonly deps: FailoverDeps) {}
+  private readonly sleep: (ms: number) => Promise<void>
+
+  constructor(private readonly deps: FailoverDeps) {
+    this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
+  }
 
   get platform(): string { return this.deps.inner.platform }
   supportsModel(model: string): boolean { return this.deps.inner.supportsModel(model) }
@@ -52,6 +60,8 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
         triedIds.add(lease.id)
         lastError = err
         if (cls === 'FATAL') throw err
+        // SERVER 错误：给上游/网络喘息后再切号。
+        if (cls === 'SERVER') await this.sleep(this.deps.retryDelayMs)
       } finally {
         lease.release()
       }
@@ -85,6 +95,8 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
           triedIds.add(lease.id)
           lastError = err
           if (cls === 'FATAL') throw err
+          // SERVER 错误：给上游/网络喘息后再切号。
+          if (cls === 'SERVER') await self.sleep(self.deps.retryDelayMs)
         } finally {
           lease.release()
         }
