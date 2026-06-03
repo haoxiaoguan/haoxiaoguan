@@ -62,16 +62,21 @@ export interface KiroFetchInit {
   signal?: AbortSignal
 }
 
-/** 窄 Response 投影：状态 + text()（错误体）+ bytes()（全量 body，review 项②）。 */
+/** 窄 Response 投影：状态 + text()（错误体）+ bytes()（全量 body）+ bytesStream()（增量 body）。
+ * bytes() 与 bytesStream() 互斥：HTTP body 只能读一次，chat 用 bytes()，流式用 bytesStream()。
+ */
 export interface KiroFetchResponse {
   ok: boolean
   status: number
   text(): Promise<string>
   bytes(): Promise<Uint8Array>
+  /** 逐 chunk 产出 body 字节；与 bytes() 互斥（body 只读一次）。 */
+  bytesStream(): AsyncIterable<Uint8Array>
 }
 
-// 默认传输：undici fetch（经 ambient proxy dispatcher）+ 全量读 body + 超时。
-// 与 quota/infrastructure/http/common.ts httpFetch 同构（读 currentDispatcher），但全量 buffer 字节。
+// 默认传输：undici fetch（经 ambient proxy dispatcher）+ 超时 controller 覆盖至 body 读完。
+// timer 生命周期延至消费路径（bytes/bytesStream/text）各自调 cleanup()，而非 fetch resolve 后立刻清。
+// 三条消费路径：① bytes()  ② bytesStream() generator finally  ③ text()（错误体）。
 async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroFetchResponse> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS)
@@ -81,9 +86,20 @@ async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroF
     if (init.signal.aborted) controller.abort()
     else init.signal.addEventListener('abort', onAbort, { once: true })
   }
+
+  // 幂等清理：clearTimeout + removeEventListener，多次调用安全。
+  let cleaned = false
+  const cleanup = (): void => {
+    if (cleaned) return
+    cleaned = true
+    clearTimeout(timer)
+    if (init.signal !== undefined) init.signal.removeEventListener('abort', onAbort)
+  }
+
   const dispatcher = currentDispatcher()
+  let resp: Response
   try {
-    const resp =
+    resp =
       dispatcher !== undefined
         ? ((await undiciFetch(url, {
             method: init.method,
@@ -93,15 +109,44 @@ async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroF
             dispatcher,
           })) as unknown as Response)
         : await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: controller.signal })
-    return {
-      ok: resp.ok,
-      status: resp.status,
-      text: () => resp.text(),
-      bytes: async () => new Uint8Array(await resp.arrayBuffer()),
-    }
-  } finally {
-    clearTimeout(timer)
-    if (init.signal !== undefined) init.signal.removeEventListener('abort', onAbort)
+  } catch (e) {
+    cleanup()
+    throw e
+  }
+
+  return {
+    ok: resp.ok,
+    status: resp.status,
+    // text()：错误体；读完后清理 timer。
+    text: async () => {
+      try {
+        return await resp.text()
+      } finally {
+        cleanup()
+      }
+    },
+    // bytes()：全量 buffer；await 完成后清理 timer。
+    bytes: async () => {
+      try {
+        return new Uint8Array(await resp.arrayBuffer())
+      } finally {
+        cleanup()
+      }
+    },
+    // bytesStream()：逐 chunk 产出；generator finally 清理 timer（含调用方提前 break 的情形）。
+    bytesStream: async function* () {
+      const reader = (resp.body as ReadableStream<Uint8Array>).getReader()
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) yield value
+        }
+      } finally {
+        reader.releaseLock()
+        cleanup()
+      }
+    },
   }
 }
 

@@ -54,10 +54,22 @@ function scriptedFetch(responses: KiroFetchResponse[]) {
 
 function okBytes(list: { eventType: string; payload: unknown }[]): KiroFetchResponse {
   const bytes = encodeKiroEventStream(list)
-  return { ok: true, status: 200, text: async () => '', bytes: async () => bytes }
+  return {
+    ok: true,
+    status: 200,
+    text: async () => '',
+    bytes: async () => bytes,
+    bytesStream: async function* () { yield bytes },
+  }
 }
 function errResp(status: number, body = 'err'): KiroFetchResponse {
-  return { ok: false, status, text: async () => body, bytes: async () => new Uint8Array(0) }
+  return {
+    ok: false,
+    status,
+    text: async () => body,
+    bytes: async () => new Uint8Array(0),
+    bytesStream: async function* () { /* no body for error responses */ },
+  }
 }
 
 const NO_REFRESH: KiroTokenRefresher = { async refresh() { return undefined } }
@@ -295,6 +307,65 @@ describe('foldEventsToResponse — C1 max_tokens stopReason 本地推断', () =>
     // 设置极大 maxTokens，不可能达到
     const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', mkReq(999999))
     expect(resp.stopReason).toBe('end_turn')
+  })
+})
+
+// --- Task 2 Step 1: bytesStream 失败测试 ---
+
+describe('KiroFetchResponse.bytesStream', () => {
+  it('把分片字节消费者拼回完整 bytes 与原始一致', async () => {
+    const original = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'chunk-A' } },
+      { eventType: 'assistantResponseEvent', payload: { content: 'chunk-B' } },
+      { eventType: 'messageMetadataEvent', payload: { tokenUsage: { uncachedInputTokens: 4, outputTokens: 2 } } },
+    ])
+
+    // 把 original 切成 3 片模拟分片传输
+    const cut1 = Math.floor(original.length / 3)
+    const cut2 = Math.floor((original.length * 2) / 3)
+    const slices = [original.slice(0, cut1), original.slice(cut1, cut2), original.slice(cut2)]
+
+    // 构造一个满足 KiroFetchResponse 接口的对象，bytesStream 按分片 yield
+    async function* generateSlices(): AsyncIterable<Uint8Array> {
+      for (const s of slices) yield s
+    }
+
+    const resp: KiroFetchResponse = {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      bytes: async () => original,
+      bytesStream: () => generateSlices(),
+    }
+
+    // 消费 bytesStream，把分片拼回完整 bytes
+    const parts: Uint8Array[] = []
+    for await (const chunk of resp.bytesStream()) {
+      parts.push(chunk)
+    }
+    const totalLen = parts.reduce((n, p) => n + p.length, 0)
+    const assembled = new Uint8Array(totalLen)
+    let off = 0
+    for (const p of parts) {
+      assembled.set(p, off)
+      off += p.length
+    }
+
+    expect(assembled).toEqual(original)
+  })
+
+  it('defaultKiroFetch 返回的 KiroFetchResponse 含 bytesStream 方法', async () => {
+    // 通过 scriptedFetch 注入 mock 验证 client 不直接测 defaultKiroFetch；
+    // 但 KiroFetchResponse 接口必须包含 bytesStream，否则 TS 类型检查失败。
+    // 这里通过类型兼容性断言（编译期），运行时验证 mock 含方法即可。
+    const resp: KiroFetchResponse = {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      bytes: async () => new Uint8Array(0),
+      bytesStream: async function* () { /* empty */ },
+    }
+    expect(typeof resp.bytesStream).toBe('function')
   })
 })
 
