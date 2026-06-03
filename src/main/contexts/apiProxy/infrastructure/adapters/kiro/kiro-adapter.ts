@@ -3,6 +3,8 @@
 // KiroAdapter 退化为"用注入上下文发一次请求 + classifyError"的薄层。
 // chat/chatStream 内：直接从 ctx 取 account/credential → 解析路由 →
 // buildConversationState（M3a）→ runWithDispatcher(ctx.dispatcher) 包住 KiroUpstreamClient 调用。
+import { randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { runWithDispatcher } from '../../../../../platform/net/dispatcher-context'
 import { getMachineId } from '../../../../../platform/identity/machine-id'
 import {
@@ -24,6 +26,7 @@ import type { PromptCacheTracker } from '../../../domain/usage/prompt-cache-trac
 import type { PlatformUpstreamAdapter, UpstreamCtx, ModelInfo, ErrorClass } from '../../../domain/platform-adapter'
 import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent, Usage, CacheBreakpointInput } from '../../../domain/canonical'
 import type { BuildConversationStateOpts } from './kiro-wire-types'
+import type { ConversationIdCache } from '../../../domain/account-selection/conversation-id-cache'
 
 // Kiro 对外暴露的模型集（spec §12：Kiro 支持的 Claude 模型）。供 /v1/models 与裸路由模型感知。
 const KIRO_MODELS: readonly string[] = [
@@ -50,6 +53,10 @@ export interface KiroAdapterDeps {
   cacheTracker: PromptCacheTracker
   /** 注入时钟（默认 Date.now）；便于测试注入固定时间戳。 */
   clock?: () => number
+  /** conversationId 稳定复用缓存（P2-2）。注入后 prepare 优先从缓存取稳定 id。 */
+  conversationIdCache?: ConversationIdCache
+  /** conversationId 生成函数（默认 randomUUID）。 */
+  genConversationId?: () => string
 }
 
 // 已解析的一次调用所需路由信息（accountId + envelope + callCtx）。
@@ -62,9 +69,11 @@ interface PreparedCall {
 export class KiroAdapter implements PlatformUpstreamAdapter {
   readonly platform = 'kiro'
   private readonly clock: () => number
+  private readonly genConversationId: () => string
 
   constructor(private readonly deps: KiroAdapterDeps) {
     this.clock = deps.clock ?? Date.now
+    this.genConversationId = deps.genConversationId ?? randomUUID
   }
 
   supportsModel(model: string): boolean {
@@ -147,10 +156,18 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
     const agentMode: 'spec' | 'vibe' = authMethod === 'idc' ? 'vibe' : 'spec'
     const invocationId = ctx.requestId ?? 'req'
 
+    // conversationId 稳定复用（P2-2）：
+    // key 优先 ctx.sessionHint；无则用前两条消息 text 内容的 sha256 前 24 hex；两者都无 → undefined。
+    // 有 key 且 cache 已注入 → getOrCreate；否则回退 ctx.requestId ?? 'conv'。
+    const cacheKey = ctx.sessionHint ?? historyFingerprint(ir)
+    const conversationId = (cacheKey !== undefined && this.deps.conversationIdCache !== undefined)
+      ? this.deps.conversationIdCache.getOrCreate(cacheKey, this.genConversationId)
+      : (ctx.requestId ?? 'conv')
+
     const buildOpts: BuildConversationStateOpts = {
       modelId: mapModelId(ir.model),
       origin: 'AI_EDITOR',
-      conversationId: ctx.requestId ?? 'conv',
+      conversationId,
       ...(profileArn !== undefined ? { profileArn } : {}),
     }
     const envelope = buildConversationState(ir, buildOpts)
@@ -167,6 +184,26 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
     }
     return { accountId: account.id, callCtx, envelope }
   }
+}
+
+// --- conversationId fingerprint 辅助 ---
+
+/**
+ * 从前两条 IR 消息的 text 内容生成 sha256 前 24 hex 作为 fingerprint key。
+ * 无消息或消息无 text 内容 → undefined（不走缓存，回退 requestId）。
+ */
+function historyFingerprint(ir: CanonicalRequest): string | undefined {
+  const msgs = ir.messages.slice(0, 2)
+  const parts: string[] = []
+  for (const m of msgs) {
+    const texts = m.content
+      .filter((b) => b.type === 'text')
+      .map((b) => (b as { type: 'text'; text: string }).text)
+      .join('')
+    if (texts.length > 0) parts.push(texts)
+  }
+  if (parts.length === 0) return undefined
+  return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 24)
 }
 
 // --- 路由解析辅助（profileArn 解析；优先级与 quota/http/kiro.ts 一致） ---

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { SettingsFileService } from './contexts/settings/infrastructure/settings-file-service'
 import { SettingsApplicationService } from './contexts/settings/application/settings-service'
 import { appDataDir } from './platform/persistence/paths'
@@ -113,6 +114,7 @@ import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/
 import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'
 import { FailoverAdapter } from './contexts/apiProxy/domain/account-selection/failover-adapter'
+import { ConversationIdCache } from './contexts/apiProxy/domain/account-selection/conversation-id-cache'
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
 import type {
   KiroCredentialPort,
@@ -467,7 +469,13 @@ export async function buildContainer(): Promise<Container> {
     },
     apiProxyHealth,
   )
-  const kiroInner = new KiroAdapter({ client: kiroUpstreamClient, cacheTracker: kiroCacheTracker })
+  const kiroConversationIdCache = new ConversationIdCache({ ttlMs: 2 * 60 * 60 * 1000, maxEntries: 1000 })
+  const kiroInner = new KiroAdapter({
+    client: kiroUpstreamClient,
+    cacheTracker: kiroCacheTracker,
+    conversationIdCache: kiroConversationIdCache,
+    genConversationId: randomUUID,
+  })
   platformRegistry.register(new FailoverAdapter({
     inner: kiroInner, selector: apiProxySelector, health: apiProxyHealth,
     accounts: kiroAccountPort, credentials: kiroCredentialPort, dispatchers: kiroDispatcherPort,
