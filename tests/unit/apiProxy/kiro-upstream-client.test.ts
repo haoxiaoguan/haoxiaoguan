@@ -449,6 +449,41 @@ describe('KiroUpstreamClient.openStream', () => {
   })
 })
 
+describe('KiroUpstreamClient.openStream — empty body graceful termination', () => {
+  it('空 body（bytesStream 立即结束）下 openStream 不抛错，只产出 flush 的 usage + message_stop', async () => {
+    // 构造 ok 响应但 bytesStream 立即结束（等价 null body / 零字节体）。
+    const emptyResp: KiroFetchResponse = {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      bytes: async () => new Uint8Array(0),
+      bytesStream: async function* () { /* 立即结束，不 yield 任何字节 */ },
+    }
+    const f = scriptedFetch([emptyResp])
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
+
+    const out: CanonicalStreamEvent[] = []
+    // openStream 是 private，通过 unknown 绕过访问限制（测试专用）。
+    const stream = await (client as unknown as {
+      openStream(e: typeof ENVELOPE, c: typeof CTX, m: string, r: typeof REQ): Promise<AsyncIterable<CanonicalStreamEvent>>
+    }).openStream(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)
+
+    // 不应抛错
+    await expect((async () => { for await (const ev of stream) out.push(ev) })()).resolves.toBeUndefined()
+
+    // flush() 必须补出 usage + message_stop，不得为空
+    const usageEv = out.find((e) => e.type === 'usage')
+    const stopEv = out.find((e) => e.type === 'message_stop')
+    expect(usageEv).toBeDefined()
+    expect(stopEv).toBeDefined()
+    // 空体：outputTokens = 0，inputTokens >= 0
+    if (usageEv?.type === 'usage') {
+      expect(usageEv.usage.outputTokens).toBe(0)
+      expect(usageEv.usage.inputTokens).toBeGreaterThanOrEqual(0)
+    }
+  })
+})
+
 describe('foldEventsToResponse — usage 估算', () => {
   const REQ4: CanonicalRequest = {
     model: 'claude-sonnet-4.5',

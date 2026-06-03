@@ -2,8 +2,8 @@
 // 职责：① 按端点构建请求（url/headers/body=conversationState 信封）；② 经注入 fetchImpl 发送
 // （M3b 仅区域 AmazonQ 单端点，接受小写 modelId；CodeWhisperer 大写模型 ID 端点留 M4）；
 // ③ 401/403 调一次 refresher 后重试同端点；
-// ④ 全量 buffer 响应字节（禁逐 chunk，否则丢尾帧）→ parseKiroEventStream（M3a）；
-// ⑤ chat 折叠事件流为 CanonicalResponse，chatStream 逐个 yield 已解析事件（M3b 非真增量）。
+// ④ chat 走全量 bytes()→parseKiroEventStream→fold；
+// ⑤ chatStream/openStream 走增量 bytesStream()→createKiroEventStreamParser（push/flush 半帧 buffer 已解决丢尾帧）→deltas 即时 yield、usage 流末 flush。
 // 代理出站不在此层：KiroAdapter 用 runWithDispatcher 包住调用，defaultKiroFetch 读 currentDispatcher。
 // 鉴权头/端点/agentMode 按线协议实现。
 import { release } from 'node:os'
@@ -134,8 +134,11 @@ async function defaultKiroFetch(url: string, init: KiroFetchInit): Promise<KiroF
       }
     },
     // bytesStream()：逐 chunk 产出；generator finally 清理 timer（含调用方提前 break 的情形）。
+    // body 为 null 时（如空响应）直接结束，generator 正常终止 → 上层 parseStream flush() 仍补 usage+message_stop。
     bytesStream: async function* () {
-      const reader = (resp.body as ReadableStream<Uint8Array>).getReader()
+      const body = resp.body as ReadableStream<Uint8Array> | null
+      if (body === null) { cleanup(); return }
+      const reader = body.getReader()
       try {
         while (true) {
           const { done, value } = await reader.read()

@@ -82,7 +82,7 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
         try {
           const innerCtx = await self.bindAccount(ctx, lease.id, pool.byId.get(lease.id)!)
           const it = self.deps.inner.chatStream(ir, innerCtx)[Symbol.asyncIterator]()
-          let next = await it.next()          // 首个 event：inner 整段 buffer+parse 完成或抛错（抛错时未吐字节，可切）
+          let next = await it.next()          // 首个 event：inner 已发起请求并解出首帧首事件，或在吐任何字节前抛错（抛错可安全切号，started 仍 false）
           self.deps.health.recordSuccess(lease.id)
           const _hint = ctx.sessionHint; if (_hint !== undefined) self.deps.selector.remember(_hint, lease.id)
           started = true
