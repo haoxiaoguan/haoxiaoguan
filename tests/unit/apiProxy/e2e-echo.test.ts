@@ -41,7 +41,7 @@ function buildServer(
   )
   const deps: HonoAppDeps = {
     service,
-    auth: { keys: authKeys, allowAnonymousLoopback: allowAnon },
+    auth: { keysProvider: async () => authKeys, allowAnonymousLoopback: allowAnon },
     knownPlatforms: registry.knownPlatforms(),
   }
   const s = new ApiHttpServer(createApiRequestListener(deps), { port: 0 })
@@ -173,9 +173,9 @@ describe('e2e: Echo over real HTTP', () => {
 
   // ---- 鉴权矩阵（task 显式要求）：配 apiProxyClientKeys 后无 Key 应拒、带正确 Key 放行 ----
 
-  it('AUTH — configured key + missing key → 401', async () => {
-    // keys 非空 → extractClientKey 取不到 → reason:'missing' → 中间件统一 401（M2b 不区分 missing/invalid）。
-    const { start } = buildServer(['secret-key'])
+  it('AUTH — configured key + missing key → 401（allowAnonymousLoopback:false 确保 loopback 也拒）', async () => {
+    // keys 非空 + 没带 key：allowAnonymousLoopback=false → 即使 loopback 也拒（reason:'missing' → 401）。
+    const { start } = buildServer(['secret-key'], false)
     const port = await start()
     const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       method: 'POST',
@@ -253,9 +253,8 @@ describe('e2e: Echo over real HTTP', () => {
     expect(json.choices[0].message.content).toBe('anon-on')
   })
 
-  it('ANON — empty keys + allowAnonymousLoopback:false → still allowed in M2b (200)', async () => {
-    // plan 不变量 C：keys 为空表示「未配置鉴权」，即使 allowAnonymousLoopback=false，
-    // M2b 也不在无配置 Key 时拦截（避免锁死本地调试），强制护栏留 M5。故仍 200。
+  it('ANON — empty keys + allowAnonymousLoopback:false → 401（M5 护栏激活：loopback 豁免关闭）', async () => {
+    // M5 语义：keys 为空且 allowAnonymousLoopback=false → 即使来自 loopback 也拒（missing）。
     const { start } = buildServer([], false)
     const port = await start()
     const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
@@ -263,8 +262,6 @@ describe('e2e: Echo over real HTTP', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'echo-1', messages: [{ role: 'user', content: 'anon-off' }] }),
     })
-    expect(res.status).toBe(200)
-    const json = (await res.json()) as { choices: { message: { content: string } }[] }
-    expect(json.choices[0].message.content).toBe('anon-off')
+    expect(res.status).toBe(401)
   })
 })

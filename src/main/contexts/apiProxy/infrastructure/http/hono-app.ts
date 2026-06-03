@@ -10,14 +10,13 @@ import { makeRequestIntentParser } from '../../domain/request-intent'
 import type { RequestFormat } from '../../domain/request-intent'
 import {
   authorizeClientKey,
-  type ClientKeyAuthConfig,
   type ClientKeyRequestInfo,
 } from '../../domain/client-key-auth'
 
 // Hono app 依赖：编排服务 + 鉴权配置 + 已注册平台名（喂路由意图解析的前缀剥离）。
 export interface HonoAppDeps {
   service: ApiProxyService
-  auth: ClientKeyAuthConfig
+  auth: { keysProvider: () => Promise<readonly string[]>; allowAnonymousLoopback: boolean }
   knownPlatforms: ReadonlySet<string>
 }
 
@@ -77,6 +76,11 @@ type HonoVariables = {
   apiProxyClientKeyId?: string
 }
 
+/** 仅 /health 与 /{platform}/health 豁免鉴权（收紧 M2b 的 endsWith 过宽）。 */
+export function isHealthExempt(path: string): boolean {
+  return path === '/health' || /^\/[^/]+\/health$/.test(path)
+}
+
 // 组装 Hono app：中间件链 + 路由表 + onError。M1 的 GET /health 行为保持（200 { ok: true }）。
 export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariables }> {
   const app = new Hono<{ Variables: HonoVariables }>()
@@ -101,7 +105,7 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
 
   // 鉴权中间件：/health 豁免；其余按客户端 Key 规则。
   app.use('*', async (c, next) => {
-    if (c.req.path === '/health' || c.req.path.endsWith('/health')) return next()
+    if (isHealthExempt(c.req.path)) return next()
     const remote = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming?.socket?.remoteAddress
     const authorization = c.req.header('authorization')
     const xApiKey = c.req.header('x-api-key')
@@ -114,7 +118,8 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
       ...(queryKey ? { queryKey } : {}),
       isLoopback: isLoopbackRemote(remote),
     }
-    const decision = authorizeClientKey(info, deps.auth)
+    const keys = await deps.auth.keysProvider()
+    const decision = authorizeClientKey(info, { keys, allowAnonymousLoopback: deps.auth.allowAnonymousLoopback })
     if (!decision.ok) {
       // 鉴权失败：missing/invalid 一律 401（M2b 不区分；安全护栏留 M5）。
       return c.json(errorBodyForFormat(formatFromPath(c.req.path), 401, 'Invalid or missing API key'), 401)
