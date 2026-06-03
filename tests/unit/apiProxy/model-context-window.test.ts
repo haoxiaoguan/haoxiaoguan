@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getContextTokensForModel } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/model-context-window'
+import { getContextTokensForModel } from '../../../src/main/contexts/apiProxy/domain/usage/model-context-window'
 
 describe('getContextTokensForModel', () => {
   it('默认 Claude 200k', () => {

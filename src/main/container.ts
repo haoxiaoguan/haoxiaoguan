@@ -107,7 +107,7 @@ import { ApiProxyKeyService } from './contexts/apiProxy/application/api-proxy-ke
 import { migrateClientKeys } from './contexts/apiProxy/application/migrate-client-keys'
 // KiroAdapter（'kiro' 上游）+ 窄 port 类型 + account port factory。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
-import { PromptCacheTracker } from './contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
+import { PromptCacheTracker } from './contexts/apiProxy/domain/usage/prompt-cache-tracker'
 import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
 import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'

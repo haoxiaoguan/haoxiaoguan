@@ -20,7 +20,7 @@ import type {
   KiroCredential,
   KiroAccountInfo,
 } from './kiro-ports'
-import type { PromptCacheTracker } from './prompt-cache-tracker'
+import type { PromptCacheTracker } from '../../../domain/usage/prompt-cache-tracker'
 import type { PlatformUpstreamAdapter, UpstreamCtx, ModelInfo, ErrorClass } from '../../../domain/platform-adapter'
 import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent, Usage, CacheBreakpointInput } from '../../../domain/canonical'
 import type { BuildConversationStateOpts } from './kiro-wire-types'

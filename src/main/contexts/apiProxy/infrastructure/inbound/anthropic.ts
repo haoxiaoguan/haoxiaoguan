@@ -15,7 +15,7 @@ import type {
   Usage,
   CacheBreakpointInput,
 } from '../../domain/canonical'
-import { countTextTokens } from '../adapters/kiro/token-estimator'
+import { countTextTokens } from '../../domain/usage/token-estimator'
 
 // ============ Anthropic 线协议类型（子集） ============
 

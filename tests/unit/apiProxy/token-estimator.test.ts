@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { countTextTokens, estimateRequestInputTokens } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/token-estimator'
+import { countTextTokens, estimateRequestInputTokens } from '../../../src/main/contexts/apiProxy/domain/usage/token-estimator'
 import type { CanonicalRequest } from '../../../src/main/contexts/apiProxy/domain/canonical'
 
 describe('countTextTokens', () => {

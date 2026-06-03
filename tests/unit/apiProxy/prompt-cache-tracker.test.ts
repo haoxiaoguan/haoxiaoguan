@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PromptCacheTracker, type CacheBreakpointInput } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
+import { PromptCacheTracker, type CacheBreakpointInput } from '../../../src/main/contexts/apiProxy/domain/usage/prompt-cache-tracker'
 
 const T0 = 1_000_000
 function blocks(): CacheBreakpointInput[] {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { KiroAdapter, NoKiroAccountError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { KiroUpstreamClient, type KiroFetchImpl, type KiroFetchResponse } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
 import { encodeKiroEventStream } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-event-stream'
-import { PromptCacheTracker } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
+import { PromptCacheTracker } from '../../../src/main/contexts/apiProxy/domain/usage/prompt-cache-tracker'
 import type {
   KiroTokenRefresher,
   KiroCredential,
