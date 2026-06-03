@@ -14,6 +14,7 @@ import { runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-
 import { createKiroEventStreamParser, parseKiroEventStream } from './kiro-event-stream'
 import { countTextTokens, estimateRequestInputTokens } from '../../../domain/usage/token-estimator'
 import { getContextTokensForModel } from '../../../domain/usage/model-context-window'
+import { redactString } from '../../../../../platform/log/redact'
 import type { ConversationStateEnvelope } from './kiro-wire-types'
 import type { KiroTokenRefresher } from './kiro-ports'
 import type {
@@ -337,7 +338,7 @@ export class KiroUpstreamClient {
           })
         } catch (e) {
           // 出站异常（代理/DNS/超时）：记录后上抛，便于真机排查（不含凭据）。
-          console.error(`[apiProxy:kiro] ${endpoint.name} fetch exception: ${(e as Error)?.message}`)
+          console.error(`[apiProxy:kiro] ${endpoint.name} fetch exception: ${redactString((e as Error)?.message ?? '')}`)
           throw e
         }
 
@@ -345,7 +346,7 @@ export class KiroUpstreamClient {
 
         const body = await resp.text()
         // 非 2xx：记录 AWS 响应（不含凭据/machineId），便于真机排查 400/403/429。
-        console.error(`[apiProxy:kiro] ${endpoint.name} HTTP ${resp.status}: ${body.slice(0, 600)}`)
+        console.error(`[apiProxy:kiro] ${endpoint.name} HTTP ${resp.status}: ${redactString(body.slice(0, 600))}`)
 
         if (resp.status === 429) {
           // 配额耗尽：记录错误并结束本端点（不刷新）；无更多端点时抛出。

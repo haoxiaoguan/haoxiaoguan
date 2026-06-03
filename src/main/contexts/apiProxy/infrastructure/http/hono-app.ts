@@ -13,6 +13,7 @@ import {
   type ClientKeyRequestInfo,
 } from '../../domain/client-key-auth'
 import type { KeyRateLimiter } from '../../domain/key-rate-limiter'
+import { redactString } from '../../../../platform/log/redact'
 
 // Hono app 依赖：编排服务 + 鉴权配置 + 已注册平台名（喂路由意图解析的前缀剥离）。
 export interface HonoAppDeps {
@@ -27,7 +28,7 @@ export interface HonoAppDeps {
 // 若取不到 remote（某些反代/协议场景），保守当非 loopback，并记 warn 供排查鉴权问题。
 function isLoopbackRemote(remote: string | undefined): boolean {
   if (!remote) {
-    console.warn('[apiProxy] remote address unavailable, treating as non-loopback')
+    console.warn(redactString('[apiProxy] remote address unavailable, treating as non-loopback'))
     return false
   }
   const r = remote.startsWith('::ffff:') ? remote.slice(7) : remote

@@ -4,6 +4,7 @@ import { getEm } from '../../../platform/persistence/database'
 import { CryptoService } from '../../../platform/crypto/crypto-service'
 import { ENVELOPE_VERSION, buildAad, type StoredEnvelope } from '../../credential/domain/envelope'
 import { ApiProxyKeyEntity } from './api-proxy-key.entity'
+import { redactString } from '../../../platform/log/redact'
 
 const KEY_ID = 'local'
 const AAD_PROVIDER = '__apiproxy_key__'
@@ -64,7 +65,7 @@ export class ApiProxyKeyRepository {
         const stored = JSON.parse(e.keyEnc) as StoredEnvelope
         out.push(this.crypto.decrypt(stored.envelope, stored.aad))
       } catch (err) {
-        console.error(`[apiProxy:key] decrypt failed for ${e.id}: ${(err as Error).message}`)
+        console.error(`[apiProxy:key] decrypt failed for ${e.id}: ${redactString((err as Error).message)}`)
       }
     }
     return out
