@@ -176,7 +176,7 @@ export class AppSettings {
       else if (k === 'api_proxy_enabled') this.runtime.apiProxyEnabled = v === 'true'
       else if (k === 'api_proxy_port') {
         const n = Number(v)
-        if (Number.isInteger(n) && n >= 1024) this.runtime.apiProxyPort = n
+        if (Number.isInteger(n) && n >= 1024 && n <= 65535) this.runtime.apiProxyPort = n
       } else if (k === 'api_proxy_client_keys') {
         // 空串 → 清空；否则按换行拆分、去空白、丢空行。
         this.runtime.apiProxyClientKeys = v

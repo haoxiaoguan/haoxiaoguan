@@ -1,4 +1,4 @@
-import type { ApiHttpServer, ApiHttpServerState } from '../infrastructure/http/api-http-server'
+import type { ApiHttpServer } from '../infrastructure/http/api-http-server'
 import type { PlatformRegistry } from '../infrastructure/platform-registry'
 import { NoUpstreamError } from '../infrastructure/platform-registry'
 import type { RequestIntent, RequestFormat } from '../domain/request-intent'
@@ -31,13 +31,7 @@ import { expandPreviousResponseHistory } from '../infrastructure/responses-store
 import type { ResponsesStore, StoredResponseDoc } from '../infrastructure/responses-store/responses-store'
 import type { ResponsesRequest } from '../infrastructure/inbound/responses/responses-types'
 import type { ContentBlock } from '../domain/canonical'
-
-// 返回给 renderer 的状态投影（spec §13：apiProxy:getStatus → { state, port? }）。
-// M1 只含 state + 可选 port；M2+ 再扩 startedAt/accountsHealthy/accountsTotal。
-export interface ApiProxyStatus {
-  state: ApiHttpServerState
-  port?: number
-}
+import type { ApiProxyStatus } from '../../../../shared/api-types'
 
 // 入站转换器映射（可注入，便于测试替换；默认用 M2a 真实函数）。
 export interface InboundConverters {

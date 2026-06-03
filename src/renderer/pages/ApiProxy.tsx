@@ -66,7 +66,7 @@ export default function ApiProxy() {
             <code className="rounded bg-muted px-2 py-1 font-mono text-[12px]">{baseUrl}</code>
             <Button variant="outline" size="sm" onClick={() => void copyBaseUrl()}>
               <Copy className="mr-1 size-3.5" aria-hidden />
-              {t('apiService')}
+              {t('copy')}
             </Button>
           </div>
         ) : null}
