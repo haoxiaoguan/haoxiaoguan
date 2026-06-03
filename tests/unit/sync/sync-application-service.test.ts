@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SettingsFileService } from '../../../src/main/contexts/settings/infrastructure/settings-file-service'
@@ -237,4 +237,94 @@ describe('SyncApplicationService guards + status', () => {
     expect(cfg.status.lastError).toBeTruthy()
     expect(cfg.status.lastErrorSource).toBe('manual')
   }, 30_000)
+})
+
+// P1-5 固化断言：WebDAV 密码不明文落库
+//
+// WebDAV 连接密码（webdavPassword）和 E2EE 同步密码（syncPassword）通过
+// SafeStorageSecretStore（Electron safeStorage 加密文件）持久化，而非 settings.json。
+// WebdavConfig.toJson() 的接口定义（WebdavConfigJson）中不含任何 password 字段，
+// saveConfig() 的实现明确将两类密码路由到 SecretStore，绝不写入 settings 文件。
+//
+// 以下测试通过 settings.json 磁盘 round-trip 固化这一不变量，防止将来改动意外
+// 把密码字段混入持久化产物。
+describe('P1-5: WebDAV 密码不明文落库（settings.json round-trip 断言）', () => {
+  // 辅助：读取磁盘上的 settings.json 原始文本
+  function readDiskSettings(path: string): string {
+    try {
+      return readFileSync(path, 'utf8')
+    } catch {
+      return ''
+    }
+  }
+
+  it('saveConfig 后 settings.json 不含任何明文密码字段（含 key 名和 value）', async () => {
+    const settingsFile = new SettingsFileService(settingsPath)
+    await settingsFile.load()
+    const webdavStore = new MemSecret()
+    const syncStore = new MemSecret()
+    const svc = makeService(settingsFile, webdavStore, syncStore)
+
+    const LOGIN_PW = 'super-secret-webdav-pw'
+    const SYNC_PW = 'super-secret-sync-pw'
+
+    await svc.saveConfig({
+      config: WebdavConfig.fromJson({
+        enabled: true,
+        baseUrl: 'https://dav.example.com/dav',
+        username: 'alice',
+        remoteRoot: 'hxg-sync',
+        profile: 'default',
+        autoSync: true,
+      }),
+      password: LOGIN_PW,
+      passwordTouched: true,
+      syncPassword: SYNC_PW,
+      syncPasswordTouched: true,
+    })
+
+    // 验证密码已写入 SecretStore（仅内存/文件，不在 settings.json）
+    expect(await webdavStore.get()).toBe(LOGIN_PW)
+    expect(await syncStore.get()).toBe(SYNC_PW)
+
+    // 磁盘 round-trip：读取实际写入的 settings.json 原始文本
+    const diskText = readDiskSettings(settingsPath)
+    expect(diskText.length).toBeGreaterThan(0) // 文件确实写入了
+
+    // 不含明文密码值
+    expect(diskText).not.toContain(LOGIN_PW)
+    expect(diskText).not.toContain(SYNC_PW)
+
+    // 不含任何 password 相关 key 名（防止未来新增字段时漏检）
+    const parsed = JSON.parse(diskText) as Record<string, unknown>
+    const webdavBlock = JSON.stringify(parsed['webdav'] ?? {})
+    expect(webdavBlock).not.toMatch(/password/i)
+    expect(webdavBlock).not.toMatch(/passwd/i)
+    expect(webdavBlock).not.toMatch(/secret/i)
+  })
+
+  it('WebdavConfig.toJson() 输出的 key 集合不含任何 password 字段', () => {
+    // 纯静态断言：domain VO 的 JSON 契约不含密码 key。
+    // 密码存储路径为 SafeStorageSecretStore（Electron safeStorage 加密文件），
+    // 与 settings.json 完全隔离。
+    const cfg = WebdavConfig.fromJson({
+      enabled: true,
+      baseUrl: 'https://dav.example.com',
+      username: 'alice',
+      remoteRoot: 'root',
+      profile: 'default',
+      autoSync: false,
+    })
+    const keys = Object.keys(cfg.toJson())
+    const passwordKeys = keys.filter((k) => /password|passwd|secret/i.test(k))
+    expect(passwordKeys).toHaveLength(0)
+    // 确认合法 key 都在场（防止 toJson() 被意外清空）
+    expect(keys).toContain('enabled')
+    expect(keys).toContain('baseUrl')
+    expect(keys).toContain('username')
+    expect(keys).toContain('remoteRoot')
+    expect(keys).toContain('profile')
+    expect(keys).toContain('autoSync')
+    expect(keys).toContain('status')
+  })
 })
