@@ -102,6 +102,9 @@ import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-servi
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 import { ResponsesStore } from './contexts/apiProxy/infrastructure/responses-store/responses-store'
+import { ApiProxyKeyRepository } from './contexts/apiProxy/infrastructure/api-proxy-key.repository'
+import { ApiProxyKeyService } from './contexts/apiProxy/application/api-proxy-key-service'
+import { migrateClientKeys } from './contexts/apiProxy/application/migrate-client-keys'
 // KiroAdapter（'kiro' 上游）+ 窄 port 类型 + account port factory。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { PromptCacheTracker } from './contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
@@ -468,6 +471,17 @@ export async function buildContainer(): Promise<Container> {
     maxRetries: settings.getApiProxyMaxRetries(),
   }))
 
+  // M5 Key 加密存储：复用已有 cryptoService（不建第二个 master key）。
+  const apiProxyKeyRepo = new ApiProxyKeyRepository(cryptoService)
+  const apiProxyKeyService = new ApiProxyKeyService(apiProxyKeyRepo)
+
+  // 启动迁移：将 settings 明文 Key 搬入加密表，然后清空 settings 字段（幂等，空则 no-op）。
+  await migrateClientKeys(
+    settings.getApiProxyClientKeys(),
+    apiProxyKeyRepo,
+    () => { void settings.updateSettings({ api_proxy_client_keys: '' }) },
+  )
+
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘），默认目录在 appDataDir()/responses。
   const responsesStore = new ResponsesStore()
   const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry, responsesStore })
@@ -475,7 +489,7 @@ export async function buildContainer(): Promise<Container> {
     createApiRequestListener({
       service: apiProxyService,
       auth: {
-        keys: settings.getApiProxyClientKeys(),
+        keysProvider: () => apiProxyKeyRepo.listActivePlaintext(),
         allowAnonymousLoopback: settings.getApiProxyAllowAnonymousLoopback(),
       },
       knownPlatforms: platformRegistry.knownPlatforms(),
@@ -511,6 +525,7 @@ export async function buildContainer(): Promise<Container> {
     apiProxyService,
     apiProxyHealth,
     kiroAccountPort,
+    apiProxyKeyService,
     tokenRefreshScheduler,
     platformQuotaScheduler,
   }
