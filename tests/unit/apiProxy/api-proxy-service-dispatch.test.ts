@@ -66,6 +66,12 @@ describe('handleRequest — non-stream chat through Echo', () => {
   })
 })
 
+async function collectFrames(r: unknown): Promise<string[]> {
+  const frames: string[] = []
+  for await (const f of (r as { frames: AsyncIterable<string> }).frames) frames.push(f)
+  return frames
+}
+
 describe('handleRequest — streaming through Echo', () => {
   it('openai stream produces SSE frames ending in [DONE]', async () => {
     const intent: RequestIntent = { format: 'openai', action: 'chat', model: 'echo-1', stream: true }
@@ -75,8 +81,8 @@ describe('handleRequest — streaming through Echo', () => {
       requestId: 's1',
     })
     expect(r.kind).toBe('stream')
-    const frames = (r as { frames: string[]; contentType: string }).frames
     expect((r as { contentType: string }).contentType).toBe('text/event-stream')
+    const frames = await collectFrames(r)
     expect(frames.some((f) => f.includes('"streamed"'))).toBe(true)
     expect(frames.at(-1)).toBe('data: [DONE]\n\n')
   })
@@ -87,7 +93,7 @@ describe('handleRequest — streaming through Echo', () => {
       body: { model: 'echo-1', stream: true, max_tokens: 8, messages: [{ role: 'user', content: 'ab' }] },
       requestId: 's2',
     })
-    const frames = (r as { frames: string[] }).frames
+    const frames = await collectFrames(r)
     expect(frames[0]).toContain('message_start')
     expect(frames.at(-1)).toContain('message_stop')
   })
@@ -99,7 +105,7 @@ describe('handleRequest — streaming through Echo', () => {
       requestId: 's3',
     })
     expect((r as { contentType: string }).contentType).toBe('application/json')
-    const frames = (r as { frames: string[] }).frames
+    const frames = await collectFrames(r)
     expect(frames.some((f) => f.includes('"zz"'))).toBe(true)
   })
 })

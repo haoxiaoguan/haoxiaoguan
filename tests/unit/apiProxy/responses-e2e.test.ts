@@ -42,7 +42,9 @@ describe('/v1/responses 经 Echo', () => {
       requestId: 'req2',
     })
     expect(r.kind).toBe('stream')
-    const joined = (r as { frames: string[] }).frames.join('')
+    const parts: string[] = []
+    for await (const f of (r as { frames: AsyncIterable<string> }).frames) parts.push(f)
+    const joined = parts.join('')
     expect(joined).toContain('event: response.created')
     expect(joined).toContain('event: response.completed')
     expect(joined).toContain('data: [DONE]')

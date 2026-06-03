@@ -13,11 +13,13 @@ import {
   openaiToIR,
   irToOpenAIResponse,
   serializeOpenAIStream,
+  serializeOpenAIStreamLazy,
 } from '../infrastructure/inbound/openai'
 import {
   anthropicToIR,
   irToAnthropicResponse,
   serializeAnthropicStream,
+  serializeAnthropicStreamLazy,
 } from '../infrastructure/inbound/anthropic'
 import {
   geminiToIR,
@@ -32,6 +34,7 @@ import type { ResponsesStore, StoredResponseDoc } from '../infrastructure/respon
 import type { ResponsesRequest } from '../infrastructure/inbound/responses/responses-types'
 import type { ContentBlock } from '../domain/canonical'
 import type { ApiProxyStatus } from '../../../../shared/api-types'
+import { estimateRequestInputTokens } from '../domain/usage/token-estimator'
 
 // 入站转换器映射（可注入，便于测试替换；默认用 M2a 真实函数）。
 export interface InboundConverters {
@@ -75,11 +78,11 @@ export interface JsonResult {
   body: unknown
 }
 
-// 流式结果：已序列化的 wire 帧数组 + content-type；由 hono handler 写出。
+// 流式结果：已序列化的 wire 帧（惰性 AsyncIterable）+ content-type；由 hono handler 写出。
 export interface StreamResult {
   kind: 'stream'
   status: number
-  frames: string[]
+  frames: AsyncIterable<string>
   contentType: string
 }
 
@@ -117,13 +120,31 @@ export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHtt
   }
 }
 
-// 把异步事件流收集成数组（M2b 简化：先 drain 再一次性序列化；增量透传留 M3）。
+// 把异步事件流收集成数组（Gemini/Responses drain 路径仍使用）。
 async function drainStream(
   stream: AsyncIterable<CanonicalStreamEvent>,
 ): Promise<CanonicalStreamEvent[]> {
   const events: CanonicalStreamEvent[] = []
   for await (const ev of stream) events.push(ev)
   return events
+}
+
+// string[] → AsyncIterable<string>（Gemini/Responses drain 路径的包装适配）。
+async function* arrayToAsyncIterable(arr: string[]): AsyncIterable<string> {
+  for (const s of arr) yield s
+}
+
+// 把 peek 出的首个 IteratorResult 和剩余 iterator 拼回一个完整 AsyncIterable。
+async function* prependFirst(
+  first: IteratorResult<CanonicalStreamEvent>,
+  it: AsyncIterator<CanonicalStreamEvent>,
+): AsyncIterable<CanonicalStreamEvent> {
+  if (!first.done) yield first.value
+  while (true) {
+    const n = await it.next()
+    if (n.done) break
+    yield n.value
+  }
 }
 
 // apiProxy 上下文的 application 服务。包装 ApiHttpServer 提供 start/stop + 状态投影（M1），
@@ -221,10 +242,11 @@ export class ApiProxyService {
     }
 
     if (intent.stream) {
-      let events
-      try { events = await drainStream(adapter.chatStream(ir, ctx)) }
-      catch (e) { throw classifyToHttp(e, intent.format) }
-      return this.serializeStream(intent, ir, events, requestId)
+      const it = adapter.chatStream(ir, ctx)[Symbol.asyncIterator]()
+      let first: IteratorResult<CanonicalStreamEvent>
+      try { first = await it.next() } catch (e) { throw classifyToHttp(e, intent.format) }
+      const events = prependFirst(first, it)
+      return this.serializeStreamLazy(intent, ir, events, requestId)
     }
     let resp
     try { resp = await adapter.chat(ir, ctx) }
@@ -287,7 +309,7 @@ export class ApiProxyService {
         kind: 'stream',
         status: 200,
         contentType: 'text/event-stream',
-        frames: serializeResponsesStream(resp, events, { id: respId, itemId, createdAt: 0 }),
+        frames: arrayToAsyncIterable(serializeResponsesStream(resp, events, { id: respId, itemId, createdAt: 0 })),
       }
     }
     let resp
@@ -375,13 +397,13 @@ export class ApiProxyService {
     }
   }
 
-  // ---- 内部：出站流式 ----
-  // requestId 用于派生确定性出站 id（与非流式 toResponseBody 对齐：chatcmpl-${requestId}/msg_${requestId}），
-  // 仍禁 Date.now/随机，保证可单测。
-  private serializeStream(
+  // ---- 内部：出站流式（惰性版）----
+  // OpenAI/Anthropic 真增量逐 token 透传；Gemini 保持 drain 后包装成 AsyncIterable。
+  // requestId 用于派生确定性出站 id，禁 Date.now/随机，保证可单测。
+  private serializeStreamLazy(
     intent: RequestIntent,
     ir: CanonicalRequest,
-    events: CanonicalStreamEvent[],
+    events: AsyncIterable<CanonicalStreamEvent>,
     requestId: string,
   ): StreamResult {
     switch (intent.format) {
@@ -390,31 +412,29 @@ export class ApiProxyService {
           kind: 'stream',
           status: 200,
           contentType: 'text/event-stream',
-          frames: this.converters.openai.serializeStream(events, ir.model, { id: `chatcmpl-${requestId}`, created: 0 }),
+          frames: serializeOpenAIStreamLazy(events, ir.model, { id: `chatcmpl-${requestId}`, created: 0 }),
         }
-      case 'anthropic': {
-        // Anthropic 流需要一个 resp 提供 message_start 的初始 usage/model；从 events 里抽 usage，缺省 0。
-        const usageEvent = events.find((e): e is { type: 'usage'; usage: CanonicalResponse['usage'] } => e.type === 'usage')
-        const seed: CanonicalResponse = {
-          model: ir.model,
-          content: [],
-          stopReason: 'end_turn',
-          usage: usageEvent ? usageEvent.usage : { inputTokens: 0, outputTokens: 0 },
-        }
+      case 'anthropic':
         return {
           kind: 'stream',
           status: 200,
           contentType: 'text/event-stream',
-          frames: this.converters.anthropic.serializeStream(seed, events, { id: `msg_${requestId}` }),
+          // message_start input 用请求文本估算（惰性下流末 cache 字段省略，非流式不受影响）。
+          frames: serializeAnthropicStreamLazy(events, { model: ir.model, inputTokens: estimateRequestInputTokens(ir) }, { id: `msg_${requestId}` }),
         }
-      }
-      case 'gemini':
+      case 'gemini': {
+        // Gemini 保持 drain（非 SSE、一次性 JSON chunk）。
+        const self = this
         return {
           kind: 'stream',
           status: 200,
           contentType: 'application/json',
-          frames: this.converters.gemini.serializeStream(events),
+          frames: (async function* () {
+            const drained = await drainStream(events)
+            yield* self.converters.gemini.serializeStream(drained)
+          })(),
         }
+      }
       case 'openai-responses':
         // 不可达：openai-responses 走 handleResponses 的 serializeResponsesStream（见上 toIR 注释）。
         throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
