@@ -107,6 +107,7 @@ import { ApiProxyKeyRepository } from './contexts/apiProxy/infrastructure/api-pr
 import { ApiProxyKeyService } from './contexts/apiProxy/application/api-proxy-key-service'
 import { migrateClientKeys } from './contexts/apiProxy/application/migrate-client-keys'
 import { KeyRateLimiter } from './contexts/apiProxy/domain/key-rate-limiter'
+import { loadOrCreateCert } from './contexts/apiProxy/infrastructure/http/self-signed-cert'
 // KiroAdapter（'kiro' 上游）+ 窄 port 类型 + account port factory。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { PromptCacheTracker } from './contexts/apiProxy/domain/usage/prompt-cache-tracker'
@@ -500,6 +501,16 @@ export async function buildContainer(): Promise<Container> {
   const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry, responsesStore })
   // 客户端 Key 令牌桶限流器（后续可接 settings 动态配置 capacity/refillPerMinute）。
   const apiProxyKeyRateLimiter = new KeyRateLimiter({ capacity: 10, refillPerMinute: 10 })
+  // 若 apiProxyHttps=true，尝试加载/生成自签证书并启用 HTTPS；失败时降级 HTTP 并打警告，不阻断启动。
+  let tlsConfig: { tls: import('./contexts/apiProxy/infrastructure/http/self-signed-cert').CertBundle } | Record<string, never> = {}
+  if (settings.getApiProxyHttps()) {
+    try {
+      const cert = loadOrCreateCert()
+      tlsConfig = { tls: cert }
+    } catch (err) {
+      console.warn('[container] HTTPS 证书加载失败，降级为 HTTP:', err)
+    }
+  }
   const apiHttpServer = new ApiHttpServer(
     createApiRequestListener({
       service: apiProxyService,
@@ -510,7 +521,7 @@ export async function buildContainer(): Promise<Container> {
       knownPlatforms: platformRegistry.knownPlatforms(),
       keyRateLimiter: apiProxyKeyRateLimiter,
     }),
-    { port: settings.getApiProxyPort() },
+    { port: settings.getApiProxyPort(), ...tlsConfig },
   )
   apiProxyService.attachServer(apiHttpServer)
 

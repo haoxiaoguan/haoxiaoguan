@@ -85,6 +85,33 @@ describe('redactString', () => {
     const msg = 'connect ETIMEDOUT 203.0.113.1:443'
     expect(redactString(msg)).toBe(msg)
   })
+
+  // ── JWT 正则收紧：确保非密文不被误打码（P1-2）──────────────────────────
+  it('AWS 主机名不被误打码（oidc.region.amazonaws.com 首段不含 eyJ）', () => {
+    const host = 'oidc.eucentral1.amazonaws.com'
+    expect(redactString(host)).toBe(host)
+  })
+
+  it('下划线分隔的普通标识符不被误打码（foo_bar.baz_qux.config_value）', () => {
+    const s = 'foo_bar.baz_qux.config_value'
+    expect(redactString(s)).toBe(s)
+  })
+
+  it('普通方法调用链不被误打码（file.method.call）', () => {
+    const s = 'file.method.call'
+    expect(redactString(s)).toBe(s)
+  })
+
+  it('三段点分短串不被误打码（a.b.c）', () => {
+    const s = 'a.b.c'
+    expect(redactString(s)).toBe(s)
+  })
+
+  it('真 JWT（eyJ 开头）仍被打码', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+    expect(redactString(`token: ${jwt}`)).toBe('token: [REDACTED_JWT]')
+    expect(redactString(`token: ${jwt}`)).not.toContain(jwt)
+  })
 })
 
 // ─── redactValue ─────────────────────────────────────────────────────────────

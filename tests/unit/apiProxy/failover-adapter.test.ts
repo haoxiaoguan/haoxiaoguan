@@ -163,6 +163,74 @@ describe('retryDelayMs jitter', () => {
 })
 
 // ══════════════════════════════════════════════════════════
+// P0-3 流式退避 jitter 测试：chatStream SERVER 错误应用 ±20% 公式
+// ══════════════════════════════════════════════════════════
+describe('chatStream retryDelayMs jitter', () => {
+  function streamJitterDeps(randomFn: () => number, sleepSpy: (ms: number) => Promise<void>) {
+    const now = { t: 0 }
+    const health = new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
+    const selector = new AccountPoolSelector({ strategy: 'sticky-lru', perAccountConcurrency: 4, affinityTtlMs: 1000, clock: () => now.t }, health)
+    const inner = {
+      platform: 'kiro', supportsModel: () => true, listModels: () => [],
+      classifyError: (_e: any) => 'SERVER' as const,
+      chat: async () => okResp,
+      // 每次调用都在吐任何字节前抛错（started 保持 false，触发 sleep + 切号逻辑）
+      chatStream: (_ir: any, _ctx: any): AsyncIterable<CanonicalStreamEvent> => ({
+        [Symbol.asyncIterator]() {
+          return {
+            next() { return Promise.reject(new Error('server err')) },
+            return() { return Promise.resolve({ done: true as const, value: undefined }) },
+          }
+        },
+      }),
+    }
+    const accounts = {
+      async listByPlatform() { return [{ id: 'a', isActive: true }, { id: 'b', isActive: true }] },
+      async markSuspended() {},
+      async clearSuspension() {},
+    }
+    return new FailoverAdapter({
+      inner: inner as any, selector, health,
+      accounts: accounts as any,
+      credentials: { async retrieve(id: string) { return { token: `tk-${id}` } } } as any,
+      dispatchers: { async dispatcherForAccount() { return undefined } } as any,
+      maxRetries: 2,
+      retryDelayMs: 100,
+      sleep: sleepSpy,
+      random: randomFn,
+    })
+  }
+
+  async function drainStream(iterable: AsyncIterable<CanonicalStreamEvent>) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of iterable) { /* drain */ }
+    } catch { /* expected */ }
+  }
+
+  it('chatStream random=0.5 → sleep 实参 = Math.round(100*(0.8+0.5*0.4)) = 100', async () => {
+    const calls: number[] = []
+    const fa = streamJitterDeps(() => 0.5, async (ms) => { calls.push(ms) })
+    await drainStream(fa.chatStream(ir, { requestId: 'r' }))
+    expect(calls[0]).toBe(Math.round(100 * (0.8 + 0.5 * 0.4))) // = 100
+  })
+
+  it('chatStream random=0 → sleep 实参 = Math.round(100*0.8) = 80', async () => {
+    const calls: number[] = []
+    const fa = streamJitterDeps(() => 0, async (ms) => { calls.push(ms) })
+    await drainStream(fa.chatStream(ir, { requestId: 'r' }))
+    expect(calls[0]).toBe(Math.round(100 * 0.8)) // = 80
+  })
+
+  it('chatStream random=1 → sleep 实参 = Math.round(100*1.2) = 120', async () => {
+    const calls: number[] = []
+    const fa = streamJitterDeps(() => 1, async (ms) => { calls.push(ms) })
+    await drainStream(fa.chatStream(ir, { requestId: 'r' }))
+    expect(calls[0]).toBe(Math.round(100 * 1.2)) // = 120
+  })
+})
+
+// ══════════════════════════════════════════════════════════
 // 回收回归：chatStream 客户端提前断连时 inner generator 被转发 return()
 // ══════════════════════════════════════════════════════════
 describe('chatStream 资源回收回归', () => {

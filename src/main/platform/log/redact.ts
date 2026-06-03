@@ -15,10 +15,10 @@
 // Bearer 规则匹配 "Bearer <anything>" 整体，JWT 规则单独匹配三段式，分别替换即可。
 // 顺序保持：JWT → Bearer → Basic → inline KV，避免歧义。
 
-// JWT 三段式：base64url chars，每段至少 4 字符（排除 IP 地址短段），且至少一段含字母
-// （纯数字三段式如 IPv4 不匹配）。
-// 采用两条正则拆分检测：先宽松匹配候选，再用过滤函数排除纯数字+短段误匹配。
-const RE_JWT = /\b([A-Za-z0-9_-]{4,})\.([A-Za-z0-9_-]{4,})\.([A-Za-z0-9_-]{4,})\b/g
+// JWT 三段式：header 段必以 eyJ 开头（base64url 编码的 `{"` 前缀，对所有合法 JWT 成立），
+// 其余两段为 base64url 字符、每段至少 10 字符（排除普通主机名/调用链/IP 短段误匹配）。
+// oidc.eucentral1.amazonaws.com / foo.bar.baz / file.method.call 均不满足 eyJ 前缀→不打码。
+const RE_JWT = /\b(eyJ[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{10,})\.([A-Za-z0-9_-]{10,})\b/g
 
 // Bearer token（token 部分含所有非空白字符；Bearer 自身保留用于诊断）。
 const RE_BEARER = /\bBearer\s+\S+/gi

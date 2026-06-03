@@ -101,4 +101,7 @@ export class SettingsApplicationService {
   getApiProxyProbabilisticRetryChance(): number {
     return this.file.loadSync().runtime.apiProxyProbabilisticRetryChance
   }
+  getApiProxyHttps(): boolean {
+    return this.file.loadSync().runtime.apiProxyHttps
+  }
 }

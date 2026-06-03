@@ -100,8 +100,8 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
           triedIds.add(lease.id)
           lastError = err
           if (cls === 'FATAL') throw err
-          // SERVER 错误：给上游/网络喘息后再切号。
-          if (cls === 'SERVER') await self.sleep(self.deps.retryDelayMs)
+          // SERVER 错误：给上游/网络喘息后再切号（±20% jitter 防止多账号同时解冻风暴）。
+          if (cls === 'SERVER') await self.sleep(Math.round(self.deps.retryDelayMs * (0.8 + self.random() * 0.4)))
         } finally {
           lease.release()
           if (it !== undefined && typeof it.return === 'function') {
