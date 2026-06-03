@@ -18,7 +18,8 @@ import { getMachineId } from '../../identity/machine-id'
 
 export const KIRO_IDE_VERSION = '0.11.107'
 const AWS_SDK_OIDC_VERSION = '3.980.0'
-const AWS_SDK_CWR_VERSION = '1.0.0'
+// 对齐官方 AmazonQ 额度端点当前版本，需随上游跟进
+const AWS_SDK_CWR_VERSION = '1.0.34'
 const DEFAULT_REGION = 'us-east-1'
 const HTTP_TIMEOUT_MS = 25_000
 
@@ -209,7 +210,7 @@ function usageLimitsHeaders(input: KiroUsageLimitsInput): Record<string, string>
   const mid = getMachineId()
   const headers: Record<string, string> = {
     'x-amz-user-agent': `aws-sdk-js/${AWS_SDK_CWR_VERSION} KiroIDE-${KIRO_IDE_VERSION}-${mid}`,
-    'user-agent': `aws-sdk-js/${AWS_SDK_CWR_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${nodeVersion()} api/codewhispererruntime#${AWS_SDK_CWR_VERSION} m/N,E KiroIDE-${KIRO_IDE_VERSION}-${mid}`,
+    'user-agent': `aws-sdk-js/${AWS_SDK_CWR_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${nodeVersion()} api/codewhispererruntime#${AWS_SDK_CWR_VERSION} m/E KiroIDE-${KIRO_IDE_VERSION}-${mid}`,
     'amz-sdk-invocation-id': randomUUID(),
     'amz-sdk-request': 'attempt=1; max=1',
     Authorization: `Bearer ${input.accessToken.trim()}`,

@@ -133,7 +133,9 @@ describe('fetchKiroUsageLimits', () => {
     expect(url).toContain('profileArn=arn%3Aaws%3Acodewhisperer')
     const h = headersOf(init)
     expect(h.Authorization).toBe('Bearer tok')
-    expect(h['user-agent']).toContain('api/codewhispererruntime#1.0.0')
+    expect(h['user-agent']).toContain('api/codewhispererruntime#1.0.34')
+    expect(h['user-agent']).toContain('m/E')
+    expect(h['user-agent']).not.toContain('m/N')
     expect(h.tokentype).toBeUndefined()
   })
 
