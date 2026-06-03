@@ -38,6 +38,16 @@ export interface RuntimeSettings {
   apiProxyClientKeys: string[]
   // 为 true 时本机回环（127.0.0.1/::1）在未配置 Key 情况下免鉴权，便于本地直连。默认 true。
   apiProxyAllowAnonymousLoopback: boolean
+  // M4 账号池/选择/故障转移/健康参数。
+  apiProxySelectionStrategy: 'sticky-lru' | 'round-robin'
+  apiProxyAffinityTtlMs: number
+  apiProxyPerAccountConcurrency: number
+  apiProxyMaxRetries: number
+  apiProxyRetryDelayMs: number
+  apiProxyBaseCooldownMs: number
+  apiProxyMaxBackoffMultiplier: number
+  apiProxyQuotaResetMs: number
+  apiProxyProbabilisticRetryChance: number
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -60,6 +70,15 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyPort: 8788,
   apiProxyClientKeys: [],
   apiProxyAllowAnonymousLoopback: true,
+  apiProxySelectionStrategy: 'sticky-lru',
+  apiProxyAffinityTtlMs: 600000,
+  apiProxyPerAccountConcurrency: 4,
+  apiProxyMaxRetries: 3,
+  apiProxyRetryDelayMs: 100,
+  apiProxyBaseCooldownMs: 1000,
+  apiProxyMaxBackoffMultiplier: 64,
+  apiProxyQuotaResetMs: 3600000,
+  apiProxyProbabilisticRetryChance: 0.1,
 }
 
 export class AppSettings {
@@ -89,6 +108,9 @@ export class AppSettings {
     runtime.apiProxyClientKeys = Array.isArray(raw.runtime?.apiProxyClientKeys)
       ? raw.runtime.apiProxyClientKeys.filter((k: unknown): k is string => typeof k === 'string')
       : []
+    if (raw.runtime?.apiProxySelectionStrategy !== 'sticky-lru' && raw.runtime?.apiProxySelectionStrategy !== 'round-robin') {
+      runtime.apiProxySelectionStrategy = 'sticky-lru'
+    }
     return new AppSettings(ui, runtime, raw.webdav ?? {}, raw.localBackup ?? {})
   }
 
@@ -113,6 +135,15 @@ export class AppSettings {
       api_proxy_port: String(this.runtime.apiProxyPort),
       api_proxy_client_keys: this.runtime.apiProxyClientKeys.join('\n'),
       api_proxy_allow_anonymous_loopback: String(this.runtime.apiProxyAllowAnonymousLoopback),
+      api_proxy_selection_strategy: this.runtime.apiProxySelectionStrategy,
+      api_proxy_affinity_ttl_ms: String(this.runtime.apiProxyAffinityTtlMs),
+      api_proxy_per_account_concurrency: String(this.runtime.apiProxyPerAccountConcurrency),
+      api_proxy_max_retries: String(this.runtime.apiProxyMaxRetries),
+      api_proxy_retry_delay_ms: String(this.runtime.apiProxyRetryDelayMs),
+      api_proxy_base_cooldown_ms: String(this.runtime.apiProxyBaseCooldownMs),
+      api_proxy_max_backoff_multiplier: String(this.runtime.apiProxyMaxBackoffMultiplier),
+      api_proxy_quota_reset_ms: String(this.runtime.apiProxyQuotaResetMs),
+      api_proxy_probabilistic_retry_chance: String(this.runtime.apiProxyProbabilisticRetryChance),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -154,6 +185,24 @@ export class AppSettings {
           .filter((s) => s.length > 0)
       } else if (k === 'api_proxy_allow_anonymous_loopback') {
         this.runtime.apiProxyAllowAnonymousLoopback = v === 'true'
+      } else if (k === 'api_proxy_selection_strategy') {
+        if (v === 'sticky-lru' || v === 'round-robin') this.runtime.apiProxySelectionStrategy = v
+      } else if (k === 'api_proxy_affinity_ttl_ms') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyAffinityTtlMs = n
+      } else if (k === 'api_proxy_per_account_concurrency') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 1) this.runtime.apiProxyPerAccountConcurrency = n
+      } else if (k === 'api_proxy_max_retries') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 1) this.runtime.apiProxyMaxRetries = n
+      } else if (k === 'api_proxy_retry_delay_ms') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyRetryDelayMs = n
+      } else if (k === 'api_proxy_base_cooldown_ms') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyBaseCooldownMs = n
+      } else if (k === 'api_proxy_max_backoff_multiplier') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 1) this.runtime.apiProxyMaxBackoffMultiplier = n
+      } else if (k === 'api_proxy_quota_reset_ms') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyQuotaResetMs = n
+      } else if (k === 'api_proxy_probabilistic_retry_chance') {
+        const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 1) this.runtime.apiProxyProbabilisticRetryChance = n
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)
