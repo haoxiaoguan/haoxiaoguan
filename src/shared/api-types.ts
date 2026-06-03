@@ -630,6 +630,8 @@ export interface AccountPoolHealthRow {
   failureCount: number
   cooldownUntilMs?: number
   quotaExhaustedAtMs?: number
+  /** quota_exhausted 恢复时间戳（ms）：由服务端按配置值计算，前端直接展示。 */
+  quotaResetsAtMs?: number
 }
 
 // 客户端 Key 元信息（不含明文/密文）。

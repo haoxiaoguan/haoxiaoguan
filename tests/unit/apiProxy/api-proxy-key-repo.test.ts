@@ -10,7 +10,10 @@ function makeStubEm() {
     rows,
     em: {
       async findOne(_e: unknown, where: { id: string }) { return rows.find((r) => r.id === where.id) ?? null },
-      async find(_e: unknown) { return [...rows] },
+      async find(_e: unknown, where?: { isActive?: boolean }) {
+        if (where?.isActive === true) return rows.filter((r) => r.isActive)
+        return [...rows]
+      },
       persist(entity: ApiProxyKeyEntity) { rows.push(entity) },
       async flush() { /* no-op */ },
       async nativeDelete(_e: unknown, where: { id: string }) {

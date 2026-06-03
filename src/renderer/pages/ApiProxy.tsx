@@ -315,9 +315,9 @@ function AccountPoolHealthCard({
               stateLabel = `${stateLabel} (${remaining}s)`;
             } else if (
               row.runtimeState === 'quota_exhausted' &&
-              row.quotaExhaustedAtMs !== undefined
+              row.quotaResetsAtMs !== undefined
             ) {
-              const resetAt = new Date(row.quotaExhaustedAtMs + 3_600_000).toLocaleTimeString(
+              const resetAt = new Date(row.quotaResetsAtMs).toLocaleTimeString(
                 [],
                 { hour: '2-digit', minute: '2-digit' },
               );

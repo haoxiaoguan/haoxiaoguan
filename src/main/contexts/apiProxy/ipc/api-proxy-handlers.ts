@@ -16,6 +16,7 @@ export function registerApiProxyHandlers(
   health?: AccountHealthTracker,
   accounts?: KiroAccountPort,
   keyService?: ApiProxyKeyService,
+  quotaResetMs?: number,
 ): void {
   ipcMain.handle(API_PROXY_CHANNELS.start, async (): Promise<ApiProxyStatus> => {
     try {
@@ -53,7 +54,7 @@ export function registerApiProxyHandlers(
       }
     })
 
-    const poolHealthHandler = makeAccountPoolHealthHandler(health, accounts)
+    const poolHealthHandler = makeAccountPoolHealthHandler(health, accounts, quotaResetMs ?? 3_600_000)
     ipcMain.handle(API_PROXY_CHANNELS.getAccountPoolHealth, async () => {
       try {
         return await poolHealthHandler()

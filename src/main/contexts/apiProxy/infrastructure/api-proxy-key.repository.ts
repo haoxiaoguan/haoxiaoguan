@@ -57,10 +57,9 @@ export class ApiProxyKeyRepository {
 
   async listActivePlaintext(): Promise<string[]> {
     const em = this.emFactory()
-    const rows = await em.find(ApiProxyKeyEntity, {})
+    const rows = await em.find(ApiProxyKeyEntity, { isActive: true })
     const out: string[] = []
     for (const e of rows) {
-      if (!e.isActive) continue
       try {
         const stored = JSON.parse(e.keyEnc) as StoredEnvelope
         out.push(this.crypto.decrypt(stored.envelope, stored.aad))
