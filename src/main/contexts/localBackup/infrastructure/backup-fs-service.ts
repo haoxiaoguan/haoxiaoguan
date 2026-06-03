@@ -3,6 +3,7 @@
 // Uses Node fs/promises; mtime is the source of createdAt (Unix seconds).
 
 import { readdir, stat, unlink, rename, mkdir } from 'node:fs/promises'
+import { chmodSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { homedir } from 'node:os'
 import { BackupEntry } from '../domain/backup-entry'
@@ -18,7 +19,7 @@ export function defaultBackupDir(): string {
  * Rules (mirrors Rust validate_filename):
  *   - must not be empty
  *   - must not contain '/', '\', or '..'
- *   - must end with '.db'
+ *   - must end with '.db' (plaintext) or '.db.enc' (encrypted)
  */
 export function validateFilename(name: string): void {
   if (
@@ -26,7 +27,7 @@ export function validateFilename(name: string): void {
     name.includes('/') ||
     name.includes('\\') ||
     name.includes('..') ||
-    !name.endsWith('.db')
+    (!name.endsWith('.db') && !name.endsWith('.db.enc'))
   ) {
     throw BackupError.invalidFilename(name)
   }
@@ -46,13 +47,13 @@ async function entryFromPath(dir: string, filename: string): Promise<BackupEntry
 }
 
 /**
- * List all .db files in the backup directory, sorted by mtime descending.
+ * List all .db and .db.enc files in the backup directory, sorted by mtime descending.
  * Returns empty array if directory does not exist.
  */
 export async function listBackups(dir: string): Promise<BackupEntry[]> {
   try {
     const names = await readdir(dir)
-    const dbFiles = names.filter((n) => extname(n) === '.db')
+    const dbFiles = names.filter((n) => n.endsWith('.db') || n.endsWith('.db.enc'))
     const entries = await Promise.all(dbFiles.map((n) => entryFromPath(dir, n)))
     const valid = entries.filter((e): e is BackupEntry => e !== null)
     valid.sort((a, b) => b.createdAt - a.createdAt)
@@ -80,9 +81,18 @@ export async function cleanupOldBackups(dir: string, retain: number): Promise<vo
   )
 }
 
-/** Ensure the backup directory exists. */
+/** Ensure the backup directory exists.
+ * On Unix, also sets 0700 permissions so only the owning user can read backups.
+ * chmod failure is non-fatal (best-effort). */
 export async function ensureBackupDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
+  if (process.platform !== 'win32') {
+    try {
+      chmodSync(dir, 0o700)
+    } catch {
+      // best-effort — do not block backup creation if chmod fails
+    }
+  }
 }
 
 /** Delete a single backup file. Throws BackupError.notFound if missing. */

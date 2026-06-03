@@ -5,6 +5,7 @@
 //   - liveDbPath: absolute path to haoxiaoguan.db (for VACUUM INTO and restore)
 //   - backupDir: directory where .db snapshots are stored
 //   - configAdapter: reads/writes LocalBackupConfig in settings.json
+//   - safeStorage: optional Electron safeStorage for backup file encryption (P1-1)
 //
 // The periodic timer (setInterval, 30 min) is wired in main.ts / container.ts,
 // not here — this service is pure use-case logic.
@@ -22,6 +23,12 @@ import {
   validateFilename,
 } from '../infrastructure/backup-fs-service'
 import { vacuumInto, dumpFull, applyFull } from '../infrastructure/db-archive-service'
+import {
+  encryptBackupFile,
+  decryptToTemp,
+  tryUnlink,
+  type SafeStorageLike,
+} from '../infrastructure/backup-crypto-service'
 import type { LocalBackupConfigAdapter } from '../infrastructure/local-backup-config-adapter'
 
 export class LocalBackupApplicationService {
@@ -29,6 +36,7 @@ export class LocalBackupApplicationService {
     private readonly liveDbPath: string,
     private readonly backupDir: string,
     private readonly configAdapter: LocalBackupConfigAdapter,
+    private readonly safeStorage: SafeStorageLike | null = null,
   ) {}
 
   // ── Config ──────────────────────────────────────────────────────────────────
@@ -58,15 +66,38 @@ export class LocalBackupApplicationService {
 
     await vacuumInto(this.liveDbPath, targetPath)
 
-    // Stat the new file to build the BackupEntry (mtime as createdAt).
-    const meta = await stat(targetPath)
+    // P1-1: attempt to encrypt the .db snapshot to .db.enc.
+    const encFilename = `${filename}.enc`
+    const encPath = `${this.backupDir}/${encFilename}`
+    let finalFilename = filename
+    let finalPath = targetPath
+
+    try {
+      const mode = await encryptBackupFile(targetPath, encPath, this.safeStorage)
+      // Encryption succeeded — delete the plaintext .db and use .db.enc.
+      await tryUnlink(targetPath)
+      finalFilename = encFilename
+      finalPath = encPath
+      if (mode === 'aes-gcm') {
+        console.warn(
+          '[localBackup] safeStorage unavailable; backup encrypted with AES-256-GCM fallback',
+        )
+      }
+    } catch (err) {
+      // Encryption failed — keep the plaintext .db and warn. Never lose the backup.
+      console.warn('[localBackup] backup encryption failed; keeping plaintext .db:', String(err))
+      await tryUnlink(encPath)
+    }
+
+    // Stat the final file to build the BackupEntry (mtime as createdAt).
+    const meta = await stat(finalPath)
     const sizeBytes = meta.size
     const createdAt = Math.floor(meta.mtimeMs / 1000)
 
     // Prune old backups to retain_count.
     await cleanupOldBackups(this.backupDir, cfg.retainCount)
 
-    return BackupEntry.create(filename, sizeBytes, createdAt)
+    return BackupEntry.create(finalFilename, sizeBytes, createdAt)
   }
 
   // ── Restore ──────────────────────────────────────────────────────────────────
@@ -75,9 +106,13 @@ export class LocalBackupApplicationService {
    * Restore from a snapshot:
    *   1. Validate filename.
    *   2. Create a safety snapshot of the current live DB.
-   *   3. Dump all rows from the snapshot as INSERT SQL.
-   *   4. Replay into the live DB (foreign_keys OFF, inside a transaction).
+   *   3. If .db.enc, decrypt to a temporary .db path first.
+   *   4. Dump all rows from the snapshot as INSERT SQL.
+   *   5. Replay into the live DB (foreign_keys OFF, inside a transaction).
+   *   6. Delete the temporary decrypted file (if any).
    * Returns the safety snapshot filename.
+   *
+   * Backward compatible: old plaintext .db backups skip decryption.
    */
   async restoreBackup(filename: string): Promise<string> {
     validateFilename(filename)
@@ -91,9 +126,26 @@ export class LocalBackupApplicationService {
     // Safety snapshot first — if this fails, we abort before touching live data.
     const safety = await this.createBackup()
 
-    // Dump from snapshot, apply to live.
-    const sql = await dumpFull(snapshotPath)
-    await applyFull(this.liveDbPath, sql)
+    // P1-1: if encrypted, decrypt to a temporary plaintext .db for dumpFull.
+    let workPath = snapshotPath
+    let tempPath: string | undefined
+
+    if (filename.endsWith('.db.enc')) {
+      tempPath = `${this.backupDir}/_restore_tmp_${Date.now()}.db`
+      await decryptToTemp(snapshotPath, tempPath, this.safeStorage)
+      workPath = tempPath
+    }
+
+    try {
+      // Dump from snapshot (plaintext or decrypted temp), apply to live.
+      const sql = await dumpFull(workPath)
+      await applyFull(this.liveDbPath, sql)
+    } finally {
+      // Always clean up the temp decrypted file.
+      if (tempPath !== undefined) {
+        await tryUnlink(tempPath)
+      }
+    }
 
     return safety.filename
   }
