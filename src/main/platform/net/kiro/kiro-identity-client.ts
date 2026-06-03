@@ -20,8 +20,11 @@ export const KIRO_IDE_VERSION = '0.11.107'
 const AWS_SDK_OIDC_VERSION = '3.980.0'
 // 对齐官方 AmazonQ 额度端点当前版本，需随上游跟进
 const AWS_SDK_CWR_VERSION = '1.0.34'
+// 聊天端点 IDE 版本（与 kiro-upstream-client 的 KIRO_CHAT_IDE_VERSION 对齐）。
+const KIRO_MODELS_IDE_VERSION = '0.12.155'
 const DEFAULT_REGION = 'us-east-1'
 const HTTP_TIMEOUT_MS = 25_000
+const MODEL_LIST_TTL_MS = 5 * 60 * 1000 // 5 分钟
 
 const RUNTIME_ENDPOINT_OVERRIDE = process.env.HAOXIAOGUAN_KIRO_RUNTIME_ENDPOINT
 const AUTH_ENDPOINT_OVERRIDE = process.env.HAOXIAOGUAN_KIRO_AUTH_ENDPOINT
@@ -316,6 +319,145 @@ async function defaultFetch(url: string, init: RequestInit): Promise<Response> {
     return await fetch(url, { ...init, signal: controller.signal })
   } finally {
     clearTimeout(timer)
+  }
+}
+
+// --- ListAvailableModels ---
+
+/** 单条模型信息（id 必填，其余字段透传上游可选字段）。 */
+export interface KiroModelInfo {
+  modelId: string
+  modelName?: string
+  tokenLimits?: unknown
+  promptCaching?: unknown
+  rateMultiplier?: number
+  availableOrigins?: unknown
+}
+
+export interface FetchAvailableModelsInput {
+  accessToken: string
+  region: string
+  profileArn?: string
+  machineId: string
+}
+
+/**
+ * 调用 ListAvailableModels 端点获取当前账号可用模型列表（含分页聚合）。
+ * 失败时返回空数组，让上层回退静态列表，不崩进程。
+ */
+export async function fetchAvailableModels(
+  input: FetchAvailableModelsInput,
+  opts: { fetchImpl?: FetchImpl } = {},
+): Promise<KiroModelInfo[]> {
+  const region = normalizeRegion(input.region)
+  const doFetch = opts.fetchImpl ?? defaultFetch
+  const base = runtimeEndpointForRegion(region).replace(/\/+$/, '')
+  const profilePart =
+    input.profileArn !== undefined && input.profileArn.trim().length > 0
+      ? `&profileArn=${encodeURIComponent(input.profileArn.trim())}`
+      : ''
+  const headers = availableModelsHeaders(input)
+
+  const models: KiroModelInfo[] = []
+  let nextToken: string | undefined
+
+  try {
+    do {
+      const tokenPart = nextToken !== undefined ? `&nextToken=${encodeURIComponent(nextToken)}` : ''
+      const url = `${base}/ListAvailableModels?origin=AI_EDITOR&maxResults=50${profilePart}${tokenPart}`
+      const response = await doFetch(url, { method: 'GET', headers })
+      const text = await response.text()
+      if (!response.ok) {
+        // 授权错误或服务错误：返回已聚合的部分（首页通常为空），不抛
+        return models
+      }
+      const parsed = safeJson(text)
+      if (!isObject(parsed)) return models
+      const rawModels = parsed.models
+      if (Array.isArray(rawModels)) {
+        for (const m of rawModels) {
+          if (!isObject(m)) continue
+          const modelId = pickStr(m, ['modelId'])
+          if (modelId === undefined) continue
+          const info: KiroModelInfo = { modelId }
+          const modelName = pickStr(m, ['modelName'])
+          if (modelName !== undefined) info.modelName = modelName
+          if ('tokenLimits' in m) info.tokenLimits = m.tokenLimits
+          if ('promptCaching' in m) info.promptCaching = m.promptCaching
+          if (typeof m.rateMultiplier === 'number') info.rateMultiplier = m.rateMultiplier
+          if ('availableOrigins' in m) info.availableOrigins = m.availableOrigins
+          models.push(info)
+        }
+      }
+      const nt = pickStr(parsed, ['nextToken'])
+      nextToken = nt
+    } while (nextToken !== undefined)
+  } catch {
+    // 网络异常等：返回已聚合部分（通常为空）
+    return models
+  }
+
+  return models
+}
+
+function availableModelsHeaders(input: FetchAvailableModelsInput): Record<string, string> {
+  const mid = input.machineId
+  const dashSuffix = `KiroIDE-${KIRO_MODELS_IDE_VERSION}-${mid}`
+  return {
+    Authorization: `Bearer ${input.accessToken.trim()}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'x-amzn-codewhisperer-optout': 'true',
+    'x-amz-user-agent': `aws-sdk-js/${AWS_SDK_CWR_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${nodeVersion()} api/codewhispererstreaming#${AWS_SDK_CWR_VERSION} ${dashSuffix}`,
+    'user-agent': `aws-sdk-js/${AWS_SDK_CWR_VERSION} ua/2.1 os/${osToken()} lang/js md/nodejs#${nodeVersion()} api/codewhispererstreaming#${AWS_SDK_CWR_VERSION} m/E ${dashSuffix}`,
+    'amz-sdk-invocation-id': randomUUID(),
+    'amz-sdk-request': 'attempt=1; max=1',
+  }
+}
+
+// --- 进程级模型列表缓存 ---
+
+export type ClockFn = () => number
+
+interface ModelListCacheEntry {
+  models: KiroModelInfo[]
+  fetchedAt: number
+}
+
+/**
+ * 进程级 Map 缓存：key = `accountId:region:profileArn`，TTL 5 分钟。
+ * 注入 clock 便于单测覆盖过期逻辑。
+ */
+export class ModelListCache {
+  private readonly cache = new Map<string, ModelListCacheEntry>()
+  private readonly ttlMs: number
+  private readonly clock: ClockFn
+
+  constructor(opts: { ttlMs?: number; clock?: ClockFn } = {}) {
+    this.ttlMs = opts.ttlMs ?? MODEL_LIST_TTL_MS
+    this.clock = opts.clock ?? Date.now
+  }
+
+  /** 命中未过期缓存直接返回；否则调用 fetcher 刷新并缓存。 */
+  async getOrFetch(key: string, fetcher: () => Promise<KiroModelInfo[]>): Promise<KiroModelInfo[]> {
+    const now = this.clock()
+    const entry = this.cache.get(key)
+    if (entry !== undefined && now - entry.fetchedAt < this.ttlMs) {
+      return entry.models
+    }
+    const models = await fetcher()
+    this.cache.set(key, { models, fetchedAt: this.clock() })
+    return models
+  }
+
+  /** 主动使 key 的缓存失效（账号切换、手动刷新等场景）。 */
+  invalidate(key: string): void {
+    this.cache.delete(key)
+  }
+
+  /** 构建标准 key：accountId:region:profileArn（profileArn 可空）。 */
+  static makeKey(accountId: string, region: string, profileArn: string | undefined): string {
+    return `${accountId}:${region}:${profileArn ?? ''}`
   }
 }
 
