@@ -90,20 +90,19 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
   }
 
   chatStream(ir: CanonicalRequest, ctx: UpstreamCtx): AsyncIterable<CanonicalStreamEvent> {
-    // M4：prepare 改同步（ctx 已含注入的 account/credential/dispatcher）。
+    // 增量迭代：openStream 在 runWithDispatcher 内 await 完成 fetch 发起（dispatcher context 内绑定），
+    // 返回的 generator 在 context 外消费（undici body 已绑 dispatcher，无需再持有 context）。
+    // M3c：对末 usage 事件做 cache 计费后处理（与 chat 同语义），其余事件增量透传。
+    // 假设每个流只有一个 usage 事件（kiro-event-stream 流末补一次）；若上游改发多个 usage
+    // 事件，每个都会触发 cacheTracker.update，导致后续 compute 把前次 update 当命中、
+    // cache 重复计费。当前上游行为安全。
     const self = this
     async function* gen(): AsyncIterable<CanonicalStreamEvent> {
       const prepared = self.prepare(ir, ctx)
-      const events = await runWithDispatcher(ctx.dispatcher, async () => {
-        const out: CanonicalStreamEvent[] = []
-        for await (const ev of self.deps.client.chatStream(prepared.envelope, prepared.callCtx, ir.model, ir)) out.push(ev)
-        return out
-      })
-      // M3c：对末 usage 事件做 cache 计费后处理（与 chat 同语义），其余事件原样透传。
-      // 假设每个流只有一个 usage 事件（kiro-event-stream 流末补一次）；若上游改发多个 usage
-      // 事件，每个都会触发 cacheTracker.update，导致后续 compute 把前次 update 当命中、
-      // cache 重复计费。当前上游行为安全。
-      for (const ev of events) {
+      const stream = await runWithDispatcher(ctx.dispatcher, () =>
+        self.deps.client.openStream(prepared.envelope, prepared.callCtx, ir.model, ir),
+      )
+      for await (const ev of stream) {
         if (ev.type === 'usage') {
           yield { type: 'usage', usage: self.applyCacheToUsage(ev.usage, ir.cacheControl, prepared.accountId, ir.model) }
           continue

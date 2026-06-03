@@ -27,7 +27,13 @@ function fetchReturning(list: { eventType: string; payload: unknown }[]): { impl
   const bytes = encodeKiroEventStream(list)
   const impl: KiroFetchImpl = async (url, init) => {
     calls.push({ url, headers: init.headers })
-    const r: KiroFetchResponse = { ok: true, status: 200, text: async () => '', bytes: async () => bytes }
+    const r: KiroFetchResponse = {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      bytes: async () => bytes,
+      bytesStream: async function* () { yield bytes },
+    }
     return r
   }
   return { impl, calls }
