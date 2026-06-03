@@ -160,6 +160,36 @@ describe('buildConversationState — tools + history', () => {
     expect(cur.content).toBe('')
   })
 
+  it('C2: 当前消息 tool_result 含 image 块时替换为 [image] 占位文本', () => {
+    const ir: CanonicalRequest = {
+      model: 'claude-sonnet-4-5',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'q' }] },
+        { role: 'assistant', content: [{ type: 'tool_use', id: 'tu_img', name: 'screenshot', input: {} }] },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              toolUseId: 'tu_img',
+              content: [
+                { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+                { type: 'text', text: 'caption' },
+              ],
+            },
+          ],
+        },
+      ],
+      stream: false,
+    }
+    const env = buildConversationState(ir, OPTS)
+    const cur = env.conversationState.currentMessage.userInputMessage
+    const tr = cur.userInputMessageContext?.toolResults?.[0]
+    expect(tr?.toolUseId).toBe('tu_img')
+    // image 替换为 [image] 占位，text 保留
+    expect(tr?.content[0].text).toBe('[image]\ncaption')
+  })
+
   it('is deterministic across complex inputs with history + tools (no clock/random)', () => {
     const ir: CanonicalRequest = {
       model: 'claude-sonnet-4-5',

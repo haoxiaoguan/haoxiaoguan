@@ -61,14 +61,23 @@ function extractImages(content: ContentBlock[]): KiroImage[] {
 }
 
 // 取 IR 消息里的 tool_result 块 → Kiro toolResults（content 非空，空则填一个空格以满足 Kiro 非空要求）。
+// Kiro（CodeWhisperer）toolResult.content 仅支持 text，不接受 image 块（上游格式限制）。
+// image 块不直接丢弃，而是替换为 "[image]" 占位文本，保留"这里有图"的语义信息。
 function extractToolResults(content: ContentBlock[]): KiroToolResult[] {
   const out: KiroToolResult[] = []
   for (const b of content) {
     if (b.type !== 'tool_result') continue
-    const texts = b.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map((c) => c.text)
-    const text = texts.join('\n')
+    const parts: string[] = []
+    for (const c of b.content) {
+      if (c.type === 'text') {
+        parts.push(c.text)
+      } else if (c.type === 'image') {
+        // image 块在 Kiro toolResult 中不支持，转为占位文本以避免语义丢失。
+        parts.push('[image]')
+      }
+      // 其它类型忽略。
+    }
+    const text = parts.join('\n')
     out.push({
       toolUseId: b.toolUseId,
       content: [{ text: text.length > 0 ? text : ' ' }],

@@ -400,6 +400,14 @@ export function foldEventsToResponse(
   }
 
   const usage = estimateUsage(model, request, outputChars, contextPct)
+
+  // Kiro 上游（CodeWhisperer）事件流无截断信号（无 finishReason/limitReached 等字段）。
+  // 本地推断：当 outputTokens 达到请求 maxTokens 且当前 stopReason 为 'end_turn' 时，
+  // 改写为 'max_tokens'（真机抓帧确认上游确无该信号后可移除此推断，直接依赖上游信号）。
+  if (stopReason === 'end_turn' && request.maxTokens !== undefined && usage.outputTokens >= request.maxTokens) {
+    stopReason = 'max_tokens'
+  }
+
   return { model, content, stopReason, usage }
 }
 

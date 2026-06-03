@@ -245,6 +245,59 @@ describe('KiroUpstreamClient.chatStream', () => {
   })
 })
 
+describe('foldEventsToResponse — C1 max_tokens stopReason 本地推断', () => {
+  const mkReq = (maxTokens?: number): CanonicalRequest => ({
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+    stream: false,
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+  })
+
+  it('当 outputTokens >= maxTokens 且 stopReason 为 end_turn 时改写为 max_tokens', () => {
+    // 构造一条输出，确保 outputTokens 估算结果 >= maxTokens 阈值。
+    // 用极小的 maxTokens=1 确保任何非空输出都触发推断。
+    const events: CanonicalStreamEvent[] = [
+      { type: 'text_delta', text: 'Hello world' },
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ]
+    const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', mkReq(1))
+    expect(resp.stopReason).toBe('max_tokens')
+  })
+
+  it('当 stopReason 为 tool_use 时即使达到 maxTokens 也不改写', () => {
+    const events: CanonicalStreamEvent[] = [
+      { type: 'tool_use_start', index: 0, id: 'tu_1', name: 'fn' },
+      { type: 'tool_use_delta', index: 0, partialJson: '{}' },
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
+      { type: 'message_stop', stopReason: 'tool_use' },
+    ]
+    const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', mkReq(1))
+    expect(resp.stopReason).toBe('tool_use')
+  })
+
+  it('未设 maxTokens 时 end_turn 保持不变', () => {
+    const events: CanonicalStreamEvent[] = [
+      { type: 'text_delta', text: 'ok' },
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ]
+    const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', mkReq())
+    expect(resp.stopReason).toBe('end_turn')
+  })
+
+  it('当 outputTokens < maxTokens 时保持 end_turn', () => {
+    const events: CanonicalStreamEvent[] = [
+      { type: 'text_delta', text: 'ok' },
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ]
+    // 设置极大 maxTokens，不可能达到
+    const resp = foldEventsToResponse(events, 'claude-sonnet-4.5', mkReq(999999))
+    expect(resp.stopReason).toBe('end_turn')
+  })
+})
+
 describe('foldEventsToResponse — usage 估算', () => {
   const REQ4: CanonicalRequest = {
     model: 'claude-sonnet-4.5',

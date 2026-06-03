@@ -112,6 +112,69 @@ describe('sanitizeConversation — empty content', () => {
   })
 })
 
+describe('irMessagesToKiroHistory — C2 tool_result image 处理', () => {
+  it('image 块替换为 [image] 占位文本，不丢失语义', () => {
+    const msgs: CanonicalMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolUseId: 'tu_img',
+            content: [{ type: 'image', mediaType: 'image/png', data: 'AAAA' }],
+          },
+        ],
+      },
+    ]
+    const out = irMessagesToKiroHistory(msgs)
+    const tr = out[0].userInputMessage?.userInputMessageContext?.toolResults?.[0]
+    expect(tr?.toolUseId).toBe('tu_img')
+    // image 被替换为占位文本
+    expect(tr?.content[0].text).toBe('[image]')
+    expect(tr?.status).toBe('success')
+  })
+
+  it('混合 text + image 时按顺序拼接，text 原文保留，image 变 [image]', () => {
+    const msgs: CanonicalMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolUseId: 'tu_mix',
+            content: [
+              { type: 'text', text: 'before' },
+              { type: 'image', mediaType: 'image/jpeg', data: 'BBBB' },
+              { type: 'text', text: 'after' },
+            ],
+          },
+        ],
+      },
+    ]
+    const out = irMessagesToKiroHistory(msgs)
+    const tr = out[0].userInputMessage?.userInputMessageContext?.toolResults?.[0]
+    expect(tr?.content[0].text).toBe('before\n[image]\nafter')
+  })
+
+  it('纯 text tool_result 保持原有行为（不回归）', () => {
+    const msgs: CanonicalMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolUseId: 'tu_text',
+            content: [{ type: 'text', text: 'result data' }],
+          },
+        ],
+      },
+    ]
+    const out = irMessagesToKiroHistory(msgs)
+    const tr = out[0].userInputMessage?.userInputMessageContext?.toolResults?.[0]
+    expect(tr?.content[0].text).toBe('result data')
+  })
+})
+
 describe('truncateToolResultText', () => {
   it('truncates oversized toolResult text by UTF-8 bytes with a marker', () => {
     const big = 'x'.repeat(100)
