@@ -369,6 +369,86 @@ describe('KiroFetchResponse.bytesStream', () => {
   })
 })
 
+// --- Task 3 Step 1: openStream 增量流失败测试 ---
+
+describe('KiroUpstreamClient.openStream', () => {
+  it('逐 chunk 增量产出 deltas，usage 在末尾', async () => {
+    // fetchImpl 返回 ok + bytesStream 按 3 片产出（text 'A' / text 'B' / metadata）
+    const chunkA = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'A' } },
+    ])
+    const chunkB = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'B' } },
+    ])
+    const chunkMeta = encodeKiroEventStream([
+      { eventType: 'contextUsageEvent', payload: { contextUsagePercentage: 1 } },
+    ])
+
+    const resp: KiroFetchResponse = {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      bytes: async () => new Uint8Array(0),
+      bytesStream: async function* () {
+        yield chunkA
+        yield chunkB
+        yield chunkMeta
+      },
+    }
+    const f = scriptedFetch([resp])
+    const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
+
+    const out: CanonicalStreamEvent[] = []
+    const stream = await (client as unknown as {
+      openStream(e: typeof ENVELOPE, c: typeof CTX, m: string, r: typeof REQ): Promise<AsyncIterable<CanonicalStreamEvent>>
+    }).openStream(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)
+    for await (const ev of stream) out.push(ev)
+
+    // 事件顺序：text_delta('A'), text_delta('B'), usage, message_stop
+    expect(out[0]).toEqual({ type: 'text_delta', text: 'A' })
+    expect(out[1]).toEqual({ type: 'text_delta', text: 'B' })
+    const usageEv = out[2]
+    expect(usageEv.type).toBe('usage')
+    if (usageEv.type === 'usage') {
+      expect(usageEv.usage.outputTokens).toBeGreaterThan(0)
+      // contextUsagePercentage=1 透传
+      expect(usageEv.contextUsagePercentage).toBe(1)
+      // input = 200000×1% − output
+      expect(usageEv.usage.inputTokens).toBe(Math.max(0, 2000 - usageEv.usage.outputTokens))
+    }
+    expect(out[3]).toEqual({ type: 'message_stop', stopReason: 'end_turn' })
+  })
+
+  it('openStream 401 先刷新再成功，刷新后才发起 body 流', async () => {
+    const chunkOk = encodeKiroEventStream([
+      { eventType: 'assistantResponseEvent', payload: { content: 'ok' } },
+    ])
+    const okResp: KiroFetchResponse = {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      bytes: async () => new Uint8Array(0),
+      bytesStream: async function* () { yield chunkOk },
+    }
+    const f = scriptedFetch([errResp(401, 'expired'), okResp])
+    const client = new KiroUpstreamClient({
+      refresher: refresherTo({ token: 'tok-2', refreshToken: 'refresh-2' }),
+      fetchImpl: f.impl,
+    })
+
+    const out: CanonicalStreamEvent[] = []
+    const stream = await (client as unknown as {
+      openStream(e: typeof ENVELOPE, c: typeof CTX, m: string, r: typeof REQ): Promise<AsyncIterable<CanonicalStreamEvent>>
+    }).openStream(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)
+    for await (const ev of stream) out.push(ev)
+
+    // 第一次 401，刷新后第二次用新 token 成功
+    expect(f.calls[0].headers['Authorization']).toBe('Bearer tok-1')
+    expect(f.calls[1].headers['Authorization']).toBe('Bearer tok-2')
+    expect(out[0]).toEqual({ type: 'text_delta', text: 'ok' })
+  })
+})
+
 describe('foldEventsToResponse — usage 估算', () => {
   const REQ4: CanonicalRequest = {
     model: 'claude-sonnet-4.5',

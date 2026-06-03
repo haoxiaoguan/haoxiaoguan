@@ -11,7 +11,7 @@ import { fetch as undiciFetch } from 'undici'
 import { isSuspendedResponse, KiroUpstreamSuspendedError } from './kiro-error'
 import { currentDispatcher } from '../../../../../platform/net/dispatcher-context'
 import { runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-identity-client'
-import { parseKiroEventStream } from './kiro-event-stream'
+import { createKiroEventStreamParser, parseKiroEventStream } from './kiro-event-stream'
 import { countTextTokens, estimateRequestInputTokens } from '../../../domain/usage/token-estimator'
 import { getContextTokensForModel } from '../../../domain/usage/model-context-window'
 import type { ConversationStateEnvelope } from './kiro-wire-types'
@@ -247,38 +247,51 @@ export class KiroUpstreamClient {
     return foldEventsToResponse(events, model, request)
   }
 
-  /**
-   * 流式（M3b：全量 buffer 后逐个 yield 已解析事件；真增量逐 token 透传留 M4）。
-   * M3c：先扫一遍事件估算 usage（output 数输出文本；input 按百分比反推或降级），再逐个 yield，
-   * 把上游零值的末 usage 事件替换为本地估算（保留 contextUsagePercentage 透传）。
-   */
+  /** 向后兼容 wrapper：委托给增量路径 openStream，现有调用/测试不破。 */
   async *chatStream(
     envelope: ConversationStateEnvelope,
     ctx: KiroCallContext,
     model: string,
     request: CanonicalRequest,
   ): AsyncIterable<CanonicalStreamEvent> {
-    const bytes = await this.send(envelope, ctx)
-    const events = parseKiroEventStream(bytes)
-    let outputText = ''
-    let contextPct: number | undefined
-    for (const ev of events) {
-      if (ev.type === 'text_delta' || ev.type === 'thinking_delta') outputText += ev.text
-      else if (ev.type === 'tool_use_delta') outputText += ev.partialJson
-      else if (ev.type === 'usage') contextPct = ev.contextUsagePercentage
-    }
-    const usage = estimateUsage(model, request, outputText, contextPct)
-    for (const ev of events) {
-      yield ev.type === 'usage'
-        ? { type: 'usage', usage, ...(contextPct !== undefined ? { contextUsagePercentage: contextPct } : {}) }
-        : ev
-    }
+    yield* await this.openStream(envelope, ctx, model, request)
   }
 
-  // 端点回退 + 401/403 单次刷新重试 → 返回全量响应字节。
-  // M3b 端点表仅含 AmazonQ 单端点：429/其它非 2xx 记录后耗尽端点直接抛错（无回退）；
-  // 循环结构保持通用，M4 端点表恢复多端点后自动按序回退。
+  /**
+   * 流式入口：在调用者 context 内完成 fetch 发起（含端点回退 + 刷新重试），
+   * 返回已绑定响应 body 的增量事件 generator（后续消费无需持有 dispatcher context）。
+   */
+  async openStream(
+    envelope: ConversationStateEnvelope,
+    ctx: KiroCallContext,
+    model: string,
+    request: CanonicalRequest,
+  ): Promise<AsyncIterable<CanonicalStreamEvent>> {
+    const body = await this.sendStream(envelope, ctx)
+    return this.parseStream(body, model, request)
+  }
+
+  /** 非流式：端点回退 + 401/403 单次刷新重试 → 返回全量响应字节。 */
   private async send(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<Uint8Array> {
+    const resp = await this.attemptSend(envelope, ctx)
+    return resp.bytes()
+  }
+
+  /**
+   * 流式传输层：端点回退 + 401/403 单次刷新重试，与 send 完全相同的鉴权/封禁/429 分支，
+   * 唯一区别：返回 resp.bytesStream() 而非 resp.bytes()。
+   */
+  private async sendStream(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<AsyncIterable<Uint8Array>> {
+    const resp = await this.attemptSend(envelope, ctx)
+    return resp.bytesStream()
+  }
+
+  /**
+   * 端点回退 + 401/403 单次刷新重试核心循环 → 返回 ok 的 KiroFetchResponse（调用方再选消费方式）。
+   * 429/suspended/auth 失败分支与此前 send 的行为逐字一致；错误体 text() 在此读取（不在消费路径）。
+   * M3b 端点表仅含 AmazonQ 单端点；M4 多端点后自动按序回退。
+   */
+  private async attemptSend(envelope: ConversationStateEnvelope, ctx: KiroCallContext): Promise<KiroFetchResponse> {
     const endpoints = endpointsForRegion(ctx.region)
     let lastError: Error | undefined
     let curCtx = ctx
@@ -302,7 +315,7 @@ export class KiroUpstreamClient {
           throw e
         }
 
-        if (resp.ok) return resp.bytes()
+        if (resp.ok) return resp
 
         const body = await resp.text()
         // 非 2xx：记录 AWS 响应（不含凭据/machineId），便于真机排查 400/403/429。
@@ -343,6 +356,38 @@ export class KiroUpstreamClient {
     }
 
     throw lastError ?? new KiroUpstreamError('all kiro endpoints failed', 502)
+  }
+
+  /**
+   * 增量流事件解析器：逐 chunk 喂入 parser，delta 事件即时 yield；
+   * 流末 flush 收口：usage 事件替换为本地估算（output 数累积输出文本，input 按 contextPct 反推或降级）。
+   */
+  private async *parseStream(
+    body: AsyncIterable<Uint8Array>,
+    model: string,
+    request: CanonicalRequest,
+  ): AsyncIterable<CanonicalStreamEvent> {
+    const parser = createKiroEventStreamParser()
+    let outputText = ''
+    for await (const chunk of body) {
+      for (const ev of parser.push(chunk)) {
+        if (ev.type === 'text_delta' || ev.type === 'thinking_delta') outputText += ev.text
+        else if (ev.type === 'tool_use_delta') outputText += ev.partialJson
+        yield ev
+      }
+    }
+    for (const ev of parser.flush()) {
+      if (ev.type === 'usage') {
+        const usage = estimateUsage(model, request, outputText, ev.contextUsagePercentage)
+        yield {
+          type: 'usage',
+          usage,
+          ...(ev.contextUsagePercentage !== undefined ? { contextUsagePercentage: ev.contextUsagePercentage } : {}),
+        }
+      } else {
+        yield ev
+      }
+    }
   }
 }
 
