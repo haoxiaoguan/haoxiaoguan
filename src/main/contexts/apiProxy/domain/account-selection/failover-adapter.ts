@@ -19,10 +19,12 @@ export interface FailoverDeps {
   credentials: KiroCredentialPort
   dispatchers: KiroDispatcherPort
   maxRetries: number
-  /** SERVER 类错误切号前等待时长（ms），给上游喘息。默认 100ms。 */
+  /** SERVER 类错误切号前等待时长（ms），给上游喘息。默认 100ms。实际等待加 ±20% jitter。 */
   retryDelayMs: number
   /** 可注入 sleep 函数（测试用），默认 setTimeout。 */
   sleep?: (ms: number) => Promise<void>
+  /** 可注入随机函数（测试用），默认 Math.random。用于退避 jitter。 */
+  random?: () => number
 }
 
 /**
@@ -31,9 +33,11 @@ export interface FailoverDeps {
  */
 export class FailoverAdapter implements PlatformUpstreamAdapter {
   private readonly sleep: (ms: number) => Promise<void>
+  private readonly random: () => number
 
   constructor(private readonly deps: FailoverDeps) {
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
+    this.random = deps.random ?? Math.random
   }
 
   get platform(): string { return this.deps.inner.platform }
@@ -60,8 +64,8 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
         triedIds.add(lease.id)
         lastError = err
         if (cls === 'FATAL') throw err
-        // SERVER 错误：给上游/网络喘息后再切号。
-        if (cls === 'SERVER') await this.sleep(this.deps.retryDelayMs)
+        // SERVER 错误：给上游/网络喘息后再切号（±20% jitter 防止多账号同时解冻风暴）。
+        if (cls === 'SERVER') await this.sleep(Math.round(this.deps.retryDelayMs * (0.8 + this.random() * 0.4)))
       } finally {
         lease.release()
       }

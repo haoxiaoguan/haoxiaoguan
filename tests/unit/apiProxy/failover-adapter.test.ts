@@ -13,7 +13,7 @@ const okResp: CanonicalResponse = { model: 'claude-sonnet-4.5', content: [{ type
 function deps(
   rows: any[],
   innerChat: (ctx: any) => Promise<CanonicalResponse>,
-  opts: { suspendedSink?: string[]; sleep?: (ms: number) => Promise<void>; retryDelayMs?: number } = {},
+  opts: { suspendedSink?: string[]; sleep?: (ms: number) => Promise<void>; retryDelayMs?: number; random?: () => number } = {},
 ) {
   const now = { t: 0 }
   const health = new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
@@ -38,6 +38,8 @@ function deps(
     maxRetries: 3,
     retryDelayMs: opts.retryDelayMs ?? 100,
     sleep: opts.sleep ?? (() => Promise.resolve()),
+    // 注入固定 random=()=>0.5：jitter 因子=0.8+0.5*0.4=1.0，sleep 实参与 retryDelayMs 相等，保持回归确定性
+    random: opts.random ?? (() => 0.5),
   })
 }
 
@@ -104,6 +106,59 @@ describe('retryDelayMs / sleep', () => {
     )
     await fa.chat(ir, { requestId: 'r' })
     expect(sleep).not.toHaveBeenCalled()
+  })
+})
+
+// ══════════════════════════════════════════════════════════
+// P0-3 退避 jitter 测试：random 注入验证 ±20% 公式
+// ══════════════════════════════════════════════════════════
+describe('retryDelayMs jitter', () => {
+  function jitterDeps(randomFn: () => number, sleepSpy: (ms: number) => Promise<void>) {
+    const now = { t: 0 }
+    const health = new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
+    const selector = new AccountPoolSelector({ strategy: 'sticky-lru', perAccountConcurrency: 4, affinityTtlMs: 1000, clock: () => now.t }, health)
+    const inner = {
+      platform: 'kiro', supportsModel: () => true, listModels: () => [],
+      classifyError: (_e: any) => 'SERVER' as const,
+      chat: async (_ir: any, _ctx: any) => { throw new Error('server err') },
+      chatStream: () => { throw new Error('n/a') },
+    }
+    const accounts = {
+      async listByPlatform() { return [{ id: 'a', isActive: true }, { id: 'b', isActive: true }] },
+      async markSuspended() {},
+      async clearSuspension() {},
+    }
+    return new FailoverAdapter({
+      inner: inner as any, selector, health,
+      accounts: accounts as any,
+      credentials: { async retrieve(id: string) { return { token: `tk-${id}` } } } as any,
+      dispatchers: { async dispatcherForAccount() { return undefined } } as any,
+      maxRetries: 2,
+      retryDelayMs: 100,
+      sleep: sleepSpy,
+      random: randomFn,
+    })
+  }
+
+  it('random=0.5 → sleep 实参 = Math.round(100*(0.8+0.5*0.4)) = 100', async () => {
+    const calls: number[] = []
+    const fa = jitterDeps(() => 0.5, async (ms) => { calls.push(ms) })
+    await fa.chat(ir, { requestId: 'r' }).catch(() => {})
+    expect(calls[0]).toBe(Math.round(100 * (0.8 + 0.5 * 0.4))) // = 100
+  })
+
+  it('random=0 → sleep 实参 = Math.round(100*0.8) = 80', async () => {
+    const calls: number[] = []
+    const fa = jitterDeps(() => 0, async (ms) => { calls.push(ms) })
+    await fa.chat(ir, { requestId: 'r' }).catch(() => {})
+    expect(calls[0]).toBe(Math.round(100 * 0.8)) // = 80
+  })
+
+  it('random=1 → sleep 实参 = Math.round(100*1.2) = 120', async () => {
+    const calls: number[] = []
+    const fa = jitterDeps(() => 1, async (ms) => { calls.push(ms) })
+    await fa.chat(ir, { requestId: 'r' }).catch(() => {})
+    expect(calls[0]).toBe(Math.round(100 * 1.2)) // = 120
   })
 })
 

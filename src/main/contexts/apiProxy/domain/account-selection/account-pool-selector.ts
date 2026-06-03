@@ -11,11 +11,23 @@ export interface AccountLease {
   id: string
   release(): void
 }
+export interface TokenBucketOpts {
+  /** 每账号令牌桶容量（突发上限），单位：请求数。 */
+  capacityPerAccount: number
+  /** 每分钟向每个账号补充的令牌数。 */
+  refillPerMinute: number
+}
+
 export interface SelectorOpts {
   strategy: 'sticky-lru' | 'round-robin'
   perAccountConcurrency: number
   affinityTtlMs: number
   clock?: () => number
+  /**
+   * 可选 per-account 令牌桶。不配置 = 不限流，向后兼容。
+   * 后续可接 settings 标量化配置。
+   */
+  tokenBucket?: TokenBucketOpts
 }
 /** 候选健康判定（注入 AccountHealthTracker.isAvailable）。 */
 export interface HealthGate {
@@ -27,14 +39,21 @@ interface AffinityEntry {
   lastAt: number
 }
 
+interface BucketState {
+  tokens: number
+  lastRefillMs: number
+}
+
 /**
  * 账号选择：策略（sticky-lru / round-robin）+ 会话粘性 + 每账号并发闸。
  * 候选过滤：health 可用 + 并发未满 + 不在 triedIds。选中返回 lease（占并发，release 归还）。
  * 全不可用 → null。纯逻辑（注入 clock），无 IO。
+ * 可选 per-account 令牌桶（tokenBucket 未配置时不限流，向后兼容）。
  */
 export class AccountPoolSelector {
   private readonly inflight = new Map<string, number>()
   private readonly affinity = new Map<string, AffinityEntry>()
+  private readonly buckets = new Map<string, BucketState>()
   private readonly clock: () => number
   private cursor = 0
 
@@ -42,12 +61,40 @@ export class AccountPoolSelector {
     this.clock = opts.clock ?? Date.now
   }
 
+  /** 按时间差向桶补充令牌，新账号初始满桶。返回当前可用令牌数。 */
+  private refillBucket(id: string): number {
+    const tb = this.opts.tokenBucket
+    if (tb === undefined) return Infinity
+    const now = this.clock()
+    const state = this.buckets.get(id)
+    if (state === undefined) {
+      // 新账号初始满桶
+      this.buckets.set(id, { tokens: tb.capacityPerAccount, lastRefillMs: now })
+      return tb.capacityPerAccount
+    }
+    const elapsedMinutes = (now - state.lastRefillMs) / 60_000
+    const refilled = Math.min(tb.capacityPerAccount, state.tokens + elapsedMinutes * tb.refillPerMinute)
+    state.tokens = refilled
+    state.lastRefillMs = now
+    return refilled
+  }
+
+  /** 消费 1 个令牌（lease 时调用）。 */
+  private consumeToken(id: string): void {
+    if (this.opts.tokenBucket === undefined) return
+    const state = this.buckets.get(id)
+    if (state !== undefined) {
+      state.tokens = Math.max(0, state.tokens - 1)
+    }
+  }
+
   acquire(candidates: PoolCandidate[], ctx: SelectionCtx): AccountLease | null {
     const usable = candidates.filter(
       (c) =>
         !ctx.triedIds.has(c.id) &&
         this.health.isAvailable(c.id) &&
-        (this.inflight.get(c.id) ?? 0) < this.opts.perAccountConcurrency,
+        (this.inflight.get(c.id) ?? 0) < this.opts.perAccountConcurrency &&
+        this.refillBucket(c.id) >= 1,
     )
     if (usable.length === 0) return null
 
@@ -99,6 +146,7 @@ export class AccountPoolSelector {
 
   private lease(c: PoolCandidate): AccountLease {
     this.inflight.set(c.id, (this.inflight.get(c.id) ?? 0) + 1)
+    this.consumeToken(c.id)
     let released = false
     return {
       id: c.id,

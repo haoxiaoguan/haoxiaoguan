@@ -9,6 +9,19 @@ function mk(strategy: 'sticky-lru' | 'round-robin', now = { t: 0 }, health = ALW
     health,
   )
 }
+
+function mkWithBucket(capacity: number, refillPerMinute: number, now = { t: 0 }, health = ALWAYS_OK) {
+  return new AccountPoolSelector(
+    {
+      strategy: 'sticky-lru',
+      perAccountConcurrency: 10,
+      affinityTtlMs: 1000,
+      clock: () => now.t,
+      tokenBucket: { capacityPerAccount: capacity, refillPerMinute },
+    },
+    health,
+  )
+}
 const ctx = (over: Partial<{ hint: string; triedIds: Set<string>; model: string }> = {}) => ({
   triedIds: new Set<string>(), model: 'claude-sonnet-4.5', ...over,
 })
@@ -60,5 +73,68 @@ describe('AccountPoolSelector', () => {
     now.t = 2000 // > affinityTtlMs 1000
     const lease = sel.acquire([{ id: 'a', lastUsedAt: 1 }, { id: 'b', lastUsedAt: 9 }], ctx({ hint: 'h1' }))
     expect(lease?.id).toBe('a') // 过期 → 落 LRU
+  })
+})
+
+describe('AccountPoolSelector — per-account 令牌桶', () => {
+  const cands = [{ id: 'a' }, { id: 'b' }]
+
+  it('capacity=2：同账号 acquire 两次成功，第三次该账号被跳过（切到 b）', () => {
+    const now = { t: 0 }
+    const sel = mkWithBucket(2, 60, now)
+    const l1 = sel.acquire(cands, ctx())
+    expect(l1?.id).toBe('a')
+    l1!.release()
+    const l2 = sel.acquire(cands, ctx())
+    expect(l2?.id).toBe('a')
+    l2!.release()
+    // a 桶空（tokens=0），第三次应选 b
+    const l3 = sel.acquire(cands, ctx())
+    expect(l3?.id).toBe('b')
+    l3!.release()
+  })
+
+  it('clock 推进足够时间后令牌补充，之前被限流的账号重新可选', () => {
+    const now = { t: 0 }
+    const sel = mkWithBucket(1, 60, now) // capacity=1，1分钟补1
+    // 消耗唯一账号 a 的 1 个令牌
+    const l1 = sel.acquire([{ id: 'a' }], ctx())
+    expect(l1?.id).toBe('a')
+    l1!.release()
+    // a 桶空 → null
+    expect(sel.acquire([{ id: 'a' }], ctx())).toBeNull()
+    // 推进 60 秒（= 1 分钟 × refillPerMinute=60 → 补 60 token，capped to capacity=1）
+    now.t = 60_000
+    const l2 = sel.acquire([{ id: 'a' }], ctx())
+    expect(l2?.id).toBe('a')
+    l2!.release()
+  })
+
+  it('不配 tokenBucket 时 acquire 行为与无令牌桶完全一致（零回归）', () => {
+    // 使用 mk() 不配 tokenBucket
+    const sel = mk('sticky-lru')
+    // 大量 acquire 不应被限流
+    const results: Array<string | null> = []
+    for (let i = 0; i < 10; i++) {
+      const l = sel.acquire([{ id: 'a' }], ctx())
+      results.push(l?.id ?? null)
+      l?.release()
+    }
+    // 全部应该成功选到 a（并发=1，release 后立即可再选）
+    expect(results.every((r) => r === 'a')).toBe(true)
+  })
+
+  it('新账号首次 acquire 初始满桶（不会被立即限流）', () => {
+    const now = { t: 0 }
+    const sel = mkWithBucket(3, 60, now)
+    // 账号 z 是新账号，应初始满桶（3 tokens）
+    const acquired: string[] = []
+    for (let i = 0; i < 3; i++) {
+      const l = sel.acquire([{ id: 'z' }], ctx())
+      if (l !== null) { acquired.push(l.id); l.release() }
+    }
+    expect(acquired).toHaveLength(3)
+    // 第 4 次桶空 → null
+    expect(sel.acquire([{ id: 'z' }], ctx())).toBeNull()
   })
 })

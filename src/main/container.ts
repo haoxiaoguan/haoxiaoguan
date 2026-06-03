@@ -461,6 +461,8 @@ export async function buildContainer(): Promise<Container> {
       strategy: settings.getApiProxySelectionStrategy(),
       perAccountConcurrency: settings.getApiProxyPerAccountConcurrency(),
       affinityTtlMs: settings.getApiProxyAffinityTtlMs(),
+      // per-account 令牌桶：15 req/min，突发上限 15。后续可接 settings 标量化配置。
+      tokenBucket: { capacityPerAccount: 15, refillPerMinute: 15 },
     },
     apiProxyHealth,
   )
@@ -470,6 +472,7 @@ export async function buildContainer(): Promise<Container> {
     accounts: kiroAccountPort, credentials: kiroCredentialPort, dispatchers: kiroDispatcherPort,
     maxRetries: settings.getApiProxyMaxRetries(),
     retryDelayMs: settings.getApiProxyRetryDelayMs(),
+    random: Math.random,
   }))
 
   // M5 Key 加密存储：复用已有 cryptoService（不建第二个 master key）。
