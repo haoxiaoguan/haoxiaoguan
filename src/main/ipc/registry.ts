@@ -144,5 +144,5 @@ export function registerAllHandlers(services: Services): void {
   registerWebSocketHandlers(services.websocket)
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
-  registerApiProxyHandlers(services.apiProxyService)
+  registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort)
 }

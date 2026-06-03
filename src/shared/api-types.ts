@@ -577,6 +577,8 @@ export interface HxgApi {
     stop(): Promise<ApiProxyStatus>
     /** 读取当前服务状态（state + 可选已绑定端口）。 */
     getStatus(): Promise<ApiProxyStatus>
+    /** 手动解除账号挂起：清运行态 + 持久化 status。 */
+    clearAccountSuspension(accountId: string): Promise<void>
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>

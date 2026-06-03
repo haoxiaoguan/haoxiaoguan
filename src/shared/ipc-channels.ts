@@ -193,4 +193,5 @@ export const API_PROXY_CHANNELS = {
   start: 'apiProxy:start',
   stop: 'apiProxy:stop',
   getStatus: 'apiProxy:getStatus',
+  clearAccountSuspension: 'apiProxy:clearAccountSuspension',
 } as const

@@ -184,6 +184,7 @@ const api: HxgApi = {
     start: () => ipcRenderer.invoke(API_PROXY_CHANNELS.start),
     stop: () => ipcRenderer.invoke(API_PROXY_CHANNELS.stop),
     getStatus: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getStatus),
+    clearAccountSuspension: (accountId: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.clearAccountSuspension, accountId),
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),
