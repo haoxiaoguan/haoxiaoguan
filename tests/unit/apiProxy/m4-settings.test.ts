@@ -9,7 +9,7 @@ describe('M4 settings 标量', () => {
     expect(s.runtime.apiProxyPerAccountConcurrency).toBe(4)
     expect(s.runtime.apiProxyMaxRetries).toBe(3)
     expect(s.runtime.apiProxyRetryDelayMs).toBe(100)
-    expect(s.runtime.apiProxyBaseCooldownMs).toBe(1000)
+    expect(s.runtime.apiProxyBaseCooldownMs).toBe(60000)
     expect(s.runtime.apiProxyMaxBackoffMultiplier).toBe(64)
     expect(s.runtime.apiProxyQuotaResetMs).toBe(3600000)
     expect(s.runtime.apiProxyProbabilisticRetryChance).toBe(0.1)

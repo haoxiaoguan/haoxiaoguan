@@ -75,7 +75,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyPerAccountConcurrency: 4,
   apiProxyMaxRetries: 3,
   apiProxyRetryDelayMs: 100,
-  apiProxyBaseCooldownMs: 1000,
+  apiProxyBaseCooldownMs: 60000,
   apiProxyMaxBackoffMultiplier: 64,
   apiProxyQuotaResetMs: 3600000,
   apiProxyProbabilisticRetryChance: 0.1,
