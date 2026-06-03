@@ -1,6 +1,6 @@
 // token 估算（纯函数）。优先官方 tokenizer，失败降级字符分类（中文友好）。
 /* eslint-disable @typescript-eslint/no-require-imports */
-import type { CanonicalRequest, ContentBlock } from '../../../domain/canonical'
+import type { CanonicalRequest, ContentBlock } from '../canonical'
 
 // 字符分类加权估算：ascii÷4.5、数字÷2、符号÷1.5、非 ASCII÷1.5。
 function approxTokens(text: string): number {
