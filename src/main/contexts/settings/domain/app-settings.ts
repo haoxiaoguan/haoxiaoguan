@@ -48,6 +48,9 @@ export interface RuntimeSettings {
   apiProxyMaxBackoffMultiplier: number
   apiProxyQuotaResetMs: number
   apiProxyProbabilisticRetryChance: number
+  // 本地反代是否启用 HTTPS（自签证书，P2-1）。默认 false（HTTP）；true 时
+  // ApiHttpServer 使用 https.createServer + loadOrCreateCert() 生成/复用证书。
+  apiProxyHttps: boolean
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -79,6 +82,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyMaxBackoffMultiplier: 64,
   apiProxyQuotaResetMs: 3600000,
   apiProxyProbabilisticRetryChance: 0.1,
+  apiProxyHttps: false,
 }
 
 export class AppSettings {
@@ -146,6 +150,7 @@ export class AppSettings {
       api_proxy_max_backoff_multiplier: String(this.runtime.apiProxyMaxBackoffMultiplier),
       api_proxy_quota_reset_ms: String(this.runtime.apiProxyQuotaResetMs),
       api_proxy_probabilistic_retry_chance: String(this.runtime.apiProxyProbabilisticRetryChance),
+      api_proxy_https: String(this.runtime.apiProxyHttps),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -205,6 +210,8 @@ export class AppSettings {
         const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyQuotaResetMs = n
       } else if (k === 'api_proxy_probabilistic_retry_chance') {
         const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 1) this.runtime.apiProxyProbabilisticRetryChance = n
+      } else if (k === 'api_proxy_https') {
+        this.runtime.apiProxyHttps = v === 'true'
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)
