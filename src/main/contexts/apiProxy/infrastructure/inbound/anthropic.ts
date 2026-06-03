@@ -455,3 +455,137 @@ export function serializeAnthropicStream(
   frames.push(anthropicSseFrame('message_stop', { type: 'message_stop' }))
   return frames
 }
+
+/**
+ * IR 事件序列（AsyncIterable）→ Anthropic Messages 流式 SSE 帧（AsyncIterable，真惰性）。
+ * 帧序与 serializeAnthropicStream 一致，但逐帧 yield——message_start 先 yield（在 for-await 前），
+ * 随后 for-await 上游 events 边到边 yield content_block_* 帧，
+ * 最后 yield message_delta + message_stop。
+ *
+ * 降级说明（与同步版的唯一差异）：
+ * message_start.usage 仅含 { input_tokens: start.inputTokens, output_tokens: 0 }，
+ * **不含 cache_read_input_tokens / cache_creation_input_tokens**——这两项在流末 usage 事件才出现，
+ * 惰性下首帧无法前置，属于 Phase 2 的明确降级（plan 已说明）。
+ * 同步版 serializeAnthropicStream 保留，现有测试不受影响。
+ */
+export async function* serializeAnthropicStreamLazy(
+  events: AsyncIterable<CanonicalStreamEvent>,
+  start: { model: string; inputTokens: number },
+  opts: AnthropicStreamOpts = {},
+): AsyncIterable<string> {
+  const id = opts.id ?? 'msg_0'
+
+  // message_start：在 for-await 前 yield，保证真惰性；cache 字段惰性下省略（plan 明确降级）。
+  yield anthropicSseFrame('message_start', {
+    type: 'message_start',
+    message: {
+      id,
+      type: 'message',
+      role: 'assistant',
+      model: start.model,
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: {
+        input_tokens: start.inputTokens,
+        output_tokens: 0,
+        // cache 字段流式下省略（惰性降级）
+      },
+    },
+  })
+
+  // 与同步版相同的状态机变量。
+  let blockIndex = -1
+  let openKind: 'text' | 'thinking' | 'tool_use' | null = null
+  let finalStop: StopReason = 'end_turn'
+  let finalOutputTokens = 0
+
+  const yieldBuf: string[] = []
+
+  const closeOpenBlock = (): string | null => {
+    if (openKind !== null) {
+      const frame = anthropicSseFrame('content_block_stop', { type: 'content_block_stop', index: blockIndex })
+      openKind = null
+      return frame
+    }
+    return null
+  }
+
+  const openTextLike = (kind: 'text' | 'thinking'): string | null => {
+    if (openKind !== kind) {
+      const closeFrame = closeOpenBlock()
+      blockIndex += 1
+      const contentBlock =
+        kind === 'text' ? { type: 'text', text: '' } : { type: 'thinking', thinking: '', signature: '' }
+      const startFrame = anthropicSseFrame('content_block_start', {
+        type: 'content_block_start',
+        index: blockIndex,
+        content_block: contentBlock,
+      })
+      openKind = kind
+      // 返回需要先 yield 的关闭帧 + 开启帧
+      yieldBuf.push(...[closeFrame, startFrame].filter((f): f is string => f !== null))
+      return null // 已推入 yieldBuf
+    }
+    return null
+  }
+
+  for await (const ev of events) {
+    // 先清空待发帧缓冲
+    while (yieldBuf.length > 0) {
+      yield yieldBuf.shift()!
+    }
+
+    if (ev.type === 'text_delta') {
+      openTextLike('text')
+      // 清缓冲
+      while (yieldBuf.length > 0) yield yieldBuf.shift()!
+      yield anthropicSseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: blockIndex,
+        delta: { type: 'text_delta', text: ev.text },
+      })
+    } else if (ev.type === 'thinking_delta') {
+      openTextLike('thinking')
+      while (yieldBuf.length > 0) yield yieldBuf.shift()!
+      yield anthropicSseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: blockIndex,
+        delta: { type: 'thinking_delta', thinking: ev.text },
+      })
+    } else if (ev.type === 'tool_use_start') {
+      const closeFrame = closeOpenBlock()
+      if (closeFrame) yield closeFrame
+      blockIndex += 1
+      yield anthropicSseFrame('content_block_start', {
+        type: 'content_block_start',
+        index: blockIndex,
+        content_block: { type: 'tool_use', id: ev.id, name: ev.name, input: {} },
+      })
+      openKind = 'tool_use'
+    } else if (ev.type === 'tool_use_delta') {
+      yield anthropicSseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: blockIndex,
+        delta: { type: 'input_json_delta', partial_json: ev.partialJson },
+      })
+    } else if (ev.type === 'usage') {
+      finalOutputTokens = ev.usage.outputTokens
+    } else {
+      // message_stop 事件：记录最终 stop_reason。
+      finalStop = ev.stopReason
+    }
+  }
+
+  // 关闭最后一个未关闭的块。
+  const closeFrame = closeOpenBlock()
+  if (closeFrame) yield closeFrame
+
+  // message_delta：携带 stop_reason 与累计 output usage。
+  yield anthropicSseFrame('message_delta', {
+    type: 'message_delta',
+    delta: { stop_reason: finalStop, stop_sequence: null },
+    usage: { output_tokens: finalOutputTokens },
+  })
+  yield anthropicSseFrame('message_stop', { type: 'message_stop' })
+}

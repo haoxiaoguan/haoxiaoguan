@@ -412,3 +412,60 @@ export function serializeOpenAIStream(
   frames.push('data: [DONE]\n\n')
   return frames
 }
+
+/**
+ * IR 事件序列（AsyncIterable）→ OpenAI SSE chat.completion.chunk 帧字符串（AsyncIterable，真惰性）。
+ * 与 serializeOpenAIStream 帧序完全一致，但逐帧 yield——首帧（role:assistant）先 yield，
+ * 随后 for-await 上游 events 边到边 yield 帧，最后 yield 收尾帧 + [DONE]。
+ * 同步版 serializeOpenAIStream 保留，现有测试不受影响。
+ */
+export async function* serializeOpenAIStreamLazy(
+  events: AsyncIterable<CanonicalStreamEvent>,
+  model: string,
+  opts: OpenAIStreamOpts = {},
+): AsyncIterable<string> {
+  const id = opts.id ?? 'chatcmpl-0'
+  const created = opts.created ?? 0
+  const base = (
+    delta: OpenAIStreamChunk['choices'][0]['delta'],
+    finishReason: OpenAIStreamChunk['choices'][0]['finish_reason'],
+    usage?: OpenAIUsage,
+  ): OpenAIStreamChunk => ({
+    id,
+    object: 'chat.completion.chunk',
+    created,
+    model,
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    ...(usage ? { usage } : {}),
+  })
+
+  // 首帧：宣告 assistant 角色（在 for-await 前 yield，保证真惰性）。
+  yield sseFrame(base({ role: 'assistant' }, null))
+
+  let finishReason: 'stop' | 'length' | 'tool_calls' = 'stop'
+  for await (const ev of events) {
+    if (ev.type === 'text_delta') {
+      yield sseFrame(base({ content: ev.text }, null))
+    } else if (ev.type === 'thinking_delta') {
+      // OpenAI Chat Completions 无 thinking 流字段，丢弃。
+    } else if (ev.type === 'tool_use_start') {
+      yield sseFrame(
+        base(
+          { tool_calls: [{ index: ev.index, id: ev.id, type: 'function', function: { name: ev.name } }] },
+          null,
+        ),
+      )
+    } else if (ev.type === 'tool_use_delta') {
+      yield sseFrame(base({ tool_calls: [{ index: ev.index, function: { arguments: ev.partialJson } }] }, null))
+    } else if (ev.type === 'usage') {
+      yield sseFrame(base({}, null, usageToOpenAI(ev.usage)))
+    } else {
+      // message_stop：记录最终 finish_reason，收尾帧在循环后统一发。
+      finishReason = stopReasonToOpenAI(ev.stopReason)
+    }
+  }
+
+  // 收尾帧：空 delta + finish_reason。
+  yield sseFrame(base({}, finishReason))
+  yield 'data: [DONE]\n\n'
+}
