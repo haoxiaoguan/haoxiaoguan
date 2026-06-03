@@ -6,6 +6,7 @@ import type {
   PlatformUpstreamAdapter,
   UpstreamCtx,
   ModelInfo,
+  ErrorClass,
 } from '../../../domain/platform-adapter'
 import type {
   CanonicalRequest,
@@ -44,6 +45,10 @@ export class EchoUpstreamAdapter implements PlatformUpstreamAdapter {
 
   supportsModel(model: string): boolean {
     return model === 'echo' || model.startsWith('echo-')
+  }
+
+  classifyError(): ErrorClass {
+    return 'FATAL' // Echo 无重试语义
   }
 
   listModels(): ModelInfo[] {

@@ -13,7 +13,7 @@ export interface KiroCredential {
   rawMetadata?: unknown
 }
 
-/** 选中账号的最小投影（KiroAdapter 仅读 id + 路由相关字段）。 */
+/** 选中账号的最小投影（M4 扩选择/健康所需字段）。 */
 export interface KiroAccountInfo {
   id: string
   email: string
@@ -21,6 +21,12 @@ export interface KiroAccountInfo {
   loginProvider?: string
   /** 可能含 profileArn/region/machineId（与凭据 rawMetadata 同优先级解析）。 */
   profilePayload?: unknown
+  /** 'SUSPENDED' 等持久化健康状态；用于候选过滤。 */
+  status?: string
+  /** 账号是否激活（isActive=false 的账号不进候选池）。 */
+  isActive: boolean
+  /** epoch ms，用于 LRU 选择。 */
+  lastUsedAt?: number
 }
 
 /** 凭据库窄 port：按账号取解密凭据。 */
@@ -28,9 +34,11 @@ export interface KiroCredentialPort {
   retrieve(accountId: string): Promise<KiroCredential | null>
 }
 
-/** 账号库窄 port：取该平台首个 active 账号（M3b 占位选择；M4 换池）。 */
+/** 账号库窄 port（M4 池版）：枚举全池 + 风控挂起持久化读写。 */
 export interface KiroAccountPort {
-  findActiveKiroAccount(): Promise<KiroAccountInfo | null>
+  listByPlatform(): Promise<KiroAccountInfo[]>
+  markSuspended(id: string, reason: string): Promise<void>
+  clearSuspension(id: string): Promise<void>
 }
 
 /** 代理 resolver 窄 port：账号 → undici Dispatcher（undefined=直连）。 */

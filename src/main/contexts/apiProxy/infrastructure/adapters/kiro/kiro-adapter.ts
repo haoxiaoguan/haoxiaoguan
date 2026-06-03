@@ -1,8 +1,8 @@
 // KiroAdapter：apiProxy 的真实 Kiro 上游适配器（implements PlatformUpstreamAdapter）。
-// chat/chatStream 内：选 active 账号 → 取解密凭据 → 解析 region/profileArn/machineId/agentMode →
-// buildConversationState（M3a）→ runWithDispatcher(账号代理) 包住 KiroUpstreamClient 调用（spec §16）。
-// 账号选择 M3b 占位（findActiveKiroAccount 取首个）；池/选择/故障转移留 M4。
-// machineId M3b 只读（凭据/profilePayload 有则用，无则 getMachineId() 进程级稳定 id），不写库。
+// M4 版：账号选择/凭据/代理由 FailoverAdapter 注入到 ctx（ctx.account/credential/dispatcher）；
+// KiroAdapter 退化为"用注入上下文发一次请求 + classifyError"的薄层。
+// chat/chatStream 内：直接从 ctx 取 account/credential → 解析路由 →
+// buildConversationState（M3a）→ runWithDispatcher(ctx.dispatcher) 包住 KiroUpstreamClient 调用。
 import { runWithDispatcher } from '../../../../../platform/net/dispatcher-context'
 import { getMachineId } from '../../../../../platform/identity/machine-id'
 import {
@@ -14,16 +14,14 @@ import {
 } from '../../../../../platform/net/kiro/kiro-identity-client'
 import { mapModelId, normalizeClaudeVersion } from './kiro-model-map'
 import { buildConversationState } from './kiro-conversation-state'
+import { classifyKiroError } from './kiro-error'
 import { KiroUpstreamClient, type KiroCallContext } from './kiro-upstream-client'
 import type {
-  KiroCredentialPort,
-  KiroAccountPort,
-  KiroDispatcherPort,
   KiroCredential,
   KiroAccountInfo,
 } from './kiro-ports'
 import type { PromptCacheTracker } from './prompt-cache-tracker'
-import type { PlatformUpstreamAdapter, UpstreamCtx, ModelInfo } from '../../../domain/platform-adapter'
+import type { PlatformUpstreamAdapter, UpstreamCtx, ModelInfo, ErrorClass } from '../../../domain/platform-adapter'
 import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent, Usage } from '../../../domain/canonical'
 import type { BuildConversationStateOpts } from './kiro-wire-types'
 
@@ -46,15 +44,13 @@ export class NoKiroAccountError extends Error {
   }
 }
 
+/** M4 版：deps 仅保留 client + cacheTracker；账号/凭据/代理由 FailoverAdapter 经 ctx 注入。 */
 export interface KiroAdapterDeps {
-  credentials: KiroCredentialPort
-  accounts: KiroAccountPort
-  dispatchers: KiroDispatcherPort
   client: KiroUpstreamClient
   cacheTracker: PromptCacheTracker
 }
 
-// 已解析的一次调用所需路由信息（account + envelope + callCtx）。
+// 已解析的一次调用所需路由信息（accountId + envelope + callCtx）。
 interface PreparedCall {
   accountId: string
   callCtx: KiroCallContext
@@ -75,10 +71,14 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
     return KIRO_MODELS.map((id) => ({ id, displayName: id }))
   }
 
+  /** 把上游错误归类（委托 classifyKiroError）。 */
+  classifyError(err: unknown): ErrorClass {
+    return classifyKiroError(err)
+  }
+
   async chat(ir: CanonicalRequest, ctx: UpstreamCtx): Promise<CanonicalResponse> {
-    const prepared = await this.prepare(ir, ctx)
-    const dispatcher = await this.deps.dispatchers.dispatcherForAccount(prepared.accountId)
-    const resp = await runWithDispatcher(dispatcher, () =>
+    const prepared = this.prepare(ir, ctx)
+    const resp = await runWithDispatcher(ctx.dispatcher, () =>
       this.deps.client.chat(prepared.envelope, prepared.callCtx, ir.model, ir),
     )
     return this.applyCache(ir, prepared.accountId, resp)
@@ -105,13 +105,11 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
   }
 
   chatStream(ir: CanonicalRequest, ctx: UpstreamCtx): AsyncIterable<CanonicalStreamEvent> {
-    // M3b：在生成器内先 prepare + runWithDispatcher 收集全部事件（client.chatStream 全量 buffer），
-    // 再逐个 yield。dispatcher 在 fetch 期间生效（spec §16）。真增量逐 token 透传留 M4。
+    // M4：prepare 改同步（ctx 已含注入的 account/credential/dispatcher）。
     const self = this
     async function* gen(): AsyncIterable<CanonicalStreamEvent> {
-      const prepared = await self.prepare(ir, ctx)
-      const dispatcher = await self.deps.dispatchers.dispatcherForAccount(prepared.accountId)
-      const events = await runWithDispatcher(dispatcher, async () => {
+      const prepared = self.prepare(ir, ctx)
+      const events = await runWithDispatcher(ctx.dispatcher, async () => {
         const out: CanonicalStreamEvent[] = []
         for await (const ev of self.deps.client.chatStream(prepared.envelope, prepared.callCtx, ir.model, ir)) out.push(ev)
         return out
@@ -143,12 +141,14 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
     return gen()
   }
 
-  // 选号 → 取凭据 → 解析路由 → 组 envelope + callCtx。
-  private async prepare(ir: CanonicalRequest, ctx: UpstreamCtx): Promise<PreparedCall> {
-    const account = await this.deps.accounts.findActiveKiroAccount()
-    if (account === null) throw new NoKiroAccountError('no active kiro account available')
-    const cred = await this.deps.credentials.retrieve(account.id)
-    if (cred === null) throw new NoKiroAccountError(`kiro credential missing for account ${account.id}`)
+  // 从 ctx.account/credential 取路由信息 → 组 envelope + callCtx（同步，无 IO）。
+  // 缺 account/credential 时抛 NoKiroAccountError（FailoverAdapter 须注入，否则配置有误）。
+  private prepare(ir: CanonicalRequest, ctx: UpstreamCtx): PreparedCall {
+    const account = ctx.account
+    const cred = ctx.credential
+    if (account === undefined || cred === undefined) {
+      throw new NoKiroAccountError('kiro adapter requires ctx.account and ctx.credential (inject via FailoverAdapter)')
+    }
 
     const authMethod = resolveKiroAuthMethod(cred.rawMetadata)
     const profileArn = resolveProfileArn(account, cred)

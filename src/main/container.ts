@@ -102,17 +102,16 @@ import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-servi
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 import { ResponsesStore } from './contexts/apiProxy/infrastructure/responses-store/responses-store'
-// KiroAdapter（'kiro' 上游）+ 4 个窄 port 类型。container 用现成 repo/resolver 实例适配这些 port。
+// KiroAdapter（'kiro' 上游）+ 窄 port 类型 + account port factory。
 import { KiroAdapter } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-adapter'
 import { PromptCacheTracker } from './contexts/apiProxy/infrastructure/adapters/kiro/prompt-cache-tracker'
 import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
+import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
 import type {
   KiroCredentialPort,
-  KiroAccountPort,
   KiroDispatcherPort,
   KiroTokenRefresher,
   KiroCredential,
-  KiroAccountInfo,
   RefreshedKiroToken,
 } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
 // 号小管 Kiro 身份 helper —— token 刷新 + auth-method/region/profileArn 解析（与额度路径同源）。
@@ -405,18 +404,7 @@ export async function buildContainer(): Promise<Container> {
       }
     },
   }
-  const kiroAccountPort: KiroAccountPort = {
-    async findActiveKiroAccount(): Promise<KiroAccountInfo | null> {
-      const acc = await accountRepo.findActiveByPlatform('kiro')
-      if (acc === null) return null
-      return {
-        id: acc.id,
-        email: acc.email,
-        ...(acc.loginProvider !== undefined ? { loginProvider: acc.loginProvider } : {}),
-        profilePayload: acc.profilePayload,
-      }
-    },
-  }
+  const kiroAccountPort = makeKiroAccountPort(accountRepo as any)
   const kiroDispatcherPort: KiroDispatcherPort = {
     dispatcherForAccount(accountId: string) {
       return proxyResolver.dispatcherForAccount(accountId)
@@ -456,11 +444,10 @@ export async function buildContainer(): Promise<Container> {
   }
   const kiroUpstreamClient = new KiroUpstreamClient({ refresher: kiroTokenRefresher })
   const kiroCacheTracker = new PromptCacheTracker()
+  // kiroCredentialPort / kiroAccountPort / kiroDispatcherPort 保留给 Task 9 的 FailoverAdapter 使用。
+  // KiroAdapter M4 版只需 client + cacheTracker（账号/凭据/代理经 ctx 由 FailoverAdapter 注入）。
   platformRegistry.register(
     new KiroAdapter({
-      credentials: kiroCredentialPort,
-      accounts: kiroAccountPort,
-      dispatchers: kiroDispatcherPort,
       client: kiroUpstreamClient,
       cacheTracker: kiroCacheTracker,
     }),

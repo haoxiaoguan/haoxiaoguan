@@ -8,6 +8,7 @@
 // 鉴权头/端点/agentMode 按线协议实现。
 import { release } from 'node:os'
 import { fetch as undiciFetch } from 'undici'
+import { isSuspendedResponse, KiroUpstreamSuspendedError } from './kiro-error'
 import { currentDispatcher } from '../../../../../platform/net/dispatcher-context'
 import { runtimeEndpointForRegion } from '../../../../../platform/net/kiro/kiro-identity-client'
 import { parseKiroEventStream } from './kiro-event-stream'
@@ -266,6 +267,11 @@ export class KiroUpstreamClient {
           // 配额耗尽：记录错误并结束本端点（不刷新）；无更多端点时抛出。
           lastError = new KiroUpstreamError(`quota exhausted on ${endpoint.name} (429)`, 429)
           break
+        }
+
+        if (isSuspendedResponse(resp.status, body)) {
+          // 风控封禁：token 有效，刷新无用 → 直接抛专用错误，由故障转移装饰器永久退役该账号。
+          throw new KiroUpstreamSuspendedError(`account suspended (${resp.status}): ${body.slice(0, 200)}`, resp.status)
         }
 
         if (resp.status === 401 || resp.status === 403) {
