@@ -11,6 +11,62 @@ const account = { id: 'acc-1', email: 'a@x', isActive: true }
 const credential = { token: 'TKN-1' }
 const cacheStub = { buildProfile: () => null, compute: () => ({ cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }), update: () => {} } as any
 
+describe('KiroAdapter resolveMachineId — per-account 隔离（P1-3）', () => {
+  it('不同 account.id → callCtx.machineId 不同', async () => {
+    const capturedMachineIds: string[] = []
+    const client = {
+      async chat(_e: any, ctx: any) {
+        capturedMachineIds.push(ctx.machineId)
+        return { model: 'claude-sonnet-4.5', content: [{ type: 'text', text: 'ok' }], stopReason: 'end_turn', usage: { inputTokens: 1, outputTokens: 1 } }
+      },
+    } as unknown as KiroUpstreamClient
+    const adapter = new KiroAdapter({ client, cacheTracker: { buildProfile: () => null, compute: () => ({ cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }), update: () => {} } as any })
+
+    await adapter.chat(ir, { requestId: 'r1', account: { id: 'account-AAA', email: 'a@x', isActive: true }, credential: { token: 'T' } })
+    await adapter.chat(ir, { requestId: 'r2', account: { id: 'account-BBB', email: 'b@x', isActive: true }, credential: { token: 'T' } })
+
+    expect(capturedMachineIds).toHaveLength(2)
+    expect(capturedMachineIds[0]).toMatch(/^[0-9a-f]{64}$/)
+    expect(capturedMachineIds[1]).toMatch(/^[0-9a-f]{64}$/)
+    expect(capturedMachineIds[0]).not.toBe(capturedMachineIds[1])
+  })
+
+  it('相同 account.id → callCtx.machineId 稳定（重复调用一致）', async () => {
+    const capturedMachineIds: string[] = []
+    const client = {
+      async chat(_e: any, ctx: any) {
+        capturedMachineIds.push(ctx.machineId)
+        return { model: 'claude-sonnet-4.5', content: [{ type: 'text', text: 'ok' }], stopReason: 'end_turn', usage: { inputTokens: 1, outputTokens: 1 } }
+      },
+    } as unknown as KiroUpstreamClient
+    const adapter = new KiroAdapter({ client, cacheTracker: { buildProfile: () => null, compute: () => ({ cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }), update: () => {} } as any })
+    const sameAccount = { id: 'account-SAME', email: 'c@x', isActive: true }
+
+    await adapter.chat(ir, { requestId: 'r1', account: sameAccount, credential: { token: 'T' } })
+    await adapter.chat(ir, { requestId: 'r2', account: sameAccount, credential: { token: 'T' } })
+
+    expect(capturedMachineIds[0]).toBe(capturedMachineIds[1])
+  })
+
+  it('显式 machineId（cred.rawMetadata）优先级不变', async () => {
+    let seenMachineId = ''
+    const client = {
+      async chat(_e: any, ctx: any) {
+        seenMachineId = ctx.machineId
+        return { model: 'claude-sonnet-4.5', content: [{ type: 'text', text: 'ok' }], stopReason: 'end_turn', usage: { inputTokens: 1, outputTokens: 1 } }
+      },
+    } as unknown as KiroUpstreamClient
+    const adapter = new KiroAdapter({ client, cacheTracker: { buildProfile: () => null, compute: () => ({ cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }), update: () => {} } as any })
+
+    await adapter.chat(ir, {
+      requestId: 'r1',
+      account: { id: 'account-ZZZ', email: 'z@x', isActive: true },
+      credential: { token: 'T', rawMetadata: { machineId: 'explicit-machine-id-override-64chars0000000000000000000000000000' } },
+    })
+    expect(seenMachineId).toBe('explicit-machine-id-override-64chars0000000000000000000000000000')
+  })
+})
+
 describe('KiroAdapter ctx 注入', () => {
   it('chat 用 ctx 注入的账号/凭据（不再自选号）', async () => {
     let seenToken = ''

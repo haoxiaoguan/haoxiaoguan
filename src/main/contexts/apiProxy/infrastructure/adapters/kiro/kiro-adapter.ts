@@ -205,11 +205,11 @@ function explicitRegion(account: KiroAccountInfo, cred: KiroCredential): string 
   )
 }
 
-// machineId：凭据/profilePayload 有则用，无则进程级稳定 getMachineId()（M3b 不派生落库）。
+// machineId：凭据/profilePayload 有则用，无则 per-account sha256 派生（P1-3 隔离）。
 function resolveMachineId(account: KiroAccountInfo, cred: KiroCredential): string {
   return (
     pickString(cred.rawMetadata, ['machineId', 'machine_id']) ??
     pickString(account.profilePayload, ['machineId', 'machine_id']) ??
-    getMachineId()
+    getMachineId(account.id)
   )
 }
