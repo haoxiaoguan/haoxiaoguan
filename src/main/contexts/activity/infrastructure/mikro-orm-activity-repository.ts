@@ -35,8 +35,8 @@ export class MikroOrmActivityRepository implements ActivityRepository {
     try {
       for (const r of rows) {
         await conn.execute(
-          'INSERT OR IGNORE INTO activity_events (source_key, tool, metric, occurred_at) VALUES (?, ?, ?, ?)',
-          [r.sourceKey, r.tool, r.metric, r.occurredAt],
+          'INSERT OR IGNORE INTO activity_events (source_key, tool, metric, occurred_at, amount) VALUES (?, ?, ?, ?, ?)',
+          [r.sourceKey, r.tool, r.metric, r.occurredAt, r.amount ?? 1],
         )
       }
       await conn.execute('COMMIT')
@@ -55,9 +55,7 @@ export class MikroOrmActivityRepository implements ActivityRepository {
         INSERT INTO activity_daily_rollups (date, tool, metric, value, updated_at)
         SELECT
           strftime('%Y-%m-%d', occurred_at, 'unixepoch'),
-          tool,
-          metric,
-          COUNT(*),
+          tool, metric, SUM(amount),
           CAST(strftime('%s', 'now') AS INTEGER)
         FROM activity_events
         GROUP BY 1, 2, 3
