@@ -34,5 +34,8 @@ data/
 test-results/
 playwright-report/
 tmp
+
+# Brainstorm visual companion scratch
+.superpowers/
 # npm lock — project uses pnpm; npm install corrupts node_modules
 package-lock.json
