@@ -15,6 +15,8 @@ function windowDays(range: string): number {
       return 6
     case '30d':
       return 29
+    case '90d':
+      return 89
     default:
       return 6
   }
