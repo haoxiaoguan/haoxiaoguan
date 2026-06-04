@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import Database from 'better-sqlite3'
-import { initDatabase, getEm, closeDatabase } from '../../../src/main/platform/persistence/database'
+import { initDatabase, getEm, closeDatabase, createSchema } from '../../../src/main/platform/persistence/database'
 
 afterEach(async () => {
   await closeDatabase()
@@ -52,5 +52,24 @@ describe('activity_events schema 迁移', () => {
     // 7) watermark 归零 → 触发历史全量补扫（否则旧 code_edit 永远补不回来）
     const ws = (await conn.execute(`SELECT last_scan_at FROM activity_scan_state WHERE id='default'`, [], 'get')) as any
     expect(Number(ws.last_scan_at)).toBe(0)
+  })
+
+  it('已是复合主键库 → 迁移幂等空操作，不重复归零 watermark', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hxg-mig-idem-'))
+    const dbFile = join(dir, 'm2.db')
+    // 全新安装：createSchema 直接建复合主键
+    await initDatabase({ dbName: dbFile, createSchemaOnInit: true })
+    const conn = getEm().getConnection()
+    await conn.execute(
+      `INSERT INTO activity_scan_state (id, last_scan_at) VALUES ('default', 5)
+       ON CONFLICT(id) DO UPDATE SET last_scan_at = 5`,
+    )
+    // 再次启动（createSchema 每次启动都会跑）→ 迁移须空操作、watermark 不被归零
+    await createSchema()
+    const ws = (await conn.execute(`SELECT last_scan_at FROM activity_scan_state WHERE id='default'`, [], 'get')) as any
+    expect(Number(ws.last_scan_at)).toBe(5)
+    const cols = (await conn.execute(`PRAGMA table_info(activity_events)`, [], 'all')) as any[]
+    const pkCols = cols.filter((c: any) => c.pk > 0).map((c: any) => c.name).sort()
+    expect(pkCols).toEqual(['metric', 'source_key'])
   })
 })
