@@ -69,6 +69,21 @@ export class MikroOrmActivityRepository implements ActivityRepository {
 
   async trend(range: string, metric: string): Promise<ActivityTrendPoint[]> {
     const conn = this.getEm().getConnection()
+    if (range === '1d') {
+      const rows = (await conn.execute(
+        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch')) AS day
+                    FROM activity_events WHERE metric = ?)
+         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch') AS date,
+                COALESCE(SUM(amount), 0) AS value
+         FROM activity_events
+         WHERE metric = ? AND strftime('%Y-%m-%d', occurred_at, 'unixepoch') = (SELECT day FROM d)
+         GROUP BY date
+         ORDER BY date ASC`,
+        [metric, metric],
+        'all',
+      )) as any[]
+      return (rows ?? []).map((r: any) => ({ date: r.date ?? '', value: Number(r.value ?? 0) }))
+    }
     const days = `-${windowDays(range)} day`
     const rows = (await conn.execute(
       `WITH max_day AS (SELECT MAX(date) AS value FROM activity_daily_rollups WHERE metric = ?)

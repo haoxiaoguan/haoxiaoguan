@@ -96,4 +96,19 @@ describe('MikroOrmActivityRepository', () => {
     await repo.writeWatermark(99999)
     expect(await repo.readWatermark()).toBe(99999)
   })
+
+  it('trend 1d：按小时分桶，锚最近有数据的那天', async () => {
+    const repo = new MikroOrmActivityRepository(testGetEm)
+    await repo.upsertEvents([
+      { sourceKey: 's1', tool: 'claude', metric: 'tool_calls', occurredAt: 1700000000, amount: 1 },
+      { sourceKey: 's2', tool: 'claude', metric: 'tool_calls', occurredAt: 1700000060, amount: 1 },
+      { sourceKey: 's3', tool: 'claude', metric: 'tool_calls', occurredAt: 1700003600, amount: 1 },
+    ])
+    await repo.rebuildRollups()
+    const pts = await repo.trend('1d', 'tool_calls')
+    expect(pts).toEqual([
+      { date: '2023-11-14 22:00', value: 2 },
+      { date: '2023-11-14 23:00', value: 1 },
+    ])
+  })
 })
