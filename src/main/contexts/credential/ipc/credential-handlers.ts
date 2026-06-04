@@ -13,6 +13,8 @@ import {
 import type { OAuthService } from '../application/oauth-service'
 import type { ImportService } from '../application/import-service'
 import type { ValidationService } from '../application/validation-service'
+import type { ProxyResolver } from '../../proxy/infrastructure/proxy-resolver'
+import { runWithDispatcher } from '../../../platform/net/dispatcher-context'
 
 // registerCredentialHandlers — wires the 7 credential IPC channels.
 //
@@ -28,10 +30,12 @@ export interface CredentialServices {
   oauthService: OAuthService
   importService: ImportService
   validationService: ValidationService
+  /** Optional: when present, import handlers route enrichment requests through the selected proxy. */
+  proxyResolver?: ProxyResolver
 }
 
 export function registerCredentialHandlers(services: CredentialServices): void {
-  const { oauthService, importService, validationService } = services
+  const { oauthService, importService, validationService, proxyResolver } = services
 
   // start_oauth — { provider, mode } → OAuthPending (state/code_verifier stripped)
   ipcMain.handle(
@@ -48,12 +52,27 @@ export function registerCredentialHandlers(services: CredentialServices): void {
     },
   )
 
-  // complete_oauth — { pendingId, code } → ImportedCredentialMaterial
+  // complete_oauth — { pendingId, code, proxyId?, accountId? } → ImportedCredentialMaterial
+  // proxyId（导入新账号时 UI 选择）或 accountId（重认证已有账号 → 走该账号绑定的代理）任一存在，
+  // 即把 OAuth 换 token 的出站请求经对应 dispatcher 路由，避免裸连暴露真实 IP（与其它出站对齐）。
   ipcMain.handle(
     CREDENTIAL_CHANNELS.completeOauth,
-    async (_e, args: { pendingId: string; code: string }): Promise<ImportedCredentialMaterialJson> => {
+    async (
+      _e,
+      args: { pendingId: string; code: string; proxyId?: string; accountId?: string },
+    ): Promise<ImportedCredentialMaterialJson> => {
       try {
-        const material = await oauthService.complete(args.pendingId, args.code ?? '')
+        const dispatcher =
+          proxyResolver === undefined
+            ? undefined
+            : args.accountId !== undefined && args.accountId !== ''
+              ? await proxyResolver.dispatcherForAccount(args.accountId)
+              : args.proxyId !== undefined && args.proxyId !== ''
+                ? await proxyResolver.dispatcherForProxyId(args.proxyId)
+                : undefined
+        const material = await runWithDispatcher(dispatcher, () =>
+          oauthService.complete(args.pendingId, args.code ?? ''),
+        )
         return importedMaterialToJson(material)
       } catch (e) {
         throw new Error(toIpcError(e))
@@ -61,13 +80,19 @@ export function registerCredentialHandlers(services: CredentialServices): void {
     },
   )
 
-  // import_token_json — { provider, payload } → ImportedCredentialMaterial
+  // import_token_json — { provider, payload, proxyId? } → ImportedCredentialMaterial
   ipcMain.handle(
     CREDENTIAL_CHANNELS.importTokenJson,
-    async (_e, args: { provider: string; payload: string }): Promise<ImportedCredentialMaterialJson> => {
+    async (_e, args: { provider: string; payload: string; proxyId?: string }): Promise<ImportedCredentialMaterialJson> => {
       try {
         const provider = parsePlatform(args.provider)
-        const material = await importService.importFromJson(provider, args.payload)
+        const dispatcher =
+          args.proxyId !== undefined && args.proxyId !== '' && proxyResolver !== undefined
+            ? await proxyResolver.dispatcherForProxyId(args.proxyId)
+            : undefined
+        const material = await runWithDispatcher(dispatcher, () =>
+          importService.importFromJson(provider, args.payload),
+        )
         return importedMaterialToJson(material)
       } catch (e) {
         throw new Error(toIpcError(e))
@@ -75,13 +100,17 @@ export function registerCredentialHandlers(services: CredentialServices): void {
     },
   )
 
-  // scan_local_credentials — { provider } → ImportedCredentialMaterial[]
+  // scan_local_credentials — { provider, proxyId? } → ImportedCredentialMaterial[]
   ipcMain.handle(
     CREDENTIAL_CHANNELS.scanLocalCredentials,
-    async (_e, args: { provider: string }): Promise<ImportedCredentialMaterialJson[]> => {
+    async (_e, args: { provider: string; proxyId?: string }): Promise<ImportedCredentialMaterialJson[]> => {
       try {
         const provider = parsePlatform(args.provider)
-        const materials = await importService.scanLocal(provider)
+        const dispatcher =
+          args.proxyId !== undefined && args.proxyId !== '' && proxyResolver !== undefined
+            ? await proxyResolver.dispatcherForProxyId(args.proxyId)
+            : undefined
+        const materials = await runWithDispatcher(dispatcher, () => importService.scanLocal(provider))
         return materials.map(importedMaterialToJson)
       } catch (e) {
         throw new Error(toIpcError(e))
@@ -89,13 +118,19 @@ export function registerCredentialHandlers(services: CredentialServices): void {
     },
   )
 
-  // import_deeplink — { provider, url } → ImportedCredentialMaterial
+  // import_deeplink — { provider, url, proxyId? } → ImportedCredentialMaterial
   ipcMain.handle(
     CREDENTIAL_CHANNELS.importDeeplink,
-    async (_e, args: { provider: string; url: string }): Promise<ImportedCredentialMaterialJson> => {
+    async (_e, args: { provider: string; url: string; proxyId?: string }): Promise<ImportedCredentialMaterialJson> => {
       try {
         const provider = parsePlatform(args.provider)
-        const material = await importService.importFromDeeplink(provider, args.url)
+        const dispatcher =
+          args.proxyId !== undefined && args.proxyId !== '' && proxyResolver !== undefined
+            ? await proxyResolver.dispatcherForProxyId(args.proxyId)
+            : undefined
+        const material = await runWithDispatcher(dispatcher, () =>
+          importService.importFromDeeplink(provider, args.url),
+        )
         return importedMaterialToJson(material)
       } catch (e) {
         throw new Error(toIpcError(e))

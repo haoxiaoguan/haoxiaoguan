@@ -8,6 +8,7 @@ import {
   LoopbackServer,
   type CallbackPayload,
 } from '../../../../platform/oauth/loopback-server'
+import { createKiroTransport, type KiroTransportFetch } from '../../../../platform/net/kiro-transport'
 import type { OAuthCapability } from '../../domain/capabilities'
 import type {
   ImportedCredentialMaterial,
@@ -73,9 +74,13 @@ async function isMwinitAvailable(): Promise<boolean> {
 export class KiroOAuthCapability implements OAuthCapability {
   private readonly pending = new Map<string, PendingKiro>()
   private readonly tokenEndpoint: string
+  private readonly transport: KiroTransportFetch
 
-  constructor() {
+  constructor(transport?: KiroTransportFetch) {
     this.tokenEndpoint = process.env.HAOXIAOGUAN_KIRO_TOKEN_ENDPOINT ?? KIRO_TOKEN_ENDPOINT
+    // 统一出站 transport：读取 currentDispatcher() → 有 per-account/proxy dispatcher 时走代理，
+    // 否则用保守 TLS 直连。与其它 Kiro 出站（聊天/刷新/额度/模型）对齐，避免 OAuth 换 token 暴露真实 IP。
+    this.transport = transport ?? createKiroTransport().fetch
   }
 
   provider(): PlatformId {
@@ -175,7 +180,7 @@ export class KiroOAuthCapability implements OAuthCapability {
   ): Promise<Record<string, unknown>> {
     let resp: Response
     try {
-      resp = await fetch(this.tokenEndpoint, {
+      resp = await this.transport(this.tokenEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, code_verifier: codeVerifier, redirect_uri: redirectUri }),

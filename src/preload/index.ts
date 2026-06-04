@@ -70,14 +70,14 @@ const api: HxgApi = {
   credential: {
     startOauth: (provider, mode) =>
       ipcRenderer.invoke(CREDENTIAL_CHANNELS.startOauth, { provider, mode }),
-    completeOauth: (pendingId, code) =>
-      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, { pendingId, code }),
-    importTokenJson: (provider, payload) =>
-      ipcRenderer.invoke(CREDENTIAL_CHANNELS.importTokenJson, { provider, payload }),
-    scanLocalCredentials: (provider) =>
-      ipcRenderer.invoke(CREDENTIAL_CHANNELS.scanLocalCredentials, { provider }),
-    importDeeplink: (provider, url) =>
-      ipcRenderer.invoke(CREDENTIAL_CHANNELS.importDeeplink, { provider, url }),
+    completeOauth: (pendingId, code, proxyId, accountId) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, { pendingId, code, proxyId, accountId }),
+    importTokenJson: (provider, payload, proxyId) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.importTokenJson, { provider, payload, proxyId }),
+    scanLocalCredentials: (provider, proxyId) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.scanLocalCredentials, { provider, proxyId }),
+    importDeeplink: (provider, url, proxyId) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.importDeeplink, { provider, url, proxyId }),
     validateCredential: (accountId) =>
       ipcRenderer.invoke(CREDENTIAL_CHANNELS.validateCredential, { accountId }),
     validateBatch: (accountIds, concurrency) =>

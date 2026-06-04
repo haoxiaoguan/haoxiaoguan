@@ -314,6 +314,12 @@ async function defaultFetch(url: string, init: RequestInit): Promise<Response> {
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS)
   try {
     return await identityKiroTransport.fetch(url, { ...init, signal: controller.signal })
+  } catch (err) {
+    // 暴露 undici fetch 的 cause（socks/TLS/连接的真正原因），否则上层只看到裸 'fetch failed'。
+    if (err instanceof Error && err.cause instanceof Error && err.cause.message !== err.message) {
+      throw new Error(`${err.message} [cause: ${err.cause.message}]`, { cause: err.cause })
+    }
+    throw err
   } finally {
     clearTimeout(timer)
   }

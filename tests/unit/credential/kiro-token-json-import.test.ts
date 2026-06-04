@@ -47,9 +47,10 @@ describe('KiroTokenJsonImportCapability', () => {
     expect(meta.identity_source).toBe('live')
 
     // The opaque token would otherwise yield a placeholder; live identity wins.
+    // identityKey 取稳定 userId；displayIdentifier 取可读 email（两者解耦）。
     const profile = profileFromImportMaterial('kiro', material.email, material.rawMetadata, material.accessToken)
-    expect(profile.displayIdentifier).toBe('d-90660ceab3.current')
     expect(profile.identityKey).toBe('d-90660ceab3.current')
+    expect(profile.displayIdentifier).toBe('wash.in.at.te+5hv4@example.com')
     expect(profile.planName).toBe('KIRO POWER')
   })
 

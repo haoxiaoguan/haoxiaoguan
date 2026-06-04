@@ -61,6 +61,33 @@ describe('Account aggregate', () => {
     expect((account.profilePayload as Record<string, unknown>).creditsTotal).toBe(100)
   })
 
+  it('healDisplayIdentity promotes a live email onto the display fields, leaving identityKey frozen', () => {
+    // 导入时 email 缺失 → displayIdentifier/email 落到不透明 userId 占位。
+    const profile = new PlatformAccountProfile({
+      identityKey: 'd-9067-abc',
+      displayIdentifier: 'd-9067-abc',
+      loginProvider: 'Builder ID',
+      planName: 'KIRO FREE',
+      planTier: 'free',
+      status: 'normal',
+      profilePayload: { userId: 'd-9067-abc' },
+    })
+    const account = Account.createWithProfile('kiro', 'd-9067-abc', undefined, [], undefined, profile)
+    const keyBefore = account.identityKey
+    expect(account.displayIdentifier).toBe('d-9067-abc')
+
+    // 在线刷新取回 email → 自愈显示，identityKey 冻结（唯一性/额度关联安全）。
+    expect(account.healDisplayIdentity('galardo@example.com')).toBe(true)
+    expect(account.displayIdentifier).toBe('galardo@example.com')
+    expect(account.email).toBe('galardo@example.com')
+    expect(account.identityKey).toBe(keyBefore)
+
+    // 幂等 + 不拿新 email 覆盖已是 email 的显示 + 非法输入一律 no-op。
+    expect(account.healDisplayIdentity('other@example.com')).toBe(false)
+    expect(account.displayIdentifier).toBe('galardo@example.com')
+    expect(account.healDisplayIdentity('not-an-email')).toBe(false)
+  })
+
   it('updateProfilePayload merges and re-derives platform fields', () => {
     const profile = new PlatformAccountProfile({
       identityKey: 'user@example.com',

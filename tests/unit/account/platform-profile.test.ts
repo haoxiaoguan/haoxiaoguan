@@ -10,7 +10,7 @@ function payload(p: ReturnType<typeof profileFromImportMaterial>): Record<string
 }
 
 describe('profileFromImportMaterial', () => {
-  it('kiro prefers user id and flattens usage fields', () => {
+  it('kiro uses userId for the stable identityKey but prefers email for display', () => {
     const raw = {
       accessToken: 'secret',
       userInfo: { userId: 'D-9067C98495.449' },
@@ -23,8 +23,9 @@ describe('profileFromImportMaterial', () => {
       bonusUsed: 5,
     }
     const p = profileFromImportMaterial('kiro', 'fallback@example.com', raw, 'token')
+    // identityKey 取 userId（稳定、用于去重）；displayIdentifier 取 email（可读）。两者解耦。
     expect(p.identityKey).toBe('d-9067c98495.449')
-    expect(p.displayIdentifier).toBe('D-9067C98495.449')
+    expect(p.displayIdentifier).toBe('fallback@example.com')
     expect(p.loginProvider).toBe('Github')
     expect(p.planName).toBe('Kiro Pro')
     expect(payload(p).creditsTotal).toBe(100)
@@ -60,7 +61,8 @@ describe('profileFromImportMaterial', () => {
 
   it('kiro takes identity + plan from usage.userInfo for enterprise accounts', () => {
     // Enterprise: profile.json has only arn/name, token is opaque, identity is
-    // in the usage telemetry's userInfo. Regression for the "kiro-user" bug.
+    // in the usage telemetry's userInfo. Regression for the "kiro-user" bug:
+    // identityKey 仍取稳定 userId（绝不回退随机 kiro-<hash>）；显示名优先用 email。
     const raw = {
       accessToken: 'aoaAAAAA-opaque',
       kiro_profile_raw: {
@@ -73,9 +75,24 @@ describe('profileFromImportMaterial', () => {
       },
     }
     const p = profileFromImportMaterial('kiro', 'galardo@example.com', raw, 'token')
-    expect(p.displayIdentifier).toBe('d-9067c98495.4498b488')
     expect(p.identityKey).toBe('d-9067c98495.4498b488')
+    expect(p.displayIdentifier).toBe('galardo@example.com')
     expect(p.planName).toBe('KIRO FREE')
+    // 稳定键不退化为占位 hash。
+    expect(p.identityKey).not.toMatch(/^kiro-[0-9a-f]+$/)
+  })
+
+  it('kiro without an email falls back to the stable userId for display (never kiro-hash)', () => {
+    // 账号确实没有 email 时：显示名回退到稳定 userId，而非随机 kiro-<hash> 占位。
+    const raw = {
+      accessToken: 'aoaAAAAA-opaque',
+      kiro_usage_raw: {
+        userInfo: { userId: 'd-1234.no-email' },
+      },
+    }
+    const p = profileFromImportMaterial('kiro', '', raw, 'token')
+    expect(p.identityKey).toBe('d-1234.no-email')
+    expect(p.displayIdentifier).toBe('d-1234.no-email')
     expect(p.displayIdentifier).not.toMatch(/^kiro-[0-9a-f]+$/)
   })
 

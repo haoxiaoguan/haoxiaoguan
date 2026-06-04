@@ -117,6 +117,13 @@ export class QuotaApplicationService {
 
     if (hasProviderPayload(result.providerPayload)) {
       account.updateProfilePayload(sanitizeProviderPayload(result.providerPayload))
+      // 自愈显示身份：Kiro 账号若导入时 email 缺失，displayIdentifier 会落到不透明
+      // userId（如 d-xxx.uuid）；一旦在线刷新取回 email，提升为可读显示名。
+      // identityKey 冻结 → 唯一性/额度关联安全（见 account.healDisplayIdentity）。
+      if (platform === 'kiro') {
+        const liveEmail = readLiveEmail(result.providerPayload)
+        if (liveEmail !== undefined) account.healDisplayIdentity(liveEmail)
+      }
       await this.accountRepo.save(account)
     }
 
@@ -348,6 +355,13 @@ function hasProviderPayload(value: JsonValue): boolean {
   if (value === null || value === undefined) return false
   if (isPlainObject(value)) return Object.keys(value).length > 0
   return true
+}
+
+/** Kiro 在线刷新已把 userInfo.email 展平到 providerPayload.email；仅取合法 email。 */
+function readLiveEmail(payload: JsonValue): string | undefined {
+  if (!isPlainObject(payload)) return undefined
+  const email = payload.email
+  return typeof email === 'string' && email.includes('@') ? email : undefined
 }
 
 function isLegacyCodexApiUsageState(state: AccountQuotaState): boolean {

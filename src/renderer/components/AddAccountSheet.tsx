@@ -154,20 +154,25 @@ export default function AddAccountSheet({
           const pending = await credentialService.startOAuth(backendPlatform, mode);
           onboarding.setPending(pending);
           await openExternalUrl(pending.authorize_url);
-          const m = await credentialService.completeOAuth(pending.pending_id, '');
+          // 导入新账号：把 OAuth 换 token 经 UI 选定的代理路由（避免暴露真实 IP）。
+          const m = await credentialService.completeOAuth(
+            pending.pending_id,
+            '',
+            proxyId !== NONE ? proxyId : undefined,
+          );
           setMaterial(m);
           onboarding.setMaterial(m);
           break;
         }
         case 'token_json': {
           if (!tokenJson.trim()) throw new Error('empty payload');
-          const m = await credentialService.importTokenJson(backendPlatform, tokenJson);
+          const m = await credentialService.importTokenJson(backendPlatform, tokenJson, proxyId !== NONE ? proxyId : undefined);
           setMaterial(m);
           onboarding.setMaterial(m);
           break;
         }
         case 'local_scan': {
-          const list = await credentialService.scanLocalCredentials(backendPlatform);
+          const list = await credentialService.scanLocalCredentials(backendPlatform, proxyId !== NONE ? proxyId : undefined);
           if (list.length === 0) throw new Error('no local credential found');
           setMaterial(list[0]);
           onboarding.setMaterial(list[0]);
@@ -228,7 +233,7 @@ export default function AddAccountSheet({
       const cred = creds[i];
       const label = cred.email || `#${i + 1}`;
       try {
-        const m = await credentialService.importTokenJson(backendPlatform, toTokenJson(cred));
+        const m = await credentialService.importTokenJson(backendPlatform, toTokenJson(cred), proxyId !== NONE ? proxyId : undefined);
         const account = await importAccount({
           platform: m.provider,
           email: m.email,

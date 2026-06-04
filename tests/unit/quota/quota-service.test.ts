@@ -187,6 +187,56 @@ describe('QuotaApplicationService.refreshQuota', () => {
     expect(payload.usage_updated_at).toBe(payload.usageUpdatedAt)
   })
 
+  it('heals a kiro account opaque displayIdentifier with the live email (identityKey frozen)', async () => {
+    // 导入时 email 缺失 → displayIdentifier 落到不透明 userId；刷新取回 email 后自愈。
+    const account = Account.create('kiro', 'd-9067-abc', undefined, [], undefined)
+    expect(account.displayIdentifier).toBe('d-9067-abc')
+    const keyBefore = account.identityKey
+    const repo = new FakeAccountRepo([account])
+    const svc = new QuotaApplicationService(
+      repo,
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher({
+        outcome: 'success',
+        source: 'live',
+        freshness: 'fresh',
+        fetchedAt: new Date(),
+        models: [new ModelQuota('credits', 0, 50)],
+        providerPayload: { email: 'galardo@example.com', planName: 'KIRO FREE' },
+        updatedCredential: undefined,
+        error: undefined,
+      }),
+    )
+    await svc.refreshQuota(account.id)
+    const saved = await repo.findById(account.id)
+    expect(saved!.displayIdentifier).toBe('galardo@example.com')
+    expect(saved!.email).toBe('galardo@example.com')
+    expect(saved!.identityKey).toBe(keyBefore) // 唯一键冻结
+  })
+
+  it('does not heal a non-kiro account even if the payload carries an email', async () => {
+    const account = Account.create('cursor', 'opaque-id-xyz', undefined, [], undefined)
+    const repo = new FakeAccountRepo([account])
+    const svc = new QuotaApplicationService(
+      repo,
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher({
+        ...cursorPayloadResult(),
+        providerPayload: {
+          email: 'someone@example.com',
+          cursor_usage_raw: { individualUsage: { plan: { used: 1, limit: 9 } } },
+        },
+      }),
+    )
+    await svc.refreshQuota(account.id)
+    const saved = await repo.findById(account.id)
+    expect(saved!.displayIdentifier).toBe('opaque-id-xyz') // 非 kiro 不自愈
+  })
+
   it('records failure state + account profile error on fetch failure', async () => {
     const account = makeAccount()
     const repo = new FakeAccountRepo([account])

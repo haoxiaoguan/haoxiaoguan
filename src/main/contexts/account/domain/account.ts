@@ -61,7 +61,8 @@ function payloadString(payload: JsonValue, keys: string[]): string | undefined {
 export class Account {
   private readonly _id: string
   private readonly _agentId: string
-  private readonly _email: string
+  // 非 readonly：healDisplayIdentity 可用在线权威 email 修正占位显示（不影响唯一键 identityKey）。
+  private _email: string
   private _identityKey: string
   private _displayIdentifier: string
   private _name?: AccountName
@@ -238,6 +239,27 @@ export class Account {
     this._status = payloadString(this._profilePayload, ['status']) ?? this._status
     this._statusReason =
       payloadString(this._profilePayload, ['statusReason', 'status_reason']) ?? this._statusReason
+  }
+
+  /**
+   * 自愈显示身份：当一次在线刷新拿到了导入时缺失的可读标识（email）时，
+   * 仅更新「显示字段」(displayIdentifier/email)；identityKey 保持冻结，
+   * 故唯一性与额度关联键不变——不会重复建号、不破坏活跃检测。
+   *
+   * 与 editMetadata 对身份字段的冻结约束并不冲突：那里禁止「用户手改」身份
+   * 以免破坏去重；这里是「系统用权威在线 email 修正占位显示」，且只动显示、不动键。
+   *
+   * 仅在「当前显示标识不是 email（占位/不透明 userId）」且「传入的是合法 email」
+   * 时生效；否则 no-op（绝不用一个 email 顶掉另一个已有 email）。返回是否发生更新。
+   */
+  healDisplayIdentity(email: string): boolean {
+    const next = email.trim()
+    if (next.length === 0 || !next.includes('@')) return false
+    // 已是 email 形态的显示标识不覆盖（合法 email 必含 '@'，故此处亦保证 next !== 当前显示）。
+    if (this._displayIdentifier.includes('@')) return false
+    this._displayIdentifier = next
+    this._email = next
+    return true
   }
 
   // --- Getters ---

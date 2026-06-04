@@ -65,10 +65,12 @@ describe('enrichKiroMaterial', () => {
     const f = scriptedFetch([{ match: '/getUsageLimits', status: 200, body: LIVE_USAGE }])
     const out = await enrichKiroMaterial(baseMaterial(), { fetchImpl: f.impl })
     const profile = profileFromImportMaterial('kiro', out.email, out.rawMetadata, out.accessToken)
-    // Live userId wins over the stale d-OLD; plan is the live KIRO POWER.
-    expect(profile.displayIdentifier).toBe('d-90660ceab3.current')
+    // Live identity wins over the stale d-OLD; plan is the live KIRO POWER.
+    // identityKey 取稳定 userId；displayIdentifier 取可读 email（两者解耦）。
     expect(profile.identityKey).toBe('d-90660ceab3.current')
+    expect(profile.displayIdentifier).toBe('wash.in.at.te+5hv4@example.com')
     expect(profile.planName).toBe('KIRO POWER')
+    expect(profile.identityKey).not.toContain('OLD')
     expect(profile.displayIdentifier).not.toContain('OLD')
   })
 

@@ -43,6 +43,7 @@ import { registerWebSocketHandlers } from '../contexts/websocket/ipc/websocket-h
 
 import type { ProxyService } from '../contexts/proxy/application/proxy-service'
 import { registerProxyHandlers } from '../contexts/proxy/ipc/proxy-handlers'
+import type { ProxyResolver } from '../contexts/proxy/infrastructure/proxy-resolver'
 
 import type { AccountGroupService } from '../contexts/accountGroup/application/account-group-service'
 import { registerAccountGroupHandlers } from '../contexts/accountGroup/ipc/account-group-handlers'
@@ -103,6 +104,7 @@ export interface Services {
 
   // proxy context (outbound proxy IP management)
   proxyService: ProxyService
+  proxyResolver: ProxyResolver
 
   // account-group context (cross-platform account groupings + group→proxy binding)
   accountGroupService: AccountGroupService
@@ -132,6 +134,7 @@ export function registerAllHandlers(services: Services): void {
     oauthService: services.credentialOAuth,
     importService: services.credentialImport,
     validationService: services.credentialValidation,
+    proxyResolver: services.proxyResolver,
   })
   registerQuotaHandlers(services.quotaService)
   registerSkillHandlers({
