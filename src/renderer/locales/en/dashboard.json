@@ -67,5 +67,33 @@
     "hoursAgo": "{{n}}h ago",
     "daysAgo": "{{n}}d ago",
     "justNow": "Just now"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…"
+  },
+  "pool": {
+    "title": "Account Pool Health",
+    "inPool": "in pool",
+    "available": "Available",
+    "cooldown": "Cooldown",
+    "exhausted": "Exhausted",
+    "empty": "No quota data"
+  },
+  "credential": {
+    "title": "Credential Health",
+    "validOf": "valid",
+    "valid": "Valid",
+    "expiring": "Expiring",
+    "invalid": "Invalid",
+    "empty": "No credential data"
+  },
+  "attention": {
+    "title": "Needs Attention · Cross-platform",
+    "none": "Nothing needs attention",
+    "count": "{{n}} items",
+    "quotaExhausted": "Quota exhausted",
+    "quotaLow": "Quota low",
+    "credExpiring": "Credential expiring"
   }
 }

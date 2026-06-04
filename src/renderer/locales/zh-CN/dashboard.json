@@ -67,5 +67,33 @@
     "hoursAgo": "{{n}} 小时前",
     "daysAgo": "{{n}} 天前",
     "justNow": "刚刚"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "refreshing": "刷新中"
+  },
+  "pool": {
+    "title": "账号池健康",
+    "inPool": "在池",
+    "available": "可用",
+    "cooldown": "冷却",
+    "exhausted": "耗尽",
+    "empty": "暂无配额数据"
+  },
+  "credential": {
+    "title": "凭证健康",
+    "validOf": "有效",
+    "valid": "有效",
+    "expiring": "将过期",
+    "invalid": "失效",
+    "empty": "暂无凭证数据"
+  },
+  "attention": {
+    "title": "需关注 · 跨平台",
+    "none": "暂无需关注项",
+    "count": "{{n}} 项",
+    "quotaExhausted": "配额耗尽",
+    "quotaLow": "配额偏低",
+    "credExpiring": "凭证将过期"
   }
 }
