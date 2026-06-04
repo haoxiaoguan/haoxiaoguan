@@ -389,6 +389,45 @@ export interface SaveConfigArgs {
   syncPasswordTouched: boolean
 }
 
+// ── Sessions DTOs (sessions context — read-only on-disk AI CLI history) ──────
+export type SessionToolDto = 'claude' | 'codex' | 'gemini'
+export interface SessionSummaryDto {
+  tool: SessionToolDto
+  sessionId: string
+  title?: string
+  summary?: string
+  projectDir?: string
+  createdAt?: number
+  lastActiveAt?: number
+  sourcePath: string
+  resumeCommand?: string
+}
+export interface SessionMessageDto {
+  role: 'user' | 'assistant' | 'tool' | 'system'
+  content: string
+  ts?: number
+}
+export interface ToolProbeDto {
+  tool: SessionToolDto
+  hasSessions: boolean
+  lastActiveAt?: number
+}
+export interface SessionPageDto {
+  items: SessionSummaryDto[]
+  total: number
+  offset: number
+}
+export interface SessionDeleteRequestDto {
+  tool: SessionToolDto
+  sourcePath: string
+  sessionId: string
+}
+export interface SessionDeleteOutcomeDto {
+  sourcePath: string
+  ok: boolean
+  error?: string
+}
+
 export interface HxgApi {
   settings: {
     getSettings(): Promise<SettingsResponse>
@@ -608,6 +647,14 @@ export interface HxgApi {
     bindGroupToProxy(groupId: string, proxyId: string): Promise<AccountGroupBindingDto>
     unbindGroup(groupId: string): Promise<void>
     getGroupBinding(groupId: string): Promise<AccountGroupBindingDto | null>
+  }
+  sessions: {
+    probeTools(): Promise<ToolProbeDto[]>
+    listSessions(tool: SessionToolDto, limit?: number, offset?: number): Promise<SessionPageDto>
+    getMessages(tool: SessionToolDto, sourcePath: string): Promise<SessionMessageDto[]>
+    deleteSession(tool: SessionToolDto, sourcePath: string, sessionId: string): Promise<void>
+    deleteSessions(items: SessionDeleteRequestDto[]): Promise<SessionDeleteOutcomeDto[]>
+    resume(command: string, cwd?: string): Promise<void>
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>

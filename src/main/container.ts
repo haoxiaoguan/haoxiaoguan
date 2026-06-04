@@ -145,6 +145,12 @@ import { ProxyService } from './contexts/proxy/application/proxy-service'
 import { MikroOrmAccountGroupRepository } from './contexts/accountGroup/infrastructure/mikro-orm-account-group-repository'
 import { AccountGroupService } from './contexts/accountGroup/application/account-group-service'
 
+// Sessions context — read-only on-disk AI CLI conversation history browser.
+import { SessionsService } from './contexts/sessions/application/sessions-service'
+import { ClaudeSessionSource } from './contexts/sessions/infrastructure/claude-session-source'
+import { CodexSessionSource } from './contexts/sessions/infrastructure/codex-session-source'
+import { GeminiSessionSource } from './contexts/sessions/infrastructure/gemini-session-source'
+
 /**
  * Account capability-registry adapter (quota manifest §5b).
  *
@@ -525,6 +531,12 @@ export async function buildContainer(): Promise<Container> {
   )
   apiProxyService.attachServer(apiHttpServer)
 
+  // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。
+  const sessionsService = new SessionsService(
+    [new ClaudeSessionSource(), new CodexSessionSource(), new GeminiSessionSource()],
+    () => settings.getTerminalLaunchTemplate(),
+  )
+
   return {
     settings,
     agents,
@@ -556,5 +568,6 @@ export async function buildContainer(): Promise<Container> {
     apiProxyKeyService,
     tokenRefreshScheduler,
     platformQuotaScheduler,
+    sessionsService,
   }
 }
