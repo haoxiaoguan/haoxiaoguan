@@ -52,12 +52,27 @@ export function registerCredentialHandlers(services: CredentialServices): void {
     },
   )
 
-  // complete_oauth — { pendingId, code } → ImportedCredentialMaterial
+  // complete_oauth — { pendingId, code, proxyId?, accountId? } → ImportedCredentialMaterial
+  // proxyId（导入新账号时 UI 选择）或 accountId（重认证已有账号 → 走该账号绑定的代理）任一存在，
+  // 即把 OAuth 换 token 的出站请求经对应 dispatcher 路由，避免裸连暴露真实 IP（与其它出站对齐）。
   ipcMain.handle(
     CREDENTIAL_CHANNELS.completeOauth,
-    async (_e, args: { pendingId: string; code: string }): Promise<ImportedCredentialMaterialJson> => {
+    async (
+      _e,
+      args: { pendingId: string; code: string; proxyId?: string; accountId?: string },
+    ): Promise<ImportedCredentialMaterialJson> => {
       try {
-        const material = await oauthService.complete(args.pendingId, args.code ?? '')
+        const dispatcher =
+          proxyResolver === undefined
+            ? undefined
+            : args.accountId !== undefined && args.accountId !== ''
+              ? await proxyResolver.dispatcherForAccount(args.accountId)
+              : args.proxyId !== undefined && args.proxyId !== ''
+                ? await proxyResolver.dispatcherForProxyId(args.proxyId)
+                : undefined
+        const material = await runWithDispatcher(dispatcher, () =>
+          oauthService.complete(args.pendingId, args.code ?? ''),
+        )
         return importedMaterialToJson(material)
       } catch (e) {
         throw new Error(toIpcError(e))

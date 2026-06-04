@@ -455,7 +455,12 @@ export interface HxgApi {
   }
   credential: {
     startOauth(provider: string, mode: string): Promise<OAuthPending>
-    completeOauth(pendingId: string, code: string): Promise<ImportedCredentialMaterial>
+    completeOauth(
+      pendingId: string,
+      code: string,
+      proxyId?: string,
+      accountId?: string,
+    ): Promise<ImportedCredentialMaterial>
     importTokenJson(provider: string, payload: string, proxyId?: string): Promise<ImportedCredentialMaterial>
     scanLocalCredentials(provider: string, proxyId?: string): Promise<ImportedCredentialMaterial[]>
     importDeeplink(provider: string, url: string, proxyId?: string): Promise<ImportedCredentialMaterial>

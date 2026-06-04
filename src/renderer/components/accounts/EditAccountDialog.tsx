@@ -177,7 +177,8 @@ export default function EditAccountDialog({
       const mode: OAuthMode = 'loopback_pkce';
       const pending = await credentialService.startOAuth(backendPlatform, mode);
       await openExternalUrl(pending.authorize_url);
-      const material = await credentialService.completeOAuth(pending.pending_id, '');
+      // 重认证已有账号：把 OAuth 换 token 经该账号绑定的代理路由，保持出口 IP 与日常一致。
+      const material = await credentialService.completeOAuth(pending.pending_id, '', undefined, account.id);
       await reauthenticate(account.id, {
         identifier: material.email,
         token: material.access_token,

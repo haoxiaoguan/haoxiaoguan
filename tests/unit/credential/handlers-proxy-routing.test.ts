@@ -63,9 +63,15 @@ describe('credential handlers — proxy routing via proxyId', () => {
 
   const proxyResolver = {
     dispatcherForProxyId: vi.fn(async (_id: string) => fakeDispatcher),
+    dispatcherForAccount: vi.fn(async (_id: string) => fakeDispatcher),
   }
 
-  const oauthService = {} as any
+  const oauthService = {
+    complete: vi.fn(async () => {
+      capturedDispatcher = currentDispatcher()
+      return fakeMaterial as any
+    }),
+  }
   const validationService = {} as any
 
   beforeEach(() => {
@@ -73,6 +79,11 @@ describe('credential handlers — proxy routing via proxyId', () => {
     capturedDispatcher = undefined
     vi.clearAllMocks()
     proxyResolver.dispatcherForProxyId.mockResolvedValue(fakeDispatcher)
+    proxyResolver.dispatcherForAccount.mockResolvedValue(fakeDispatcher)
+    oauthService.complete.mockImplementation(async () => {
+      capturedDispatcher = currentDispatcher()
+      return fakeMaterial as any
+    })
     importService.importFromJson.mockImplementation(async () => {
       capturedDispatcher = currentDispatcher()
       return fakeMaterial as any
@@ -145,6 +156,44 @@ describe('credential handlers — proxy routing via proxyId', () => {
     await handler(null, { provider: 'kiro', url: 'kiro://callback?code=abc' })
 
     expect(proxyResolver.dispatcherForProxyId).not.toHaveBeenCalled()
+    expect(capturedDispatcher).toBeUndefined()
+  })
+
+  // --- complete_oauth ---
+
+  it('complete_oauth: routes through proxy when proxyId is provided (import)', async () => {
+    const handler = handlers.get(CREDENTIAL_CHANNELS.completeOauth)!
+    await handler(null, { pendingId: 'pd-1', code: '', proxyId: 'p-4' })
+
+    expect(proxyResolver.dispatcherForProxyId).toHaveBeenCalledWith('p-4')
+    expect(proxyResolver.dispatcherForAccount).not.toHaveBeenCalled()
+    expect(capturedDispatcher).toBe(fakeDispatcher)
+  })
+
+  it('complete_oauth: routes through the account proxy when accountId is provided (reauth)', async () => {
+    const handler = handlers.get(CREDENTIAL_CHANNELS.completeOauth)!
+    await handler(null, { pendingId: 'pd-2', code: '', accountId: 'a-1' })
+
+    expect(proxyResolver.dispatcherForAccount).toHaveBeenCalledWith('a-1')
+    expect(proxyResolver.dispatcherForProxyId).not.toHaveBeenCalled()
+    expect(capturedDispatcher).toBe(fakeDispatcher)
+  })
+
+  it('complete_oauth: accountId takes precedence over proxyId', async () => {
+    const handler = handlers.get(CREDENTIAL_CHANNELS.completeOauth)!
+    await handler(null, { pendingId: 'pd-3', code: '', proxyId: 'p-x', accountId: 'a-2' })
+
+    expect(proxyResolver.dispatcherForAccount).toHaveBeenCalledWith('a-2')
+    expect(proxyResolver.dispatcherForProxyId).not.toHaveBeenCalled()
+    expect(capturedDispatcher).toBe(fakeDispatcher)
+  })
+
+  it('complete_oauth: direct connection when neither proxyId nor accountId provided', async () => {
+    const handler = handlers.get(CREDENTIAL_CHANNELS.completeOauth)!
+    await handler(null, { pendingId: 'pd-4', code: '' })
+
+    expect(proxyResolver.dispatcherForProxyId).not.toHaveBeenCalled()
+    expect(proxyResolver.dispatcherForAccount).not.toHaveBeenCalled()
     expect(capturedDispatcher).toBeUndefined()
   })
 

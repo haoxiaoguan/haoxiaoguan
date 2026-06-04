@@ -70,8 +70,8 @@ const api: HxgApi = {
   credential: {
     startOauth: (provider, mode) =>
       ipcRenderer.invoke(CREDENTIAL_CHANNELS.startOauth, { provider, mode }),
-    completeOauth: (pendingId, code) =>
-      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, { pendingId, code }),
+    completeOauth: (pendingId, code, proxyId, accountId) =>
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, { pendingId, code, proxyId, accountId }),
     importTokenJson: (provider, payload, proxyId) =>
       ipcRenderer.invoke(CREDENTIAL_CHANNELS.importTokenJson, { provider, payload, proxyId }),
     scanLocalCredentials: (provider, proxyId) =>

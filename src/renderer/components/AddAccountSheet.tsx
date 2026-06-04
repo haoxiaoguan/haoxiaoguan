@@ -154,7 +154,12 @@ export default function AddAccountSheet({
           const pending = await credentialService.startOAuth(backendPlatform, mode);
           onboarding.setPending(pending);
           await openExternalUrl(pending.authorize_url);
-          const m = await credentialService.completeOAuth(pending.pending_id, '');
+          // 导入新账号：把 OAuth 换 token 经 UI 选定的代理路由（避免暴露真实 IP）。
+          const m = await credentialService.completeOAuth(
+            pending.pending_id,
+            '',
+            proxyId !== NONE ? proxyId : undefined,
+          );
           setMaterial(m);
           onboarding.setMaterial(m);
           break;

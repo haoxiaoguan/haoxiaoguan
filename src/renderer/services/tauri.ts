@@ -202,8 +202,8 @@ export const credentialService = {
   startOAuth: (provider: string, mode: OAuthMode) =>
     bridge().credential.startOauth(provider, mode) as Promise<OAuthPending>,
 
-  completeOAuth: (pendingId: string, code: string) =>
-    bridge().credential.completeOauth(pendingId, code) as Promise<ImportedCredentialMaterial>,
+  completeOAuth: (pendingId: string, code: string, proxyId?: string, accountId?: string) =>
+    bridge().credential.completeOauth(pendingId, code, proxyId, accountId) as Promise<ImportedCredentialMaterial>,
 
   importTokenJson: (provider: string, payload: string, proxyId?: string) =>
     bridge().credential.importTokenJson(provider, payload, proxyId) as Promise<ImportedCredentialMaterial>,
