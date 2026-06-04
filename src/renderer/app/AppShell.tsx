@@ -19,7 +19,6 @@ import {
   type CSSProperties,
   type ReactNode,
   useEffect,
-  useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
@@ -38,7 +37,6 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ManagementHeaderTabs } from '@/components/management/ManagementControls';
-import { isDashboardDesignFixtureEnabled } from '@/features/dashboard/page/dashboardDesignFixture';
 import { cn } from '@/lib/utils';
 import { SidebarBrand } from './SidebarBrand';
 import { SidebarUserCard } from './SidebarUserCard';
@@ -170,20 +168,6 @@ export function AppShell({ shell }: AppShellProps) {
   const navigate = useNavigate();
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const resolvedShell = shell ?? detectPlatformShell(window.location.search, navigator.userAgent);
-  const [designFixtureEnabled, setDesignFixtureEnabled] = useState(() =>
-    isDashboardDesignFixtureEnabled(),
-  );
-
-  useEffect(() => {
-    const sync = () => setDesignFixtureEnabled(isDashboardDesignFixtureEnabled());
-    window.addEventListener('haoxiaoguan-dashboard-fixture-change', sync);
-    window.addEventListener('storage', sync);
-    return () => {
-      window.removeEventListener('haoxiaoguan-dashboard-fixture-change', sync);
-      window.removeEventListener('storage', sync);
-    };
-  }, []);
-
   // 记住进入设置前的主路由，供「返回」使用。
   useEffect(() => {
     if (!location.pathname.startsWith('/settings')) {
@@ -195,14 +179,6 @@ export function AppShell({ shell }: AppShellProps) {
     const last = sessionStorage.getItem('haoxiaoguan:last-main-route') || '/';
     navigate(last);
   };
-
-  if (designFixtureEnabled) {
-    return (
-      <div className="h-screen w-screen overflow-hidden bg-background">
-        <Outlet />
-      </div>
-    );
-  }
 
   // Just over the macOS traffic-light height. Lives above the rounded card
   // gutter so the OS chrome never overlaps content.
