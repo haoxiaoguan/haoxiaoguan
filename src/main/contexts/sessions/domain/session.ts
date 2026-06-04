@@ -25,6 +25,7 @@ export interface SessionMessage {
 export interface ToolProbe {
   tool: SessionTool
   hasSessions: boolean
+  count: number // 会话文件总数（probe 遍历目录时即得，无需解析内容）
   lastActiveAt?: number // 该工具最新会话文件 mtime（epoch 毫秒）
 }
 

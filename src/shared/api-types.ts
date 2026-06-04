@@ -410,6 +410,7 @@ export interface SessionMessageDto {
 export interface ToolProbeDto {
   tool: SessionToolDto
   hasSessions: boolean
+  count: number
   lastActiveAt?: number
 }
 export interface SessionPageDto {

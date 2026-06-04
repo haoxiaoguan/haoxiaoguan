@@ -51,7 +51,7 @@ export class GeminiSessionSource implements SessionSource {
     const files = await this.files()
     const mtimes = await Promise.all(files.map((f) => mtimeMs(f)))
     const latest = mtimes.reduce((a, b) => (b > a ? b : a), 0)
-    return { tool: this.tool, hasSessions: files.length > 0, lastActiveAt: latest > 0 ? latest : undefined }
+    return { tool: this.tool, hasSessions: files.length > 0, count: files.length, lastActiveAt: latest > 0 ? latest : undefined }
   }
 
   async scan(opts: ScanOpts = {}): Promise<SessionPage> {

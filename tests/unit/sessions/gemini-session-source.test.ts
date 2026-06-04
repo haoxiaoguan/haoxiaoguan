@@ -79,6 +79,7 @@ describe('GeminiSessionSource', () => {
     const p = await writeChat('projC', 'session-y.json', { sessionId: 'gem-3', startTime: '2026-05-14T00:00:00.000Z', messages: [] }, '/c')
     const probe = await source().probe()
     expect(probe.hasSessions).toBe(true)
+    expect(probe.count).toBe(1)
     await source().delete(p, 'gem-3')
     expect(existsSync(p)).toBe(false)
   })

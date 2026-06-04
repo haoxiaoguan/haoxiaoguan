@@ -83,6 +83,7 @@ describe('ClaudeSessionSource', () => {
     const probe = await source().probe()
     expect(probe.tool).toBe('claude')
     expect(probe.hasSessions).toBe(true)
+    expect(probe.count).toBe(1)
     expect(probe.lastActiveAt).toBeGreaterThan(0)
   })
 

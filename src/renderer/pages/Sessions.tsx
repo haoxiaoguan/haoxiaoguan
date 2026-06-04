@@ -344,6 +344,8 @@ export default function Sessions() {
   const items = cur?.items ?? [];
   const hasMore = cur ? cur.offset < cur.total : false;
   const selectedSession = items.find((i) => i.sourcePath === selectedPath);
+  // 当前工具总数：已扫描用 byTool.total，否则用 probe.count（无需扫描内容）。
+  const activeTotal = cur?.total ?? probes.find((p) => p.tool === activeTool)?.count;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -445,9 +447,9 @@ export default function Sessions() {
               <span className="text-[12.5px] font-semibold text-foreground">
                 {t('sessions')}
               </span>
-              {cur?.total != null && (
+              {activeTotal != null && (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {cur.total}
+                  {activeTotal}
                 </span>
               )}
 
@@ -537,8 +539,9 @@ export default function Sessions() {
                               dotColor: 'bg-muted-foreground',
                             };
                             const probe = probes.find((p) => p.tool === tool);
-                            const count = byTool[tool]?.total ?? 0;
-                            const hasNone = probe?.hasSessions === false || count === 0;
+                            // 数量与可选性来自 probe（遍历目录即得），不依赖是否已扫描过该工具。
+                            const count = probe?.count ?? byTool[tool]?.total ?? 0;
+                            const hasNone = probe ? !probe.hasSessions : count === 0;
                             return (
                               <SelectItem
                                 key={tool}
@@ -552,16 +555,9 @@ export default function Sessions() {
                                     aria-hidden
                                   />
                                   <span>{cfg.label}</span>
-                                  {count > 0 && (
-                                    <span className="ml-auto pl-3 text-[11px] text-muted-foreground">
-                                      {count}
-                                    </span>
-                                  )}
-                                  {hasNone && (
-                                    <span className="ml-auto pl-3 text-[11px] text-muted-foreground">
-                                      0
-                                    </span>
-                                  )}
+                                  <span className="ml-auto pl-3 text-[11px] text-muted-foreground">
+                                    {count}
+                                  </span>
                                 </div>
                               </SelectItem>
                             );
