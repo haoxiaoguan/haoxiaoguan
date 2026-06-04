@@ -28,10 +28,17 @@
     }
   },
   "trend": {
-    "title": "Activity trend",
+    "title": "Trend Analysis",
+    "empty": "No data",
+    "rangeToday": "Today",
+    "rangeWeek": "Week",
+    "rangeMonth": "Month",
+    "dimToken": "Tokens",
+    "dimTool": "Tool calls",
+    "dimSession": "Sessions",
+    "dimCode": "Code lines",
     "less": "Less",
     "more": "More",
-    "rangeWeek": "Week",
     "rangeYear": "Year"
   },
   "account": {

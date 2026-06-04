@@ -28,10 +28,17 @@
     }
   },
   "trend": {
-    "title": "活跃趋势",
+    "title": "趋势分析",
+    "empty": "暂无数据",
+    "rangeToday": "今日",
+    "rangeWeek": "本周",
+    "rangeMonth": "本月",
+    "dimToken": "Token 消耗",
+    "dimTool": "工具调用",
+    "dimSession": "会话数量",
+    "dimCode": "代码改动",
     "less": "Less",
     "more": "More",
-    "rangeWeek": "周",
     "rangeYear": "年"
   },
   "account": {
