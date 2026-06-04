@@ -21,7 +21,7 @@ import { useSessionsStore } from '../../../src/renderer/stores/sessionsStore'
 beforeEach(() => {
   vi.clearAllMocks()
   useSessionsStore.setState({
-    probes: [], activeTool: 'claude', byTool: {}, selectedId: null, messages: [], loading: false, error: null,
+    probes: [], activeTool: 'claude', byTool: {}, selectedPath: null, messages: [], loading: false, error: null,
   } as never)
 })
 
@@ -73,7 +73,7 @@ it('deleteSelected 批量删除后从当前工具缓存移除', async () => {
   expect(items.map((i) => i.sourcePath)).toEqual(['/b'])
 })
 
-it('deleteSelected 删掉当前选中项后 selectedId 清空', async () => {
+it('deleteSelected 删掉当前选中项后 selectedPath 清空', async () => {
   mocks.probeTools.mockResolvedValue([{ tool: 'claude', hasSessions: true, lastActiveAt: 1 }])
   mocks.listSessions.mockResolvedValue({
     items: [{ tool: 'claude', sessionId: 'a', sourcePath: '/a' }],
@@ -81,9 +81,25 @@ it('deleteSelected 删掉当前选中项后 selectedId 清空', async () => {
   })
   mocks.deleteSessions.mockResolvedValue([{ sourcePath: '/a', ok: true }])
   await useSessionsStore.getState().init()
-  useSessionsStore.setState({ selectedId: 'a' } as never)
+  useSessionsStore.setState({ selectedPath: '/a' } as never)
   await useSessionsStore.getState().deleteSelected([{ tool: 'claude', sessionId: 'a', sourcePath: '/a' } as never])
-  expect(useSessionsStore.getState().selectedId).toBeNull()
+  expect(useSessionsStore.getState().selectedPath).toBeNull()
+})
+
+it('selectSession 用 sourcePath 作选中键（sessionId 可能跨文件重复）', async () => {
+  mocks.probeTools.mockResolvedValue([{ tool: 'claude', hasSessions: true, lastActiveAt: 1 }])
+  // 两个文件共用同一 sessionId（续聊/fork），但 sourcePath 不同
+  mocks.listSessions.mockResolvedValue({
+    items: [
+      { tool: 'claude', sessionId: 'dup', sourcePath: '/a' },
+      { tool: 'claude', sessionId: 'dup', sourcePath: '/b' },
+    ],
+    total: 2, offset: 0,
+  })
+  await useSessionsStore.getState().init()
+  await useSessionsStore.getState().selectSession({ tool: 'claude', sessionId: 'dup', sourcePath: '/b' } as never)
+  // 选中键是 sourcePath（精确到被点的那个文件），不是 sessionId
+  expect(useSessionsStore.getState().selectedPath).toBe('/b')
 })
 
 it('refresh 重载当前工具并更新 byTool 和 probes', async () => {
@@ -110,6 +126,6 @@ it('refresh 重载当前工具并更新 byTool 和 probes', async () => {
   expect(state.byTool.claude?.total).toBe(2)
   // probes 也被更新
   expect(state.probes[0].lastActiveAt).toBe(2)
-  // selectedId 被清空
-  expect(state.selectedId).toBeNull()
+  // selectedPath 被清空
+  expect(state.selectedPath).toBeNull()
 })

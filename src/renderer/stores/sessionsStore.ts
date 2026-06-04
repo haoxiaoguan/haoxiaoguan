@@ -21,7 +21,9 @@ interface SessionsState {
   probes: ToolProbeDto[];
   activeTool: SessionToolDto;
   byTool: Partial<Record<SessionToolDto, ToolState>>;
-  selectedId: string | null;
+  // 选中会话用 sourcePath 标识（逐文件唯一）。sessionId 来自文件内容，
+  // 续聊/fork 会话会跨多个文件共用同一 sessionId，不能当选中键。
+  selectedPath: string | null;
   messages: SessionMessageDto[];
   loading: boolean;
   error: string | null;
@@ -45,7 +47,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   probes: [],
   activeTool: 'claude',
   byTool: {},
-  selectedId: null,
+  selectedPath: null,
   messages: [],
   loading: false,
   error: null,
@@ -63,7 +65,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   selectTool: async (tool) => {
-    set({ activeTool: tool, selectedId: null, messages: [] });
+    set({ activeTool: tool, selectedPath: null, messages: [] });
     if (get().byTool[tool]?.loaded) return;
     set({ loading: true, error: null });
     try {
@@ -103,7 +105,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   selectSession: async (summary) => {
-    set({ selectedId: summary.sessionId, messages: [], loading: true, error: null });
+    set({ selectedPath: summary.sourcePath, messages: [], loading: true, error: null });
     try {
       const messages = await sessionsService.getMessages(summary.tool, summary.sourcePath);
       set({ messages, loading: false });
@@ -127,8 +129,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
               total: Math.max(0, cur.total - 1),
             },
           },
-          selectedId: s.selectedId === summary.sessionId ? null : s.selectedId,
-          messages: s.selectedId === summary.sessionId ? [] : s.messages,
+          selectedPath: s.selectedPath === summary.sourcePath ? null : s.selectedPath,
+          messages: s.selectedPath === summary.sourcePath ? [] : s.messages,
         };
       });
     } catch (e) {
@@ -154,10 +156,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
             ...s.byTool,
             [tool]: { ...cur, items, total: Math.max(0, cur.total - removed.size) },
           },
-          selectedId:
-            s.selectedId && removed.has(cur.items.find((i) => i.sessionId === s.selectedId)?.sourcePath ?? '')
-              ? null
-              : s.selectedId,
+          selectedPath: s.selectedPath && removed.has(s.selectedPath) ? null : s.selectedPath,
         };
       });
     } catch (e) {
@@ -178,7 +177,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   refresh: async () => {
     const tool = get().activeTool;
-    set({ loading: true, error: null, selectedId: null, messages: [] });
+    set({ loading: true, error: null, selectedPath: null, messages: [] });
     try {
       const probes = await sessionsService.probeTools();
       const page = await sessionsService.listSessions(tool, PAGE_LIMIT, 0);

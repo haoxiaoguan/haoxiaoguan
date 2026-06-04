@@ -302,7 +302,7 @@ export default function Sessions() {
     probes,
     activeTool,
     byTool,
-    selectedId,
+    selectedPath,
     messages,
     loading,
     error,
@@ -340,7 +340,7 @@ export default function Sessions() {
   const cur = byTool[activeTool];
   const items = cur?.items ?? [];
   const hasMore = cur ? cur.offset < cur.total : false;
-  const selectedSession = items.find((i) => i.sessionId === selectedId);
+  const selectedSession = items.find((i) => i.sourcePath === selectedPath);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -645,7 +645,7 @@ export default function Sessions() {
                   <SessionRow
                     key={s.sourcePath}
                     session={s}
-                    active={s.sessionId === selectedId && !selectMode}
+                    active={s.sourcePath === selectedPath && !selectMode}
                     selectMode={selectMode}
                     checked={selected.has(s.sourcePath)}
                     onSelect={() => {
