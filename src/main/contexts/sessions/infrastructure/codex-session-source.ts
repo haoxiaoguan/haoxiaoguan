@@ -21,6 +21,7 @@ import {
   truncateSummary,
 } from '../domain/session-parse-utils'
 import { mtimeMs, readHeadTailLines } from './fs-helpers'
+import { patchChurn } from '../domain/code-edit-utils'
 
 const HEAD_N = 12
 const TAIL_N = 30
@@ -218,6 +219,13 @@ export class CodexSessionSource implements SessionSource {
               : `${f}#${fileToolEvents.length}#${ts}`
           const name = typeof payload.name === 'string' ? payload.name : undefined
           fileToolEvents.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey: callId, name })
+          if (name === 'apply_patch') {
+            const input = typeof payload.input === 'string' ? payload.input : undefined
+            const churn = input ? patchChurn(input) : 0
+            if (churn > 0) {
+              fileToolEvents.push({ tool: this.tool, kind: 'code_edit', ts, sourceKey: callId, name, amount: churn })
+            }
+          }
         }
       }
       if (isSubagent) continue

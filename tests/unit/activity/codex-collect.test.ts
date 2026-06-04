@@ -31,6 +31,28 @@ describe('CodexSessionSource.collectLogEvents', () => {
     expect(calls.map((c) => c.name).sort()).toEqual(['apply_patch', 'shell'])
   })
 
+  it('apply_patch custom_tool_call 产出 code_edit 事件并携带 amount', async () => {
+    const PATCH = [
+      '*** Begin Patch',
+      '*** Update File: a.ts',
+      '@@',
+      ' keep',
+      '-old',
+      '+n1',
+      '+n2',
+      '*** End Patch',
+    ].join('\n')
+    await writeSession('rollout-3.jsonl', [
+      { type: 'session_meta', timestamp: '2023-11-14T00:00:00.000Z', payload: { id: 'c3', cwd: '/p' } },
+      { type: 'response_item', timestamp: '2023-11-14T00:00:03.000Z', payload: { type: 'custom_tool_call', call_id: 'c1', name: 'apply_patch', input: PATCH } },
+    ])
+    const { events } = await new CodexSessionSource(dir).collectLogEvents()
+    const edits = events.filter((e) => e.kind === 'code_edit')
+    expect(edits).toHaveLength(1)
+    expect(edits[0].amount).toBe(3)
+    expect(edits[0].sourceKey).toBe('c1')
+  })
+
   it('subagent 会话整体跳过', async () => {
     await writeSession('rollout-2.jsonl', [
       { type: 'session_meta', timestamp: '2023-11-14T00:00:00.000Z', payload: { id: 'c2', source: { subagent: true } } },
