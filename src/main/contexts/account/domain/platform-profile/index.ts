@@ -312,12 +312,18 @@ function kiroProfile(email: string, raw: JsonValue | undefined, tokenHint: strin
     pickString(profile, [['email'], ['userEmail']]) ??
     pickString(usage, [['userInfo', 'email'], ['email']])
 
-  const displayIdentifier =
+  // 身份键与显示名解耦：
+  //  - identityKey 取 userId 优先（IdC/企业账号 userId 稳定，email 可能间歇缺失），
+  //    保证唯一性/去重/活跃检测的键稳定，且永不回退到随机 kiro-<hash> 占位。
+  //  - displayIdentifier 取 email 优先（可读性），email 缺失才回退到同一稳定来源。
+  // 两者派生自不同优先级 → 改善显示名不会牵动 identityKey（不破坏唯一性/额度关联）。
+  const stableIdentitySource =
     userId ??
     resolvedEmail ??
     pickString(authToken, [['login_hint'], ['loginHint']]) ??
     `kiro-${shortHash(tokenHint)}`
-  const identityKey = sanitizeIdentifierPart(displayIdentifier)
+  const identityKey = sanitizeIdentifierPart(stableIdentitySource)
+  const displayIdentifier = resolvedEmail ?? stableIdentitySource
   const loginProviderRaw =
     pickString(profile, [['loginProvider'], ['provider'], ['authProvider'], ['signedInWith']]) ??
     pickString(authToken, [['login_option'], ['provider'], ['loginProvider']]) ??
