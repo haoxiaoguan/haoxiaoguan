@@ -39,6 +39,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         autostart: kv.autostart === 'true',
         utilityButtons: kv.utility_buttons,
         allowStaleKiroImport: kv.allow_stale_kiro_import === 'true',
+        terminalLaunchTemplate: kv.terminal_launch_template,
       }
     } catch (e) {
       throw new Error(toIpcError(e))

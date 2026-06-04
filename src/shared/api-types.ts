@@ -17,6 +17,7 @@ export interface SettingsResponse {
   autostart: boolean
   utilityButtons: string
   allowStaleKiroImport: boolean
+  terminalLaunchTemplate: string
 }
 export interface AppDirs {
   dataDir: string
