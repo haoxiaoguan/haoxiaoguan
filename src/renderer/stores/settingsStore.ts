@@ -27,6 +27,8 @@ interface SettingsState {
   utilityButtons: string;
   /** Allow Kiro import when identity cannot be confirmed online */
   allowStaleKiroImport: boolean;
+  /** 「会话」恢复用的终端启动命令模板，占位符 {cwd}/{command}。空串=未配置（前端降级为复制）。 */
+  terminalLaunchTemplate: string;
   /** Loading state */
   loading: boolean;
   /** Error message */
@@ -58,6 +60,8 @@ interface SettingsState {
   setUtilityButtons: (value: string) => Promise<void>;
   /** Update allow-stale-Kiro-import toggle */
   setAllowStaleKiroImport: (enabled: boolean) => Promise<void>;
+  /** Update terminal launch template (for session resume) */
+  setTerminalLaunchTemplate: (template: string) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -73,6 +77,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   autostart: false,
   utilityButtons: 'device,support,docs,notification',
   allowStaleKiroImport: false,
+  terminalLaunchTemplate: '',
   loading: false,
   error: null,
 
@@ -101,6 +106,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         autostart: settings.autostart,
         utilityButtons: settings.utilityButtons,
         allowStaleKiroImport: settings.allowStaleKiroImport,
+        terminalLaunchTemplate: settings.terminalLaunchTemplate ?? '',
         loading: false,
       });
     } catch (err) {
@@ -229,6 +235,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         settings: { allow_stale_kiro_import: enabled ? 'true' : 'false' },
       });
       set({ allowStaleKiroImport: enabled });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setTerminalLaunchTemplate: async (template: string) => {
+    try {
+      await settingsService.updateSettings({ settings: { terminal_launch_template: template } });
+      set({ terminalLaunchTemplate: template });
     } catch (err) {
       set({ error: String(err) });
     }

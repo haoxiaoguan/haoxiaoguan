@@ -51,6 +51,8 @@ export interface RuntimeSettings {
   // 本地反代是否启用 HTTPS（自签证书，P2-1）。默认 false（HTTP）；true 时
   // ApiHttpServer 使用 https.createServer + loadOrCreateCert() 生成/复用证书。
   apiProxyHttps: boolean
+  // 「会话」恢复用的终端启动命令模板，占位符 {cwd}/{command}。空串=未配置（前端降级为复制）。
+  terminalLaunchTemplate: string
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -83,6 +85,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyQuotaResetMs: 3600000,
   apiProxyProbabilisticRetryChance: 0.1,
   apiProxyHttps: false,
+  terminalLaunchTemplate: '',
 }
 
 export class AppSettings {
@@ -151,6 +154,7 @@ export class AppSettings {
       api_proxy_quota_reset_ms: String(this.runtime.apiProxyQuotaResetMs),
       api_proxy_probabilistic_retry_chance: String(this.runtime.apiProxyProbabilisticRetryChance),
       api_proxy_https: String(this.runtime.apiProxyHttps),
+      terminal_launch_template: this.runtime.terminalLaunchTemplate,
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -212,6 +216,8 @@ export class AppSettings {
         const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 1) this.runtime.apiProxyProbabilisticRetryChance = n
       } else if (k === 'api_proxy_https') {
         this.runtime.apiProxyHttps = v === 'true'
+      } else if (k === 'terminal_launch_template') {
+        this.runtime.terminalLaunchTemplate = v
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

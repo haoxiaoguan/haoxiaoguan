@@ -16,6 +16,7 @@ import {
   WS_CHANNELS,
   PROXY_CHANNELS,
   API_PROXY_CHANNELS,
+  SESSIONS_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi } from '../shared/api-types'
 
@@ -212,6 +213,17 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.unbindGroup, { groupId }),
     getGroupBinding: (groupId) =>
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.getGroupBinding, { groupId }),
+  },
+  sessions: {
+    probeTools: () => ipcRenderer.invoke(SESSIONS_CHANNELS.probeTools),
+    listSessions: (tool, limit, offset) =>
+      ipcRenderer.invoke(SESSIONS_CHANNELS.listSessions, { tool, limit, offset }),
+    getMessages: (tool, sourcePath) =>
+      ipcRenderer.invoke(SESSIONS_CHANNELS.getMessages, { tool, sourcePath }),
+    deleteSession: (tool, sourcePath, sessionId) =>
+      ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSession, { tool, sourcePath, sessionId }),
+    deleteSessions: (items) => ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSessions, { items }),
+    resume: (command, cwd) => ipcRenderer.invoke(SESSIONS_CHANNELS.resume, { command, cwd }),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

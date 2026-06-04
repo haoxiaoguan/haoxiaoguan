@@ -556,3 +556,30 @@ export const accountGroupService = {
   getGroupBinding: (groupId: string) =>
     bridge().accountGroup.getGroupBinding(groupId) as Promise<AccountGroupBindingDto | null>,
 };
+
+// ============================================================================
+// Sessions Commands (本机 AI 对话历史浏览器)
+// ============================================================================
+
+import type {
+  SessionToolDto,
+  SessionMessageDto,
+  ToolProbeDto,
+  SessionPageDto,
+  SessionDeleteRequestDto,
+  SessionDeleteOutcomeDto,
+} from '@shared/api-types';
+
+export const sessionsService = {
+  probeTools: () => bridge().sessions.probeTools() as Promise<ToolProbeDto[]>,
+  listSessions: (tool: SessionToolDto, limit?: number, offset?: number) =>
+    bridge().sessions.listSessions(tool, limit, offset) as Promise<SessionPageDto>,
+  getMessages: (tool: SessionToolDto, sourcePath: string) =>
+    bridge().sessions.getMessages(tool, sourcePath) as Promise<SessionMessageDto[]>,
+  deleteSession: (tool: SessionToolDto, sourcePath: string, sessionId: string) =>
+    bridge().sessions.deleteSession(tool, sourcePath, sessionId),
+  deleteSessions: (items: SessionDeleteRequestDto[]) =>
+    bridge().sessions.deleteSessions(items) as Promise<SessionDeleteOutcomeDto[]>,
+  resume: (command: string, cwd?: string) =>
+    bridge().sessions.resume(command, cwd),
+};

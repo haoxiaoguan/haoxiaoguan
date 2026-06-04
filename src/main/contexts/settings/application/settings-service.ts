@@ -104,4 +104,9 @@ export class SettingsApplicationService {
   getApiProxyHttps(): boolean {
     return this.file.loadSync().runtime.apiProxyHttps
   }
+
+  /** 会话恢复用的终端启动命令模板（空串=未配置）。 */
+  getTerminalLaunchTemplate(): string {
+    return this.file.loadSync().runtime.terminalLaunchTemplate
+  }
 }

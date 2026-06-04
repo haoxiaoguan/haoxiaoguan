@@ -9,6 +9,7 @@ import ApiProxyHealth from '../pages/ApiProxyHealth';
 import Proxies from '../pages/Proxies';
 import Groups from '../pages/Groups';
 import Analytics from '../pages/Analytics';
+import Sessions from '../pages/Sessions';
 import Settings from '../pages/Settings';
 import GeneralSettings from '../components/settings/pages/GeneralSettings';
 import SyncSettings from '../components/settings/pages/SyncSettings';
@@ -41,6 +42,7 @@ export function AppRouter() {
             <Route index element={<Navigate to="service" replace />} />
           </Route>
           <Route path="analytics" element={<Analytics />} />
+          <Route path="sessions" element={<Sessions />} />
           <Route path="settings" element={<Settings />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<GeneralSettings />} />

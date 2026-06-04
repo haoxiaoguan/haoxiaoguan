@@ -187,6 +187,16 @@ export const PROXY_CHANNELS = {
   unbindAccount: 'proxy:unbindAccount',
 } as const
 
+// Sessions context — read-only on-disk AI CLI conversation history browser.
+export const SESSIONS_CHANNELS = {
+  probeTools: 'sessions:probeTools',
+  listSessions: 'sessions:listSessions',
+  getMessages: 'sessions:getMessages',
+  deleteSession: 'sessions:deleteSession',
+  deleteSessions: 'sessions:deleteSessions',
+  resume: 'sessions:resume',
+} as const
+
 // API 反代服务上下文（apiProxy）—— 本地 HTTP 服务开关 + 状态。新功能，无 Tauri
 // 来源命令名，故 channel 取 "apiProxy:<method>"。
 export const API_PROXY_CHANNELS = {

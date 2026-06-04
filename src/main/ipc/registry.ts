@@ -54,6 +54,9 @@ import type { AccountHealthTracker } from '../contexts/apiProxy/domain/account-s
 import type { KiroAccountPort } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
 import type { ApiProxyKeyService } from '../contexts/apiProxy/application/api-proxy-key-service'
 
+import type { SessionsService } from '../contexts/sessions/application/sessions-service'
+import { registerSessionsHandlers } from '../contexts/sessions/ipc/sessions-handlers'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
@@ -117,6 +120,9 @@ export interface Services {
   kiroAccountPort: KiroAccountPort
   /** 客户端 Key 管理（可选，Task 6 container 注入后激活 IPC handler）。 */
   apiProxyKeyService?: ApiProxyKeyService
+
+  // sessions context (read-only on-disk AI CLI conversation history browser)
+  sessionsService: SessionsService
 }
 
 // Each context contributes a register*Handlers function.
@@ -151,4 +157,5 @@ export function registerAllHandlers(services: Services): void {
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
   registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs())
+  registerSessionsHandlers(services.sessionsService)
 }
