@@ -62,7 +62,9 @@ export async function httpFetch(
     }
     return await fetch(url, { ...init, signal: controller.signal })
   } catch (err) {
-    throw providerError(`${describe}: ${err instanceof Error ? err.message : String(err)}`)
+    const base = err instanceof Error ? err.message : String(err)
+    const causeMsg = err instanceof Error && err.cause instanceof Error ? ` [cause: ${err.cause.message}]` : ''
+    throw providerError(`${describe}: ${base}${causeMsg}`)
   } finally {
     clearTimeout(timer)
   }
