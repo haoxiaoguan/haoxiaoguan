@@ -51,6 +51,10 @@ import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infr
 
 import { ApiProxyKeyEntity } from '../../contexts/apiProxy/infrastructure/api-proxy-key.entity'
 
+import { ActivityEventEntity } from '../../contexts/activity/infrastructure/activity-event.entity'
+import { ActivityDailyRollupEntity } from '../../contexts/activity/infrastructure/activity-daily-rollup.entity'
+import { ActivityScanStateEntity } from '../../contexts/activity/infrastructure/activity-scan-state.entity'
+
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
   // account context
@@ -83,4 +87,8 @@ export const ALL_ENTITIES: unknown[] = [
   AccountGroupProxyBindingEntity,
   // api-proxy context
   ApiProxyKeyEntity,
+  // activity context
+  ActivityEventEntity,
+  ActivityDailyRollupEntity,
+  ActivityScanStateEntity,
 ]
