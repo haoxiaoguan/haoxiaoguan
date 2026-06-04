@@ -12,6 +12,7 @@ import {
   type ToolProbe,
 } from '../domain/session'
 import { DEFAULT_PAGE_LIMIT, type ScanOpts, type SessionSource } from '../domain/session-source'
+import type { ActivityCollectResult, RawLogEvent } from '../domain/log-event'
 import {
   deriveTitle,
   extractText,
@@ -166,6 +167,48 @@ export class ClaudeSessionSource implements SessionSource {
       await rm(sidecar, { recursive: true, force: true })
     }
     await rm(sourcePath, { force: true })
+  }
+
+  async collectLogEvents(opts: { since?: number } = {}): Promise<ActivityCollectResult> {
+    const since = opts.since ?? 0
+    const files = await this.files()
+    const withMtime = await Promise.all(files.map(async (f) => ({ f, m: await mtimeMs(f) })))
+    let latestMtime = since
+    const events: RawLogEvent[] = []
+    for (const { f, m } of withMtime) {
+      if (m > latestMtime) latestMtime = m
+      if (m < since) continue
+      let text: string
+      try {
+        text = await readTextAsync(f)
+      } catch {
+        continue
+      }
+      let sessionEmitted = false
+      for (const line of text.split('\n')) {
+        if (line.trim().length === 0) continue
+        const v = parse(line)
+        if (!v || v.isMeta === true) continue
+        const ts = typeof v.timestamp === 'string' ? parseTimestampToMs(v.timestamp) : undefined
+        if (ts === undefined) continue
+        if (!sessionEmitted) {
+          events.push({ tool: this.tool, kind: 'session', ts, sourceKey: f })
+          sessionEmitted = true
+        }
+        const msg = isObject(v.message) ? v.message : undefined
+        if (v.type === 'assistant' && msg && Array.isArray(msg.content)) {
+          const uuid = typeof v.uuid === 'string' ? v.uuid : undefined
+          msg.content.forEach((it, idx) => {
+            if (isObject(it) && it.type === 'tool_use') {
+              const name = typeof it.name === 'string' ? it.name : undefined
+              const sourceKey = uuid ? `${uuid}#${idx}` : `${f}#${idx}#${ts}`
+              events.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey, name })
+            }
+          })
+        }
+      }
+    }
+    return { events, latestMtime }
   }
 }
 

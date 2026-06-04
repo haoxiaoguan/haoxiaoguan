@@ -175,6 +175,16 @@ export interface UnmanagedSkillEntryDto {
   description?: string
 }
 
+// ── Activity DTOs (activity context — 会话活动统计) ────────────────────────────
+export interface ActivityTrendPointResponse {
+  date: string
+  value: number
+}
+// 仅返回本次入库的事件数；原设计的 scanned 字段已由单一 watermark 增量机制取代，故省略。
+export interface ActivitySyncSummaryResponse {
+  events: number
+}
+
 // ── Usage DTOs (usage manifest §6) ───────────────────────────────────────────
 export interface UsageSyncSummaryResponse {
   imported: number
@@ -567,6 +577,10 @@ export interface HxgApi {
     getUsageTrend(range: string, metric: string): Promise<UsageTrendPointResponse[]>
     getUsagePlatformBreakdown(range: string): Promise<PlatformUsageBreakdownResponse[]>
     getUsageSyncStatus(): Promise<UsageSyncStatusResponse>
+  }
+  activity: {
+    syncActivity(): Promise<ActivitySyncSummaryResponse>
+    getActivityTrend(range: string, metric: string): Promise<ActivityTrendPointResponse[]>
   }
   localBackup: {
     create(): Promise<BackupEntryDto>

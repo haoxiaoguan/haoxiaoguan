@@ -12,6 +12,7 @@ import {
   type ToolProbe,
 } from '../domain/session'
 import { DEFAULT_PAGE_LIMIT, type ScanOpts, type SessionSource } from '../domain/session-source'
+import type { ActivityCollectResult, RawLogEvent } from '../domain/log-event'
 import {
   deriveTitle,
   extractText,
@@ -173,6 +174,57 @@ export class CodexSessionSource implements SessionSource {
 
   async delete(sourcePath: string): Promise<void> {
     await rm(sourcePath, { force: true })
+  }
+
+  async collectLogEvents(opts: { since?: number } = {}): Promise<ActivityCollectResult> {
+    const since = opts.since ?? 0
+    const files = await this.files()
+    const withMtime = await Promise.all(files.map(async (f) => ({ f, m: await mtimeMs(f) })))
+    let latestMtime = since
+    const events: RawLogEvent[] = []
+    for (const { f, m } of withMtime) {
+      if (m > latestMtime) latestMtime = m
+      if (m < since) continue
+      let text: string
+      try {
+        text = await readTextAsync(f)
+      } catch {
+        continue
+      }
+      let sessionTs: number | undefined
+      let isSubagent = false
+      const fileToolEvents: RawLogEvent[] = []
+      for (const line of text.split('\n')) {
+        if (line.trim().length === 0) continue
+        const v = parse(line)
+        if (!v) continue
+        const ts = typeof v.timestamp === 'string' ? parseTimestampToMs(v.timestamp) : undefined
+        if (sessionTs === undefined && ts !== undefined) sessionTs = ts
+        const payload = isObject(v.payload) ? v.payload : undefined
+        if (
+          v.type === 'session_meta' && payload && this.skipSubagents &&
+          isObject(payload.source) && 'subagent' in payload.source
+        ) {
+          isSubagent = true
+          break
+        }
+        if (
+          v.type === 'response_item' && payload && ts !== undefined &&
+          (payload.type === 'function_call' || payload.type === 'custom_tool_call')
+        ) {
+          const callId =
+            typeof payload.call_id === 'string' && payload.call_id
+              ? payload.call_id
+              : `${f}#${fileToolEvents.length}#${ts}`
+          const name = typeof payload.name === 'string' ? payload.name : undefined
+          fileToolEvents.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey: callId, name })
+        }
+      }
+      if (isSubagent) continue
+      if (sessionTs !== undefined) events.push({ tool: this.tool, kind: 'session', ts: sessionTs, sourceKey: f })
+      events.push(...fileToolEvents)
+    }
+    return { events, latestMtime }
   }
 }
 

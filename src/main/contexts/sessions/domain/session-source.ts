@@ -1,4 +1,5 @@
 import type { SessionMessage, SessionPage, SessionTool, ToolProbe } from './session'
+import type { ActivityCollectResult } from './log-event'
 
 export interface ScanOpts {
   limit?: number
@@ -18,6 +19,8 @@ export interface SessionSource {
   delete(sourcePath: string, sessionId: string): Promise<void>
   /** 合法根目录（越界校验用）。 */
   roots(): string[]
+  /** 增量收集活动事件（session/tool_call）。since 为上次 watermark(ms)，按文件 mtime 跳过未变文件。 */
+  collectLogEvents(opts?: { since?: number }): Promise<ActivityCollectResult>
 }
 
 export const DEFAULT_PAGE_LIMIT = 200

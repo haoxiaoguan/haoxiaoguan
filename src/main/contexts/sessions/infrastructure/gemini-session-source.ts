@@ -12,6 +12,7 @@ import {
   type ToolProbe,
 } from '../domain/session'
 import { DEFAULT_PAGE_LIMIT, type ScanOpts, type SessionSource } from '../domain/session-source'
+import type { ActivityCollectResult, RawLogEvent } from '../domain/log-event'
 import { deriveTitle, parseTimestampToMs, sanitizeSessionId, truncateSummary } from '../domain/session-parse-utils'
 import { mtimeMs } from './fs-helpers'
 
@@ -154,5 +155,39 @@ export class GeminiSessionSource implements SessionSource {
 
   async delete(sourcePath: string): Promise<void> {
     await rm(sourcePath, { force: true })
+  }
+
+  async collectLogEvents(opts: { since?: number } = {}): Promise<ActivityCollectResult> {
+    const since = opts.since ?? 0
+    const files = await this.files()
+    const withMtime = await Promise.all(files.map(async (f) => ({ f, m: await mtimeMs(f) })))
+    let latestMtime = since
+    const events: RawLogEvent[] = []
+    for (const { f, m } of withMtime) {
+      if (m > latestMtime) latestMtime = m
+      if (m < since) continue
+      let root: Record<string, unknown>
+      try {
+        const v = JSON.parse(await readTextAsync(f))
+        if (!isObject(v)) continue
+        root = v
+      } catch {
+        continue
+      }
+      const createdAt = parseTimestampToMs(root.startTime) ?? parseTimestampToMs(root.lastUpdated)
+      if (createdAt !== undefined) events.push({ tool: this.tool, kind: 'session', ts: createdAt, sourceKey: f })
+      const messages = Array.isArray(root.messages) ? root.messages : []
+      messages.forEach((msg, mi) => {
+        if (!isObject(msg) || !Array.isArray(msg.toolCalls)) return
+        const ts = parseTimestampToMs(msg.timestamp) ?? createdAt
+        if (ts === undefined) return
+        msg.toolCalls.forEach((call, ci) => {
+          if (isObject(call) && typeof call.name === 'string' && call.name) {
+            events.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey: `${f}#${mi}#${ci}`, name: call.name })
+          }
+        })
+      })
+    }
+    return { events, latestMtime }
   }
 }

@@ -17,6 +17,7 @@ import {
   PROXY_CHANNELS,
   API_PROXY_CHANNELS,
   SESSIONS_CHANNELS,
+  ACTIVITY_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi } from '../shared/api-types'
 
@@ -224,6 +225,11 @@ const api: HxgApi = {
       ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSession, { tool, sourcePath, sessionId }),
     deleteSessions: (items) => ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSessions, { items }),
     resume: (command, cwd) => ipcRenderer.invoke(SESSIONS_CHANNELS.resume, { command, cwd }),
+  },
+  activity: {
+    syncActivity: () => ipcRenderer.invoke(ACTIVITY_CHANNELS.syncActivity),
+    getActivityTrend: (range: string, metric: string) =>
+      ipcRenderer.invoke(ACTIVITY_CHANNELS.getActivityTrend, range, metric),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
