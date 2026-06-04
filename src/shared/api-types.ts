@@ -180,6 +180,7 @@ export interface ActivityTrendPointResponse {
   date: string
   value: number
 }
+// 仅返回本次入库的事件数；原设计的 scanned 字段已由单一 watermark 增量机制取代，故省略。
 export interface ActivitySyncSummaryResponse {
   events: number
 }

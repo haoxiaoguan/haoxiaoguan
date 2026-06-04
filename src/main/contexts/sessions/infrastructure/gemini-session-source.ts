@@ -165,7 +165,7 @@ export class GeminiSessionSource implements SessionSource {
     const events: RawLogEvent[] = []
     for (const { f, m } of withMtime) {
       if (m > latestMtime) latestMtime = m
-      if (m <= since) continue
+      if (m < since) continue
       let root: Record<string, unknown>
       try {
         const v = JSON.parse(await readTextAsync(f))

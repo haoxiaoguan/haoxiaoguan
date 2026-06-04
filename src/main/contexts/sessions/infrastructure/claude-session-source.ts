@@ -177,7 +177,7 @@ export class ClaudeSessionSource implements SessionSource {
     const events: RawLogEvent[] = []
     for (const { f, m } of withMtime) {
       if (m > latestMtime) latestMtime = m
-      if (m <= since) continue
+      if (m < since) continue
       let text: string
       try {
         text = await readTextAsync(f)
