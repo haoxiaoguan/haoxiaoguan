@@ -17,7 +17,7 @@ export function DataWallCard({ children, className, title, headerRight }: DataWa
   return (
     <div
       className={cn(
-        'rounded-[14px] border border-border bg-card text-card-foreground shadow-bento-light dark:shadow-bento',
+        'flex h-full flex-col rounded-[14px] border border-border bg-card text-card-foreground shadow-bento-light dark:shadow-bento',
         className,
       )}
     >
@@ -29,7 +29,7 @@ export function DataWallCard({ children, className, title, headerRight }: DataWa
           {headerRight ?? null}
         </div>
       )}
-      <div className="p-[13px]">{children}</div>
+      <div className="min-h-0 flex-1 p-[13px]">{children}</div>
     </div>
   )
 }

@@ -125,66 +125,54 @@ export default function DataWallPage() {
         )}
       </div>
 
-      {/* 12-column Bento grid */}
+      {/* Bento data wall — decoupled rows: the top row keeps a definite height
+          (the chart needs one), content-heavy rows size to their content so
+          nothing overflows or overlaps. */}
       <div
         data-testid="datawall-grid"
         className="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
       >
-        <div className="grid grid-cols-12 auto-rows-[98px] gap-2.5">
-          {/* Row 1: AccountHeroCard (3×2) | TrendChartCard (6×2) | PlatformDonutCard (3×2) */}
-          <div className="col-span-3 row-span-2">
-            <AccountHeroCard
-              total={stats.total}
-              platformsCovered={stats.platformsCovered}
-              platformsTotal={stats.platformsTotal}
-              todayActive={stats.todayActive}
-              weekNew={stats.weekNew}
-            />
-          </div>
-          <div className="col-span-6 row-span-2">
-            <TrendChartCard
-              range={range}
-              onRangeChange={setRange}
-            />
-          </div>
-          <div className="col-span-3 row-span-2">
-            <PlatformDonutCard
-              items={stats.perPlatform}
-              total={stats.total}
-            />
+        <div className="flex flex-col gap-2.5">
+          {/* Top: account hero | trend chart | platform donut (definite height) */}
+          <div className="grid h-[200px] grid-cols-12 grid-rows-1 gap-2.5">
+            <div className="col-span-3">
+              <AccountHeroCard
+                total={stats.total}
+                platformsCovered={stats.platformsCovered}
+                platformsTotal={stats.platformsTotal}
+                todayActive={stats.todayActive}
+                weekNew={stats.weekNew}
+              />
+            </div>
+            <div className="col-span-6">
+              <TrendChartCard range={range} onRangeChange={setRange} />
+            </div>
+            <div className="col-span-3">
+              <PlatformDonutCard items={stats.perPlatform} total={stats.total} />
+            </div>
           </div>
 
-          {/* Row 3: PoolHealthCard (4×1) | CredentialHealthCard (4×1) | TokenSummaryCard (4×1) */}
-          <div className="col-span-4">
-            <PoolHealthCard
-              pool={qh.pool}
-              onRefresh={qh.refresh}
-            />
-          </div>
-          <div className="col-span-4">
-            <CredentialHealthCard
-              credential={qh.credential}
-              onRefresh={qh.refresh}
-            />
-          </div>
-          <div className="col-span-4">
-            <TokenSummaryCard
-              rangeLabel={rangeLabel}
-              {...tokenProps}
-            />
+          {/* Middle: pool health | credential health | token summary */}
+          <div className="grid grid-cols-12 auto-rows-[minmax(132px,auto)] gap-2.5">
+            <div className="col-span-4">
+              <PoolHealthCard pool={qh.pool} onRefresh={qh.refresh} />
+            </div>
+            <div className="col-span-4">
+              <CredentialHealthCard credential={qh.credential} onRefresh={qh.refresh} />
+            </div>
+            <div className="col-span-4">
+              <TokenSummaryCard rangeLabel={rangeLabel} {...tokenProps} />
+            </div>
           </div>
 
-          {/* Row 4: AttentionListCard (8×1) | SessionActivityCard (4×1) */}
-          <div className="col-span-8">
-            <AttentionListCard
-              items={qh.attention}
-              onRefresh={qh.refresh}
-            />
-          </div>
-          <div className="col-span-4">
-            <SessionActivityCard
-              tools={sessionTools}
-            />
+          {/* Bottom: attention list | session activity */}
+          <div className="grid grid-cols-12 auto-rows-[minmax(120px,auto)] gap-2.5">
+            <div className="col-span-8">
+              <AttentionListCard items={qh.attention} onRefresh={qh.refresh} />
+            </div>
+            <div className="col-span-4">
+              <SessionActivityCard tools={sessionTools} />
+            </div>
           </div>
         </div>
       </div>
