@@ -227,6 +227,7 @@ export interface Settings {
   autostart: boolean;
   utilityButtons: string;
   allowStaleKiroImport: boolean;
+  terminalLaunchTemplate: string;
 }
 
 export interface UpdateSettingsRequest {

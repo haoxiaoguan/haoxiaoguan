@@ -62,6 +62,7 @@
     "colFailures": "失败次数",
     "colActions": "操作"
   },
+  "sessions": "会话历史",
   "proxies": "代理管理",
   "groups": "分组管理",
   "analytics": "数据统计",

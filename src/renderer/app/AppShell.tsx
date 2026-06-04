@@ -3,6 +3,7 @@ import {
   Bell,
   BookOpen,
   Headphones,
+  History,
   Info,
   LayoutGrid,
   Plug,
@@ -63,6 +64,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
   { to: '/api-service', labelKey: 'nav:apiService', icon: Plug },
+  { to: '/sessions', labelKey: 'nav:sessions', icon: History },
 ];
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [
@@ -88,6 +90,7 @@ function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/mcp')) return 'nav:mcp';
   if (pathname.startsWith('/api-service')) return 'nav:apiService';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
+  if (pathname.startsWith('/sessions')) return 'nav:sessions';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';
   if (pathname.startsWith('/settings/advanced')) return 'nav:settings.menu.advanced';
   if (pathname.startsWith('/settings/about')) return 'nav:settings.menu.about';

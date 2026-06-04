@@ -62,6 +62,7 @@
     "colFailures": "Failures",
     "colActions": "Actions"
   },
+  "sessions": "Sessions",
   "proxies": "Proxies",
   "groups": "Groups",
   "analytics": "Analytics",
