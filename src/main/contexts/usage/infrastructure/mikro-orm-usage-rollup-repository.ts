@@ -17,6 +17,8 @@ import type { UsageRollupRepository } from '../domain/usage-repositories'
 
 function windowDays(range: string): number {
   switch (range) {
+    case '1d':
+      return 0
     case '7d':
       return 6
     case '30d':
@@ -114,6 +116,30 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }>
   > {
     const conn = this.getEm().getConnection()
+    if (range === '1d') {
+      const rows = (await conn.execute(
+        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch')) AS day FROM usage_records)
+         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch') AS date,
+           COALESCE(SUM(input_tokens), 0) AS input_tokens,
+           COALESCE(SUM(output_tokens), 0) AS output_tokens,
+           COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+           COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
+           COUNT(*) AS requests
+         FROM usage_records
+         WHERE strftime('%Y-%m-%d', occurred_at, 'unixepoch') = (SELECT day FROM d)
+         GROUP BY date ORDER BY date ASC`,
+        [],
+        'all',
+      )) as any[]
+      return (rows ?? []).map((row: any) => ({
+        date: row.date ?? '',
+        inputTokens: Number(row.input_tokens ?? 0),
+        outputTokens: Number(row.output_tokens ?? 0),
+        cacheReadTokens: Number(row.cache_read_tokens ?? 0),
+        cacheCreationTokens: Number(row.cache_creation_tokens ?? 0),
+        requests: Number(row.requests ?? 0),
+      }))
+    }
     const days = `-${windowDays(range)} day`
 
     const rows = (await conn.execute(
