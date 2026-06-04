@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveTemplate, buildLaunchInvocation } from '../../../src/main/contexts/sessions/application/terminal-launch'
+import { resolveTemplate, buildLaunchInvocation, isLaunchArgSafe } from '../../../src/main/contexts/sessions/application/terminal-launch'
 
 describe('resolveTemplate', () => {
   it('替换 {command} 与 {cwd}', () => {
@@ -24,5 +24,19 @@ describe('buildLaunchInvocation', () => {
       file: '/bin/sh',
       args: ['-c', 'sh: c'],
     })
+  })
+})
+
+describe('isLaunchArgSafe', () => {
+  it('普通路径/命令安全', () => {
+    expect(isLaunchArgSafe('/Users/me/my proj')).toBe(true)
+    expect(isLaunchArgSafe('claude --resume abc-123')).toBe(true)
+  })
+  it('含 shell 危险字符不安全', () => {
+    expect(isLaunchArgSafe('/tmp/evil" && rm -rf ~')).toBe(false)
+    expect(isLaunchArgSafe('/x; reboot')).toBe(false)
+    expect(isLaunchArgSafe('/x`whoami`')).toBe(false)
+    expect(isLaunchArgSafe('/x$(id)')).toBe(false)
+    expect(isLaunchArgSafe('/x | tee')).toBe(false)
   })
 })

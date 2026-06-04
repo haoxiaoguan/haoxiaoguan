@@ -72,3 +72,16 @@ it('deleteSelected 批量删除后从当前工具缓存移除', async () => {
   const items = useSessionsStore.getState().byTool.claude?.items ?? []
   expect(items.map((i) => i.sourcePath)).toEqual(['/b'])
 })
+
+it('deleteSelected 删掉当前选中项后 selectedId 清空', async () => {
+  mocks.probeTools.mockResolvedValue([{ tool: 'claude', hasSessions: true, lastActiveAt: 1 }])
+  mocks.listSessions.mockResolvedValue({
+    items: [{ tool: 'claude', sessionId: 'a', sourcePath: '/a' }],
+    total: 1, offset: 0,
+  })
+  mocks.deleteSessions.mockResolvedValue([{ sourcePath: '/a', ok: true }])
+  await useSessionsStore.getState().init()
+  useSessionsStore.setState({ selectedId: 'a' } as never)
+  await useSessionsStore.getState().deleteSelected([{ tool: 'claude', sessionId: 'a', sourcePath: '/a' } as never])
+  expect(useSessionsStore.getState().selectedId).toBeNull()
+})

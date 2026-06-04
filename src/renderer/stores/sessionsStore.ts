@@ -154,7 +154,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
             [tool]: { ...cur, items, total: Math.max(0, cur.total - removed.size) },
           },
           selectedId:
-            s.selectedId && removed.has(items.find((i) => i.sessionId === s.selectedId)?.sourcePath ?? '')
+            s.selectedId && removed.has(cur.items.find((i) => i.sessionId === s.selectedId)?.sourcePath ?? '')
               ? null
               : s.selectedId,
         };
