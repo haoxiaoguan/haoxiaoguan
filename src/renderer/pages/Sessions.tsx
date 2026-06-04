@@ -1,22 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   Bot,
+  ChevronDown,
   Copy,
   FolderOpen,
   MessageSquare,
   Play,
+  RefreshCw,
+  Search,
+  SquareCheck,
   Trash2,
 } from 'lucide-react';
 import { useSessionsStore, TOOLS } from '../stores/sessionsStore';
-import { SegmentedOptions } from '../components/ui/segmented-options';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,15 +35,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select';
 import { ManagementSearchField } from '@/components/management/ManagementControls';
 import { cn } from '@/lib/utils';
 import type { SessionSummaryDto, SessionMessageDto } from '@shared/api-types';
 
 // 工具色调配置
-const TOOL_CONFIG: Record<string, { color: string; label: string }> = {
-  claude: { color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400', label: 'Claude Code' },
-  codex:  { color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',   label: 'Codex'      },
-  gemini: { color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', label: 'Gemini CLI' },
+const TOOL_CONFIG: Record<string, { color: string; label: string; dotColor: string }> = {
+  claude: {
+    color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    label: 'Claude Code',
+    dotColor: 'bg-orange-500',
+  },
+  codex: {
+    color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    label: 'Codex',
+    dotColor: 'bg-blue-500',
+  },
+  gemini: {
+    color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    label: 'Gemini CLI',
+    dotColor: 'bg-emerald-500',
+  },
 };
 
 function toolLabel(tool: string): string {
@@ -86,7 +112,11 @@ function SessionListSkeleton() {
 // ──────────────────────────────────────────────
 // 空态
 // ──────────────────────────────────────────────
-function EmptyState({ icon: Icon, title, subtitle }: {
+function EmptyState({
+  icon: Icon,
+  title,
+  subtitle,
+}: {
   icon: typeof MessageSquare;
   title: string;
   subtitle: string;
@@ -108,10 +138,10 @@ function EmptyState({ icon: Icon, title, subtitle }: {
 // 消息角色徽章
 // ──────────────────────────────────────────────
 const ROLE_STYLE: Record<string, string> = {
-  user:      'bg-primary/10 text-primary',
+  user: 'bg-primary/10 text-primary',
   assistant: 'bg-muted text-muted-foreground',
-  tool:      'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  system:    'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
+  tool: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  system: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
 };
 
 function RoleBadge({ role, label }: { role: string; label: string }) {
@@ -125,10 +155,13 @@ function RoleBadge({ role, label }: { role: string; label: string }) {
       <span
         className={cn(
           'size-1.5 rounded-full',
-          role === 'user'      ? 'bg-primary'
-          : role === 'assistant' ? 'bg-muted-foreground/50'
-          : role === 'tool'      ? 'bg-amber-500'
-          : 'bg-zinc-400',
+          role === 'user'
+            ? 'bg-primary'
+            : role === 'assistant'
+              ? 'bg-muted-foreground/50'
+              : role === 'tool'
+                ? 'bg-amber-500'
+                : 'bg-zinc-400',
         )}
         aria-hidden
       />
@@ -141,13 +174,19 @@ function RoleBadge({ role, label }: { role: string; label: string }) {
 // 消息气泡
 // ──────────────────────────────────────────────
 const BUBBLE_STYLE: Record<string, string> = {
-  user:      'bg-primary/10 border-primary/20',
+  user: 'bg-primary/10 border-primary/20',
   assistant: 'bg-card border-border/60',
-  tool:      'bg-muted/50 border-border/40',
-  system:    'bg-muted/30 border-border/30',
+  tool: 'bg-muted/50 border-border/40',
+  system: 'bg-muted/30 border-border/30',
 };
 
-function MessageBubble({ msg, roleLabel }: { msg: SessionMessageDto; roleLabel: string }) {
+function MessageBubble({
+  msg,
+  roleLabel,
+}: {
+  msg: SessionMessageDto;
+  roleLabel: string;
+}) {
   const isToolCall = msg.role === 'tool' || msg.content?.startsWith('[Tool:');
   return (
     <div
@@ -189,7 +228,11 @@ function SessionRow({
   onSelect: () => void;
   onCheck: (checked: boolean) => void;
 }) {
-  const toolCfg = TOOL_CONFIG[session.tool] ?? { color: 'bg-muted text-muted-foreground', label: session.tool };
+  const toolCfg = TOOL_CONFIG[session.tool] ?? {
+    color: 'bg-muted text-muted-foreground',
+    label: session.tool,
+    dotColor: 'bg-muted-foreground',
+  };
 
   return (
     <button
@@ -256,11 +299,25 @@ function SessionRow({
 export default function Sessions() {
   const { t } = useTranslation('nav');
   const {
-    probes, activeTool, byTool, selectedId, messages, loading, error,
-    init, selectTool, loadMore, selectSession, deleteSession, resume, deleteSelected,
+    probes,
+    activeTool,
+    byTool,
+    selectedId,
+    messages,
+    loading,
+    error,
+    init,
+    selectTool,
+    loadMore,
+    selectSession,
+    deleteSession,
+    resume,
+    deleteSelected,
+    refresh,
   } = useSessionsStore();
 
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -268,8 +325,17 @@ export default function Sessions() {
   const [deleteTarget, setDeleteTarget] = useState<SessionSummaryDto | null>(null);
   const [showBatchDelete, setShowBatchDelete] = useState(false);
 
-  useEffect(() => { void init(); }, [init]);
-  useEffect(() => { if (error) toast.error(error); }, [error]);
+  // 无限滚动：ScrollArea viewport ref + sentinel ref
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
+
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
 
   const cur = byTool[activeTool];
   const items = cur?.items ?? [];
@@ -280,21 +346,35 @@ export default function Sessions() {
     const q = query.trim().toLowerCase();
     if (!q) return items;
     return items.filter((s) =>
-      [s.title, s.summary, s.projectDir, s.sessionId].some((f) => f?.toLowerCase().includes(q)),
+      [s.title, s.summary, s.projectDir, s.sessionId].some((f) =>
+        f?.toLowerCase().includes(q),
+      ),
     );
   }, [items, query]);
 
-  // tab 标签：带数量
-  const toolItems = TOOLS.map((tool) => {
-    const probe = probes.find((p) => p.tool === tool);
-    const label = toolLabel(tool);
-    const count = byTool[tool]?.total ?? 0;
-    const hasNone = probe?.hasSessions === false || count === 0;
-    return {
-      value: tool,
-      label: hasNone ? `${label} (0)` : count > 0 ? `${label} (${count})` : label,
-    };
-  });
+  // IntersectionObserver：sentinel 进入视口时触发 loadMore
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !loading) void loadMore();
+  }, [hasMore, loading, loadMore]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    // 找 Radix ScrollArea 的内部滚动视口
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-radix-scroll-area-viewport]',
+    ) as HTMLElement | null;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) handleLoadMore();
+      },
+      { root: viewport ?? null, rootMargin: '0px 0px 80px 0px', threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMore]);
 
   // 复制恢复命令
   const copyResume = async (s: SessionSummaryDto) => {
@@ -335,79 +415,227 @@ export default function Sessions() {
   // 角色标签中文化
   const roleLabel = (role: string) => {
     const map: Record<string, string> = {
-      user:      t('sessionsView.roleUser'),
+      user: t('sessionsView.roleUser'),
       assistant: t('sessionsView.roleAssistant'),
-      tool:      t('sessionsView.roleTool'),
-      system:    t('sessionsView.roleSystem'),
+      tool: t('sessionsView.roleTool'),
+      system: t('sessionsView.roleSystem'),
     };
     return map[role] ?? role;
+  };
+
+  // 当前工具色配置
+  const activeCfg = TOOL_CONFIG[activeTool] ?? {
+    color: 'bg-muted text-muted-foreground',
+    label: activeTool,
+    dotColor: 'bg-muted-foreground',
   };
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex h-[calc(100vh-96px)] w-full overflow-hidden bg-card">
-        {/* ── 左栏：工具 tab + 列表 ── */}
+        {/* ── 左栏：列表 ── */}
         <aside className="flex h-full min-h-0 w-[300px] shrink-0 flex-col border-r border-border/80">
-          {/* tab 切换 */}
-          <div className="shrink-0 px-3 pt-4 pb-3">
-            <SegmentedOptions
-              items={toolItems}
-              value={activeTool}
-              onChange={(v) => {
-                void selectTool(v as typeof activeTool);
-                setQuery('');
-                setSelectMode(false);
-                setSelected(new Set());
-              }}
-              fullWidth
-            />
-          </div>
-
-          {/* 搜索 + 批量操作 */}
-          <div className="shrink-0 space-y-2 px-3 pb-2">
-            <ManagementSearchField
-              value={query}
-              onChange={setQuery}
-              placeholder={t('sessionsView.search')}
-            />
+          {/* ── 表头行 ── */}
+          <div className="shrink-0 border-b border-border/60 px-3 py-2">
             <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 rounded-[7px] px-2.5 text-[11.5px]"
-                onClick={() => {
-                  setSelectMode((v) => !v);
-                  setSelected(new Set());
-                }}
-              >
-                {selectMode ? t('sessionsView.batchCancel') : t('sessionsView.batchToggle')}
-              </Button>
-              {selectMode && selected.size > 0 && (
+              {/* 标题 + 总数徽章 */}
+              <span className="text-[12.5px] font-semibold text-foreground">
+                {t('sessions')}
+              </span>
+              {cur?.total != null && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                  {cur.total}
+                </span>
+              )}
+
+              {/* 右侧 icon 按钮组 */}
+              <div className="ml-auto flex items-center gap-0.5">
+                {/* 批量选择 */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'size-7 rounded-[7px] text-muted-foreground hover:text-foreground',
+                        selectMode && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+                      )}
+                      aria-label={selectMode ? t('sessionsView.batchCancel') : t('sessionsView.batchToggle')}
+                      onClick={() => {
+                        setSelectMode((v) => !v);
+                        setSelected(new Set());
+                      }}
+                    >
+                      <SquareCheck className="size-3.5" strokeWidth={1.9} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {selectMode ? t('sessionsView.batchCancel') : t('sessionsView.batchToggle')}
+                  </TooltipContent>
+                </Tooltip>
+
+                {/* 搜索切换 */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'size-7 rounded-[7px] text-muted-foreground hover:text-foreground',
+                        searchOpen && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+                      )}
+                      aria-label={t('sessionsView.searchToggle')}
+                      onClick={() => {
+                        setSearchOpen((v) => {
+                          if (v) setQuery('');
+                          return !v;
+                        });
+                      }}
+                    >
+                      <Search className="size-3.5" strokeWidth={1.9} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('sessionsView.searchToggle')}</TooltipContent>
+                </Tooltip>
+
+                {/* 工具切换下拉 */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* 包一层 div 避免 Tooltip + Select 冲突 */}
+                    <div>
+                      <Select
+                        value={activeTool}
+                        onValueChange={(v) => {
+                          void selectTool(v as typeof activeTool);
+                          setQuery('');
+                          setSearchOpen(false);
+                          setSelectMode(false);
+                          setSelected(new Set());
+                        }}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            'h-7 gap-0.5 rounded-[7px] border-0 bg-transparent px-1.5 text-[11.5px] shadow-none focus:ring-0',
+                            activeCfg.color,
+                          )}
+                          aria-label={t('sessionsView.toolSelect')}
+                        >
+                          <span
+                            className={cn('size-2 shrink-0 rounded-full', activeCfg.dotColor)}
+                            aria-hidden
+                          />
+                          <ChevronDown className="size-3 opacity-60" strokeWidth={1.9} />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="min-w-[170px]">
+                          {TOOLS.map((tool) => {
+                            const cfg = TOOL_CONFIG[tool] ?? {
+                              color: 'bg-muted text-muted-foreground',
+                              label: tool,
+                              dotColor: 'bg-muted-foreground',
+                            };
+                            const probe = probes.find((p) => p.tool === tool);
+                            const count = byTool[tool]?.total ?? 0;
+                            const hasNone = probe?.hasSessions === false || count === 0;
+                            return (
+                              <SelectItem
+                                key={tool}
+                                value={tool}
+                                disabled={hasNone}
+                                className="text-[12.5px]"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={cn('size-2 shrink-0 rounded-full', cfg.dotColor)}
+                                    aria-hidden
+                                  />
+                                  <span>{cfg.label}</span>
+                                  {count > 0 && (
+                                    <span className="ml-auto pl-3 text-[11px] text-muted-foreground">
+                                      {count}
+                                    </span>
+                                  )}
+                                  {hasNone && (
+                                    <span className="ml-auto pl-3 text-[11px] text-muted-foreground">
+                                      0
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('sessionsView.toolSelect')}</TooltipContent>
+                </Tooltip>
+
+                {/* 刷新 */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 rounded-[7px] text-muted-foreground hover:text-foreground"
+                      aria-label={t('sessionsView.refresh')}
+                      disabled={loading}
+                      onClick={() => void refresh()}
+                    >
+                      <RefreshCw
+                        className={cn('size-3.5', loading && 'animate-spin')}
+                        strokeWidth={1.9}
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('sessionsView.refresh')}</TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+
+            {/* 搜索栏（展开时显示） */}
+            {searchOpen && (
+              <div className="mt-2">
+                <ManagementSearchField
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={t('sessionsView.search')}
+                />
+              </div>
+            )}
+
+            {/* 批量模式：删除按钮行 */}
+            {selectMode && selected.size > 0 && (
+              <div className="mt-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 rounded-[7px] px-2.5 text-[11.5px] text-destructive hover:text-destructive"
+                  className="h-7 w-full rounded-[7px] px-2.5 text-[11.5px] text-destructive hover:text-destructive"
                   onClick={() => setShowBatchDelete(true)}
                 >
                   {t('sessionsView.batchDelete', { count: selected.size })}
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* 列表区域 */}
-          <ScrollArea className="min-h-0 flex-1 px-1">
+          {/* 列表区域（无限滚动） */}
+          <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1 px-1">
             {loading && items.length === 0 ? (
               <SessionListSkeleton />
             ) : filtered.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
-                <MessageSquare className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
+                <MessageSquare
+                  className="size-8 text-muted-foreground/40"
+                  strokeWidth={1.5}
+                />
                 <div>
                   <p className="text-[12.5px] font-medium text-muted-foreground">
                     {query ? t('sessionsView.emptySearch') : t('sessionsView.emptyList')}
                   </p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-                    {query ? t('sessionsView.emptySearchSub') : t('sessionsView.emptyListSub')}
+                    {query
+                      ? t('sessionsView.emptySearchSub')
+                      : t('sessionsView.emptyListSub')}
                   </p>
                 </div>
               </div>
@@ -433,24 +661,19 @@ export default function Sessions() {
                     }}
                   />
                 ))}
+
+                {/* 无限滚动 sentinel */}
+                <div ref={sentinelRef} className="h-px w-full" aria-hidden />
+
+                {/* 加载中 spinner */}
+                {loading && items.length > 0 && (
+                  <div className="flex justify-center py-3">
+                    <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
+                  </div>
+                )}
               </div>
             )}
           </ScrollArea>
-
-          {/* 加载更多 */}
-          {hasMore && (
-            <div className="shrink-0 border-t border-border/60 px-3 py-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-8 rounded-[8px] text-[12px]"
-                disabled={loading}
-                onClick={() => void loadMore()}
-              >
-                {t('sessionsView.loadMore')}
-              </Button>
-            </div>
-          )}
         </aside>
 
         {/* ── 右栏：详情 ── */}
@@ -473,7 +696,8 @@ export default function Sessions() {
                       <Badge
                         className={cn(
                           'shrink-0 h-5 border-transparent px-1.5 text-[11px]',
-                          TOOL_CONFIG[selectedSession.tool]?.color ?? 'bg-muted text-muted-foreground',
+                          TOOL_CONFIG[selectedSession.tool]?.color ??
+                            'bg-muted text-muted-foreground',
                         )}
                       >
                         {toolLabel(selectedSession.tool)}
@@ -493,10 +717,14 @@ export default function Sessions() {
                             }
                           >
                             <FolderOpen className="size-3 shrink-0" strokeWidth={1.8} />
-                            <span className="max-w-[320px] truncate">{selectedSession.projectDir}</span>
+                            <span className="max-w-[320px] truncate">
+                              {selectedSession.projectDir}
+                            </span>
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom">{t('sessionsView.copyDir')}</TooltipContent>
+                        <TooltipContent side="bottom">
+                          {t('sessionsView.copyDir')}
+                        </TooltipContent>
                       </Tooltip>
                     )}
                   </div>
@@ -588,12 +816,16 @@ export default function Sessions() {
       {/* ── 单条删除确认 ── */}
       <AlertDialog
         open={deleteTarget !== null}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('sessionsView.confirmDeleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('sessionsView.confirmDeleteDesc')}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {t('sessionsView.confirmDeleteDesc')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('sessionsView.cancelAction')}</AlertDialogCancel>
@@ -611,7 +843,9 @@ export default function Sessions() {
       <AlertDialog open={showBatchDelete} onOpenChange={setShowBatchDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('sessionsView.confirmDeleteBatchTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('sessionsView.confirmDeleteBatchTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('sessionsView.confirmDeleteBatchDesc', { count: selected.size })}
             </AlertDialogDescription>

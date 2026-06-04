@@ -32,6 +32,7 @@ interface SessionsState {
   deleteSession: (summary: SessionSummaryDto) => Promise<void>;
   deleteSelected: (summaries: SessionSummaryDto[]) => Promise<void>;
   resume: (summary: SessionSummaryDto) => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 function pickDefaultTool(probes: ToolProbeDto[]): SessionToolDto {
@@ -172,6 +173,22 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     } catch (e) {
       set({ error: String(e) });
       throw e;
+    }
+  },
+
+  refresh: async () => {
+    const tool = get().activeTool;
+    set({ loading: true, error: null, selectedId: null, messages: [] });
+    try {
+      const probes = await sessionsService.probeTools();
+      const page = await sessionsService.listSessions(tool, PAGE_LIMIT, 0);
+      set((s) => ({
+        probes,
+        byTool: { ...s.byTool, [tool]: { items: page.items, total: page.total, offset: PAGE_LIMIT, loaded: true } },
+        loading: false,
+      }));
+    } catch (e) {
+      set({ error: String(e), loading: false });
     }
   },
 }));

@@ -85,3 +85,31 @@ it('deleteSelected 删掉当前选中项后 selectedId 清空', async () => {
   await useSessionsStore.getState().deleteSelected([{ tool: 'claude', sessionId: 'a', sourcePath: '/a' } as never])
   expect(useSessionsStore.getState().selectedId).toBeNull()
 })
+
+it('refresh 重载当前工具并更新 byTool 和 probes', async () => {
+  // 先 init 设好初始状态
+  mocks.probeTools.mockResolvedValue([{ tool: 'claude', hasSessions: true, lastActiveAt: 1 }])
+  mocks.listSessions.mockResolvedValue({
+    items: [{ tool: 'claude', sessionId: 'old', sourcePath: '/old' }],
+    total: 1, offset: 0,
+  })
+  await useSessionsStore.getState().init()
+  expect(useSessionsStore.getState().byTool.claude?.items[0].sessionId).toBe('old')
+
+  // refresh：probeTools 返回新数量，listSessions 返回新 items
+  mocks.probeTools.mockResolvedValue([{ tool: 'claude', hasSessions: true, lastActiveAt: 2 }])
+  mocks.listSessions.mockResolvedValue({
+    items: [{ tool: 'claude', sessionId: 'new1', sourcePath: '/new1' }, { tool: 'claude', sessionId: 'new2', sourcePath: '/new2' }],
+    total: 2, offset: 0,
+  })
+  await useSessionsStore.getState().refresh()
+
+  const state = useSessionsStore.getState()
+  expect(state.loading).toBe(false)
+  expect(state.byTool.claude?.items.map((i) => i.sessionId)).toEqual(['new1', 'new2'])
+  expect(state.byTool.claude?.total).toBe(2)
+  // probes 也被更新
+  expect(state.probes[0].lastActiveAt).toBe(2)
+  // selectedId 被清空
+  expect(state.selectedId).toBeNull()
+})
