@@ -66,7 +66,6 @@ export function summarizeQuotaHealth(
     // ── Pool health ───────────────────────────────────────────────────────
     const qState = quotaStates.get(id)
     if (qState !== undefined) {
-      pool.total++
       const { status } = qState
       if (status === 'ok') {
         pool.available++
@@ -94,7 +93,6 @@ export function summarizeQuotaHealth(
     // ── Credential health ─────────────────────────────────────────────────
     const snap = healthSnapshots.get(id)
     if (snap !== undefined) {
-      credential.total++
       const { state, expires_at } = snap.validation
 
       if (state === 'expired' || state === 'revoked') {
@@ -126,6 +124,13 @@ export function summarizeQuotaHealth(
     }
   }
 
+  // total = sum of classified buckets, so the stacked bar and the "x / total"
+  // label stay consistent. Accounts in unclassified states (quota
+  // unknown/unsupported/error; credential rate_limited/network_error/pending/…)
+  // are simply not counted as pool/credential members rather than inflating the
+  // denominator and making the segments add up to less than the whole.
+  pool.total = pool.available + pool.cooldown + pool.exhausted
+  credential.total = credential.valid + credential.expiring + credential.invalid
   pool.hasData = pool.total > 0
   credential.hasData = credential.total > 0
 

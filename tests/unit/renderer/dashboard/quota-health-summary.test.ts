@@ -32,6 +32,18 @@ describe('summarizeQuotaHealth — pool', () => {
     expect(pool.hasData).toBe(false)
     expect(pool.total).toBe(0)
   })
+
+  it('unclassified statuses are excluded from total (denominator = sum of buckets)', () => {
+    const quotaStates = new Map([
+      ['a1', { status: 'ok' }],
+      ['a2', { status: 'unknown' }],
+      ['a3', { status: 'unsupported' }],
+    ])
+    const { pool } = summarizeQuotaHealth(ACCOUNTS, quotaStates, new Map(), NOW_MS)
+    expect(pool.available).toBe(1)
+    expect(pool.total).toBe(1)
+    expect(pool.available + pool.cooldown + pool.exhausted).toBe(pool.total)
+  })
 })
 
 describe('summarizeQuotaHealth — credential', () => {
@@ -82,7 +94,7 @@ describe('summarizeQuotaHealth — credential', () => {
     expect(credential.total).toBe(2)
   })
 
-  it('other states (rate_limited, network_error) do not count in any bucket but contribute to total', () => {
+  it('other states (rate_limited, network_error) are excluded from total (denominator = sum of buckets)', () => {
     const snapshots = new Map([
       ['a1', { validation: { state: 'rate_limited' } }],
     ])
@@ -90,7 +102,19 @@ describe('summarizeQuotaHealth — credential', () => {
     expect(credential.valid).toBe(0)
     expect(credential.expiring).toBe(0)
     expect(credential.invalid).toBe(0)
-    expect(credential.total).toBe(1)
+    expect(credential.total).toBe(0)
+    expect(credential.hasData).toBe(false)
+  })
+
+  it('total equals sum of buckets with mixed classified + unclassified states', () => {
+    const snapshots = new Map([
+      ['a1', { validation: { state: 'valid' } }],
+      ['a2', { validation: { state: 'expired' } }],
+      ['a3', { validation: { state: 'pending' } }],
+    ])
+    const { credential } = summarizeQuotaHealth(ACCOUNTS, new Map(), snapshots, NOW_MS)
+    expect(credential.valid + credential.expiring + credential.invalid).toBe(credential.total)
+    expect(credential.total).toBe(2)
   })
 
   it('hasData is false when no snapshots provided', () => {

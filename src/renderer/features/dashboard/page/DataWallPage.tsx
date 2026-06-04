@@ -29,7 +29,7 @@ const RANGE_LABEL_KEYS: Record<TrendRange, string> = {
  */
 export default function DataWallPage() {
   const { t } = useTranslation('dashboard')
-  const { fetchAccounts } = useAccountStore()
+  const fetchAccounts = useAccountStore((s) => s.fetchAccounts)
 
   const [range, setRange] = useState<TrendRange>('7d')
 
