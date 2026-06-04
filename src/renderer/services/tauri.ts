@@ -568,6 +568,8 @@ import type {
   SessionPageDto,
   SessionDeleteRequestDto,
   SessionDeleteOutcomeDto,
+  ActivityTrendPointResponse,
+  ActivitySyncSummaryResponse,
 } from '@shared/api-types';
 
 export const sessionsService = {
@@ -582,4 +584,15 @@ export const sessionsService = {
     bridge().sessions.deleteSessions(items) as Promise<SessionDeleteOutcomeDto[]>,
   resume: (command: string, cwd?: string) =>
     bridge().sessions.resume(command, cwd),
+};
+
+// ============================================================================
+// Activity Commands (会话活动统计：增量扫描 + 趋势查询)
+// ============================================================================
+
+export const activityService = {
+  syncActivity: () =>
+    bridge().activity.syncActivity() as Promise<ActivitySyncSummaryResponse>,
+  getActivityTrend: (range: string, metric: string) =>
+    bridge().activity.getActivityTrend(range, metric) as Promise<ActivityTrendPointResponse[]>,
 };

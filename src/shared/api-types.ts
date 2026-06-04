@@ -175,6 +175,15 @@ export interface UnmanagedSkillEntryDto {
   description?: string
 }
 
+// ── Activity DTOs (activity context — 会话活动统计) ────────────────────────────
+export interface ActivityTrendPointResponse {
+  date: string
+  value: number
+}
+export interface ActivitySyncSummaryResponse {
+  events: number
+}
+
 // ── Usage DTOs (usage manifest §6) ───────────────────────────────────────────
 export interface UsageSyncSummaryResponse {
   imported: number
@@ -567,6 +576,10 @@ export interface HxgApi {
     getUsageTrend(range: string, metric: string): Promise<UsageTrendPointResponse[]>
     getUsagePlatformBreakdown(range: string): Promise<PlatformUsageBreakdownResponse[]>
     getUsageSyncStatus(): Promise<UsageSyncStatusResponse>
+  }
+  activity: {
+    syncActivity(): Promise<ActivitySyncSummaryResponse>
+    getActivityTrend(range: string, metric: string): Promise<ActivityTrendPointResponse[]>
   }
   localBackup: {
     create(): Promise<BackupEntryDto>

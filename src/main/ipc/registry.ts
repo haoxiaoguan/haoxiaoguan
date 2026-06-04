@@ -57,6 +57,10 @@ import type { ApiProxyKeyService } from '../contexts/apiProxy/application/api-pr
 import type { SessionsService } from '../contexts/sessions/application/sessions-service'
 import { registerSessionsHandlers } from '../contexts/sessions/ipc/sessions-handlers'
 
+import { registerActivityHandlers } from '../contexts/activity/ipc/activity-handlers'
+import type { ActivitySyncService } from '../contexts/activity/application/activity-sync-service'
+import type { ActivityQueryService } from '../contexts/activity/application/activity-query-service'
+
 // The service singletons built by buildContainer(). Each implemented context
 // contributes its application services; the IPC layer registers handlers that
 // delegate to them.
@@ -123,6 +127,10 @@ export interface Services {
 
   // sessions context (read-only on-disk AI CLI conversation history browser)
   sessionsService: SessionsService
+
+  // activity context (session activity stats — incremental scan + trend query)
+  activitySync: ActivitySyncService
+  activityQuery: ActivityQueryService
 }
 
 // Each context contributes a register*Handlers function.
@@ -158,4 +166,5 @@ export function registerAllHandlers(services: Services): void {
   registerAccountGroupHandlers(services.accountGroupService)
   registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs())
   registerSessionsHandlers(services.sessionsService)
+  registerActivityHandlers(services.activitySync, services.activityQuery)
 }

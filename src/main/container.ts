@@ -151,6 +151,11 @@ import { ClaudeSessionSource } from './contexts/sessions/infrastructure/claude-s
 import { CodexSessionSource } from './contexts/sessions/infrastructure/codex-session-source'
 import { GeminiSessionSource } from './contexts/sessions/infrastructure/gemini-session-source'
 
+// Activity context — 会话活动统计（增量扫描 + 趋势查询）。
+import { MikroOrmActivityRepository } from './contexts/activity/infrastructure/mikro-orm-activity-repository'
+import { ActivitySyncService } from './contexts/activity/application/activity-sync-service'
+import { ActivityQueryService } from './contexts/activity/application/activity-query-service'
+
 /**
  * Account capability-registry adapter (quota manifest §5b).
  *
@@ -532,10 +537,14 @@ export async function buildContainer(): Promise<Container> {
   apiProxyService.attachServer(apiHttpServer)
 
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。
-  const sessionsService = new SessionsService(
-    [new ClaudeSessionSource(), new CodexSessionSource(), new GeminiSessionSource()],
-    () => settings.getTerminalLaunchTemplate(),
-  )
+  // logSources 同时注入 sessionsService 与 activitySync，接新 agent 只动这一个数组。
+  const logSources = [new ClaudeSessionSource(), new CodexSessionSource(), new GeminiSessionSource()]
+  const sessionsService = new SessionsService(logSources, () => settings.getTerminalLaunchTemplate())
+
+  // Activity context — 复用 logSources，不重建适配器实例。
+  const activityRepo = new MikroOrmActivityRepository()
+  const activitySync = new ActivitySyncService(logSources, activityRepo)
+  const activityQuery = new ActivityQueryService(activityRepo)
 
   return {
     settings,
@@ -569,5 +578,7 @@ export async function buildContainer(): Promise<Container> {
     tokenRefreshScheduler,
     platformQuotaScheduler,
     sessionsService,
+    activitySync,
+    activityQuery,
   }
 }

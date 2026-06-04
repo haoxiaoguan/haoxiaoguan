@@ -210,3 +210,10 @@ export const API_PROXY_CHANNELS = {
   deleteClientKey: 'apiProxy:deleteClientKey',
   getAccountPoolHealth: 'apiProxy:getAccountPoolHealth',
 } as const
+
+// Activity context — 会话活动统计（增量扫描 + 趋势查询）。Channel 值 snake_case
+// 与 usage 同口径。
+export const ACTIVITY_CHANNELS = {
+  syncActivity: 'sync_activity',
+  getActivityTrend: 'get_activity_trend',
+} as const
