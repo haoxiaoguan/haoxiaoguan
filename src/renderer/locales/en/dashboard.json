@@ -33,5 +33,32 @@
     "more": "More",
     "rangeWeek": "Week",
     "rangeYear": "Year"
+  },
+  "account": {
+    "title": "Account Overview",
+    "total": "Total Accounts",
+    "platforms": "Platforms",
+    "todayActive": "Active Today",
+    "weekNew": "New This Week"
+  },
+  "platform": {
+    "title": "Platform Distribution · By Account",
+    "others": "Others",
+    "empty": "No accounts yet",
+    "unit": "Accounts"
+  },
+  "token": {
+    "title": "{{range}} · Tokens",
+    "in": "In",
+    "out": "Out",
+    "cache": "Cache"
+  },
+  "session": {
+    "title": "Session Activity · Local",
+    "recentActive": "Last active ·",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago",
+    "daysAgo": "{{n}}d ago",
+    "justNow": "Just now"
   }
 }

@@ -33,5 +33,32 @@
     "more": "More",
     "rangeWeek": "周",
     "rangeYear": "年"
+  },
+  "account": {
+    "title": "账号总览",
+    "total": "账号总数",
+    "platforms": "平台",
+    "todayActive": "今日活跃",
+    "weekNew": "本周新增"
+  },
+  "platform": {
+    "title": "平台分布 · 按账号数",
+    "others": "其他",
+    "empty": "暂无账号",
+    "unit": "账号"
+  },
+  "token": {
+    "title": "{{range}}合计 · Token",
+    "in": "入",
+    "out": "出",
+    "cache": "缓存"
+  },
+  "session": {
+    "title": "会话活跃 · 本机",
+    "recentActive": "最近活跃 ·",
+    "minutesAgo": "{{n}} 分钟前",
+    "hoursAgo": "{{n}} 小时前",
+    "daysAgo": "{{n}} 天前",
+    "justNow": "刚刚"
   }
 }
