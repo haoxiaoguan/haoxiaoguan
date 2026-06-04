@@ -71,4 +71,8 @@ describe('sanitizeSessionId', () => {
   it('剔除危险字符', () => {
     expect(sanitizeSessionId('a b;rm -rf/')).toBe('abrm-rf')
   })
+  it('纯标点（如 ..）返回空串', () => {
+    expect(sanitizeSessionId('../')).toBe('')
+    expect(sanitizeSessionId('..')).toBe('')
+  })
 })

@@ -68,6 +68,16 @@ describe('CodexSessionSource', () => {
     ])
   })
 
+  it('function_call_output 非字符串 output → JSON 字符串而非 [object Object]；null → 跳过', async () => {
+    const p = await writeRollout('rollout-7-eeeeeeee-0000-0000-0000-000000000000.jsonl', [
+      { timestamp: '2026-06-01T00:00:00.000Z', type: 'session_meta', payload: { id: 'eeeeeeee-0000-0000-0000-000000000000', cwd: '/x' } },
+      { timestamp: '2026-06-01T00:00:01.000Z', type: 'response_item', payload: { type: 'function_call_output', output: { ok: true } } },
+      { timestamp: '2026-06-01T00:00:02.000Z', type: 'response_item', payload: { type: 'function_call_output', output: null } },
+    ])
+    const msgs = await source().readMessages(p)
+    expect(msgs).toEqual([{ role: 'tool', content: '{"ok":true}', ts: Date.parse('2026-06-01T00:00:01.000Z') }])
+  })
+
   it('archived_sessions 也被扫描；delete 删文件无 sidecar', async () => {
     await mkdir(join(dir, 'archived_sessions'), { recursive: true })
     const a = join(dir, 'archived_sessions', 'rollout-9-dddddddd-0000-0000-0000-000000000000.jsonl')

@@ -66,6 +66,15 @@ describe('GeminiSessionSource', () => {
     ])
   })
 
+  it('readMessages：content 为纯字符串也能取到', async () => {
+    const p = await writeChat('projE', 'session-s.json', {
+      sessionId: 'gem-s', startTime: '2026-05-14T00:00:00.000Z', lastUpdated: '2026-05-14T00:01:00.000Z',
+      messages: [{ type: 'gemini', timestamp: '2026-05-14T00:00:05.000Z', content: 'I am Gemini.' }],
+    })
+    const msgs = await source().readMessages(p)
+    expect(msgs).toEqual([{ role: 'assistant', content: 'I am Gemini.', ts: Date.parse('2026-05-14T00:00:05.000Z') }])
+  })
+
   it('probe + delete', async () => {
     const p = await writeChat('projC', 'session-y.json', { sessionId: 'gem-3', startTime: '2026-05-14T00:00:00.000Z', messages: [] }, '/c')
     const probe = await source().probe()

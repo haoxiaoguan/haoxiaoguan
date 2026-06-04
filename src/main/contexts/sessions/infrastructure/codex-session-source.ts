@@ -59,11 +59,8 @@ export class CodexSessionSource implements SessionSource {
 
   async probe(): Promise<ToolProbe> {
     const files = await this.files()
-    let latest = 0
-    for (const f of files) {
-      const m = await mtimeMs(f)
-      if (m > latest) latest = m
-    }
+    const mtimes = await Promise.all(files.map((f) => mtimeMs(f)))
+    const latest = mtimes.reduce((a, b) => (b > a ? b : a), 0)
     return { tool: this.tool, hasSessions: files.length > 0, lastActiveAt: latest > 0 ? latest : undefined }
   }
 
@@ -159,7 +156,12 @@ export class CodexSessionSource implements SessionSource {
         content = `[Tool: ${name}]`
       } else if (payload.type === 'function_call_output') {
         role = 'tool'
-        content = typeof payload.output === 'string' ? payload.output.trim() : String(payload.output ?? '').trim()
+        content =
+          typeof payload.output === 'string'
+            ? payload.output.trim()
+            : payload.output == null
+              ? ''
+              : JSON.stringify(payload.output).trim()
       } else {
         continue
       }

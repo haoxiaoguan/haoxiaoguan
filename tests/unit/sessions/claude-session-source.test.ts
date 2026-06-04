@@ -70,6 +70,14 @@ describe('ClaudeSessionSource', () => {
     expect(msgs[1].content).toBe('result text')
   })
 
+  it('首条 user 以 <command-name> 开头被跳过，标题回退目录名', async () => {
+    await writeSession('-Users-me-proj', 'sid-cmd', [
+      { type: 'user', sessionId: 'sid-cmd', cwd: '/Users/me/proj', timestamp: '2026-06-01T00:00:00.000Z', message: { role: 'user', content: '<command-name>/clear</command-name>' } },
+    ])
+    const page = await source().scan()
+    expect(page.items[0].title).toBe('proj')
+  })
+
   it('probe：有会话 + lastActiveAt 为最新文件 mtime', async () => {
     await writeSession('-p', 'sid-4', [{ sessionId: 'sid-4', message: { role: 'user', content: 'x' } }])
     const probe = await source().probe()

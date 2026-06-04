@@ -70,9 +70,11 @@ export function pathBasename(value: string): string {
 
 /** 仅放行安全 id 字符（防止后续拼进 shell 命令时注入）。 */
 export function sanitizeSessionId(raw: string): string {
-  return Array.from(raw.trim())
+  const out = Array.from(raw.trim())
     .filter((ch) => /[A-Za-z0-9._-]/.test(ch))
     .join('')
+  // 拒绝不含任何字母数字的结果（如 '..' / '.' / '--'），防止后续删除 sidecar 时指向父目录。
+  return /[A-Za-z0-9]/.test(out) ? out : ''
 }
 
 /** 统一 title 派生：自定义标题 > 首条真实 user 消息 > 目录名 > sessionId（前两者截断 80）。 */
