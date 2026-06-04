@@ -330,7 +330,10 @@ export default function Sessions() {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void init();
+    // 延迟到首帧绘制后再发起加载：点击导航即时显示页面（含骨架），不阻塞导航。
+    // init 幂等，反复进出会话页时为 no-op（直接用缓存）。
+    const id = requestAnimationFrame(() => void init());
+    return () => cancelAnimationFrame(id);
   }, [init]);
 
   useEffect(() => {
@@ -620,7 +623,7 @@ export default function Sessions() {
 
           {/* 列表区域（无限滚动） */}
           <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1 px-1">
-            {loading && items.length === 0 ? (
+            {!cur?.loaded ? (
               <SessionListSkeleton />
             ) : filtered.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">

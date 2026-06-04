@@ -18,6 +18,9 @@ interface ToolState {
 }
 
 interface SessionsState {
+  // 是否已首次初始化（probe + 默认工具加载）。模块级 store 跨导航存活，
+  // 故反复进出会话页时 init 直接复用缓存、不重扫，避免每次进页都卡。
+  initialized: boolean;
   probes: ToolProbeDto[];
   activeTool: SessionToolDto;
   byTool: Partial<Record<SessionToolDto, ToolState>>;
@@ -44,6 +47,7 @@ function pickDefaultTool(probes: ToolProbeDto[]): SessionToolDto {
 }
 
 export const useSessionsStore = create<SessionsState>((set, get) => ({
+  initialized: false,
   probes: [],
   activeTool: 'claude',
   byTool: {},
@@ -53,14 +57,17 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   error: null,
 
   init: async () => {
-    set({ loading: true, error: null });
+    // 已初始化则直接复用缓存（反复进出会话页不重扫）。需要最新数据用 refresh()。
+    if (get().initialized) return;
+    set({ initialized: true, loading: true, error: null });
     try {
       const probes = await sessionsService.probeTools();
       const activeTool = pickDefaultTool(probes);
       set({ probes, activeTool });
       await get().selectTool(activeTool);
     } catch (e) {
-      set({ error: String(e), loading: false });
+      // 失败则回退 initialized，允许下次进入重试。
+      set({ initialized: false, error: String(e), loading: false });
     }
   },
 

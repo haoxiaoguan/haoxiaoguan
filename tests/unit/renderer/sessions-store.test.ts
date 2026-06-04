@@ -21,7 +21,7 @@ import { useSessionsStore } from '../../../src/renderer/stores/sessionsStore'
 beforeEach(() => {
   vi.clearAllMocks()
   useSessionsStore.setState({
-    probes: [], activeTool: 'claude', byTool: {}, selectedPath: null, messages: [], loading: false, error: null,
+    initialized: false, probes: [], activeTool: 'claude', byTool: {}, selectedPath: null, messages: [], loading: false, error: null,
   } as never)
 })
 
@@ -46,6 +46,16 @@ describe('sessionsStore.init', () => {
     mocks.listSessions.mockClear()
     await useSessionsStore.getState().selectTool('claude')
     expect(mocks.listSessions).not.toHaveBeenCalled()
+  })
+
+  it('init 幂等：已初始化后再调不重新 probe（反复进出页面不重扫）', async () => {
+    mocks.probeTools.mockResolvedValue([{ tool: 'claude', hasSessions: true, lastActiveAt: 1 }])
+    mocks.listSessions.mockResolvedValue({ items: [], total: 0, offset: 0 })
+    await useSessionsStore.getState().init()
+    expect(mocks.probeTools).toHaveBeenCalledTimes(1)
+    mocks.probeTools.mockClear()
+    await useSessionsStore.getState().init()
+    expect(mocks.probeTools).not.toHaveBeenCalled()
   })
 })
 
