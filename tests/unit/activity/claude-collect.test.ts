@@ -45,6 +45,27 @@ describe('ClaudeSessionSource.collectLogEvents', () => {
     expect(events).toHaveLength(0)
   })
 
+  it('Write/Edit tool_use 产出 code_edit 事件并携带 amount', async () => {
+    await writeSession('-p', 'sid-ce', [
+      { type: 'user', uuid: 'u0', timestamp: '2023-11-14T00:00:00.000Z', message: { role: 'user', content: 'hi' } },
+      {
+        type: 'assistant', uuid: 'u2', timestamp: '2023-11-14T00:00:05.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', name: 'Write', input: { file_path: 'f', content: 'a\nb\nc' } },
+            { type: 'tool_use', name: 'Edit', input: { old_string: 'x', new_string: 'y\nz' } },
+          ],
+        },
+      },
+    ])
+    const { events } = await new ClaudeSessionSource(dir).collectLogEvents()
+    const edits = events.filter((e) => e.kind === 'code_edit')
+    expect(edits).toHaveLength(2)
+    expect(edits.map((e) => e.amount).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([3, 3])
+    expect(edits.every((e) => e.tool === 'claude')).toBe(true)
+  })
+
   it('agent- 前缀文件被排除', async () => {
     await mkdir(join(dir, '-p'), { recursive: true })
     await writeFile(join(dir, '-p', 'agent-x.jsonl'), JSON.stringify({ type: 'user', uuid: 'u', timestamp: '2023-11-14T00:00:00.000Z', message: { role: 'user', content: 'x' } }))
