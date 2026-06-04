@@ -21,6 +21,7 @@ import {
   truncateSummary,
 } from '../domain/session-parse-utils'
 import { mtimeMs, readHeadTailLines } from './fs-helpers'
+import { claudeEditChurn } from '../domain/code-edit-utils'
 
 const HEAD_N = 12
 const TAIL_N = 30
@@ -203,6 +204,10 @@ export class ClaudeSessionSource implements SessionSource {
               const name = typeof it.name === 'string' ? it.name : undefined
               const sourceKey = uuid ? `${uuid}#${idx}` : `${f}#${idx}#${ts}`
               events.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey, name })
+              const churn = claudeEditChurn(name ?? '', it.input)
+              if (churn > 0) {
+                events.push({ tool: this.tool, kind: 'code_edit', ts, sourceKey, name, amount: churn })
+              }
             }
           })
         }

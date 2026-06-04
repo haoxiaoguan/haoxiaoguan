@@ -35,8 +35,8 @@ export class MikroOrmActivityRepository implements ActivityRepository {
     try {
       for (const r of rows) {
         await conn.execute(
-          'INSERT OR IGNORE INTO activity_events (source_key, tool, metric, occurred_at) VALUES (?, ?, ?, ?)',
-          [r.sourceKey, r.tool, r.metric, r.occurredAt],
+          'INSERT OR IGNORE INTO activity_events (source_key, tool, metric, occurred_at, amount) VALUES (?, ?, ?, ?, ?)',
+          [r.sourceKey, r.tool, r.metric, r.occurredAt, r.amount ?? 1],
         )
       }
       await conn.execute('COMMIT')
@@ -55,9 +55,7 @@ export class MikroOrmActivityRepository implements ActivityRepository {
         INSERT INTO activity_daily_rollups (date, tool, metric, value, updated_at)
         SELECT
           strftime('%Y-%m-%d', occurred_at, 'unixepoch'),
-          tool,
-          metric,
-          COUNT(*),
+          tool, metric, SUM(amount),
           CAST(strftime('%s', 'now') AS INTEGER)
         FROM activity_events
         GROUP BY 1, 2, 3
@@ -71,6 +69,21 @@ export class MikroOrmActivityRepository implements ActivityRepository {
 
   async trend(range: string, metric: string): Promise<ActivityTrendPoint[]> {
     const conn = this.getEm().getConnection()
+    if (range === '1d') {
+      const rows = (await conn.execute(
+        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch')) AS day
+                    FROM activity_events WHERE metric = ?)
+         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch') AS date,
+                COALESCE(SUM(amount), 0) AS value
+         FROM activity_events
+         WHERE metric = ? AND strftime('%Y-%m-%d', occurred_at, 'unixepoch') = (SELECT day FROM d)
+         GROUP BY date
+         ORDER BY date ASC`,
+        [metric, metric],
+        'all',
+      )) as any[]
+      return (rows ?? []).map((r: any) => ({ date: r.date ?? '', value: Number(r.value ?? 0) }))
+    }
     const days = `-${windowDays(range)} day`
     const rows = (await conn.execute(
       `WITH max_day AS (SELECT MAX(date) AS value FROM activity_daily_rollups WHERE metric = ?)

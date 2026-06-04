@@ -28,10 +28,72 @@
     }
   },
   "trend": {
-    "title": "活跃趋势",
+    "title": "趋势分析",
+    "empty": "暂无数据",
+    "rangeToday": "今日",
+    "rangeWeek": "本周",
+    "rangeMonth": "本月",
+    "dimToken": "Token 消耗",
+    "dimTool": "工具调用",
+    "dimSession": "会话数量",
+    "dimCode": "代码改动",
     "less": "Less",
     "more": "More",
-    "rangeWeek": "周",
     "rangeYear": "年"
+  },
+  "account": {
+    "title": "账号总览",
+    "total": "账号总数",
+    "platforms": "平台",
+    "todayActive": "今日活跃",
+    "weekNew": "本周新增"
+  },
+  "platform": {
+    "title": "平台分布 · 按账号数",
+    "others": "其他",
+    "empty": "暂无账号",
+    "unit": "账号"
+  },
+  "token": {
+    "title": "{{range}}合计 · Token",
+    "in": "入",
+    "out": "出",
+    "cache": "缓存"
+  },
+  "session": {
+    "title": "会话活跃 · 本机",
+    "recentActive": "最近活跃 ·",
+    "minutesAgo": "{{n}} 分钟前",
+    "hoursAgo": "{{n}} 小时前",
+    "daysAgo": "{{n}} 天前",
+    "justNow": "刚刚"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "refreshing": "刷新中"
+  },
+  "pool": {
+    "title": "账号池健康",
+    "inPool": "在池",
+    "available": "可用",
+    "cooldown": "冷却",
+    "exhausted": "耗尽",
+    "empty": "暂无配额数据"
+  },
+  "credential": {
+    "title": "凭证健康",
+    "validOf": "有效",
+    "valid": "有效",
+    "expiring": "将过期",
+    "invalid": "失效",
+    "empty": "暂无凭证数据"
+  },
+  "attention": {
+    "title": "需关注 · 跨平台",
+    "none": "暂无需关注项",
+    "count": "{{n}} 项",
+    "quotaExhausted": "配额耗尽",
+    "quotaLow": "配额偏低",
+    "credExpiring": "凭证将过期"
   }
 }

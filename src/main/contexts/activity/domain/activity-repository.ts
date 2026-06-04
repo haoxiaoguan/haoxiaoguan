@@ -5,6 +5,8 @@ export interface ActivityEventRow {
   metric: string
   /** epoch 秒（喂给 SQLite strftime(..,'unixepoch')） */
   occurredAt: number
+  /** 求和量（计数维度=1；code_lines=改动行数） */
+  amount: number
 }
 
 export interface ActivityTrendPoint {
@@ -13,7 +15,7 @@ export interface ActivityTrendPoint {
 }
 
 export interface ActivityRepository {
-  /** 批量 INSERT OR IGNORE（source_key 唯一 → 幂等）。 */
+  /** 批量 INSERT OR IGNORE（(source_key, metric) 复合主键 → 幂等）。 */
   upsertEvents(rows: ActivityEventRow[]): Promise<void>
   /** 从 activity_events 全量重算 activity_daily_rollups。 */
   rebuildRollups(): Promise<void>

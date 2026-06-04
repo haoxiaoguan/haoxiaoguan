@@ -4,6 +4,7 @@ import { MikroORM } from '@mikro-orm/better-sqlite'
 import type { EntityManager } from '@mikro-orm/better-sqlite'
 import { buildOrmConfig, type OrmConfigOptions } from '../../../../mikro-orm.config'
 import { ALL_ENTITIES } from './entities'
+import { runMigrations } from './migrations'
 
 // MikroORM + better-sqlite3 bootstrap for the Electron main process.
 //
@@ -75,6 +76,8 @@ export function getEm(): EntityManager {
 export async function createSchema(): Promise<void> {
   const generator = getOrm().getSchemaGenerator()
   await generator.updateSchema({ wrap: false })
+  // 补 updateSchema 在 SQLite 上做不到的结构变更（主键重建等）。幂等。
+  await runMigrations(getOrm().em.getConnection())
 }
 
 export async function closeDatabase(): Promise<void> {

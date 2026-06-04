@@ -28,10 +28,72 @@
     }
   },
   "trend": {
-    "title": "Activity trend",
+    "title": "Trend Analysis",
+    "empty": "No data",
+    "rangeToday": "Today",
+    "rangeWeek": "Week",
+    "rangeMonth": "Month",
+    "dimToken": "Tokens",
+    "dimTool": "Tool calls",
+    "dimSession": "Sessions",
+    "dimCode": "Code lines",
     "less": "Less",
     "more": "More",
-    "rangeWeek": "Week",
     "rangeYear": "Year"
+  },
+  "account": {
+    "title": "Account Overview",
+    "total": "Total Accounts",
+    "platforms": "Platforms",
+    "todayActive": "Active Today",
+    "weekNew": "New This Week"
+  },
+  "platform": {
+    "title": "Platform Distribution · By Account",
+    "others": "Others",
+    "empty": "No accounts yet",
+    "unit": "Accounts"
+  },
+  "token": {
+    "title": "{{range}} · Tokens",
+    "in": "In",
+    "out": "Out",
+    "cache": "Cache"
+  },
+  "session": {
+    "title": "Session Activity · Local",
+    "recentActive": "Last active ·",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago",
+    "daysAgo": "{{n}}d ago",
+    "justNow": "Just now"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…"
+  },
+  "pool": {
+    "title": "Account Pool Health",
+    "inPool": "in pool",
+    "available": "Available",
+    "cooldown": "Cooldown",
+    "exhausted": "Exhausted",
+    "empty": "No quota data"
+  },
+  "credential": {
+    "title": "Credential Health",
+    "validOf": "valid",
+    "valid": "Valid",
+    "expiring": "Expiring",
+    "invalid": "Invalid",
+    "empty": "No credential data"
+  },
+  "attention": {
+    "title": "Needs Attention · Cross-platform",
+    "none": "Nothing needs attention",
+    "count": "{{n}} items",
+    "quotaExhausted": "Quota exhausted",
+    "quotaLow": "Quota low",
+    "credExpiring": "Credential expiring"
   }
 }
