@@ -6,13 +6,17 @@ export class ActivityEventEntity {
   @PrimaryKey({ type: 'text', fieldName: 'source_key' })
   sourceKey!: string
 
-  @Property({ type: 'text' })
-  tool!: string
+  @PrimaryKey({ type: 'text' })
+  metric!: string
 
   @Property({ type: 'text' })
-  metric!: string
+  tool!: string
 
   /** epoch 秒 */
   @Property({ type: 'bigint', fieldName: 'occurred_at' })
   occurredAt!: number
+
+  /** 求和量（缺省 1） */
+  @Property({ type: 'integer', default: 1 })
+  amount!: number
 }
