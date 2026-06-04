@@ -11,6 +11,7 @@ function fakeSource(tool: SessionTool, over: Partial<SessionSource> = {}): Sessi
     readMessages: async (): Promise<SessionMessage[]> => [],
     delete: vi.fn(async () => undefined),
     roots: () => ['/root/' + tool],
+    collectLogEvents: async () => ({ events: [], latestMtime: 0 }),
     ...over,
   }
 }
