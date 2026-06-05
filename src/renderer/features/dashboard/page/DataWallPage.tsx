@@ -87,7 +87,8 @@ export default function DataWallPage() {
       .getUsageSummary(currentRange)
       .then((data) => {
         setUsageSummary(data)
-        setLastSyncedAt(data.lastSyncedAt ?? Date.now())
+        // lastSyncedAt 后端是 Unix 秒，转毫秒再喂给 new Date()（Date.now() 兜底本就是毫秒）。
+        setLastSyncedAt(data.lastSyncedAt != null ? data.lastSyncedAt * 1000 : Date.now())
       })
       .catch(() => undefined)
     DASHBOARD_PLATFORMS.forEach((p) => {
@@ -113,7 +114,8 @@ export default function DataWallPage() {
         .getUsageSummary(rangeRef.current)
         .then((data) => {
           setUsageSummary(data)
-          setLastSyncedAt(data.lastSyncedAt ?? Date.now())
+          // lastSyncedAt 后端是 Unix 秒，转毫秒再喂给 new Date()（Date.now() 兜底本就是毫秒）。
+        setLastSyncedAt(data.lastSyncedAt != null ? data.lastSyncedAt * 1000 : Date.now())
         })
         .catch(() => undefined)
       setRefreshNonce((n) => n + 1)
@@ -142,7 +144,8 @@ export default function DataWallPage() {
       .then((data) => {
         if (rangeRef.current !== thisRange) return
         setUsageSummary(data)
-        setLastSyncedAt(data.lastSyncedAt ?? Date.now())
+        // lastSyncedAt 后端是 Unix 秒，转毫秒再喂给 new Date()（Date.now() 兜底本就是毫秒）。
+        setLastSyncedAt(data.lastSyncedAt != null ? data.lastSyncedAt * 1000 : Date.now())
       })
       .catch(() => undefined)
   }, [range])
