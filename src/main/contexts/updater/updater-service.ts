@@ -13,10 +13,14 @@ export interface UpdaterOptions {
 // 推给渲染层。autoDownload 开启 → 发现新版即自动下载，下载完成由前端确认后 install。
 export class UpdaterService {
   private status: UpdateStatus = { state: 'idle' }
-  private listener: (s: UpdateStatus) => void = () => {}
+  // 注意：不能用 class property 箭头函数初始化（`listener = () => {}`）——
+  // bytecodePlugin(babel) 不支持「arrow inside class property」，会让 main bundle
+  // 的 bytecode 编译失败。改在 constructor 里赋值。
+  private listener: (s: UpdateStatus) => void
   private readonly isPackaged: boolean
 
   constructor(opts: UpdaterOptions) {
+    this.listener = () => {}
     this.isPackaged = opts.isPackaged
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
