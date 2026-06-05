@@ -19,8 +19,10 @@ import {
   API_PROXY_CHANNELS,
   SESSIONS_CHANNELS,
   ACTIVITY_CHANNELS,
+  UPDATER_CHANNELS,
+  UPDATE_EVENTS,
 } from '../shared/ipc-channels'
-import type { HxgApi } from '../shared/api-types'
+import type { HxgApi, UpdateStatus } from '../shared/api-types'
 
 const api: HxgApi = {
   settings: {
@@ -236,6 +238,17 @@ const api: HxgApi = {
     syncActivity: () => ipcRenderer.invoke(ACTIVITY_CHANNELS.syncActivity),
     getActivityTrend: (range: string, metric: string) =>
       ipcRenderer.invoke(ACTIVITY_CHANNELS.getActivityTrend, range, metric),
+  },
+  updater: {
+    check: () => ipcRenderer.invoke(UPDATER_CHANNELS.check),
+    download: () => ipcRenderer.invoke(UPDATER_CHANNELS.download),
+    install: () => ipcRenderer.invoke(UPDATER_CHANNELS.install),
+    getStatus: () => ipcRenderer.invoke(UPDATER_CHANNELS.getStatus),
+    onStatus: (cb) => {
+      const listener = (_e: unknown, status: UpdateStatus) => cb(status)
+      ipcRenderer.on(UPDATE_EVENTS.status, listener)
+      return () => ipcRenderer.removeListener(UPDATE_EVENTS.status, listener)
+    },
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

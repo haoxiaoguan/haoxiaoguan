@@ -109,4 +109,14 @@ export class SettingsApplicationService {
   getTerminalLaunchTemplate(): string {
     return this.file.loadSync().runtime.terminalLaunchTemplate
   }
+
+  /** 自动更新是否启用（默认 true）。 */
+  getAutoUpdateEnabled(): boolean {
+    return this.file.loadSync().runtime.autoUpdateEnabled
+  }
+
+  /** 更新源地址（generic provider；空串=用打包的 app-update.yml 默认）。 */
+  getUpdateFeedUrl(): string {
+    return this.file.loadSync().runtime.updateFeedUrl
+  }
 }

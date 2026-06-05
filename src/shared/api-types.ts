@@ -675,6 +675,18 @@ export interface HxgApi {
     deleteSessions(items: SessionDeleteRequestDto[]): Promise<SessionDeleteOutcomeDto[]>
     resume(command: string, cwd?: string): Promise<void>
   }
+  updater: {
+    /** 手动检查更新（dev 下 no-op）。 */
+    check(): Promise<void>
+    /** 手动触发下载（autoDownload 时通常已自动开始）。 */
+    download(): Promise<void>
+    /** 退出并安装已下载的更新。 */
+    install(): Promise<void>
+    /** 读取当前更新状态。 */
+    getStatus(): Promise<UpdateStatus>
+    /** 订阅更新状态推送。返回取消订阅函数。 */
+    onStatus(cb: (status: UpdateStatus) => void): () => void
+  }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
 }
@@ -691,6 +703,25 @@ export type ApiProxyState = 'stopped' | 'running' | 'failed'
 export interface ApiProxyStatus {
   state: ApiProxyState
   port?: number
+}
+
+// 自动更新状态（G9）：主进程 autoUpdater 事件投影。
+export type UpdateState =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+export interface UpdateStatus {
+  state: UpdateState
+  /** 可用 / 已下载的版本号。 */
+  version?: string
+  /** downloading 时的进度百分比（0–100）。 */
+  percent?: number
+  /** error 时的错误信息。 */
+  error?: string
 }
 
 // 账号池健康行（IPC 返回）：合并账号 meta + 运行态快照。

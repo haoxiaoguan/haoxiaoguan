@@ -224,3 +224,16 @@ export const ACTIVITY_CHANNELS = {
   syncActivity: 'sync_activity',
   getActivityTrend: 'get_activity_trend',
 } as const
+
+// 自动更新上下文（updater，G9）—— electron-updater 封装。新功能，channel 取 "updater:<method>"。
+export const UPDATER_CHANNELS = {
+  check: 'updater:check',
+  download: 'updater:download',
+  install: 'updater:install',
+  getStatus: 'updater:getStatus',
+} as const
+
+// 主进程 → 渲染层推送：更新状态变化（checking/available/downloading/downloaded/error）。
+export const UPDATE_EVENTS = {
+  status: 'updater:status',
+} as const

@@ -53,6 +53,10 @@ export interface RuntimeSettings {
   apiProxyHttps: boolean
   // 「会话」恢复用的终端启动命令模板，占位符 {cwd}/{command}。空串=未配置（前端降级为复制）。
   terminalLaunchTemplate: string
+  // 自动更新（G9）：是否启用 + 更新源地址（generic provider，指向 single-server 更新代理；
+  // 空串则用打包的 app-update.yml 默认）。
+  autoUpdateEnabled: boolean
+  updateFeedUrl: string
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -86,6 +90,8 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyProbabilisticRetryChance: 0.1,
   apiProxyHttps: false,
   terminalLaunchTemplate: '',
+  autoUpdateEnabled: true,
+  updateFeedUrl: '',
 }
 
 export class AppSettings {
@@ -155,6 +161,8 @@ export class AppSettings {
       api_proxy_probabilistic_retry_chance: String(this.runtime.apiProxyProbabilisticRetryChance),
       api_proxy_https: String(this.runtime.apiProxyHttps),
       terminal_launch_template: this.runtime.terminalLaunchTemplate,
+      auto_update_enabled: String(this.runtime.autoUpdateEnabled),
+      update_feed_url: this.runtime.updateFeedUrl,
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -218,6 +226,10 @@ export class AppSettings {
         this.runtime.apiProxyHttps = v === 'true'
       } else if (k === 'terminal_launch_template') {
         this.runtime.terminalLaunchTemplate = v
+      } else if (k === 'auto_update_enabled') {
+        this.runtime.autoUpdateEnabled = v === 'true'
+      } else if (k === 'update_feed_url') {
+        this.runtime.updateFeedUrl = v.trim()
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

@@ -44,6 +44,7 @@ import { detectPlatformShell, type PlatformShell } from './platform-shell';
 import { SupportPopover } from './shell-utility/SupportPopover';
 import { FaqPopover } from './shell-utility/FaqPopover';
 import { NotificationPopover } from './shell-utility/NotificationPopover';
+import { UpdaterIndicator } from './shell-utility/UpdaterIndicator';
 
 interface AppShellProps {
   shell?: PlatformShell;
@@ -326,6 +327,7 @@ export function AppShell({ shell }: AppShellProps) {
               className="no-drag flex items-center gap-1"
               data-tauri-no-drag
             >
+              <UpdaterIndicator />
               <ShellUtilityHoverItem
                 icon={Headphones}
                 label={t('nav:shell.support')}

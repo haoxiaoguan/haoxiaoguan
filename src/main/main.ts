@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
-import { QUOTA_EVENTS, USAGE_EVENTS } from '../shared/ipc-channels'
+import { QUOTA_EVENTS, USAGE_EVENTS, UPDATE_EVENTS } from '../shared/ipc-channels'
 import { isOfficialTokenizerAvailable } from './contexts/apiProxy/domain/usage/token-estimator'
+import { UpdaterService } from './contexts/updater/updater-service'
+import { registerUpdaterHandlers } from './contexts/updater/ipc/updater-handlers'
 
 // userData location. Tests set HXG_USER_DATA_DIR to an isolated temp dir so
 // parallel/sequential e2e launches don't share a SingletonLock or DB. In
@@ -224,6 +226,21 @@ if (!gotLock) {
     services = await buildContainer()
     registerAllHandlers(services)
     registerShellAndAppHandlers()
+
+    // 自动更新（G9）：UpdaterService 封装 electron-updater，状态推送给渲染层。
+    // dev（未打包）下 check/download 内部 no-op。feedUrl 空则用打包的 app-update.yml。
+    const updater = new UpdaterService({
+      feedUrl: services.settings.getUpdateFeedUrl(),
+      isPackaged: app.isPackaged,
+    })
+    updater.setStatusListener((s) => mainWindow?.webContents.send(UPDATE_EVENTS.status, s))
+    registerUpdaterHandlers(updater)
+    // 启动后延迟检查（仅用户启用时；autoDownload 会在发现新版后自动下载）。
+    if (services.settings.getAutoUpdateEnabled()) {
+      setTimeout(() => {
+        void updater.check()
+      }, 10_000)
+    }
 
     refreshCloseBehavior()
     // Apply persisted autostart preference at startup (best-effort; a rollback
