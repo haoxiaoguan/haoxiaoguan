@@ -50,7 +50,7 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
           input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, updated_at
         )
         SELECT
-          strftime('%Y-%m-%d', occurred_at, 'unixepoch'),
+          strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime'),
           agent_id,
           source_kind,
           COUNT(*),
@@ -118,15 +118,15 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     const conn = this.getEm().getConnection()
     if (range === '1d') {
       const rows = (await conn.execute(
-        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch')) AS day FROM usage_records)
-         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch') AS date,
+        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime')) AS day FROM usage_records)
+         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date,
            COALESCE(SUM(input_tokens), 0) AS input_tokens,
            COALESCE(SUM(output_tokens), 0) AS output_tokens,
            COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
            COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
            COUNT(*) AS requests
          FROM usage_records
-         WHERE strftime('%Y-%m-%d', occurred_at, 'unixepoch') = (SELECT day FROM d)
+         WHERE strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') = (SELECT day FROM d)
          GROUP BY date ORDER BY date ASC`,
         [],
         'all',

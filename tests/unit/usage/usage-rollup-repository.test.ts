@@ -1,3 +1,4 @@
+process.env.TZ = 'UTC'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { MikroORM } from '@mikro-orm/better-sqlite'
 import { ReflectMetadataProvider } from '@mikro-orm/core'

@@ -54,7 +54,7 @@ export class MikroOrmActivityRepository implements ActivityRepository {
       await conn.execute(`
         INSERT INTO activity_daily_rollups (date, tool, metric, value, updated_at)
         SELECT
-          strftime('%Y-%m-%d', occurred_at, 'unixepoch'),
+          strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime'),
           tool, metric, SUM(amount),
           CAST(strftime('%s', 'now') AS INTEGER)
         FROM activity_events
@@ -71,12 +71,12 @@ export class MikroOrmActivityRepository implements ActivityRepository {
     const conn = this.getEm().getConnection()
     if (range === '1d') {
       const rows = (await conn.execute(
-        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch')) AS day
+        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime')) AS day
                     FROM activity_events WHERE metric = ?)
-         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch') AS date,
+         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date,
                 COALESCE(SUM(amount), 0) AS value
          FROM activity_events
-         WHERE metric = ? AND strftime('%Y-%m-%d', occurred_at, 'unixepoch') = (SELECT day FROM d)
+         WHERE metric = ? AND strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') = (SELECT day FROM d)
          GROUP BY date
          ORDER BY date ASC`,
         [metric, metric],
