@@ -34,6 +34,12 @@ let backupTimer: ReturnType<typeof setInterval> | null = null
 const PENDING_OAUTH_PURGE_INTERVAL_MS = 5 * 60 * 1000
 let pendingOAuthPurgeTimer: ReturnType<typeof setInterval> | null = null
 
+// 用量 session-log 同步：对齐 cc-switch 的 SESSION_SYNC_INTERVAL_SECS=60。
+// 增量 per-file 游标使重复扫描很快；usageSyncRunning 重入保护避免首次全量未完成就叠跑。
+const USAGE_SYNC_INTERVAL_MS = 60 * 1000
+let usageSyncTimer: ReturnType<typeof setInterval> | null = null
+let usageSyncRunning = false
+
 // Deep-link URL captured before the renderer/container is ready (macOS can emit
 // open-url before whenReady resolves). Flushed once the window exists.
 let pendingDeepLink: string | null = null
@@ -286,6 +292,29 @@ if (!gotLock) {
       PENDING_OAUTH_PURGE_INTERVAL_MS,
     )
 
+    // 用量同步：启动后立即跑一次，然后每 60s 一次。首次为全量扫描（清库后重建），
+    // 之后靠 per-file mtime 游标只处理变化的文件，并 rebuild 当日 rollup。
+    const runUsageSync = async (): Promise<void> => {
+      const svc = services
+      if (!svc || usageSyncRunning) return
+      usageSyncRunning = true
+      try {
+        const summary = await svc.usageSync.syncAll()
+        const failed = svc.usageSync
+          .lastErrors()
+          .map((e) => e.split(':')[0].trim())
+          .filter(Boolean)
+        await svc.usageQuery.recordSyncResult(summary.platforms, failed)
+        await svc.usageQuery.rebuildRollups()
+      } catch (e) {
+        console.error('[usage] periodic sync failed:', e)
+      } finally {
+        usageSyncRunning = false
+      }
+    }
+    void runUsageSync()
+    usageSyncTimer = setInterval(() => void runUsageSync(), USAGE_SYNC_INTERVAL_MS)
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(false)
       else showMainWindow()
@@ -307,6 +336,10 @@ app.on('before-quit', () => {
   if (pendingOAuthPurgeTimer) {
     clearInterval(pendingOAuthPurgeTimer)
     pendingOAuthPurgeTimer = null
+  }
+  if (usageSyncTimer) {
+    clearInterval(usageSyncTimer)
+    usageSyncTimer = null
   }
   services?.tokenRefreshScheduler.stop()
   services?.platformQuotaScheduler.stop()

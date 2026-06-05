@@ -142,4 +142,9 @@ export interface UsageCursor {
 export interface UsageMetricsBatch {
   records: UsageRecord[]
   nextCursor: UsageCursor
+  /**
+   * 本轮实际处理（读取并解析）过的文件 + 其 mtime(ms)。增量同步用：同步服务在
+   * upsert 成功后据此推进 per-file 游标。未实现增量的 reader 可省略。
+   */
+  processedFiles?: Array<{ sourcePath: string; mtimeMs: number }>
 }

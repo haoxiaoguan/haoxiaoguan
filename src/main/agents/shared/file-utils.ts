@@ -138,6 +138,16 @@ export async function fileUpdatedAtAsync(filePath: string, fallback: number): Pr
   }
 }
 
+/** Async file mtime in integer milliseconds; 0 on error. 用于 per-file 增量游标比对。 */
+export async function fileMtimeMsAsync(filePath: string): Promise<number> {
+  try {
+    const s = await stat(filePath)
+    return Math.floor(s.mtimeMs)
+  } catch {
+    return 0
+  }
+}
+
 /**
  * Async recursive collect, yielding to the event loop between directory entries
  * so a large tree never blocks the UI.

@@ -66,6 +66,7 @@ import { StorageService } from './contexts/skill/application/storage-service'
 import { MikroOrmUsageRecordRepository } from './contexts/usage/infrastructure/mikro-orm-usage-record-repository'
 import { MikroOrmUsageRollupRepository } from './contexts/usage/infrastructure/mikro-orm-usage-rollup-repository'
 import { MikroOrmUsageSyncStateRepository } from './contexts/usage/infrastructure/mikro-orm-usage-sync-state-repository'
+import { MikroOrmUsageFileCursorStore } from './contexts/usage/infrastructure/mikro-orm-usage-file-cursor-store'
 import { UsageSyncService } from './contexts/usage/application/usage-sync-service'
 import { UsageQueryService } from './contexts/usage/application/usage-query-service'
 import { InMemoryAgentRegistry } from './agents/shared/agent-registry'
@@ -348,9 +349,12 @@ export async function buildContainer(): Promise<Container> {
   //    registry interface (agents/shared), so it consumes the lean 5-client
   //    registry per the usage manifest §5. (The full registry is structurally
   //    incompatible with that narrower interface — see final integration notes.)
+  // per-file 增量游标存储（复用 usage_sync_state 表）。注入 claude/codex（大体量 reader）
+  // 与同步服务：reader 据此跳过 mtime 未变的文件，同步服务在 upsert 成功后推进游标。
+  const usageFileCursorStore = new MikroOrmUsageFileCursorStore()
   const usageAgentRegistry = new InMemoryAgentRegistry([
-    new ClaudeAgentClient(),
-    new CodexAgentClient(),
+    new ClaudeAgentClient(usageFileCursorStore),
+    new CodexAgentClient(usageFileCursorStore),
     new GeminiCliAgentClient(),
     new KiroAgentClient(),
     new QoderAgentClient(),
@@ -358,7 +362,7 @@ export async function buildContainer(): Promise<Container> {
   const usageRecordRepo = new MikroOrmUsageRecordRepository()
   const usageRollupRepo = new MikroOrmUsageRollupRepository()
   const usageSyncStateRepo = new MikroOrmUsageSyncStateRepository()
-  const usageSync = new UsageSyncService(usageAgentRegistry, usageRecordRepo)
+  const usageSync = new UsageSyncService(usageAgentRegistry, usageRecordRepo, usageFileCursorStore)
   const usageQuery = new UsageQueryService(usageRollupRepo, usageSyncStateRepo)
 
   // 7. LocalBackup context.
