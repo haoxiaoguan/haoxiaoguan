@@ -90,7 +90,7 @@ describe('DataWallPage', () => {
     expect(screen.getByTestId('datawall-grid')).toBeInTheDocument();
   });
 
-  it('triggers fetchAccounts, syncUsageSources, syncActivity, and probeTools on mount', async () => {
+  it('on mount triggers read-only loads (accounts + probeTools); sync is backend-only', async () => {
     render(
       <MemoryRouter>
         <DataWallPage />
@@ -98,9 +98,10 @@ describe('DataWallPage', () => {
     );
 
     expect(mocks.fetchAccounts).toHaveBeenCalled();
-    expect(mocks.syncUsageSources).toHaveBeenCalled();
-    expect(mocks.syncActivity).toHaveBeenCalled();
     expect(mocks.probeTools).toHaveBeenCalled();
+    // 对齐 cc-switch：用量/活动同步由后端固定 60s 定时负责，UI 挂载/刷新不再触发 syncAll。
+    expect(mocks.syncUsageSources).not.toHaveBeenCalled();
+    expect(mocks.syncActivity).not.toHaveBeenCalled();
   });
 
   it('renders key card titles via i18n keys', () => {

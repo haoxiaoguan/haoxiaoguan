@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
 import { useAccountStore } from '@/stores/accountStore'
-import { usageService, activityService, sessionsService, systemService } from '@/services/tauri'
+import { usageService, sessionsService, systemService } from '@/services/tauri'
 import type { UsageSummaryResponse } from '@/types'
 import type { ToolProbeDto } from '@shared/api-types'
 import { DASHBOARD_PLATFORMS } from '../platforms'
@@ -74,11 +74,11 @@ export default function DataWallPage() {
   const [refreshInterval, setRefreshIntervalState] = useState<number>(readStoredInterval)
   const [refreshNonce, setRefreshNonce] = useState(0)
 
-  // ── Full data reload (used by auto-refresh tick) ─────────────────────────────
+  // ── 只读刷新（自动刷新 tick / usage:synced 事件用）────────────────────────────
+  // 对齐 cc-switch：同步全部由后端固定 60s 定时（main.ts）负责，这里只重读 DB，不再触发
+  // syncUsageSources/syncActivity——避免「选 5s 就每 5s 全量 syncAll+rebuildRollups」的浪费。
   const reloadAll = useCallback(() => {
     const currentRange = rangeRef.current
-    void usageService.syncUsageSources().catch(() => undefined)
-    void activityService.syncActivity().catch(() => undefined)
     void sessionsService
       .probeTools()
       .then((result) => setTools(result))
@@ -104,32 +104,21 @@ export default function DataWallPage() {
     return () => clearInterval(id)
   }, [refreshInterval, reloadAll])
 
-  // ── 主进程后台同步线程完成事件 → 刷新只读视图 ───────────────────────────────────
-  // 主进程每 60s 跑一次用量同步（main.ts），完成后推 usage:synced。大屏据此刷新
-  // 「最后同步时间」+ token 数字 + 趋势，**与页内「自动刷新」开关无关**——即使开关为
-  // 关闭，常驻后台线程仍在驱动右上角时间与数据更新。
+  // ── 主进程后台同步线程完成事件 → 只读刷新 ───────────────────────────────────────
+  // 主进程每 60s 同步 usage+activity（main.ts），完成后推 usage:synced。大屏据此重读，
+  // **与页内「自动刷新」开关无关**——即使开关为关闭，后台线程仍驱动右上时间与数据更新。
+  const reloadAllRef = useRef(reloadAll)
+  reloadAllRef.current = reloadAll
   useEffect(() => {
-    const unsub = systemService.onUsageSynced(() => {
-      void usageService
-        .getUsageSummary(rangeRef.current)
-        .then((data) => {
-          setUsageSummary(data)
-          // lastSyncedAt 后端是 Unix 秒，转毫秒再喂给 new Date()（Date.now() 兜底本就是毫秒）。
-        setLastSyncedAt(data.lastSyncedAt != null ? data.lastSyncedAt * 1000 : Date.now())
-        })
-        .catch(() => undefined)
-      setRefreshNonce((n) => n + 1)
-    })
+    const unsub = systemService.onUsageSynced(() => reloadAllRef.current())
     return unsub
   }, [])
 
-  // ── Mount effects ────────────────────────────────────────────────────────────
+  // ── Mount effects（只读：账号 + 工具探针；用量/活动同步由后端 60s 定时负责）──────────
   useEffect(() => {
     DASHBOARD_PLATFORMS.forEach((p) => {
       void fetchAccounts(p)
     })
-    void usageService.syncUsageSources().catch(() => undefined)
-    void activityService.syncActivity().catch(() => undefined)
     void sessionsService
       .probeTools()
       .then((result) => setTools(result))

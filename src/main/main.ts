@@ -294,28 +294,37 @@ if (!gotLock) {
 
     // 用量同步：启动后立即跑一次，然后每 60s 一次。首次为全量扫描（清库后重建），
     // 之后靠 per-file mtime 游标只处理变化的文件，并 rebuild 当日 rollup。
-    const runUsageSync = async (): Promise<void> => {
+    // 对齐 cc-switch：用量 + 活动的同步统一由后端固定定时负责（UI 不再触发 syncAll），
+    // 完成后推 usage:synced 让大屏只读刷新。usage 与 activity 各自独立容错，互不阻塞。
+    const runBackgroundSync = async (): Promise<void> => {
       const svc = services
       if (!svc || usageSyncRunning) return
       usageSyncRunning = true
       try {
-        const summary = await svc.usageSync.syncAll()
-        const failed = svc.usageSync
-          .lastErrors()
-          .map((e) => e.split(':')[0].trim())
-          .filter(Boolean)
-        await svc.usageQuery.recordSyncResult(summary.platforms, failed)
-        await svc.usageQuery.rebuildRollups()
-        // 推送给渲染层：大屏据此刷新「最后同步时间」+ 数字 + 趋势（即使其页内自动刷新为关闭）。
+        try {
+          const summary = await svc.usageSync.syncAll()
+          const failed = svc.usageSync
+            .lastErrors()
+            .map((e) => e.split(':')[0].trim())
+            .filter(Boolean)
+          await svc.usageQuery.recordSyncResult(summary.platforms, failed)
+          await svc.usageQuery.rebuildRollups()
+        } catch (e) {
+          console.error('[usage] periodic sync failed:', e)
+        }
+        try {
+          await svc.activitySync.syncAll()
+        } catch (e) {
+          console.error('[activity] periodic sync failed:', e)
+        }
+        // 推送渲染层：大屏据此只读刷新（最后同步时间 + 数字 + 趋势 + 工具/账号），与页内自动刷新开关无关。
         mainWindow?.webContents.send(USAGE_EVENTS.synced)
-      } catch (e) {
-        console.error('[usage] periodic sync failed:', e)
       } finally {
         usageSyncRunning = false
       }
     }
-    void runUsageSync()
-    usageSyncTimer = setInterval(() => void runUsageSync(), USAGE_SYNC_INTERVAL_MS)
+    void runBackgroundSync()
+    usageSyncTimer = setInterval(() => void runBackgroundSync(), USAGE_SYNC_INTERVAL_MS)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(false)
