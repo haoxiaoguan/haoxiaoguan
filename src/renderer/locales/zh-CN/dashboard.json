@@ -63,7 +63,8 @@
     "title": "{{range}}合计 · Token",
     "in": "入",
     "out": "出",
-    "cache": "缓存"
+    "cache": "缓存",
+    "requests": "请求"
   },
   "session": {
     "title": "会话活跃 · 本机",

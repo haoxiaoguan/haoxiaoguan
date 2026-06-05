@@ -63,7 +63,8 @@
     "title": "{{range}} · Tokens",
     "in": "In",
     "out": "Out",
-    "cache": "Cache"
+    "cache": "Cache",
+    "requests": "reqs"
   },
   "session": {
     "title": "Session Activity · Local",

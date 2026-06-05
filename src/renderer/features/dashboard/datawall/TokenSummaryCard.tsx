@@ -9,6 +9,7 @@ interface Props {
   inputTokens: number
   outputTokens: number
   cacheTokens: number
+  requests: number
 }
 
 interface BarDef {
@@ -27,6 +28,7 @@ export function TokenSummaryCard({
   inputTokens,
   outputTokens,
   cacheTokens,
+  requests,
 }: Props) {
   const { t } = useTranslation('dashboard')
 
@@ -39,7 +41,17 @@ export function TokenSummaryCard({
   const maxVal = Math.max(inputTokens, outputTokens, cacheTokens, 1)
 
   return (
-    <DataWallCard title={t('token.title', { range: rangeLabel })}>
+    <DataWallCard
+      title={t('token.title', { range: rangeLabel })}
+      headerRight={
+        <span className="flex items-baseline gap-1 text-[10px] text-muted-foreground">
+          <span className="font-semibold tabular-nums text-foreground">
+            {requests.toLocaleString('en-US')}
+          </span>
+          {t('token.requests')}
+        </span>
+      }
+    >
       {/* Large total */}
       <div
         className="text-[34px] font-extrabold leading-none tracking-tight text-foreground"

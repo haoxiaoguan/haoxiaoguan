@@ -153,8 +153,9 @@ export default function DataWallPage() {
         inputTokens: usageSummary.inputTokens,
         outputTokens: usageSummary.outputTokens,
         cacheTokens: usageSummary.cacheReadTokens + usageSummary.cacheCreationTokens,
+        requests: usageSummary.requests,
       }
-    : { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0 }
+    : { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, requests: 0 }
 
   const rangeLabel = t(RANGE_LABEL_KEYS[range])
 
