@@ -151,6 +151,18 @@ export default function DataWallPage() {
   const stats = useAccountStats()
   const qh = useQuotaHealthSummary()
 
+  // 进入仪表盘后自动加载「账号池健康 / 凭证健康 / 需关注」三卡（此前需手点各自的刷新）。
+  // 等账号就绪后触发一次：配额走缓存(ensureMany→getQuotaState)、凭证校验一次。用 ref 守卫
+  // 保证同一会话只自动跑一次（避免每次切到仪表盘都重复校验），空账号则不触发。
+  const qhRef = useRef(qh)
+  qhRef.current = qh
+  const autoLoadedHealthRef = useRef(false)
+  useEffect(() => {
+    if (autoLoadedHealthRef.current || stats.total <= 0) return
+    autoLoadedHealthRef.current = true
+    void qhRef.current.refresh().catch(() => undefined)
+  }, [stats.total])
+
   const sessionTools = useMemo(
     () =>
       tools.map((e) => ({
