@@ -46,6 +46,9 @@ class CodexSessionLogReader implements SessionLogReader {
       let prevCacheR = 0
       let prevCacheC = 0
 
+      // Track best-effort model name: updated whenever a line carries payload.model
+      let model = 'unknown-model'
+
       for (const [index, raw] of lines) {
         let value: Record<string, any>
         try {
@@ -53,25 +56,40 @@ class CodexSessionLogReader implements SessionLogReader {
         } catch {
           continue
         }
-        const usage = value?.response?.usage ?? {}
-        const curIn: number = usage?.input_tokens ?? 0
-        const curOut: number = usage?.output_tokens ?? 0
-        const curCacheR: number =
-          usage?.cached_input_tokens ?? usage?.cache_read_input_tokens ?? 0
-        const curCacheC: number = usage?.cache_creation_input_tokens ?? 0
+
+        // Update model from any line that carries it (best-effort)
+        const payloadModel = value?.payload?.model
+        if (typeof payloadModel === 'string' && payloadModel) {
+          model = payloadModel
+        }
+
+        // Token data lives in token_count events only:
+        // value.payload.type === 'token_count' && value.payload.info.total_token_usage
+        const tu = value?.payload?.info?.total_token_usage
+        if (!tu) continue
+
+        const curInRaw: number = tu.input_tokens ?? 0
+        const curCached: number = tu.cached_input_tokens ?? 0
+        const curOut: number = tu.output_tokens ?? 0
+        const curReason: number = tu.reasoning_output_tokens ?? 0
 
         // saturating_sub: clamp to 0 if counter decreased
-        const dIn = Math.max(0, curIn - prevIn)
+        const dInRaw = Math.max(0, curInRaw - prevIn)
+        const dCached = Math.max(0, curCached - prevCacheR)
         const dOut = Math.max(0, curOut - prevOut)
-        const dCr = Math.max(0, curCacheR - prevCacheR)
-        const dCc = Math.max(0, curCacheC - prevCacheC)
+        const dReason = Math.max(0, curReason - prevCacheC)
 
-        prevIn = curIn
+        prevIn = curInRaw
         prevOut = curOut
-        prevCacheR = curCacheR
-        prevCacheC = curCacheC
+        prevCacheR = curCached
+        prevCacheC = curReason
 
-        if (dIn === 0 && dOut === 0 && dCr === 0 && dCc === 0) continue
+        // Normalised storage: new input = input_delta - cached_delta; cache_creation = 0
+        const inputTokens = Math.max(0, dInRaw - dCached)
+        const cacheReadTokens = dCached
+        const outputTokens = dOut + dReason
+
+        if (inputTokens === 0 && outputTokens === 0 && cacheReadTokens === 0) continue
 
         const tsStr: string | undefined = value?.timestamp
         const occurredAt = tsStr
@@ -85,12 +103,12 @@ class CodexSessionLogReader implements SessionLogReader {
             sourcePath: sourcePathStr(filePath),
             sourceEventId: `${filePath}:${index}`,
             sessionId: value?.session_id ?? undefined,
-            model: value?.response?.model ?? 'unknown-model',
+            model,
             providerName: 'openai',
-            inputTokens: dIn,
-            outputTokens: dOut,
-            cacheReadTokens: dCr,
-            cacheCreationTokens: dCc,
+            inputTokens,
+            outputTokens,
+            cacheReadTokens,
+            cacheCreationTokens: 0,
             occurredAt,
             rawUpdatedAt: await fileUpdatedAtAsync(filePath, occurredAt),
             rawHash: rawHash(raw),
