@@ -53,6 +53,10 @@ export interface RuntimeSettings {
   apiProxyHttps: boolean
   // 「会话」恢复用的终端启动命令模板，占位符 {cwd}/{command}。空串=未配置（前端降级为复制）。
   terminalLaunchTemplate: string
+  // 自动更新（G9）：是否启用 + 更新源地址（generic provider，指向 single-server 更新代理；
+  // 空串则用打包的 app-update.yml 默认）。
+  autoUpdateEnabled: boolean
+  updateFeedUrl: string
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -86,6 +90,8 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyProbabilisticRetryChance: 0.1,
   apiProxyHttps: false,
   terminalLaunchTemplate: '',
+  autoUpdateEnabled: true,
+  updateFeedUrl: '',
 }
 
 export class AppSettings {
@@ -155,6 +161,8 @@ export class AppSettings {
       api_proxy_probabilistic_retry_chance: String(this.runtime.apiProxyProbabilisticRetryChance),
       api_proxy_https: String(this.runtime.apiProxyHttps),
       terminal_launch_template: this.runtime.terminalLaunchTemplate,
+      auto_update_enabled: String(this.runtime.autoUpdateEnabled),
+      update_feed_url: this.runtime.updateFeedUrl,
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -218,6 +226,30 @@ export class AppSettings {
         this.runtime.apiProxyHttps = v === 'true'
       } else if (k === 'terminal_launch_template') {
         this.runtime.terminalLaunchTemplate = v
+      } else if (k === 'auto_update_enabled') {
+        this.runtime.autoUpdateEnabled = v === 'true'
+      } else if (k === 'update_feed_url') {
+        // 仅接受 HTTPS 更新源（回环地址例外，便于本地联调）。此设置渲染层可写，
+        // 若不校验，被攻陷的渲染层可把更新源指向恶意 / 明文服务器 → 配合未签名产物
+        // 无签名兜底，等同持久化 RCE。非法 / 非 HTTPS 源静默丢弃（与宽松契约一致）。
+        const raw = v.trim()
+        if (raw.length === 0) {
+          this.runtime.updateFeedUrl = '' // 空 = 回退打包 app-update.yml
+        } else {
+          try {
+            const u = new URL(raw)
+            const isLoopback =
+              u.hostname === 'localhost' ||
+              u.hostname === '127.0.0.1' ||
+              u.hostname === '::1' ||
+              u.hostname === '[::1]' // WHATWG URL 对 IPv6 字面量 hostname 带方括号
+            if (u.protocol === 'https:' || (u.protocol === 'http:' && isLoopback)) {
+              this.runtime.updateFeedUrl = raw
+            }
+          } catch {
+            // 非法 URL：丢弃
+          }
+        }
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

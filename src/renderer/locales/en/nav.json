@@ -134,6 +134,18 @@
       "wechat": "WeChat Group",
       "qq": "QQ Group"
     },
+    "update": {
+      "title": "Update available",
+      "desc": "A new version is available.",
+      "newVersion": "Version {{version}} is available",
+      "preparing": "Preparing download…",
+      "downloading": "Downloading… {{percent}}%",
+      "ready": "The update is downloaded. Click \"Install now\" to restart and apply it.",
+      "later": "Later",
+      "installNow": "Install now",
+      "error": "Update failed: {{message}}",
+      "retry": "Retry"
+    },
     "notify": {
       "title": "Notifications",
       "more": "View more",
