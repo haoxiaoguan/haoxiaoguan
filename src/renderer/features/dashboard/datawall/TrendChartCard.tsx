@@ -13,11 +13,13 @@ import { useThemeValue } from '@/hooks/use-theme'
 import { useTrendSeries } from '../hooks/useTrendSeries'
 import type { TrendRange, TrendDimension } from '../hooks/useTrendSeries'
 import { formatMetricValue } from '../utils/trend-fill'
+import { VIZ } from './viz-colors'
 import { cn } from '@/lib/utils'
 
 interface TrendChartCardProps {
   range: TrendRange
   onRangeChange: (r: TrendRange) => void
+  refreshNonce?: number
 }
 
 const RANGE_OPTIONS: { value: TrendRange; labelKey: string }[] = [
@@ -36,12 +38,52 @@ const DIM_OPTIONS: { value: TrendDimension; labelKey: string }[] = [
 // Themed custom tooltip -------------------------------------------------------
 interface ChartTooltipProps {
   active?: boolean
-  payload?: ReadonlyArray<{ value?: number | string }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: ReadonlyArray<{ value?: number | string; payload?: any }>
   label?: string | number
+  dimension: TrendDimension
 }
 
-function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
+function ChartTooltip({ active, payload, label, dimension }: ChartTooltipProps) {
+  const { t } = useTranslation('dashboard')
   if (!active || !payload?.length) return null
+
+  if (dimension === 'tokens') {
+    const point = payload[0]?.payload as { value?: number; extra?: Record<string, number> } | undefined
+    const total = typeof payload[0]?.value === 'number' ? payload[0].value : (point?.value ?? 0)
+    const extra = point?.extra
+    const rows: { labelKey: string; color: string; val: number }[] = [
+      { labelKey: 'trend.tipInput',       color: VIZ.blue,   val: extra?.input ?? 0 },
+      { labelKey: 'trend.tipOutput',      color: VIZ.green,  val: extra?.output ?? 0 },
+      { labelKey: 'trend.tipCacheCreate', color: VIZ.amber,  val: extra?.cacheCreation ?? 0 },
+      { labelKey: 'trend.tipCacheRead',   color: VIZ.violet, val: extra?.cacheRead ?? 0 },
+    ]
+    return (
+      <div className="rounded-[8px] border border-border bg-card px-3 py-2 shadow-md min-w-[150px]">
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <div className="mt-1 flex flex-col gap-0.5">
+          {rows.map((row) => (
+            <div key={row.labelKey} className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span className="size-1.5 rounded-full shrink-0" style={{ background: row.color }} />
+                {t(row.labelKey)}
+              </span>
+              <span className="text-[11px] font-medium tabular-nums text-foreground">
+                {row.val.toLocaleString('en-US')}
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 flex items-center justify-between gap-3 border-t border-border pt-1">
+            <span className="text-[11px] text-muted-foreground">{t('trend.tipTotal')}</span>
+            <span className="text-[12px] font-semibold tabular-nums text-foreground">
+              {(typeof total === 'number' ? total : 0).toLocaleString('en-US')}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const val = payload[0]?.value
   return (
     <div className="rounded-[8px] border border-border bg-card px-3 py-2 shadow-md">
@@ -71,13 +113,14 @@ function LoadingPlaceholder() {
 /**
  * Central trend chart card for the data wall.
  * Controlled `range` prop; internal `dimension` state.
+ * Optional `refreshNonce` — increment externally to force a data re-fetch.
  */
-export function TrendChartCard({ range, onRangeChange }: TrendChartCardProps) {
+export function TrendChartCard({ range, onRangeChange, refreshNonce }: TrendChartCardProps) {
   const { t } = useTranslation('dashboard')
   const theme = useThemeValue()
 
   const [dimension, setDimension] = useState<TrendDimension>('tokens')
-  const { points, total, loading } = useTrendSeries(range, dimension)
+  const { points, total, loading } = useTrendSeries(range, dimension, refreshNonce)
 
   // Theme-aware colors
   const brandBlue   = theme === 'dark' ? '#3b82f6' : '#2563eb'
@@ -188,7 +231,14 @@ export function TrendChartCard({ range, onRangeChange }: TrendChartCardProps) {
               <YAxis hide />
 
               <Tooltip
-                content={(props) => <ChartTooltip {...(props as ChartTooltipProps)} />}
+                content={(props) => (
+                  <ChartTooltip
+                    active={props.active}
+                    payload={props.payload as ChartTooltipProps['payload']}
+                    label={props.label}
+                    dimension={dimension}
+                  />
+                )}
                 cursor={{ stroke: brandBlue, strokeWidth: 1, strokeDasharray: '3 3' }}
               />
 

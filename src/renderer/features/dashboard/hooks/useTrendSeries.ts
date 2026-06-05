@@ -17,10 +17,14 @@ export interface UseTrendSeriesResult {
  *
  * Granularity: '1d' → hour buckets; '7d'/'30d' → day buckets.
  * Stale responses from superseded fetches are discarded (anti-race).
+ *
+ * Optional `refreshNonce` — increment it externally to trigger a re-fetch
+ * without changing range or dimension.
  */
 export function useTrendSeries(
   range: TrendRange,
   dimension: TrendDimension,
+  refreshNonce?: number,
 ): UseTrendSeriesResult {
   const [points, setPoints] = useState<FilledTrendPoint[]>([])
   const [total, setTotal] = useState(0)
@@ -34,11 +38,22 @@ export function useTrendSeries(
 
     const fetchData = async () => {
       try {
-        let rawPoints: Array<{ date: string; value: number }>
+        let rawPoints: Array<{ date: string; value: number; extra?: Record<string, number> }>
 
         if (dimension === 'tokens') {
           const data = await usageService.getUsageTrend(range, 'tokens')
-          rawPoints = data.map((p) => ({ date: p.date, value: p.totalTokens }))
+          // Use the four-way sum (input + output + cacheCreation + cacheRead) so
+          // cache tokens are included, and carry per-category breakdown as extra.
+          rawPoints = data.map((p) => ({
+            date: p.date,
+            value: p.inputTokens + p.outputTokens + p.cacheCreationTokens + p.cacheReadTokens,
+            extra: {
+              input: p.inputTokens,
+              output: p.outputTokens,
+              cacheCreation: p.cacheCreationTokens,
+              cacheRead: p.cacheReadTokens,
+            },
+          }))
         } else {
           const data = await activityService.getActivityTrend(range, dimension)
           rawPoints = data.map((p) => ({ date: p.date, value: p.value }))
@@ -67,7 +82,9 @@ export function useTrendSeries(
     return () => {
       cancelled = true
     }
-  }, [range, dimension])
+    // refreshNonce intentionally included so callers can force a re-fetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, dimension, refreshNonce])
 
   return { points, total, loading }
 }

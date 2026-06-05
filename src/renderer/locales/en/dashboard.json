@@ -39,7 +39,12 @@
     "dimCode": "Code lines",
     "less": "Less",
     "more": "More",
-    "rangeYear": "Year"
+    "rangeYear": "Year",
+    "tipInput": "Input",
+    "tipOutput": "Output",
+    "tipCacheCreate": "Cache write",
+    "tipCacheRead": "Cache hit",
+    "tipTotal": "Total"
   },
   "account": {
     "title": "Account Overview",
@@ -95,5 +100,17 @@
     "quotaExhausted": "Quota exhausted",
     "quotaLow": "Quota low",
     "credExpiring": "Credential expiring"
+  },
+  "datawall": {
+    "title": "Control Center",
+    "refresh": "Refresh",
+    "autoRefresh": "Auto",
+    "interval": {
+      "off": "Off",
+      "5s": "5s",
+      "10s": "10s",
+      "30s": "30s",
+      "60s": "60s"
+    }
   }
 }

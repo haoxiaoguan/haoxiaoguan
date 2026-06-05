@@ -3,12 +3,16 @@ export type TrendGranularity = 'hour' | 'day'
 export interface TrendPoint {
   date: string   // 'YYYY-MM-DD HH:00' for hour | 'YYYY-MM-DD' for day
   value: number
+  /** Optional extra numeric fields (e.g. token breakdown). Passed through as-is; missing buckets get 0. */
+  extra?: Record<string, number>
 }
 
 export interface FilledTrendPoint {
   date: string
   label: string
   value: number
+  /** Extra numeric fields transparently forwarded from the input points. */
+  extra?: Record<string, number>
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -96,11 +100,20 @@ export function formatMetricValue(value: number, kind: 'tokens' | 'count'): stri
 export function fillTrendGaps(points: TrendPoint[], g: TrendGranularity): FilledTrendPoint[] {
   if (points.length === 0) return []
 
-  // Build a lookup by canonical bucket key → value
-  const lookup = new Map<string, number>()
+  // Determine all extra keys present in the input so we can zero-fill them
+  const extraKeys = new Set<string>()
+  for (const p of points) {
+    if (p.extra) {
+      for (const k of Object.keys(p.extra)) extraKeys.add(k)
+    }
+  }
+  const hasExtra = extraKeys.size > 0
+
+  // Build a lookup by canonical bucket key → { value, extra }
+  const lookup = new Map<string, { value: number; extra?: Record<string, number> }>()
   for (const p of points) {
     const key = bucketKey(parseUtcMs(p.date, g), g)
-    lookup.set(key, p.value)
+    lookup.set(key, { value: p.value, extra: p.extra })
   }
 
   const tsMsList = points.map((p) => parseUtcMs(p.date, g))
@@ -112,8 +125,21 @@ export function fillTrendGaps(points: TrendPoint[], g: TrendGranularity): Filled
 
   for (let ms = minMs; ms <= maxMs; ms += step) {
     const date = bucketKey(ms, g)
-    const value = lookup.get(date) ?? 0
-    result.push({ date, label: formatTrendLabel(date, g), value })
+    const entry = lookup.get(date)
+    const value = entry?.value ?? 0
+    if (hasExtra) {
+      // Build zero-filled extra, then overlay actual values if present
+      const extra: Record<string, number> = {}
+      for (const k of extraKeys) extra[k] = 0
+      if (entry?.extra) {
+        for (const k of extraKeys) {
+          if (k in entry.extra) extra[k] = entry.extra[k]!
+        }
+      }
+      result.push({ date, label: formatTrendLabel(date, g), value, extra })
+    } else {
+      result.push({ date, label: formatTrendLabel(date, g), value })
+    }
   }
 
   return result

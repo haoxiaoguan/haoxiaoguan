@@ -39,7 +39,12 @@
     "dimCode": "代码改动",
     "less": "Less",
     "more": "More",
-    "rangeYear": "年"
+    "rangeYear": "年",
+    "tipInput": "输入",
+    "tipOutput": "输出",
+    "tipCacheCreate": "缓存创建",
+    "tipCacheRead": "缓存命中",
+    "tipTotal": "合计"
   },
   "account": {
     "title": "账号总览",
@@ -95,5 +100,17 @@
     "quotaExhausted": "配额耗尽",
     "quotaLow": "配额偏低",
     "credExpiring": "凭证将过期"
+  },
+  "datawall": {
+    "title": "控制中心",
+    "refresh": "刷新",
+    "autoRefresh": "自动刷新",
+    "interval": {
+      "off": "关闭",
+      "5s": "5s",
+      "10s": "10s",
+      "30s": "30s",
+      "60s": "60s"
+    }
   }
 }
