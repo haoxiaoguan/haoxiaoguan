@@ -24,10 +24,33 @@ export class UpdaterService {
     this.isPackaged = opts.isPackaged
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
-    if (opts.feedUrl && opts.feedUrl.trim().length > 0) {
-      autoUpdater.setFeedURL({ provider: 'generic', url: opts.feedUrl.trim() })
-    }
+    this.setFeedUrl(opts.feedUrl)
     this.wire()
+  }
+
+  /**
+   * 设置更新源（generic provider）。强制 HTTPS（回环地址例外，便于本地联调）——
+   * 产物未签名时 HTTPS 是防 MITM 投毒更新的唯一防线。非法 / 非 HTTPS 源被忽略，
+   * 回退打包的 app-update.yml；空串同样回退默认源。运行时改更新源可调用此方法。
+   */
+  setFeedUrl(url?: string): void {
+    if (!url || url.trim().length === 0) return
+    const raw = url.trim()
+    let parsed: URL
+    try {
+      parsed = new URL(raw)
+    } catch {
+      return // 非法 URL：忽略，回退 app-update.yml
+    }
+    const isLoopback =
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname === '::1' ||
+      parsed.hostname === '[::1]' // WHATWG URL 对 IPv6 字面量 hostname 带方括号
+    if (parsed.protocol !== 'https:' && !isLoopback) {
+      return // 非 HTTPS 非回环：拒绝（防 MITM；unsigned 无签名兜底）
+    }
+    autoUpdater.setFeedURL({ provider: 'generic', url: raw })
   }
 
   setStatusListener(fn: (s: UpdateStatus) => void): void {

@@ -20,7 +20,15 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   dialogOpen: false,
 
   init: () => {
-    return bridge().updater.onStatus((status) => set({ status }));
+    // 先订阅，确保订阅期间到达的事件不漏；再用主进程快照回填初始 idle，
+    // 这样「下载完成后窗口被销毁重开」也能从 getStatus() 恢复 downloaded 等状态，
+    // UpdaterIndicator 才能正确显示「可安装」（否则新 React 树永远停在 idle）。
+    const unsub = bridge().updater.onStatus((status) => set({ status }));
+    void bridge()
+      .updater.getStatus()
+      .then((s) => set((prev) => (prev.status.state === 'idle' ? { status: s } : prev)))
+      .catch(() => {});
+    return unsub;
   },
 
   check: async () => {

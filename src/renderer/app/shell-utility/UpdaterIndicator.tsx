@@ -23,14 +23,20 @@ export function UpdaterIndicator() {
   const openDialog = useUpdaterStore((s) => s.openDialog);
   const closeDialog = useUpdaterStore((s) => s.closeDialog);
   const install = useUpdaterStore((s) => s.install);
+  const check = useUpdaterStore((s) => s.check);
 
   useEffect(() => init(), [init]);
 
+  // error 也纳入：否则更新流程出错时整个组件 return null，已打开的弹窗会连同
+  // 指示器一起消失，用户得不到任何失败反馈也无法重试。
   const hasUpdate =
     status.state === 'available' ||
     status.state === 'downloading' ||
-    status.state === 'downloaded';
+    status.state === 'downloaded' ||
+    status.state === 'error';
   if (!hasUpdate) return null;
+
+  const isError = status.state === 'error';
 
   return (
     <>
@@ -43,7 +49,11 @@ export function UpdaterIndicator() {
         className="no-drag relative inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <Download className="size-[17px]" strokeWidth={1.85} aria-hidden />
-        <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-card" />
+        <span
+          className={`absolute right-1.5 top-1.5 size-2 rounded-full ring-2 ring-card ${
+            isError ? 'bg-destructive' : 'bg-primary'
+          }`}
+        />
       </button>
 
       <Dialog open={dialogOpen} onOpenChange={(o) => (o ? openDialog() : closeDialog())}>
@@ -73,15 +83,23 @@ export function UpdaterIndicator() {
             <p className="text-sm text-muted-foreground">{t('nav:shell.update.preparing')}</p>
           ) : status.state === 'downloaded' ? (
             <p className="text-sm text-foreground">{t('nav:shell.update.ready')}</p>
+          ) : status.state === 'error' ? (
+            <p className="text-sm text-destructive">
+              {t('nav:shell.update.error', { message: status.error ?? '' })}
+            </p>
           ) : null}
 
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>
               {t('nav:shell.update.later')}
             </Button>
-            <Button onClick={() => void install()} disabled={status.state !== 'downloaded'}>
-              {t('nav:shell.update.installNow')}
-            </Button>
+            {isError ? (
+              <Button onClick={() => void check()}>{t('nav:shell.update.retry')}</Button>
+            ) : (
+              <Button onClick={() => void install()} disabled={status.state !== 'downloaded'}>
+                {t('nav:shell.update.installNow')}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

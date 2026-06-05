@@ -142,7 +142,9 @@
       "downloading": "Downloading… {{percent}}%",
       "ready": "The update is downloaded. Click \"Install now\" to restart and apply it.",
       "later": "Later",
-      "installNow": "Install now"
+      "installNow": "Install now",
+      "error": "Update failed: {{message}}",
+      "retry": "Retry"
     },
     "notify": {
       "title": "Notifications",

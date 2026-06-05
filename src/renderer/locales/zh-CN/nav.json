@@ -142,7 +142,9 @@
       "downloading": "下载中… {{percent}}%",
       "ready": "新版本已下载完成，点击「立即安装」将重启应用以完成更新。",
       "later": "稍后",
-      "installNow": "立即安装"
+      "installNow": "立即安装",
+      "error": "更新失败：{{message}}",
+      "retry": "重试"
     },
     "notify": {
       "title": "通知",
