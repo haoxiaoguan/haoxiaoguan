@@ -21,6 +21,13 @@ export const QUOTA_EVENTS = {
   updated: 'quota:updated',
 } as const
 
+export const USAGE_EVENTS = {
+  // Fired by the main-process periodic usage sync (60s) after rebuildRollups,
+  // so the dashboard can re-pull summary/trend (updates the "last synced" time
+  // + numbers) even when its in-page auto-refresh is off.
+  synced: 'usage:synced',
+} as const
+
 export const SKILL_CHANNELS = {
   getInstalledSkills: 'skill:getInstalledSkills',
   installSkillUnified: 'skill:installSkillUnified',

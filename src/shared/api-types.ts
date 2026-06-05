@@ -455,6 +455,8 @@ export interface HxgApi {
     detectAppPath(platform: string): Promise<AppPathInfo>
     /** Subscribe to background quota-refresh events. Returns an unsubscribe fn. */
     onQuotaUpdated(cb: (accountIds: string[]) => void): () => void
+    /** Subscribe to the main-process periodic usage-sync completion. Returns an unsubscribe fn. */
+    onUsageSynced(cb: () => void): () => void
   }
   agent: {
     listAgents(): Promise<AgentInfo[]>

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
-import { QUOTA_EVENTS } from '../shared/ipc-channels'
+import { QUOTA_EVENTS, USAGE_EVENTS } from '../shared/ipc-channels'
 import { isOfficialTokenizerAvailable } from './contexts/apiProxy/domain/usage/token-estimator'
 
 // userData location. Tests set HXG_USER_DATA_DIR to an isolated temp dir so
@@ -306,6 +306,8 @@ if (!gotLock) {
           .filter(Boolean)
         await svc.usageQuery.recordSyncResult(summary.platforms, failed)
         await svc.usageQuery.rebuildRollups()
+        // 推送给渲染层：大屏据此刷新「最后同步时间」+ 数字 + 趋势（即使其页内自动刷新为关闭）。
+        mainWindow?.webContents.send(USAGE_EVENTS.synced)
       } catch (e) {
         console.error('[usage] periodic sync failed:', e)
       } finally {

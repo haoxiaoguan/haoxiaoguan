@@ -35,6 +35,9 @@ vi.mock('@/services/tauri', () => ({
   sessionsService: {
     probeTools: mocks.probeTools,
   },
+  systemService: {
+    onUsageSynced: () => () => {},
+  },
 }));
 
 vi.mock('@/stores/accountStore', () => ({

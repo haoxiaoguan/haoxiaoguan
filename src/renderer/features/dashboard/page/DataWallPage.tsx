@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
 import { useAccountStore } from '@/stores/accountStore'
-import { usageService, activityService, sessionsService } from '@/services/tauri'
+import { usageService, activityService, sessionsService, systemService } from '@/services/tauri'
 import type { UsageSummaryResponse } from '@/types'
 import type { ToolProbeDto } from '@shared/api-types'
 import { DASHBOARD_PLATFORMS } from '../platforms'
@@ -102,6 +102,24 @@ export default function DataWallPage() {
     const id = setInterval(reloadAll, refreshInterval * 1000)
     return () => clearInterval(id)
   }, [refreshInterval, reloadAll])
+
+  // ── 主进程后台同步线程完成事件 → 刷新只读视图 ───────────────────────────────────
+  // 主进程每 60s 跑一次用量同步（main.ts），完成后推 usage:synced。大屏据此刷新
+  // 「最后同步时间」+ token 数字 + 趋势，**与页内「自动刷新」开关无关**——即使开关为
+  // 关闭，常驻后台线程仍在驱动右上角时间与数据更新。
+  useEffect(() => {
+    const unsub = systemService.onUsageSynced(() => {
+      void usageService
+        .getUsageSummary(rangeRef.current)
+        .then((data) => {
+          setUsageSummary(data)
+          setLastSyncedAt(data.lastSyncedAt ?? Date.now())
+        })
+        .catch(() => undefined)
+      setRefreshNonce((n) => n + 1)
+    })
+    return unsub
+  }, [])
 
   // ── Mount effects ────────────────────────────────────────────────────────────
   useEffect(() => {

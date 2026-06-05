@@ -54,6 +54,16 @@ vi.mock('@/stores', () => ({
     fail: mocks.fail,
     finish: mocks.finish,
   }),
+  // 组件以 selector 形式读取分组 store：useAccountGroupStore((s) => s.groups) 等。
+  useAccountGroupStore: (selector: (s: { groups: unknown[]; fetchGroups: () => void; addMembers: () => void }) => unknown) =>
+    selector({ groups: [], fetchGroups: () => {}, addMembers: () => {} }),
+}));
+
+// 组件直接从 '../stores/proxyStore' 引入 useProxyStore（不经 @/stores），需单独 mock，
+// 否则真实 zustand store 会在挂载时打 window.api（jsdom 下未定义）而中断流程。
+vi.mock('@/stores/proxyStore', () => ({
+  useProxyStore: (selector: (s: { proxies: unknown[]; fetchAll: () => void; bindAccountToProxy: () => void }) => unknown) =>
+    selector({ proxies: [], fetchAll: () => {}, bindAccountToProxy: () => {} }),
 }));
 
 describe('AddAccountSheet', () => {

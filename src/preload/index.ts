@@ -3,6 +3,7 @@ import {
   SETTINGS_CHANNELS,
   SYSTEM_CHANNELS,
   QUOTA_EVENTS,
+  USAGE_EVENTS,
   AGENT_CHANNELS,
   ACCOUNT_CHANNELS,
   ACCOUNT_GROUP_CHANNELS,
@@ -35,6 +36,11 @@ const api: HxgApi = {
       const listener = (_e: unknown, accountIds: string[]) => cb(accountIds)
       ipcRenderer.on(QUOTA_EVENTS.updated, listener)
       return () => ipcRenderer.removeListener(QUOTA_EVENTS.updated, listener)
+    },
+    onUsageSynced: (cb) => {
+      const listener = () => cb()
+      ipcRenderer.on(USAGE_EVENTS.synced, listener)
+      return () => ipcRenderer.removeListener(USAGE_EVENTS.synced, listener)
     },
   },
   agent: {

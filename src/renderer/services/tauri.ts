@@ -134,6 +134,7 @@ export const systemService = {
   pickPath: () => bridge().system.pickPath() as Promise<string | null>,
   detectAppPath: (platform: string) => bridge().system.detectAppPath(platform) as Promise<AppPathInfo>,
   onQuotaUpdated: (cb: (accountIds: string[]) => void) => bridge().system.onQuotaUpdated(cb),
+  onUsageSynced: (cb: () => void) => bridge().system.onUsageSynced(cb),
 };
 
 // ============================================================================
