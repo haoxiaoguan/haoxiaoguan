@@ -179,6 +179,7 @@ export interface UsageSummaryResponse {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   requests: number;
+  totalCostUsd?: number;
   lastSyncedAt?: number;
 }
 
@@ -190,6 +191,7 @@ export interface UsageTrendPointResponse {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   requests: number;
+  costUsd?: number;
 }
 
 export interface PlatformUsageBreakdownResponse {

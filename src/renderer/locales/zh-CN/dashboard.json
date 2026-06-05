@@ -37,6 +37,7 @@
     "dimTool": "工具调用",
     "dimSession": "会话数量",
     "dimCode": "代码改动",
+    "dimCost": "费用",
     "less": "Less",
     "more": "More",
     "rangeYear": "年",
@@ -64,7 +65,9 @@
     "in": "入",
     "out": "出",
     "cache": "缓存",
-    "requests": "请求"
+    "requests": "请求",
+    "cost": "消费",
+    "costApprox": "估算"
   },
   "session": {
     "title": "会话活跃 · 本机",

@@ -76,7 +76,11 @@ export function formatTrendLabel(date: string, g: TrendGranularity): string {
  * tokens: ≥1e6 → "x.xM", ≥1e3 → "x.xK", otherwise integer string
  * count:  thousands separator via en-US locale
  */
-export function formatMetricValue(value: number, kind: 'tokens' | 'count'): string {
+export function formatMetricValue(value: number, kind: 'tokens' | 'count' | 'cost'): string {
+  if (kind === 'cost') {
+    // 美元金额，千分位 + 两位小数（$1,234.56）。
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
   if (kind === 'tokens') {
     if (value >= 1_000_000) {
       return `${(value / 1_000_000).toFixed(1)}M`

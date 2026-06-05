@@ -51,6 +51,7 @@ function readStoredInterval(): number {
 
 /**
  * Data wall page — 12-column Bento grid combining 8 metric cards.
+ * 三行用分数高度（fr）铺满内容区，避免底部留白；窗口过矮时各行回退到 min 高度并滚动。
  */
 export default function DataWallPage() {
   const { t } = useTranslation('dashboard')
@@ -154,8 +155,9 @@ export default function DataWallPage() {
         outputTokens: usageSummary.outputTokens,
         cacheTokens: usageSummary.cacheReadTokens + usageSummary.cacheCreationTokens,
         requests: usageSummary.requests,
+        costUsd: usageSummary.totalCostUsd ?? 0,
       }
-    : { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, requests: 0 }
+    : { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, requests: 0, costUsd: 0 }
 
   const rangeLabel = t(RANGE_LABEL_KEYS[range])
 
@@ -174,95 +176,86 @@ export default function DataWallPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
-        <h1 className="text-[15px] font-semibold text-foreground">
-          {t('datawall.title', '控制中心')}
-        </h1>
+      {/* Header —— 去掉「控制中心」副标题（与顶栏「仪表盘」重复），仅保留「最后同步时间 + 自动刷新」控件并靠右。 */}
+      <div className="flex shrink-0 items-center justify-end gap-2 px-5 pb-2 pt-3">
+        {syncLabel != null && (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground" title={t('datawall.lastSynced', '最后同步')}>
+            <RefreshCw className="size-3" strokeWidth={1.8} aria-hidden />
+            {syncLabel}
+          </span>
+        )}
 
-        {/* Right: last-sync time + auto-refresh selector */}
-        <div className="flex items-center gap-2">
-          {syncLabel != null && (
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <RefreshCw className="size-3" strokeWidth={1.8} aria-hidden />
-              {syncLabel}
-            </span>
-          )}
-
-          {/* Auto-refresh inline selector */}
-          <div className="flex items-center gap-1 rounded-md bg-muted/50 px-1 py-0.5">
-            <span className="text-[10px] text-muted-foreground">
-              {t('datawall.autoRefresh')}
-            </span>
-            <div className="flex items-center gap-0.5">
-              {REFRESH_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => handleIntervalChange(opt.value)}
-                  className={cn(
-                    'rounded px-1.5 py-0.5 text-[10px] font-medium transition-all duration-100',
-                    refreshInterval === opt.value
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                  aria-pressed={refreshInterval === opt.value}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
+        {/* Auto-refresh inline selector */}
+        <div className="flex items-center gap-1 rounded-md bg-muted/50 px-1 py-0.5">
+          <span className="text-[10px] text-muted-foreground">
+            {t('datawall.autoRefresh')}
+          </span>
+          <div className="flex items-center gap-0.5">
+            {REFRESH_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => handleIntervalChange(opt.value)}
+                className={cn(
+                  'rounded px-1.5 py-0.5 text-[10px] font-medium transition-all duration-100',
+                  refreshInterval === opt.value
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                aria-pressed={refreshInterval === opt.value}
+              >
+                {t(opt.labelKey)}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Bento data wall — decoupled rows: the top row keeps a definite height
-          (the chart needs one), content-heavy rows size to their content so
-          nothing overflows or overlaps. */}
+      {/* Bento data wall —— 三行用 fr 分数高度铺满内容区（不再固定 200px / auto 行高，
+          消除底部留白）。每行内部 grid-rows-1 让 3 张卡片等高拉伸；窗口过矮时各行回退到
+          minmax 的最小高度并由容器滚动。 */}
       <div
         data-testid="datawall-grid"
-        className="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
+        className="grid min-h-0 flex-1 grid-rows-[minmax(200px,1.05fr)_minmax(160px,1fr)_minmax(150px,1fr)] gap-2.5 overflow-y-auto px-5 pb-5"
       >
-        <div className="flex flex-col gap-2.5">
-          {/* Top: account hero | trend chart | platform donut (definite height) */}
-          <div className="grid h-[200px] grid-cols-12 grid-rows-1 gap-2.5">
-            <div className="col-span-3">
-              <AccountHeroCard
-                total={stats.total}
-                platformsCovered={stats.platformsCovered}
-                platformsTotal={stats.platformsTotal}
-                todayActive={stats.todayActive}
-                weekNew={stats.weekNew}
-              />
-            </div>
-            <div className="col-span-6">
-              <TrendChartCard range={range} onRangeChange={setRange} refreshNonce={refreshNonce} />
-            </div>
-            <div className="col-span-3">
-              <PlatformDonutCard items={stats.perPlatform} total={stats.total} />
-            </div>
+        {/* Top: account hero | trend chart | platform donut */}
+        <div className="grid min-h-0 grid-cols-12 grid-rows-1 gap-2.5">
+          <div className="col-span-3 min-h-0">
+            <AccountHeroCard
+              total={stats.total}
+              platformsCovered={stats.platformsCovered}
+              platformsTotal={stats.platformsTotal}
+              todayActive={stats.todayActive}
+              weekNew={stats.weekNew}
+            />
           </div>
-
-          {/* Middle: pool health | credential health | token summary */}
-          <div className="grid grid-cols-12 auto-rows-[minmax(132px,auto)] gap-2.5">
-            <div className="col-span-4">
-              <PoolHealthCard pool={qh.pool} onRefresh={qh.refresh} />
-            </div>
-            <div className="col-span-4">
-              <CredentialHealthCard credential={qh.credential} onRefresh={qh.refresh} />
-            </div>
-            <div className="col-span-4">
-              <TokenSummaryCard rangeLabel={rangeLabel} {...tokenProps} />
-            </div>
+          <div className="col-span-6 min-h-0">
+            <TrendChartCard range={range} onRangeChange={setRange} refreshNonce={refreshNonce} />
           </div>
+          <div className="col-span-3 min-h-0">
+            <PlatformDonutCard items={stats.perPlatform} total={stats.total} />
+          </div>
+        </div>
 
-          {/* Bottom: attention list | session activity */}
-          <div className="grid grid-cols-12 auto-rows-[minmax(120px,auto)] gap-2.5">
-            <div className="col-span-8">
-              <AttentionListCard items={qh.attention} onRefresh={qh.refresh} />
-            </div>
-            <div className="col-span-4">
-              <SessionActivityCard tools={sessionTools} />
-            </div>
+        {/* Middle: pool health | credential health | token summary */}
+        <div className="grid min-h-0 grid-cols-12 grid-rows-1 gap-2.5">
+          <div className="col-span-4 min-h-0">
+            <PoolHealthCard pool={qh.pool} onRefresh={qh.refresh} />
+          </div>
+          <div className="col-span-4 min-h-0">
+            <CredentialHealthCard credential={qh.credential} onRefresh={qh.refresh} />
+          </div>
+          <div className="col-span-4 min-h-0">
+            <TokenSummaryCard rangeLabel={rangeLabel} {...tokenProps} />
+          </div>
+        </div>
+
+        {/* Bottom: attention list | session activity */}
+        <div className="grid min-h-0 grid-cols-12 grid-rows-1 gap-2.5">
+          <div className="col-span-8 min-h-0">
+            <AttentionListCard items={qh.attention} onRefresh={qh.refresh} />
+          </div>
+          <div className="col-span-4 min-h-0">
+            <SessionActivityCard tools={sessionTools} />
           </div>
         </div>
       </div>

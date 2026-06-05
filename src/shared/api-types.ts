@@ -198,6 +198,7 @@ export interface UsageSummaryResponse {
   cacheReadTokens: number
   cacheCreationTokens: number
   requests: number
+  totalCostUsd: number
   lastSyncedAt: number | null
 }
 export interface UsageTrendPointResponse {
@@ -208,6 +209,7 @@ export interface UsageTrendPointResponse {
   cacheReadTokens: number
   cacheCreationTokens: number
   requests: number
+  costUsd: number
 }
 export interface PlatformUsageBreakdownResponse {
   platform: string

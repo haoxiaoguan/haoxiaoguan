@@ -94,6 +94,8 @@ export interface UsageSummary {
   cacheReadTokens: number
   cacheCreationTokens: number
   requests: number
+  /** 估算消费（USD）；未计价模型按 0 计。 */
+  totalCostUsd: number
   lastSyncedAt: number | null
 }
 
@@ -105,6 +107,8 @@ export interface UsageTrendPoint {
   cacheReadTokens: number
   cacheCreationTokens: number
   requests: number
+  /** 估算消费（USD），仅 metric==='cost' 时有意义；其余维度为 0。 */
+  costUsd: number
 }
 
 export interface PlatformUsageBreakdown {

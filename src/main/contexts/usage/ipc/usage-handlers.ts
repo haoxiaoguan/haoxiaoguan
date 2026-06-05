@@ -65,6 +65,7 @@ export function registerUsageHandlers(
         cacheReadTokens: s.cacheReadTokens,
         cacheCreationTokens: s.cacheCreationTokens,
         requests: s.requests,
+        totalCostUsd: s.totalCostUsd,
         lastSyncedAt: s.lastSyncedAt,
       }
     } catch (e) {
@@ -86,6 +87,7 @@ export function registerUsageHandlers(
           cacheReadTokens: p.cacheReadTokens,
           cacheCreationTokens: p.cacheCreationTokens,
           requests: p.requests,
+          costUsd: p.costUsd,
         }))
       } catch (e) {
         throw new Error(toIpcError(e))

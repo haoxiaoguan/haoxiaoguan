@@ -30,6 +30,7 @@ const RANGE_OPTIONS: { value: TrendRange; labelKey: string }[] = [
 
 const DIM_OPTIONS: { value: TrendDimension; labelKey: string }[] = [
   { value: 'tokens',     labelKey: 'trend.dimToken' },
+  { value: 'cost',       labelKey: 'trend.dimCost' },
   { value: 'tool_calls', labelKey: 'trend.dimTool' },
   { value: 'sessions',   labelKey: 'trend.dimSession' },
   { value: 'code_lines', labelKey: 'trend.dimCode' },
@@ -85,11 +86,17 @@ function ChartTooltip({ active, payload, label, dimension }: ChartTooltipProps) 
   }
 
   const val = payload[0]?.value
+  const display =
+    dimension === 'cost'
+      ? formatMetricValue(typeof val === 'number' ? val : 0, 'cost')
+      : typeof val === 'number'
+        ? val.toLocaleString('en-US')
+        : (val ?? '—')
   return (
     <div className="rounded-[8px] border border-border bg-card px-3 py-2 shadow-md">
       <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">
-        {typeof val === 'number' ? val.toLocaleString('en-US') : (val ?? '—')}
+        {display}
       </p>
     </div>
   )
@@ -128,7 +135,7 @@ export function TrendChartCard({ range, onRangeChange, refreshNonce }: TrendChar
   const tickColor   = theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(15,23,42,0.35)'
   const gradId      = `trend-area-grad-${theme}`
 
-  const valueKind = dimension === 'tokens' ? 'tokens' : 'count'
+  const valueKind = dimension === 'tokens' ? 'tokens' : dimension === 'cost' ? 'cost' : 'count'
   const totalLabel = formatMetricValue(total, valueKind)
 
   return (

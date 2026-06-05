@@ -6,6 +6,7 @@
  * Pending platforms (7): cursor, windsurf, github-copilot, codebuddy, codebuddy-cn, trae, zed
  */
 import type { UsageRollupRepository, UsageSyncStateRepository } from '../domain/usage-repositories'
+import { costForModel, totalCostUsd as sumCostUsd } from '../domain/usage-pricing'
 import type {
   UsageSummary,
   UsageTrendPoint,
@@ -33,6 +34,8 @@ export class UsageQueryService {
   async summary(range: string): Promise<UsageSummary> {
     const raw = await this.rollupRepo.summary(range)
     const lastSyncedAt = await this.syncStateRepo.latestSuccessfulSyncAt()
+    // 费用：按 model 聚合窗口内 token × 单价（未计价模型按 0）。
+    const byModel = await this.rollupRepo.usageByModel(range)
     return {
       totalTokens: raw.inputTokens + raw.outputTokens,
       inputTokens: raw.inputTokens,
@@ -40,11 +43,33 @@ export class UsageQueryService {
       cacheReadTokens: raw.cacheReadTokens,
       cacheCreationTokens: raw.cacheCreationTokens,
       requests: raw.requests,
+      totalCostUsd: sumCostUsd(byModel),
       lastSyncedAt,
     }
   }
 
   async trend(range: string, metric: string): Promise<UsageTrendPoint[]> {
+    // 费用趋势：按 (date, model) 聚合 → 每日按单价求和。
+    if (metric === 'cost') {
+      const rows = await this.rollupRepo.usageByDateModel(range)
+      const byDate = new Map<string, number>()
+      for (const r of rows) {
+        byDate.set(r.date, (byDate.get(r.date) ?? 0) + costForModel(r.model, r))
+      }
+      return [...byDate.entries()]
+        .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+        .map(([date, cost]) => ({
+          date,
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          requests: 0,
+          costUsd: cost,
+        }))
+    }
+
     const rows = await this.rollupRepo.trend(range, metric)
     return rows.map((row) => {
       const totalTokens =
@@ -57,6 +82,7 @@ export class UsageQueryService {
         cacheReadTokens: row.cacheReadTokens,
         cacheCreationTokens: row.cacheCreationTokens,
         requests: row.requests,
+        costUsd: 0,
       }
     })
   }

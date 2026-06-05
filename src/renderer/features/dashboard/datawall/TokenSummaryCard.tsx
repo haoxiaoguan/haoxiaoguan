@@ -10,6 +10,8 @@ interface Props {
   outputTokens: number
   cacheTokens: number
   requests: number
+  /** 估算消费（USD）。 */
+  costUsd: number
 }
 
 interface BarDef {
@@ -29,6 +31,7 @@ export function TokenSummaryCard({
   outputTokens,
   cacheTokens,
   requests,
+  costUsd,
 }: Props) {
   const { t } = useTranslation('dashboard')
 
@@ -58,6 +61,15 @@ export function TokenSummaryCard({
         style={{ fontVariantNumeric: 'tabular-nums' }}
       >
         {formatMetricValue(totalTokens, 'tokens')}
+      </div>
+
+      {/* Estimated cost (USD) —— 估算消费，未计价模型按 0 */}
+      <div className="mt-1.5 flex items-baseline gap-1 text-[12px] text-muted-foreground">
+        <span>{t('token.cost')}</span>
+        <span className="font-semibold tabular-nums text-foreground">
+          ≈ {formatMetricValue(costUsd, 'cost')}
+        </span>
+        <span className="text-[10px]">{t('token.costApprox')}</span>
       </div>
 
       {/* Proportion bars */}

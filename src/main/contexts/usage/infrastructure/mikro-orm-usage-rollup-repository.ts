@@ -207,4 +207,90 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
       requests: Number(row.requests ?? 0),
     }))
   }
+
+  // 费用计算需要 model 维度，而 usage_daily_rollups 不含 model，故直接查 usage_records。
+  // 窗口锚定与 summary 一致：MAX(date) of usage_daily_rollups 往前推 windowDays。
+  async usageByModel(range: string): Promise<
+    Array<{
+      model: string
+      inputTokens: number
+      outputTokens: number
+      cacheReadTokens: number
+      cacheCreationTokens: number
+    }>
+  > {
+    const conn = this.getEm().getConnection()
+    const days = `-${windowDays(range)} day`
+    const rows = (await conn.execute(
+      `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
+       SELECT model AS model,
+         COALESCE(SUM(input_tokens), 0) AS input_tokens,
+         COALESCE(SUM(output_tokens), 0) AS output_tokens,
+         COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+         COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens
+       FROM usage_records
+       WHERE date(occurred_at, 'unixepoch', 'localtime') >= date((SELECT value FROM max_day), ?)
+       GROUP BY model`,
+      [days],
+      'all',
+    )) as any[]
+    return (rows ?? []).map((row: any) => ({
+      model: row.model ?? '',
+      inputTokens: Number(row.input_tokens ?? 0),
+      outputTokens: Number(row.output_tokens ?? 0),
+      cacheReadTokens: Number(row.cache_read_tokens ?? 0),
+      cacheCreationTokens: Number(row.cache_creation_tokens ?? 0),
+    }))
+  }
+
+  async usageByDateModel(range: string): Promise<
+    Array<{
+      date: string
+      model: string
+      inputTokens: number
+      outputTokens: number
+      cacheReadTokens: number
+      cacheCreationTokens: number
+    }>
+  > {
+    const conn = this.getEm().getConnection()
+    const sumCols = `
+      COALESCE(SUM(input_tokens), 0) AS input_tokens,
+      COALESCE(SUM(output_tokens), 0) AS output_tokens,
+      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+      COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens`
+
+    let rows: any[]
+    if (range === '1d') {
+      // 当天小时桶（与 token 趋势 1d 口径一致）。
+      rows = (await conn.execute(
+        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime')) AS day FROM usage_records)
+         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date, model AS model, ${sumCols}
+         FROM usage_records
+         WHERE strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') = (SELECT day FROM d)
+         GROUP BY date, model`,
+        [],
+        'all',
+      )) as any[]
+    } else {
+      const days = `-${windowDays(range)} day`
+      rows = (await conn.execute(
+        `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
+         SELECT date(occurred_at, 'unixepoch', 'localtime') AS date, model AS model, ${sumCols}
+         FROM usage_records
+         WHERE date(occurred_at, 'unixepoch', 'localtime') >= date((SELECT value FROM max_day), ?)
+         GROUP BY date, model`,
+        [days],
+        'all',
+      )) as any[]
+    }
+    return (rows ?? []).map((row: any) => ({
+      date: row.date ?? '',
+      model: row.model ?? '',
+      inputTokens: Number(row.input_tokens ?? 0),
+      outputTokens: Number(row.output_tokens ?? 0),
+      cacheReadTokens: Number(row.cache_read_tokens ?? 0),
+      cacheCreationTokens: Number(row.cache_creation_tokens ?? 0),
+    }))
+  }
 }

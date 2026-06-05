@@ -37,6 +37,7 @@
     "dimTool": "Tool calls",
     "dimSession": "Sessions",
     "dimCode": "Code lines",
+    "dimCost": "Cost",
     "less": "Less",
     "more": "More",
     "rangeYear": "Year",
@@ -64,7 +65,9 @@
     "in": "In",
     "out": "Out",
     "cache": "Cache",
-    "requests": "reqs"
+    "requests": "reqs",
+    "cost": "Cost",
+    "costApprox": "est."
   },
   "session": {
     "title": "Session Activity · Local",

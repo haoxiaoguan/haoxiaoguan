@@ -12,6 +12,8 @@ function makeRollupRepo(overrides: Partial<UsageRollupRepository> = {}): UsageRo
     summary: async () => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, requests: 0 }),
     trend: async () => [],
     platformBreakdown: async () => [],
+    usageByModel: async () => [],
+    usageByDateModel: async () => [],
     ...overrides,
   }
 }
@@ -67,6 +69,39 @@ describe('UsageQueryService.trend', () => {
     )
     const points = await svc.trend('7d', 'requests')
     expect(points[0].totalTokens).toBe(7)
+  })
+
+  it('metric="cost" 按日聚合费用（未计价模型计 0）', async () => {
+    const svc = new UsageQueryService(
+      makeRollupRepo({
+        usageByDateModel: async () => [
+          { date: '2026-06-01', model: 'gpt-5.5', inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+          { date: '2026-06-01', model: 'aimami_relay_x', inputTokens: 9_000_000, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+          { date: '2026-06-02', model: 'gpt-5.5', inputTokens: 0, outputTokens: 1_000_000, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        ],
+      }),
+      makeSyncStateRepo(),
+    )
+    const pts = await svc.trend('7d', 'cost')
+    expect(pts.map((p) => p.date)).toEqual(['2026-06-01', '2026-06-02'])
+    expect(pts[0].costUsd).toBeCloseTo(5, 6) // gpt-5.5 input 1M = $5；relay 计 0
+    expect(pts[1].costUsd).toBeCloseTo(30, 6) // gpt-5.5 output 1M = $30
+  })
+})
+
+describe('UsageQueryService.summary — 费用', () => {
+  it('totalCostUsd 按 model 定价汇总', async () => {
+    const svc = new UsageQueryService(
+      makeRollupRepo({
+        summary: async () => ({ inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, requests: 1 }),
+        usageByModel: async () => [
+          { model: 'gpt-5.5', inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        ],
+      }),
+      makeSyncStateRepo(),
+    )
+    const s = await svc.summary('7d')
+    expect(s.totalCostUsd).toBeCloseTo(5, 6)
   })
 })
 

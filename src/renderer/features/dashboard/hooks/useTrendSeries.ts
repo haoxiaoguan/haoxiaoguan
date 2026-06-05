@@ -4,7 +4,7 @@ import type { FilledTrendPoint, TrendGranularity } from '../utils/trend-fill'
 import { fillTrendGaps } from '../utils/trend-fill'
 
 export type TrendRange = '1d' | '7d' | '30d'
-export type TrendDimension = 'tokens' | 'tool_calls' | 'sessions' | 'code_lines'
+export type TrendDimension = 'tokens' | 'tool_calls' | 'sessions' | 'code_lines' | 'cost'
 
 export interface UseTrendSeriesResult {
   points: FilledTrendPoint[]
@@ -54,6 +54,10 @@ export function useTrendSeries(
               cacheRead: p.cacheReadTokens,
             },
           }))
+        } else if (dimension === 'cost') {
+          // 费用维度：取后端按模型定价算出的每日 costUsd（美元）。
+          const data = await usageService.getUsageTrend(range, 'cost')
+          rawPoints = data.map((p) => ({ date: p.date, value: p.costUsd ?? 0 }))
         } else {
           const data = await activityService.getActivityTrend(range, dimension)
           rawPoints = data.map((p) => ({ date: p.date, value: p.value }))
