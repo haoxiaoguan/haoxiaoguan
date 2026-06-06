@@ -17,12 +17,13 @@ import {
   WS_CHANNELS,
   PROXY_CHANNELS,
   API_PROXY_CHANNELS,
+  API_PROXY_EVENTS,
   SESSIONS_CHANNELS,
   ACTIVITY_CHANNELS,
   UPDATER_CHANNELS,
   UPDATE_EVENTS,
 } from '../shared/ipc-channels'
-import type { HxgApi, UpdateStatus } from '../shared/api-types'
+import type { HxgApi, UpdateStatus, ProxyRequestRecord } from '../shared/api-types'
 
 const api: HxgApi = {
   settings: {
@@ -200,6 +201,13 @@ const api: HxgApi = {
     setClientKeyActive: (id: string, isActive: boolean) => ipcRenderer.invoke(API_PROXY_CHANNELS.setClientKeyActive, id, isActive),
     deleteClientKey: (id: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteClientKey, id),
     getAccountPoolHealth: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getAccountPoolHealth),
+    getRequestLog: (limit?: number) => ipcRenderer.invoke(API_PROXY_CHANNELS.getRequestLog, limit),
+    clearRequestLog: () => ipcRenderer.invoke(API_PROXY_CHANNELS.clearRequestLog),
+    onRequestLog: (cb: (record: ProxyRequestRecord) => void) => {
+      const listener = (_e: unknown, record: ProxyRequestRecord) => cb(record)
+      ipcRenderer.on(API_PROXY_EVENTS.requestLog, listener)
+      return () => ipcRenderer.removeListener(API_PROXY_EVENTS.requestLog, listener)
+    },
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),

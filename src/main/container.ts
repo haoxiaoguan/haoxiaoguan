@@ -115,6 +115,8 @@ import { PromptCacheTracker } from './contexts/apiProxy/domain/usage/prompt-cach
 import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
 import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'
+import { ProxyRequestLog } from './contexts/apiProxy/domain/observability/proxy-request-log'
+import { renderPrometheus, type AccountStateTally } from './contexts/apiProxy/domain/observability/prometheus'
 import { FailoverAdapter } from './contexts/apiProxy/domain/account-selection/failover-adapter'
 import { ConversationIdCache } from './contexts/apiProxy/domain/account-selection/conversation-id-cache'
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
@@ -513,7 +515,14 @@ export async function buildContainer(): Promise<Container> {
 
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘），默认目录在 appDataDir()/responses。
   const responsesStore = new ResponsesStore()
-  const apiProxyService = new ApiProxyService(undefined, { registry: platformRegistry, responsesStore })
+  // 请求级可观测性（G3）：环形缓冲 + 累计计数器。注入 service 记录每请求；container 把它接到
+  // webContents.send 推前端日志页（main.ts），并作为 /metrics（G10）的计数器源。
+  const apiProxyRequestLog = new ProxyRequestLog({ capacity: 500 })
+  const apiProxyService = new ApiProxyService(undefined, {
+    registry: platformRegistry,
+    responsesStore,
+    observability: apiProxyRequestLog,
+  })
   // 客户端 Key 令牌桶限流器（后续可接 settings 动态配置 capacity/refillPerMinute）。
   const apiProxyKeyRateLimiter = new KeyRateLimiter({ capacity: 10, refillPerMinute: 10 })
   // 若 apiProxyHttps=true，尝试加载/生成自签证书并启用 HTTPS；失败时降级 HTTP 并打警告，不阻断启动。
@@ -526,6 +535,21 @@ export async function buildContainer(): Promise<Container> {
       console.warn('[container] HTTPS 证书加载失败，降级为 HTTP:', err)
     }
   }
+  // Prometheus /metrics（G10）数据源：G3 计数器 + 账号运行态汇总 + inflight + uptime。
+  const apiProxyMetrics = async (): Promise<string> => {
+    const accts = await kiroAccountPort.listByPlatform()
+    const tally: AccountStateTally = { available: 0, cooldown: 0, quota_exhausted: 0, suspended: 0 }
+    for (const s of apiProxyHealth.snapshotAll(accts.map((a) => a.id))) tally[s.runtimeState] += 1
+    const counters = apiProxyRequestLog.counters()
+    const uptimeSeconds =
+      counters.startedAtMs === null ? 0 : Math.max(0, Math.floor((Date.now() - counters.startedAtMs) / 1000))
+    return renderPrometheus({
+      counters,
+      uptimeSeconds,
+      inflight: apiProxySelector.totalInflight(),
+      accountStates: tally,
+    })
+  }
   const apiHttpServer = new ApiHttpServer(
     createApiRequestListener({
       service: apiProxyService,
@@ -535,6 +559,7 @@ export async function buildContainer(): Promise<Container> {
       },
       knownPlatforms: platformRegistry.knownPlatforms(),
       keyRateLimiter: apiProxyKeyRateLimiter,
+      metrics: apiProxyMetrics,
     }),
     { port: settings.getApiProxyPort(), ...tlsConfig },
   )
@@ -579,6 +604,7 @@ export async function buildContainer(): Promise<Container> {
     apiProxyHealth,
     kiroAccountPort,
     apiProxyKeyService,
+    apiProxyRequestLog,
     tokenRefreshScheduler,
     platformQuotaScheduler,
     sessionsService,

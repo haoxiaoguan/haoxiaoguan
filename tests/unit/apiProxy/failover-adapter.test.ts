@@ -6,6 +6,7 @@ import { AccountPoolSelector } from '../../../src/main/contexts/apiProxy/domain/
 import { AccountHealthTracker } from '../../../src/main/contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { KiroUpstreamSuspendedError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-error'
 import type { CanonicalRequest, CanonicalResponse } from '../../../src/main/contexts/apiProxy/domain/canonical'
+import type { RequestObservation } from '../../../src/main/contexts/apiProxy/domain/observability/proxy-request-log'
 
 const ir: CanonicalRequest = { model: 'claude-sonnet-4.5', system: '', messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }] }
 const okResp: CanonicalResponse = { model: 'claude-sonnet-4.5', content: [{ type: 'text', text: 'ok' }], stopReason: 'end_turn', usage: { inputTokens: 1, outputTokens: 1 } }
@@ -46,6 +47,25 @@ function deps(
 it('首个账号成功直接返回', async () => {
   const fa = deps([{ id: 'a', isActive: true }], async () => okResp)
   expect((await fa.chat(ir, { requestId: 'r' })).content[0]).toMatchObject({ text: 'ok' })
+})
+
+it('回填 observation：成功时 accountId=选中账号、attempts=1（G3）', async () => {
+  const fa = deps([{ id: 'a', isActive: true }], async () => okResp)
+  const obs: RequestObservation = { attempts: 0 }
+  await fa.chat(ir, { requestId: 'r', observation: obs })
+  expect(obs.attempts).toBe(1)
+  expect(obs.accountId).toBe('a')
+})
+
+it('回填 observation：切号后 attempts 累加、accountId=最终成功账号（G3）', async () => {
+  const fa = deps(
+    [{ id: 'a', isActive: true, lastUsedAt: 1 }, { id: 'b', isActive: true, lastUsedAt: 2 }],
+    async (ctx) => { if (ctx.account.id === 'a') throw new KiroUpstreamSuspendedError('x', 403); return okResp },
+  )
+  const obs: RequestObservation = { attempts: 0 }
+  await fa.chat(ir, { requestId: 'r', observation: obs })
+  expect(obs.attempts).toBe(2)
+  expect(obs.accountId).toBe('b')
 })
 
 it('suspended → 持久化退役 + 切到下一账号', async () => {

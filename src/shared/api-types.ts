@@ -653,6 +653,12 @@ export interface HxgApi {
     deleteClientKey(id: string): Promise<void>
     /** 查询账号池运行态健康（合并持久化 meta + 内存运行态）。 */
     getAccountPoolHealth(): Promise<AccountPoolHealthRow[]>
+    /** 拉取最近 N 条请求日志（G3）；省略 limit 返回环形缓冲全部。 */
+    getRequestLog(limit?: number): Promise<ProxyRequestRecord[]>
+    /** 清空请求日志环形缓冲（计数器保持单调，不影响 /metrics）。 */
+    clearRequestLog(): Promise<void>
+    /** 订阅请求日志推送（G3）。返回取消订阅函数。 */
+    onRequestLog(cb: (record: ProxyRequestRecord) => void): () => void
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>
@@ -695,6 +701,27 @@ export interface WsStatus {
   running: boolean
   port?: number
   connectionCount: number
+}
+
+// 单条反代请求日志记录（G3）——与 main 的 ProxyRequestRecord 保持同形。
+export interface ProxyRequestRecord {
+  seq: number
+  tsMs: number
+  method: string
+  path: string
+  format: string
+  platform?: string
+  action: string
+  stream: boolean
+  status: number
+  ok: boolean
+  durationMs: number
+  attempts: number
+  accountId?: string
+  clientKeyId?: string
+  inputTokens?: number
+  outputTokens?: number
+  errorMessage?: string
 }
 
 // apiProxy 服务状态（与 main/contexts/apiProxy/application/api-proxy-service.ts
