@@ -22,12 +22,14 @@ export const CLIENT_DISPLAY_NAMES: Record<ClientId, string> = {
   hermes: 'Hermes',
 }
 
-/** 某客户端的可用性摘要（供 UI pill 切换器显示）。 */
+/** 某客户端的可用性摘要（供 UI 左侧列表显示）。 */
 export interface ClientInfo {
   clientId: ClientId
   displayName: string
   /** 是否检测到该客户端（任一配置文件已存在）。 */
   detected: boolean
+  /** 写入语义（决定右侧列表是「当前生效」单选还是「共存」多选）。 */
+  writeMode: WriteMode
 }
 
 /**
@@ -45,6 +47,16 @@ export type ProfileSource = 'local-proxy' | 'manual'
  */
 export type WriteMode = 'switch' | 'additive'
 
+/** 客户端 → 写入语义。切换式同时仅一份生效;累加式多份共存。Codex 单文件路由但档内可多 provider 共存,仍按 switch 管。 */
+export const CLIENT_WRITE_MODE: Record<ClientId, WriteMode> = {
+  claude: 'switch',
+  codex: 'switch',
+  gemini_cli: 'switch',
+  opencode: 'additive',
+  openclaw: 'additive',
+  hermes: 'additive',
+}
+
 /** 一份接入档的对外摘要（不含密文 key —— key 经 safeStorage 加密或指向反代 key 表）。 */
 export interface ClientConfigProfile {
   id: string
@@ -54,8 +66,12 @@ export interface ClientConfigProfile {
   baseUrl: string
   /** 选定模型（写进客户端配置的 model 字段）。 */
   model?: string
-  /** 是否当前生效（每客户端至多一份）。 */
+  /** 切换式:是否当前生效（每客户端至多一份）。累加式忽略。 */
   isCurrent: boolean
+  /** 累加式:是否已注入 live（多份可同时为 true）。切换式忽略。 */
+  enabled: boolean
+  /** 累加式:是否默认指针（每客户端至多一份）。切换式忽略。 */
+  isDefault: boolean
   sortIndex: number
   createdAt: number
   updatedAt: number

@@ -28,8 +28,12 @@ export interface ClientConfigStore {
   create(input: CreateProfileInput): Promise<ClientConfigProfile>
   update(id: string, patch: UpdateProfileInput): Promise<void>
   delete(id: string): Promise<void>
-  /** 标记某接入档当前生效（同 client 其余置否）。 */
+  /** 切换式:标记某接入档当前生效（同 client 其余置否）。 */
   setCurrent(clientId: ClientId, id: string): Promise<void>
+  /** 累加式:启/停某档注入（不影响其它档）。 */
+  setEnabled(id: string, enabled: boolean): Promise<void>
+  /** 累加式:设默认指针（同 client 其余置否）。 */
+  setDefault(clientId: ClientId, id: string): Promise<void>
   /** 解出该接入档的明文 api key（解密 key_enc；local-proxy 的 key_ref 解析见 phase3）。 */
   resolveApiKey(id: string): Promise<string>
 }

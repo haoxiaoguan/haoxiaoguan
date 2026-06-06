@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { fetch as undiciFetch } from 'undici'
 import type { LocalProxyPort, ConnTestResult } from './local-proxy-port'
 import type { ClientId, ClientConfigProfile, ClientInfo } from '../domain/client-profile'
-import { CLIENT_DISPLAY_NAMES } from '../domain/client-profile'
+import { CLIENT_DISPLAY_NAMES, CLIENT_WRITE_MODE } from '../domain/client-profile'
 import type { ApplyInput, ClientConfigWriter } from '../domain/client-writer'
 import type { ClientConfigStore, CreateProfileInput, UpdateProfileInput } from './client-config-store'
 import type { WriterRegistry } from './writer-registry'
@@ -31,12 +31,17 @@ export class ClientConfigService {
     this.localProxy = localProxy
   }
 
-  /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI pill 切换器。 */
+  /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI 左侧客户端列表。 */
   listClients(): ClientInfo[] {
     return this.registry.clientIds().map((clientId) => {
       const writer = this.registry.get(clientId)
       const detected = writer !== undefined && writer.configFiles().some((f) => existsSync(f))
-      return { clientId, displayName: CLIENT_DISPLAY_NAMES[clientId], detected }
+      return {
+        clientId,
+        displayName: CLIENT_DISPLAY_NAMES[clientId],
+        detected,
+        writeMode: writer?.writeMode ?? CLIENT_WRITE_MODE[clientId],
+      }
     })
   }
 
@@ -73,6 +78,51 @@ export class ClientConfigService {
     const profile = await this.requireProfile(id)
     const writer = this.requireWriter(profile.clientId)
     await this.applier.clear(writer, id)
+    // 切换式:还原当前生效档时取消 current；累加式:停用注入标记。
+    if (writer.writeMode === 'switch') {
+      if (profile.isCurrent) await this.store.setCurrent(profile.clientId, '')
+    } else {
+      await this.store.setEnabled(id, false)
+    }
+  }
+
+  // ---- 累加式（共存）----
+  /** 启用：把该档注入 live（与其它已启用档共存，不互相覆盖）+ 标记 enabled。
+   *  若该客户端尚无默认指针，本次顺带设为默认。switch 客户端等价 apply。 */
+  async enable(id: string): Promise<void> {
+    const profile = await this.requireProfile(id)
+    const writer = this.requireWriter(profile.clientId)
+    if (writer.writeMode === 'switch') {
+      await this.apply(id)
+      return
+    }
+    const siblings = await this.store.list(profile.clientId)
+    const hasDefault = siblings.some((p) => p.isDefault && p.id !== id)
+    const makeDefault = profile.isDefault || !hasDefault
+    const { writer: w, input } = await this.resolve(id, { isDefault: makeDefault })
+    await this.applier.apply(w, input, 'apply')
+    await this.store.setEnabled(id, true)
+    if (makeDefault) await this.store.setDefault(profile.clientId, id)
+  }
+
+  /** 停用：从 live 移除该档（保留其它已启用档）+ 清 enabled。 */
+  async disable(id: string): Promise<void> {
+    const profile = await this.requireProfile(id)
+    const writer = this.requireWriter(profile.clientId)
+    await this.applier.clear(writer, id)
+    await this.store.setEnabled(id, false)
+  }
+
+  /** 设默认指针（累加式）：确保该档已注入并改写客户端顶层默认模型，同 client 其余取消默认。 */
+  async setDefault(clientId: ClientId, id: string): Promise<void> {
+    const profile = await this.requireProfile(id)
+    const writer = this.requireWriter(clientId)
+    if (writer.writeMode !== 'additive') throw new Error('仅累加式客户端支持默认指针')
+    const { writer: w, input } = await this.resolve(id, { isDefault: true })
+    await this.applier.apply(w, input, 'apply')
+    await this.store.setEnabled(id, true)
+    await this.store.setDefault(clientId, id)
+    void profile
   }
 
   // ---- 本机反代接入（phase3 杀手锏）----
@@ -130,6 +180,7 @@ export class ClientConfigService {
   }
   private async resolve(
     id: string,
+    opts?: { isDefault?: boolean },
   ): Promise<{ profile: ClientConfigProfile; writer: ClientConfigWriter; input: ApplyInput }> {
     const profile = await this.requireProfile(id)
     const writer = this.requireWriter(profile.clientId)
@@ -140,6 +191,7 @@ export class ClientConfigService {
       baseUrl: profile.baseUrl,
       apiKey,
       ...(profile.model !== undefined ? { model: profile.model } : {}),
+      ...(opts?.isDefault !== undefined ? { isDefault: opts.isDefault } : {}),
     }
     return { profile, writer, input }
   }

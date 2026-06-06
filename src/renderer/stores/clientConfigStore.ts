@@ -15,6 +15,8 @@ interface ClientConfigState {
   clients: ClientConfigClientInfo[]
   activeClient: ClientConfigClientId
   profiles: ClientConfigProfileDto[]
+  /** 每个客户端的接入档数量（左侧列表 badge）。 */
+  counts: Record<string, number>
   loading: boolean
   error: string | null
 
@@ -27,10 +29,16 @@ interface ClientConfigState {
   create: (input: CreateClientConfigProfileDto) => Promise<void>
   update: (id: string, patch: UpdateClientConfigProfileDto) => Promise<void>
   remove: (id: string) => Promise<void>
-  /** 应用并设为当前生效。 */
+  /** 应用并设为当前生效（切换式）。 */
   apply: (id: string) => Promise<void>
   /** 从客户端配置还原。 */
   clear: (id: string) => Promise<void>
+  /** 累加式:启用注入（共存）。 */
+  enable: (id: string) => Promise<void>
+  /** 累加式:停用注入。 */
+  disable: (id: string) => Promise<void>
+  /** 累加式:设默认指针。 */
+  setDefault: (id: string) => Promise<void>
   preview: (id: string) => Promise<ClientConfigDiffFile[]>
   history: () => Promise<ClientConfigSnapshotDto[]>
   rollback: (entryId: string) => Promise<void>
@@ -38,6 +46,12 @@ interface ClientConfigState {
   connectLocalProxy: () => Promise<void>
   /** 测连通。 */
   testConnectivity: (id: string) => Promise<ClientConfigConnTest | undefined>
+}
+
+function countByClient(all: ClientConfigProfileDto[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const p of all) out[p.clientId] = (out[p.clientId] ?? 0) + 1
+  return out
 }
 
 async function run<T>(set: (p: Partial<ClientConfigState>) => void, fn: () => Promise<T>): Promise<T | undefined> {
@@ -56,6 +70,7 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   clients: [],
   activeClient: 'claude',
   profiles: [],
+  counts: {},
   loading: false,
   error: null,
 
@@ -64,8 +79,11 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
       const clients = await bridge().clientConfig.clients()
       set({ clients })
       const active = get().activeClient
-      const profiles = await bridge().clientConfig.list(active)
-      set({ profiles })
+      const [profiles, all] = await Promise.all([
+        bridge().clientConfig.list(active),
+        bridge().clientConfig.list(),
+      ])
+      set({ profiles, counts: countByClient(all) })
     })
   },
 
@@ -76,8 +94,11 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
 
   refresh: async () => {
     await run(set, async () => {
-      const profiles = await bridge().clientConfig.list(get().activeClient)
-      set({ profiles })
+      const [profiles, all] = await Promise.all([
+        bridge().clientConfig.list(get().activeClient),
+        bridge().clientConfig.list(),
+      ])
+      set({ profiles, counts: countByClient(all) })
     })
   },
 
@@ -99,6 +120,18 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   },
   clear: async (id) => {
     await run(set, () => bridge().clientConfig.clear(id))
+    await get().refresh()
+  },
+  enable: async (id) => {
+    await run(set, () => bridge().clientConfig.enable(id))
+    await get().refresh()
+  },
+  disable: async (id) => {
+    await run(set, () => bridge().clientConfig.disable(id))
+    await get().refresh()
+  },
+  setDefault: async (id) => {
+    await run(set, () => bridge().clientConfig.setDefault(get().activeClient, id))
     await get().refresh()
   },
 

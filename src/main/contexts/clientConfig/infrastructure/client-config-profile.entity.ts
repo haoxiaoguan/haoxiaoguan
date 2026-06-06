@@ -16,6 +16,10 @@ export class ClientConfigProfileEntity {
   /** 指向反代 client key 表的 id（local-proxy 用，phase3 解析）。 */
   @Property({ type: 'string', fieldName: 'key_ref', nullable: true }) keyRef?: string
   @Property({ type: 'boolean', fieldName: 'is_current' }) isCurrent!: boolean
+  /** 累加式:是否已注入 live（多份可同时为 true）。 */
+  @Property({ type: 'boolean', fieldName: 'enabled', default: false }) enabled!: boolean
+  /** 累加式:是否默认指针（每客户端至多一份）。 */
+  @Property({ type: 'boolean', fieldName: 'is_default', default: false }) isDefault!: boolean
   @Property({ type: 'number', fieldName: 'sort_index' }) sortIndex!: number
   /** per-client 额外配置（JSON，按客户端形态各异；MVP 可空）。 */
   @Property({ type: 'string', fieldName: 'settings_config', nullable: true }) settingsConfig?: string

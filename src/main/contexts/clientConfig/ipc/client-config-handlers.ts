@@ -63,6 +63,27 @@ export function registerClientConfigHandlers(svc: ClientConfigService): void {
       throw new Error(toIpcError(e))
     }
   })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.enable, async (_e, id: string) => {
+    try {
+      await svc.enable(id)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.disable, async (_e, id: string) => {
+    try {
+      await svc.disable(id)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setDefault, async (_e, clientId: ClientId, id: string) => {
+    try {
+      await svc.setDefault(clientId, id)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.history, async (_e, clientId: ClientId) => {
     try {
       return await svc.history(clientId)

@@ -23,6 +23,8 @@ function toProfile(e: ClientConfigProfileEntity): ClientConfigProfile {
     baseUrl: e.baseUrl,
     ...(e.model != null ? { model: e.model } : {}),
     isCurrent: e.isCurrent,
+    enabled: e.enabled ?? false,
+    isDefault: e.isDefault ?? false,
     sortIndex: e.sortIndex,
     createdAt: Date.parse(e.createdAt),
     updatedAt: Date.parse(e.updatedAt),
@@ -67,6 +69,8 @@ export class ClientConfigProfileRepository implements ClientConfigStore {
     if (input.apiKey !== undefined && input.apiKey.length > 0) e.keyEnc = this.encryptKey(id, now, input.apiKey)
     if (input.keyRef !== undefined) e.keyRef = input.keyRef
     e.isCurrent = false
+    e.enabled = false
+    e.isDefault = false
     e.sortIndex = existing.length
     e.createdAt = now
     e.updatedAt = now
@@ -98,6 +102,21 @@ export class ClientConfigProfileRepository implements ClientConfigStore {
     const em = this.emFactory()
     const rows = await em.find(ClientConfigProfileEntity, { clientId })
     for (const e of rows) e.isCurrent = e.id === id
+    await em.flush()
+  }
+
+  async setEnabled(id: string, enabled: boolean): Promise<void> {
+    const em = this.emFactory()
+    const e = await em.findOne(ClientConfigProfileEntity, { id })
+    if (e === null) return
+    e.enabled = enabled
+    await em.flush()
+  }
+
+  async setDefault(clientId: ClientId, id: string): Promise<void> {
+    const em = this.emFactory()
+    const rows = await em.find(ClientConfigProfileEntity, { clientId })
+    for (const e of rows) e.isDefault = e.id === id
     await em.flush()
   }
 

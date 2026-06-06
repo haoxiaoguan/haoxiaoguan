@@ -10,6 +10,11 @@ import { ConfigSnapshotStore } from '../../../src/main/contexts/clientConfig/inf
 import { ClaudeWriter } from '../../../src/main/contexts/clientConfig/infrastructure/writers/claude-writer'
 import type { ClientId, ClientConfigProfile } from '../../../src/main/contexts/clientConfig/domain/client-profile'
 import type {
+  ClientConfigWriter,
+  ApplyInput,
+  FileBundle,
+} from '../../../src/main/contexts/clientConfig/domain/client-writer'
+import type {
   ClientConfigStore,
   CreateProfileInput,
   UpdateProfileInput,
@@ -39,6 +44,8 @@ class FakeStore implements ClientConfigStore {
       baseUrl: input.baseUrl,
       ...(input.model !== undefined ? { model: input.model } : {}),
       isCurrent: false,
+      enabled: false,
+      isDefault: false,
       sortIndex: this.profiles.length,
       createdAt: 0,
       updatedAt: 0,
@@ -61,13 +68,48 @@ class FakeStore implements ClientConfigStore {
   async setCurrent(clientId: ClientId, id: string) {
     for (const p of this.profiles) if (p.clientId === clientId) p.isCurrent = p.id === id
   }
+  async setEnabled(id: string, enabled: boolean) {
+    const p = this.profiles.find((x) => x.id === id)
+    if (p) p.enabled = enabled
+  }
+  async setDefault(clientId: ClientId, id: string) {
+    for (const p of this.profiles) if (p.clientId === clientId) p.isDefault = p.id === id
+  }
   async resolveApiKey(id: string) {
     return this.keys.get(id) ?? ''
   }
 }
 
+// 内存假累加式写入器（opencode 形态）：provider map 多档共存 + 顶层 default 指针。
+class FakeAdditiveWriter implements ClientConfigWriter {
+  readonly clientId: ClientId = 'opencode'
+  readonly writeMode = 'additive' as const
+  constructor(private readonly path: string) {}
+  configFiles() {
+    return [this.path]
+  }
+  private parse(current: FileBundle): { providers: Record<string, unknown>; default: string | null } {
+    const raw = current[this.path]
+    if (raw === null || raw === undefined) return { providers: {}, default: null }
+    return JSON.parse(raw)
+  }
+  renderApply(current: FileBundle, input: ApplyInput): FileBundle {
+    const cfg = this.parse(current)
+    cfg.providers[input.profileId] = { baseUrl: input.baseUrl, model: input.model ?? null }
+    if (input.isDefault === true) cfg.default = input.profileId
+    return { [this.path]: JSON.stringify(cfg) }
+  }
+  renderClear(current: FileBundle, profileId: string): FileBundle {
+    const cfg = this.parse(current)
+    delete cfg.providers[profileId]
+    if (cfg.default === profileId) cfg.default = null
+    return { [this.path]: JSON.stringify(cfg) }
+  }
+}
+
 let root: string
 let settings: string
+let ocPath: string
 let store: FakeStore
 let svc: ClientConfigService
 let seq: number
@@ -76,10 +118,12 @@ let proxyPort: number | null
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'hxg-svc-'))
   settings = join(root, 'claude', 'settings.json')
+  ocPath = join(root, 'opencode', 'opencode.json')
   seq = 0
   store = new FakeStore()
   const registry = new WriterRegistry()
   registry.register(new ClaudeWriter(settings))
+  registry.register(new FakeAdditiveWriter(ocPath))
   const snapshots = new ConfigSnapshotStore({
     baseDir: join(root, 'history'),
     clock: () => ++seq,
@@ -156,5 +200,53 @@ describe('ClientConfigService', () => {
   it('反代未运行(port null) → connectLocalProxy 抛错', async () => {
     proxyPort = null
     await expect(svc.connectLocalProxy('claude')).rejects.toThrow(/反代未运行/)
+  })
+
+  // ---- 累加式共存 ----
+  function newOpencode(name: string, baseUrl: string, model: string) {
+    return svc.create({ clientId: 'opencode', name, source: 'manual', baseUrl, apiKey: 'k', model })
+  }
+
+  it('累加式 enable 两份 → live 同时含两者，首份为默认', async () => {
+    const a = await newOpencode('A', 'http://a', 'm-a')
+    const b = await newOpencode('B', 'http://b', 'm-b')
+    await svc.enable(a.id)
+    await svc.enable(b.id)
+    const cfg = JSON.parse(await readFile(ocPath, 'utf8'))
+    expect(Object.keys(cfg.providers).sort()).toEqual([a.id, b.id].sort())
+    expect(cfg.default).toBe(a.id) // 首个 enable 顺带设默认
+    const list = await svc.list('opencode')
+    expect(list.find((x) => x.id === a.id)!.enabled).toBe(true)
+    expect(list.find((x) => x.id === b.id)!.enabled).toBe(true)
+    expect(list.find((x) => x.id === a.id)!.isDefault).toBe(true)
+  })
+
+  it('累加式 disable 一份 → 仅移除该份，另一份保留', async () => {
+    const a = await newOpencode('A', 'http://a', 'm-a')
+    const b = await newOpencode('B', 'http://b', 'm-b')
+    await svc.enable(a.id)
+    await svc.enable(b.id)
+    await svc.disable(a.id)
+    const cfg = JSON.parse(await readFile(ocPath, 'utf8'))
+    expect(Object.keys(cfg.providers)).toEqual([b.id])
+    expect((await svc.list('opencode')).find((x) => x.id === a.id)!.enabled).toBe(false)
+  })
+
+  it('累加式 setDefault → 改写默认指针，同 client 其余取消默认', async () => {
+    const a = await newOpencode('A', 'http://a', 'm-a')
+    const b = await newOpencode('B', 'http://b', 'm-b')
+    await svc.enable(a.id)
+    await svc.enable(b.id)
+    await svc.setDefault('opencode', b.id)
+    const cfg = JSON.parse(await readFile(ocPath, 'utf8'))
+    expect(cfg.default).toBe(b.id)
+    const list = await svc.list('opencode')
+    expect(list.find((x) => x.id === b.id)!.isDefault).toBe(true)
+    expect(list.find((x) => x.id === a.id)!.isDefault).toBe(false)
+  })
+
+  it('switch 客户端 setDefault → 抛错（仅累加式支持）', async () => {
+    const p = await newClaude('A', 'http://a', 'key-a')
+    await expect(svc.setDefault('claude', p.id)).rejects.toThrow(/累加式/)
   })
 })

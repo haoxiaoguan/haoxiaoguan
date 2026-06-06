@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Cable, History, Trash2, Eye, Check, Zap } from 'lucide-react';
+import { Plus, History, Trash2, Eye, Check, Zap, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
-import { SegmentedOptions } from '@/components/ui/segmented-options';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Sheet,
@@ -25,11 +25,12 @@ import {
 } from '@/components/ui/dialog';
 import type {
   ClientConfigClientId,
+  ClientConfigProfileDto,
   ClientConfigDiffFile,
   ClientConfigSnapshotDto,
 } from '@shared/api-types';
 
-// ─── 添加接入档 Sheet（MVP：手动填写第三方/反代地址）──────────────────────
+// ─── 添加接入档 Sheet（手动填写第三方地址；本机反代走头部「接入本机反代」按钮）─────
 function AddProfileSheet({
   clientId,
   open,
@@ -74,7 +75,7 @@ function AddProfileSheet({
       <SheetContent className="w-[420px] sm:max-w-[420px]">
         <SheetHeader>
           <SheetTitle>{t('clientConfigPage.form.createTitle')}</SheetTitle>
-          <SheetDescription>{t('clientConfigPage.subtitle')}</SheetDescription>
+          <SheetDescription>{t('clientConfigPage.form.thirdPartyHint')}</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-3 px-4 py-3">
           <label className="text-[12px] font-medium text-muted-foreground">
@@ -199,11 +200,116 @@ function HistoryDialog({
   );
 }
 
-// ─── 主页面 ───────────────────────────────────────────────────────────────
+// ─── 单份接入档行（切换/累加差异化）──────────────────────────────────────
+function ProviderRow({
+  p,
+  isAdditive,
+  loading,
+  onPreview,
+  onTestConn,
+  onApply,
+  onClear,
+  onEnable,
+  onDisable,
+  onSetDefault,
+  onRemove,
+}: {
+  p: ClientConfigProfileDto;
+  isAdditive: boolean;
+  loading: boolean;
+  onPreview: (id: string) => void;
+  onTestConn: (id: string) => void;
+  onApply: (id: string) => void;
+  onClear: (id: string) => void;
+  onEnable: (id: string) => void;
+  onDisable: (id: string) => void;
+  onSetDefault: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const { t } = useTranslation('nav');
+  // 高亮：切换式看 isCurrent，累加式看 enabled。
+  const active = isAdditive ? p.enabled : p.isCurrent;
+  return (
+    <div className={cn('flex items-center gap-3 rounded-[8px] border px-4 py-3', active ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/60')}>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-[13px] font-medium text-foreground">{p.name}</span>
+          {!isAdditive && p.isCurrent && (
+            <span className="inline-flex h-5 items-center gap-1 rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+              <Check className="size-3" aria-hidden />
+              {t('clientConfigPage.current')}
+            </span>
+          )}
+          {isAdditive && p.enabled && (
+            <span className="inline-flex h-5 items-center gap-1 rounded-[6px] bg-emerald-500/10 px-1.5 text-[10px] font-medium text-emerald-600">
+              <Check className="size-3" aria-hidden />
+              {t('clientConfigPage.injected')}
+            </span>
+          )}
+          {isAdditive && p.isDefault && (
+            <span className="inline-flex h-5 items-center gap-1 rounded-[6px] bg-amber-500/10 px-1.5 text-[10px] font-medium text-amber-600">
+              <Star className="size-3" aria-hidden />
+              {t('clientConfigPage.default')}
+            </span>
+          )}
+          <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
+            {p.source === 'local-proxy' ? t('clientConfigPage.sourceLocal') : t('clientConfigPage.sourceManual')}
+          </span>
+        </div>
+        <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+          {p.baseUrl}
+          {p.model ? ` · ${p.model}` : ''}
+        </div>
+      </div>
+      <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onTestConn(p.id)}>
+        {t('clientConfigPage.testConn')}
+      </Button>
+      <Button size="sm" variant="ghost" disabled={loading} className="h-7 gap-1 text-[12px]" onClick={() => onPreview(p.id)}>
+        <Eye className="size-3.5" aria-hidden />
+        {t('clientConfigPage.preview')}
+      </Button>
+
+      {isAdditive ? (
+        <>
+          {p.enabled && !p.isDefault && (
+            <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-amber-600" onClick={() => onSetDefault(p.id)}>
+              {t('clientConfigPage.setDefault')}
+            </Button>
+          )}
+          {p.enabled ? (
+            <Button size="sm" variant="outline" disabled={loading} className="h-7 text-[12px]" onClick={() => onDisable(p.id)}>
+              {t('clientConfigPage.disable')}
+            </Button>
+          ) : (
+            <Button size="sm" disabled={loading} className="h-7 text-[12px]" onClick={() => onEnable(p.id)}>
+              {t('clientConfigPage.enable')}
+            </Button>
+          )}
+        </>
+      ) : (
+        <>
+          <Button size="sm" disabled={loading} variant={p.isCurrent ? 'outline' : 'default'} className="h-7 text-[12px]" onClick={() => onApply(p.id)}>
+            {t('clientConfigPage.enable')}
+          </Button>
+          {p.isCurrent && (
+            <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onClear(p.id)}>
+              {t('clientConfigPage.clear')}
+            </Button>
+          )}
+        </>
+      )}
+      <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => onRemove(p.id)}>
+        <Trash2 className="size-3.5" aria-hidden />
+      </Button>
+    </div>
+  );
+}
+
+// ─── 主页面（主从布局：左客户端 / 右供应商列表）─────────────────────────────
 export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
-  const { clients, activeClient, profiles, error, loading } = store;
+  const { clients, activeClient, profiles, counts, error, loading } = store;
   const [addOpen, setAddOpen] = useState(false);
   const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
@@ -216,12 +322,11 @@ export default function ClientConfig() {
     if (error) toast.error(error);
   }, [error]);
 
-  const items = clients.map((c) => ({ value: c.clientId, label: c.displayName }));
-  const activeDetected = clients.find((c) => c.clientId === activeClient)?.detected ?? false;
+  const activeInfo = clients.find((c) => c.clientId === activeClient);
+  const isAdditive = activeInfo?.writeMode === 'additive';
 
   const onPreview = async (id: string) => {
     const files = await store.preview(id);
-    // 预览失败(store 吞错返回 [])或无改动时不弹空弹窗。
     if (files.length === 0) {
       toast.message(t('clientConfigPage.diff.noChange'));
       return;
@@ -234,7 +339,8 @@ export default function ClientConfig() {
   };
   const onApplyFromDiff = async () => {
     if (!diff) return;
-    await store.apply(diff.id);
+    if (isAdditive) await store.enable(diff.id);
+    else await store.apply(diff.id);
     setDiff(null);
     toast.success(t('clientConfigPage.applied'));
   };
@@ -255,99 +361,123 @@ export default function ClientConfig() {
     if (r?.ok) toast.success(t('clientConfigPage.connOk'));
     else toast.error(t('clientConfigPage.connFail', { msg: r?.message ?? String(r?.status ?? '') }));
   };
+  const onEnable = async (id: string) => {
+    await store.enable(id);
+    toast.success(t('clientConfigPage.applied'));
+  };
+  const onDisable = async (id: string) => {
+    await store.disable(id);
+    toast.success(t('clientConfigPage.cleared'));
+  };
+  const onSetDefault = async (id: string) => {
+    await store.setDefault(id);
+    toast.success(t('clientConfigPage.defaultSet'));
+  };
 
   return (
-    <div className="flex flex-col gap-5 px-6 py-5">
-      {/* 标题行 */}
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-primary/10">
-          <Cable className="size-4.5 text-primary" strokeWidth={1.85} aria-hidden />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-semibold leading-5 text-foreground">{t('clientConfigPage.title')}</div>
-          <div className="mt-0.5 text-[12px] text-muted-foreground">{t('clientConfigPage.subtitle')}</div>
-        </div>
-        <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => void onShowHistory()}>
-          <History className="size-3.5" aria-hidden />
-          {t('clientConfigPage.history')}
-        </Button>
-        <Button variant="outline" size="sm" disabled={loading} className="h-8 gap-1.5 text-[12px]" onClick={() => void onConnectLocalProxy()}>
-          <Zap className="size-3.5" aria-hidden />
-          {t('clientConfigPage.connectLocalProxy')}
-        </Button>
-        <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setAddOpen(true)}>
-          <Plus className="size-3.5" aria-hidden />
-          {t('clientConfigPage.addProfile')}
-        </Button>
-      </div>
-
-      {/* 客户端 pill 切换器 */}
-      {items.length > 0 && (
-        <div className="flex items-center gap-2">
-          <SegmentedOptions items={items} value={activeClient} onChange={(v) => void store.selectClient(v as ClientConfigClientId)} />
-          <span className={cn('inline-flex items-center gap-1 text-[11px]', activeDetected ? 'text-emerald-600' : 'text-muted-foreground/60')}>
-            <span className={cn('size-1.5 rounded-full', activeDetected ? 'bg-emerald-500' : 'bg-zinc-400')} aria-hidden />
-            {activeDetected ? t('clientConfigPage.detected') : t('clientConfigPage.notDetected')}
-          </span>
-        </div>
-      )}
-
-      {/* 接入档卡片列表 */}
-      <div className="flex flex-col gap-2">
-        {profiles.length === 0 ? (
-          <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-8 text-center">
-            <div className="text-[13px] text-muted-foreground">{t('clientConfigPage.empty')}</div>
-            <div className="mt-1 text-[12px] text-muted-foreground/60">{t('clientConfigPage.emptyHint')}</div>
-          </div>
-        ) : (
-          profiles.map((p) => (
-            <div
-              key={p.id}
-              className={cn(
-                'flex items-center gap-3 rounded-[8px] border px-4 py-3',
-                p.isCurrent ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/60',
-              )}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[13px] font-medium text-foreground">{p.name}</span>
-                  {p.isCurrent && (
-                    <span className="inline-flex h-5 items-center gap-1 rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
-                      <Check className="size-3" aria-hidden />
-                      {t('clientConfigPage.current')}
-                    </span>
+    <div className="flex h-[calc(100vh-96px)] w-full max-w-full min-w-0 overflow-hidden bg-card">
+      {/* 左：客户端列表 */}
+      <aside className="flex h-full min-h-0 w-[200px] shrink-0 flex-col border-r border-border/80 px-3 py-4">
+        <div className="px-1 text-[12px] font-medium text-foreground/70">{t('clientConfigPage.clients')}</div>
+        <ScrollArea className="mt-2 min-h-0 flex-1 pr-1">
+          <nav className="flex min-w-0 flex-col gap-1" aria-label={t('clientConfigPage.clients')}>
+            {clients.map((c) => {
+              const selected = c.clientId === activeClient;
+              const n = counts[c.clientId] ?? 0;
+              return (
+                <button
+                  key={c.clientId}
+                  type="button"
+                  onClick={() => void store.selectClient(c.clientId)}
+                  className={cn(
+                    'flex h-11 w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 text-left transition-colors',
+                    selected ? 'bg-primary/10' : 'hover:bg-muted',
                   )}
-                  <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
-                    {p.source === 'local-proxy' ? t('clientConfigPage.sourceLocal') : t('clientConfigPage.sourceManual')}
+                >
+                  <span
+                    className={cn(
+                      'flex size-7 shrink-0 items-center justify-center rounded-[7px] text-[12px] font-semibold',
+                      selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                    )}
+                    aria-hidden
+                  >
+                    {c.displayName.slice(0, 1)}
                   </span>
-                </div>
-                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                  {p.baseUrl}
-                  {p.model ? ` · ${p.model}` : ''}
-                </div>
-              </div>
-              <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => void onTestConn(p.id)}>
-                {t('clientConfigPage.testConn')}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={loading} className="h-7 gap-1 text-[12px]" onClick={() => void onPreview(p.id)}>
-                <Eye className="size-3.5" aria-hidden />
-                {t('clientConfigPage.preview')}
-              </Button>
-              <Button size="sm" disabled={loading} variant={p.isCurrent ? 'outline' : 'default'} className="h-7 text-[12px]" onClick={() => void store.apply(p.id)}>
-                {t('clientConfigPage.enable')}
-              </Button>
-              {p.isCurrent && (
-                <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => void onClear(p.id)}>
-                  {t('clientConfigPage.clear')}
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => void store.remove(p.id)}>
-                <Trash2 className="size-3.5" aria-hidden />
-              </Button>
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block truncate text-[12.5px] font-medium', selected ? 'text-primary' : 'text-foreground')}>
+                      {c.displayName}
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className={cn('size-1.5 rounded-full', c.detected ? 'bg-emerald-500' : 'bg-zinc-400')} aria-hidden />
+                      {c.detected ? t('clientConfigPage.detected') : t('clientConfigPage.notDetected')}
+                    </span>
+                  </span>
+                  {n > 0 && (
+                    <span className="shrink-0 rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">{n}</span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </ScrollArea>
+      </aside>
+
+      {/* 右：供应商列表 */}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 items-center gap-2.5 border-b border-border/60 px-5 py-3.5">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[14px] font-semibold text-foreground">{activeInfo?.displayName ?? ''}</span>
+              <span className="shrink-0 rounded-[6px] bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {isAdditive ? t('clientConfigPage.coexist') : t('clientConfigPage.switchMode')}
+              </span>
             </div>
-          ))
-        )}
-      </div>
+            <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
+              {isAdditive ? t('clientConfigPage.coexistHint') : t('clientConfigPage.switchHint')}
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => void onShowHistory()}>
+            <History className="size-3.5" aria-hidden />
+            {t('clientConfigPage.history')}
+          </Button>
+          <Button variant="outline" size="sm" disabled={loading} className="h-8 gap-1.5 text-[12px]" onClick={() => void onConnectLocalProxy()}>
+            <Zap className="size-3.5" aria-hidden />
+            {t('clientConfigPage.connectLocalProxy')}
+          </Button>
+          <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setAddOpen(true)}>
+            <Plus className="size-3.5" aria-hidden />
+            {t('clientConfigPage.addProfile')}
+          </Button>
+        </div>
+
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-2 px-5 py-4">
+            {profiles.length === 0 ? (
+              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-10 text-center">
+                <div className="text-[13px] text-muted-foreground">{t('clientConfigPage.empty')}</div>
+                <div className="mt-1 text-[12px] text-muted-foreground/60">{t('clientConfigPage.emptyHint')}</div>
+              </div>
+            ) : (
+              profiles.map((p) => (
+                <ProviderRow
+                  key={p.id}
+                  p={p}
+                  isAdditive={isAdditive}
+                  loading={loading}
+                  onPreview={(id) => void onPreview(id)}
+                  onTestConn={(id) => void onTestConn(id)}
+                  onApply={(id) => void store.apply(id)}
+                  onClear={(id) => void onClear(id)}
+                  onEnable={(id) => void onEnable(id)}
+                  onDisable={(id) => void onDisable(id)}
+                  onSetDefault={(id) => void onSetDefault(id)}
+                  onRemove={(id) => void store.remove(id)}
+                />
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </section>
 
       <AddProfileSheet
         clientId={activeClient}

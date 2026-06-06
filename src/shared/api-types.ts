@@ -707,6 +707,12 @@ export interface HxgApi {
     apply(id: string): Promise<void>
     /** 从客户端配置移除本接入档（还原）。 */
     clear(id: string): Promise<void>
+    /** 累加式:启用注入（与其它已启用档共存）。 */
+    enable(id: string): Promise<void>
+    /** 累加式:停用注入（仅移除该档）。 */
+    disable(id: string): Promise<void>
+    /** 累加式:设默认指针。 */
+    setDefault(clientId: ClientConfigClientId, id: string): Promise<void>
     history(clientId: ClientConfigClientId): Promise<ClientConfigSnapshotDto[]>
     rollback(clientId: ClientConfigClientId, entryId: string): Promise<void>
     /** 一键接入本机反代：建 local-proxy 接入档并立即启用（读端口/签发 key/拉模型）。 */
@@ -720,10 +726,12 @@ export interface HxgApi {
 
 // ─── clientConfig DTO（与 main domain 同形）─────────────────────────────────
 export type ClientConfigClientId = 'claude' | 'codex' | 'gemini_cli' | 'opencode' | 'openclaw' | 'hermes'
+export type ClientConfigWriteMode = 'switch' | 'additive'
 export interface ClientConfigClientInfo {
   clientId: ClientConfigClientId
   displayName: string
   detected: boolean
+  writeMode: ClientConfigWriteMode
 }
 export interface ClientConfigProfileDto {
   id: string
@@ -733,6 +741,8 @@ export interface ClientConfigProfileDto {
   baseUrl: string
   model?: string
   isCurrent: boolean
+  enabled: boolean
+  isDefault: boolean
   sortIndex: number
   createdAt: number
   updatedAt: number
