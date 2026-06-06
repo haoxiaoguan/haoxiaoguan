@@ -111,6 +111,8 @@ import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/cla
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
 import { OpenCodeWriter } from './contexts/clientConfig/infrastructure/writers/opencode-writer'
 import { CodexWriter } from './contexts/clientConfig/infrastructure/writers/codex-writer'
+import { OpenClawWriter } from './contexts/clientConfig/infrastructure/writers/openclaw-writer'
+import { HermesWriter } from './contexts/clientConfig/infrastructure/writers/hermes-writer'
 import type { LocalProxyPort } from './contexts/clientConfig/application/local-proxy-port'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
@@ -607,6 +609,8 @@ export async function buildContainer(): Promise<Container> {
   )
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
   clientConfigRegistry.register(new CodexWriter(join(dotDir('codex'), 'config.toml')))
+  clientConfigRegistry.register(new OpenClawWriter(join(dotDir('openclaw'), 'openclaw.json')))
+  clientConfigRegistry.register(new HermesWriter(join(dotDir('hermes'), 'config.yaml')))
   const clientConfigSnapshots = new ConfigSnapshotStore({
     baseDir: join(appDataDir(), 'client-config', 'history'),
   })

@@ -1,5 +1,16 @@
-import type { ComponentType } from 'react';
-import { Bot, Code2, Gem, Github, Hexagon, Minus, Orbit, Waves } from 'lucide-react';
+// 账号管理平台官方图标（复用 @lobehub/icons-static-svg 静态 SVG，与 clientConfig/ClientLogo 同源）。
+// 各 AI 工具用其官方品牌 logo;无官方图标的(如 zed)走 lucide 兜底。白底 chip 保证深浅主题都清晰。
+import antigravityIcon from '@lobehub/icons-static-svg/icons/antigravity-color.svg';
+import codebuddyIcon from '@lobehub/icons-static-svg/icons/codebuddy-color.svg';
+import codexIcon from '@lobehub/icons-static-svg/icons/codex-color.svg';
+import cursorIcon from '@lobehub/icons-static-svg/icons/cursor.svg';
+import geminiCliIcon from '@lobehub/icons-static-svg/icons/geminicli-color.svg';
+import githubCopilotIcon from '@lobehub/icons-static-svg/icons/githubcopilot.svg';
+import kiroIcon from '@lobehub/icons-static-svg/icons/kiro-color.svg';
+import qoderIcon from '@lobehub/icons-static-svg/icons/qoder-color.svg';
+import traeIcon from '@lobehub/icons-static-svg/icons/trae-color.svg';
+import windsurfIcon from '@lobehub/icons-static-svg/icons/windsurf.svg';
+import { Gem } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlatformId } from '../../types';
 
@@ -9,66 +20,47 @@ interface PlatformIconProps {
   iconClassName?: string;
 }
 
+// 平台 → 官方品牌 SVG。无官方图标的平台不在此表，走 lucide 兜底。
+const PLATFORM_ICON_MAP: Partial<Record<PlatformId, string>> = {
+  cursor: cursorIcon,
+  windsurf: windsurfIcon,
+  antigravity: antigravityIcon,
+  kiro: kiroIcon,
+  'github-copilot': githubCopilotIcon,
+  codex: codexIcon,
+  'gemini-cli': geminiCliIcon,
+  codebuddy: codebuddyIcon,
+  'codebuddy-cn': codebuddyIcon,
+  qoder: qoderIcon,
+  trae: traeIcon,
+};
+
 export function PlatformIcon({ platform, className, iconClassName }: PlatformIconProps) {
-  if (platform === 'cursor') {
+  const src = PLATFORM_ICON_MAP[platform];
+  if (src !== undefined) {
     return (
       <span
         className={cn(
-          'relative inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-black text-white shadow-sm',
+          'inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-border/60 bg-white shadow-sm',
           className,
         )}
         aria-hidden
       >
-        <span className="absolute size-5 rotate-45 rounded-[2px] bg-white/95" />
-        <span className="absolute size-3 rotate-45 rounded-[1px] bg-zinc-600" />
-        <span className="absolute size-2 rotate-45 rounded-[1px] bg-zinc-100" />
+        <img src={src} alt="" className={cn('size-5', iconClassName)} draggable={false} />
       </span>
     );
   }
 
-  if (platform === 'gemini-cli') {
-    return (
-      <span
-        className={cn(
-          'relative inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-white',
-          className,
-        )}
-        aria-hidden
-      >
-        <span className="absolute h-7 w-7 rotate-45 rounded-[3px] bg-[conic-gradient(from_20deg,#4285f4,#a142f4,#ea4335,#fbbc04,#34a853,#4285f4)]" />
-        <span className="absolute size-3 rounded-full bg-white" />
-      </span>
-    );
-  }
-
-  const Icon = platformIconMap[platform]?.icon ?? Hexagon;
-  const tone = platformIconMap[platform]?.tone ?? 'bg-zinc-900 text-white';
-
+  // 兜底（如 zed:lobehub 暂无官方图标）。
   return (
     <span
       className={cn(
-        'inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] shadow-sm',
-        tone,
+        'inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-zinc-950 text-violet-400 shadow-sm',
         className,
       )}
       aria-hidden
     >
-      <Icon className={cn('size-5', iconClassName)} strokeWidth={2} />
+      <Gem className={cn('size-5', iconClassName)} strokeWidth={2} />
     </span>
   );
 }
-
-const platformIconMap: Partial<
-  Record<PlatformId, { icon: ComponentType<{ className?: string; strokeWidth?: number }>; tone: string }>
-> = {
-  windsurf: { icon: Waves, tone: 'bg-zinc-950 text-emerald-300' },
-  antigravity: { icon: Orbit, tone: 'bg-emerald-600 text-white' },
-  kiro: { icon: Bot, tone: 'bg-indigo-600 text-white' },
-  'github-copilot': { icon: Github, tone: 'bg-zinc-950 text-white' },
-  codex: { icon: Code2, tone: 'bg-white text-zinc-950 ring-1 ring-border' },
-  codebuddy: { icon: Bot, tone: 'bg-pink-500 text-white' },
-  'codebuddy-cn': { icon: Bot, tone: 'bg-rose-500 text-white' },
-  qoder: { icon: Hexagon, tone: 'bg-zinc-950 text-white' },
-  trae: { icon: Minus, tone: 'bg-red-500 text-white' },
-  zed: { icon: Gem, tone: 'bg-zinc-950 text-violet-400' },
-};

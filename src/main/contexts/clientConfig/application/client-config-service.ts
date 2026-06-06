@@ -1,5 +1,6 @@
 // 客户端接入档应用服务：编排 store（记录）+ writer 注册表 + applier（写盘）+ 快照（历史/回滚）。
 import { existsSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { fetch as undiciFetch } from 'undici'
 import type { LocalProxyPort, ConnTestResult } from './local-proxy-port'
 import type { ClientId, ClientConfigProfile, ClientInfo } from '../domain/client-profile'
@@ -35,7 +36,11 @@ export class ClientConfigService {
   listClients(): ClientInfo[] {
     return this.registry.clientIds().map((clientId) => {
       const writer = this.registry.get(clientId)
-      const detected = writer !== undefined && writer.configFiles().some((f) => existsSync(f))
+      // 检测=客户端配置文件存在 OR 其配置目录存在（如 ~/.codex 仅有 auth.json 也算已接入,
+      // 对齐 cc-switch「auth.json 或 config.toml 任一存在即认有效」,避免只登录未配置时漏检）。
+      const detected =
+        writer !== undefined &&
+        writer.configFiles().some((f) => existsSync(f) || existsSync(dirname(f)))
       return {
         clientId,
         displayName: CLIENT_DISPLAY_NAMES[clientId],

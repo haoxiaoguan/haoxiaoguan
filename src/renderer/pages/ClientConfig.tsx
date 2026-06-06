@@ -6,6 +6,7 @@ import { useClientConfigStore } from '../stores/clientConfigStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 import { cn } from '@/lib/utils';
 import {
   Sheet,
@@ -394,15 +395,7 @@ export default function ClientConfig() {
                     selected ? 'bg-primary/10' : 'hover:bg-muted',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'flex size-7 shrink-0 items-center justify-center rounded-[7px] text-[12px] font-semibold',
-                      selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
-                    )}
-                    aria-hidden
-                  >
-                    {c.displayName.slice(0, 1)}
-                  </span>
+                  <ClientLogo clientId={c.clientId} />
                   <span className="min-w-0 flex-1">
                     <span className={cn('block truncate text-[12.5px] font-medium', selected ? 'text-primary' : 'text-foreground')}>
                       {c.displayName}
