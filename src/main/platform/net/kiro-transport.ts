@@ -114,6 +114,28 @@ async function defaultKiroTransportFetch(url: string, init: RequestInit): Promis
   })) as unknown as Response
 }
 
+// --- 全进程统一注入点（G2：原生 TLS 指纹 sidecar 就绪后一处覆盖全出站） ---
+
+// 模块级「当前生效实现」。聊天/刷新+额度+模型/oauth 三处经 createKiroTransport()（无 opts.impl）
+// 创建的 transport，其 fetch 在【调用时】读取此值，故 container 在 sidecar 就绪后只需调用一次
+// setKiroTransportImpl 即覆盖全部出站路径，从根上杜绝「漏一条致 JA3 指纹分裂」。
+let activeKiroTransportImpl: KiroTransportFetch | undefined
+
+/**
+ * 设置/清除全进程统一出站实现（G2 单一注入点，仅 container 调用）。
+ * - 传入原生指纹 transport → 全出站（含模块加载时已创建的 upstream/identity 单例 +
+ *   每个 KiroOAuthCapability）即时切换（它们的 fetch 调用时动态读取此值）。
+ * - 传 undefined → 回退默认 undici + per-account dispatcher + 保守 TLS。
+ */
+export function setKiroTransportImpl(impl: KiroTransportFetch | undefined): void {
+  activeKiroTransportImpl = impl
+}
+
+/** 当前生效出站实现（activeImpl 优先，否则默认）。供 createKiroTransport 调用时动态解析。 */
+function resolveActiveKiroFetch(): KiroTransportFetch {
+  return activeKiroTransportImpl ?? defaultKiroTransportFetch
+}
+
 // --- 工厂函数 ---
 
 export interface CreateKiroTransportOpts {
@@ -142,8 +164,14 @@ export interface CreateKiroTransportOpts {
  *   const transport = createKiroTransport({ impl: fingerprintTransportFetch })
  */
 export function createKiroTransport(opts: CreateKiroTransportOpts = {}): KiroTransport {
-  const fetchFn = opts.impl ?? defaultKiroTransportFetch
-  return { fetch: fetchFn }
+  // opts.impl（测试/显式注入）优先且固定；否则返回【调用时】动态读取 activeKiroTransportImpl 的
+  // 包装，使 container 一处 setKiroTransportImpl 即覆盖所有 createKiroTransport() 消费者
+  // （含本模块加载前已创建的 upstream/identity 单例）。
+  const explicit = opts.impl
+  if (explicit !== undefined) {
+    return { fetch: explicit }
+  }
+  return { fetch: (url, init) => resolveActiveKiroFetch()(url, init) }
 }
 
 // 导出 TLS 选项常量供测试断言（不对外暴露 Agent 实例）。
