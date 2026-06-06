@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Bell,
   BookOpen,
+  Cable,
   Headphones,
   History,
   Info,
@@ -63,6 +64,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
   { to: '/api-service', labelKey: 'nav:apiService', icon: Plug },
+  { to: '/client-config', labelKey: 'nav:clientConfig', icon: Cable },
   { to: '/sessions', labelKey: 'nav:sessions', icon: History },
 ];
 
@@ -88,6 +90,7 @@ function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/skills')) return 'nav:skills';
   if (pathname.startsWith('/mcp')) return 'nav:mcp';
   if (pathname.startsWith('/api-service')) return 'nav:apiService';
+  if (pathname.startsWith('/client-config')) return 'nav:clientConfig';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
   if (pathname.startsWith('/sessions')) return 'nav:sessions';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';

@@ -4,6 +4,46 @@
   "skills": "Skills 管理",
   "mcp": "MCP 管理",
   "apiService": "API 服务",
+  "clientConfig": "客户端接入",
+  "clientConfigPage": {
+    "title": "客户端接入",
+    "subtitle": "把反代或第三方 provider 一键写进 AI 客户端配置（自动备份，可还原）",
+    "addProfile": "添加接入档",
+    "history": "历史",
+    "empty": "该客户端暂无接入档",
+    "emptyHint": "点「添加接入档」把一个 provider 写进它的配置",
+    "current": "当前生效",
+    "detected": "已检测到客户端",
+    "notDetected": "未检测到客户端",
+    "enable": "启用",
+    "preview": "预览",
+    "applied": "已应用并启用",
+    "rolledBack": "已回滚",
+    "sourceLocal": "本机反代",
+    "sourceManual": "第三方",
+    "form": {
+      "createTitle": "添加接入档",
+      "name": "名称",
+      "namePlaceholder": "如 我的反代",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "model": "模型（可选）",
+      "create": "创建",
+      "cancel": "取消"
+    },
+    "diff": {
+      "title": "预览改动",
+      "before": "改动前",
+      "after": "改动后",
+      "apply": "应用并启用"
+    },
+    "historyDialog": {
+      "title": "历史 / 回滚",
+      "empty": "暂无历史",
+      "rollback": "回滚到此",
+      "close": "关闭"
+    }
+  },
   "copy": "复制",
   "service": {
     "baseUrlLabel": "Base URL",
