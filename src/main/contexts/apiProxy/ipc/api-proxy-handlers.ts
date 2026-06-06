@@ -8,6 +8,7 @@ import type { KiroAccountPort } from '../infrastructure/adapters/kiro/kiro-ports
 import { makeClearSuspensionHandler } from '../application/clear-suspension-handler'
 import { makeAccountPoolHealthHandler } from '../application/account-pool-health-handler'
 import type { ApiProxyKeyService } from '../application/api-proxy-key-service'
+import type { ProxyRequestLog } from '../domain/observability/proxy-request-log'
 
 // 注册 apiProxy 的 IPC handlers：start / stop / getStatus / clearAccountSuspension。
 // start/stop 均返回最新状态投影，方便 renderer 一次拿到结果免再查。
@@ -17,6 +18,7 @@ export function registerApiProxyHandlers(
   accounts?: KiroAccountPort,
   keyService?: ApiProxyKeyService,
   quotaResetMs?: number,
+  requestLog?: ProxyRequestLog,
 ): void {
   ipcMain.handle(API_PROXY_CHANNELS.start, async (): Promise<ApiProxyStatus> => {
     try {
@@ -89,6 +91,23 @@ export function registerApiProxyHandlers(
     ipcMain.handle(API_PROXY_CHANNELS.deleteClientKey, async (_e, id: string) => {
       try {
         await keyService.delete(id)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+  }
+
+  if (requestLog) {
+    ipcMain.handle(API_PROXY_CHANNELS.getRequestLog, async (_e, limit?: number) => {
+      try {
+        return requestLog.listRecent(limit)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+    ipcMain.handle(API_PROXY_CHANNELS.clearRequestLog, async (): Promise<void> => {
+      try {
+        requestLog.clear()
       } catch (e) {
         throw new Error(toIpcError(e))
       }

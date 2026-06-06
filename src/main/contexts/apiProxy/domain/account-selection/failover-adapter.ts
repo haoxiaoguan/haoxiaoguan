@@ -52,10 +52,12 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
     for (let attempt = 0; attempt < this.deps.maxRetries; attempt++) {
       const lease = this.deps.selector.acquire(pool.list, this.selCtx(ir, ctx, triedIds))
       if (lease === null) break
+      if (ctx.observation) ctx.observation.attempts += 1
       try {
         const innerCtx = await this.bindAccount(ctx, lease.id, pool.byId.get(lease.id)!)
         const resp = await this.deps.inner.chat(ir, innerCtx)
         this.deps.health.recordSuccess(lease.id)
+        if (ctx.observation) ctx.observation.accountId = lease.id
         const _hint = ctx.sessionHint; if (_hint !== undefined) this.deps.selector.remember(_hint, lease.id)
         return resp
       } catch (err) {
@@ -82,6 +84,7 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
       for (let attempt = 0; attempt < self.deps.maxRetries; attempt++) {
         const lease = self.deps.selector.acquire(pool.list, self.selCtx(ir, ctx, triedIds))
         if (lease === null) break
+        if (ctx.observation) ctx.observation.attempts += 1
         let started = false
         let it: AsyncIterator<CanonicalStreamEvent> | undefined
         try {
@@ -89,6 +92,7 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
           it = self.deps.inner.chatStream(ir, innerCtx)[Symbol.asyncIterator]()
           let next = await it.next()          // 首个 event：inner 已发起请求并解出首帧首事件，或在吐任何字节前抛错（抛错可安全切号，started 仍 false）
           self.deps.health.recordSuccess(lease.id)
+          if (ctx.observation) ctx.observation.accountId = lease.id
           const _hint = ctx.sessionHint; if (_hint !== undefined) self.deps.selector.remember(_hint, lease.id)
           started = true
           while (next.done !== true) { yield next.value; next = await it.next() }

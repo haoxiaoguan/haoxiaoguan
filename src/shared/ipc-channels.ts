@@ -216,6 +216,13 @@ export const API_PROXY_CHANNELS = {
   setClientKeyActive: 'apiProxy:setClientKeyActive',
   deleteClientKey: 'apiProxy:deleteClientKey',
   getAccountPoolHealth: 'apiProxy:getAccountPoolHealth',
+  getRequestLog: 'apiProxy:getRequestLog',
+  clearRequestLog: 'apiProxy:clearRequestLog',
+} as const
+
+// 主进程 → 渲染层推送：每条反代请求日志（G3 请求级可观测性）。
+export const API_PROXY_EVENTS = {
+  requestLog: 'apiProxy:requestLog',
 } as const
 
 // Activity context — 会话活动统计（增量扫描 + 趋势查询）。Channel 值 snake_case

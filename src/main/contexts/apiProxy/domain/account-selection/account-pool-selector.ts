@@ -112,6 +112,13 @@ export class AccountPoolSelector {
     this.affinity.set(hint, { accountId: id, lastAt: this.clock() })
   }
 
+  /** 当前所有账号在途请求数之和（G10 inflight gauge 数据源）。 */
+  totalInflight(): number {
+    let sum = 0
+    for (const n of this.inflight.values()) sum += n
+    return sum
+  }
+
   sweep(): void {
     const now = this.clock()
     for (const [h, e] of this.affinity) {

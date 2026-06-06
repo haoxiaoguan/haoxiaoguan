@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
-import { QUOTA_EVENTS, USAGE_EVENTS, UPDATE_EVENTS } from '../shared/ipc-channels'
+import { QUOTA_EVENTS, USAGE_EVENTS, UPDATE_EVENTS, API_PROXY_EVENTS } from '../shared/ipc-channels'
 import { isOfficialTokenizerAvailable } from './contexts/apiProxy/domain/usage/token-estimator'
 import { UpdaterService } from './contexts/updater/updater-service'
 import { registerUpdaterHandlers } from './contexts/updater/ipc/updater-handlers'
@@ -235,6 +235,10 @@ if (!gotLock) {
     })
     updater.setStatusListener((s) => mainWindow?.webContents.send(UPDATE_EVENTS.status, s))
     registerUpdaterHandlers(updater)
+    // 反代请求日志（G3）→ 渲染层日志页（闭包惰性读 mainWindow，窗口存在时才推）。
+    services.apiProxyRequestLog.setListener((rec) =>
+      mainWindow?.webContents.send(API_PROXY_EVENTS.requestLog, rec),
+    )
     // 启动后延迟检查（仅用户启用时；autoDownload 会在发现新版后自动下载）。
     if (services.settings.getAutoUpdateEnabled()) {
       setTimeout(() => {

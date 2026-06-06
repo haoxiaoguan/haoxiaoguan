@@ -35,6 +35,11 @@ import type { ResponsesRequest } from '../infrastructure/inbound/responses/respo
 import type { ContentBlock } from '../domain/canonical'
 import type { ApiProxyStatus } from '../../../../shared/api-types'
 import { estimateRequestInputTokens } from '../domain/usage/token-estimator'
+import type {
+  ProxyRequestLog,
+  ProxyRequestRecordInput,
+  RequestObservation,
+} from '../domain/observability/proxy-request-log'
 
 // 入站转换器映射（可注入，便于测试替换；默认用 M2a 真实函数）。
 export interface InboundConverters {
@@ -69,6 +74,9 @@ export interface HandleRequestInput {
   signal?: AbortSignal
   headers?: Record<string, string>
   clientKeyId?: string
+  /** 原始 HTTP method/path（hono 注入；仅用于 G3 请求日志展示，不参与编排）。 */
+  method?: string
+  path?: string
 }
 
 // 非流式 / 错误结果：直接作为 JSON 响应体。
@@ -161,18 +169,29 @@ export class ApiProxyService {
   private readonly converters: InboundConverters
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘）；仅 /v1/responses 用。
   private readonly responsesStore?: ResponsesStore
+  // 请求级可观测性（G3）：注入则记录每请求落点 + 累计计数器（喂 G10 /metrics）。
+  private readonly observability?: ProxyRequestLog
+  private readonly clock: () => number
   // server 可后置注入（解循环依赖：container 先建 service 再建 listener+server，最后 attachServer）。
   // M1 单参构造 new ApiProxyService(server) 仍合法——server 既可构造传入也可 attach。
   private server?: ApiHttpServer
 
   constructor(
     server?: ApiHttpServer,
-    deps: { registry?: PlatformRegistry; converters?: InboundConverters; responsesStore?: ResponsesStore } = {},
+    deps: {
+      registry?: PlatformRegistry
+      converters?: InboundConverters
+      responsesStore?: ResponsesStore
+      observability?: ProxyRequestLog
+      clock?: () => number
+    } = {},
   ) {
     this.server = server
     this.registry = deps.registry
     this.converters = deps.converters ?? DEFAULT_INBOUND_CONVERTERS
     this.responsesStore = deps.responsesStore
+    this.observability = deps.observability
+    this.clock = deps.clock ?? Date.now
   }
 
   /**
@@ -187,12 +206,14 @@ export class ApiProxyService {
   async start(): Promise<void> {
     if (!this.server) throw new Error('ApiProxyService: server not attached')
     await this.server.start()
+    this.observability?.markStarted()
   }
 
   async stop(): Promise<void> {
     // server 未 attach 时 stop 是安全 no-op（语义同「本就未启动」）。
     if (!this.server) return
     await this.server.stop()
+    this.observability?.markStopped()
   }
 
   getStatus(): ApiProxyStatus {
@@ -205,10 +226,38 @@ export class ApiProxyService {
   }
 
   /**
-   * 编排单个 API 请求：入站归一化 → 选上游适配器 → chat/chatStream → 出站序列化。
-   * 错误统一抛 ApiProxyHttpError（由 hono onError 按 format 渲染错误体）。
+   * 编排单个 API 请求。在 dispatch 外包一层可观测性（G3）：计时 + 选中账号/尝试次数
+   * （经 obs 由 FailoverAdapter 回填）+ 成功/失败落 ProxyRequestLog（同时喂 G10 计数器）。
+   * health/models 是本地应答、无上游账号，跳过记录以免噪声。
    */
   async handleRequest(input: HandleRequestInput): Promise<HandleResult> {
+    if (input.intent.action === 'health' || input.intent.action === 'models') {
+      return this.dispatch(input, { attempts: 0 })
+    }
+    const obs: RequestObservation = { attempts: 0 }
+    const t0 = this.clock()
+    try {
+      const result = await this.dispatch(input, obs)
+      this.observability?.record(
+        this.buildRecord(input, obs, result.status, result.kind === 'stream', this.clock() - t0, true),
+      )
+      return result
+    } catch (err) {
+      const status = err instanceof ApiProxyHttpError ? err.status : 500
+      const message = err instanceof Error ? err.message : String(err)
+      this.observability?.record(
+        this.buildRecord(input, obs, status, false, this.clock() - t0, false, message),
+      )
+      throw err
+    }
+  }
+
+  /**
+   * 单请求编排实体：入站归一化 → 选上游适配器 → chat/chatStream → 出站序列化。
+   * 错误统一抛 ApiProxyHttpError（由 hono onError 按 format 渲染错误体）。
+   * obs 在链路中被 FailoverAdapter 回填账号/尝试次数，并在此记录 input/output tokens。
+   */
+  private async dispatch(input: HandleRequestInput, obs: RequestObservation): Promise<HandleResult> {
     const { intent, body, requestId, signal } = input
 
     if (intent.action === 'health') {
@@ -221,7 +270,7 @@ export class ApiProxyService {
     // Responses 协议有专属编排（历史链 + store 落盘 + 语义 SSE），走独立分支，
     // 不复用下方 chat 类的 toIR/toResponseBody/serializeStream。
     if (intent.format === 'openai-responses') {
-      return this.handleResponses(intent, body, requestId, signal, input.headers, input.clientKeyId)
+      return this.handleResponses(intent, body, requestId, obs, signal, input.headers, input.clientKeyId)
     }
 
     if (this.registry === undefined) {
@@ -230,6 +279,7 @@ export class ApiProxyService {
 
     // 入站 → IR。
     const ir = this.toIR(intent, body)
+    obs.inputTokens = estimateRequestInputTokens(ir)
     // 选上游。
     let adapter
     try {
@@ -245,6 +295,7 @@ export class ApiProxyService {
     const ctx: UpstreamCtx = {
       ...(signal ? { signal } : {}),
       requestId,
+      observation: obs,
       ...(sessionHint !== undefined ? { sessionHint } : {}),
     }
 
@@ -258,6 +309,7 @@ export class ApiProxyService {
     let resp
     try { resp = await adapter.chat(ir, ctx) }
     catch (e) { throw classifyToHttp(e, intent.format) }
+    if (resp.usage) obs.outputTokens = resp.usage.outputTokens
     return { kind: 'json', status: 200, body: this.toResponseBody(intent, resp, requestId) }
   }
 
@@ -271,6 +323,7 @@ export class ApiProxyService {
     intent: RequestIntent,
     body: unknown,
     requestId: string,
+    obs: RequestObservation,
     signal?: AbortSignal,
     headers?: Record<string, string>,
     clientKeyId?: string,
@@ -287,6 +340,7 @@ export class ApiProxyService {
       ? expandPreviousResponseHistory(req.previous_response_id, (id) => this.responsesStore!.load(id))
       : undefined
     const ir = responsesToIR(req, { ...(historyMessages ? { historyMessages } : {}) })
+    obs.inputTokens = estimateRequestInputTokens(ir)
 
     let adapter
     try {
@@ -301,6 +355,7 @@ export class ApiProxyService {
     const ctx: UpstreamCtx = {
       ...(signal ? { signal } : {}),
       requestId,
+      observation: obs,
       ...(sessionHint !== undefined ? { sessionHint } : {}),
     }
     const respId = this.responsesStore.generateResponseId()
@@ -311,6 +366,7 @@ export class ApiProxyService {
       try { events = await drainStream(adapter.chatStream(ir, ctx)) }
       catch (e) { throw classifyToHttp(e, 'openai-responses') }
       const resp = foldStreamForStore(events, ir.model)
+      if (resp.usage) obs.outputTokens = resp.usage.outputTokens
       this.persistResponses(req, respId, resp, itemId)
       return {
         kind: 'stream',
@@ -322,6 +378,7 @@ export class ApiProxyService {
     let resp
     try { resp = await adapter.chat(ir, ctx) }
     catch (e) { throw classifyToHttp(e, 'openai-responses') }
+    if (resp.usage) obs.outputTokens = resp.usage.outputTokens
     this.persistResponses(req, respId, resp, itemId)
     return {
       kind: 'json',
@@ -445,6 +502,36 @@ export class ApiProxyService {
       case 'openai-responses':
         // 不可达：openai-responses 走 handleResponses 的 serializeResponsesStream（见上 toIR 注释）。
         throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
+    }
+  }
+
+  // ---- 内部：组装一条请求日志记录（G3）----
+  private buildRecord(
+    input: HandleRequestInput,
+    obs: RequestObservation,
+    status: number,
+    stream: boolean,
+    durationMs: number,
+    ok: boolean,
+    errorMessage?: string,
+  ): ProxyRequestRecordInput {
+    const { intent } = input
+    return {
+      method: input.method ?? (intent.action === 'models' ? 'GET' : 'POST'),
+      path: input.path ?? '',
+      format: intent.format,
+      ...(intent.platform !== undefined ? { platform: intent.platform } : {}),
+      action: intent.action,
+      stream,
+      status,
+      ok,
+      durationMs,
+      attempts: obs.attempts,
+      ...(obs.accountId !== undefined ? { accountId: obs.accountId } : {}),
+      ...(input.clientKeyId !== undefined ? { clientKeyId: input.clientKeyId } : {}),
+      ...(obs.inputTokens !== undefined ? { inputTokens: obs.inputTokens } : {}),
+      ...(obs.outputTokens !== undefined ? { outputTokens: obs.outputTokens } : {}),
+      ...(errorMessage !== undefined ? { errorMessage } : {}),
     }
   }
 

@@ -22,6 +22,8 @@ export interface HonoAppDeps {
   knownPlatforms: ReadonlySet<string>
   /** 可选：客户端 Key 令牌桶限流器；不传则不限流（向后兼容）。匿名回环请求（无 keyId）自动跳过。 */
   keyRateLimiter?: KeyRateLimiter
+  /** 可选：Prometheus /metrics 文本渲染（G10）；不传则 /metrics 返回 404。 */
+  metrics?: () => Promise<string>
 }
 
 // 远端地址是否回环。@hono/node-server 把底层 socket 暴露在 c.env.incoming（node IncomingMessage）。
@@ -71,6 +73,14 @@ function geminiErrorStatus(status: number): string {
   return 'INTERNAL'
 }
 
+// 5xx 通用消息（G14）：上游/内部 5xx 一律替换为通用文案，不向客户端泄露内部细节。
+function genericServerMessage(status: number): string {
+  if (status === 502) return 'Upstream error'
+  if (status === 503) return 'Service unavailable'
+  if (status === 504) return 'Upstream timeout'
+  return 'Internal server error'
+}
+
 // 鉴权失败时还没解析 intent，用路径关键字粗判 format（仅决定错误体形状）。
 function formatFromPath(path: string): RequestFormat {
   if (path.includes('/messages')) return 'anthropic'
@@ -113,7 +123,7 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
 
   // 鉴权中间件：/health 豁免；其余按客户端 Key 规则。
   app.use('*', async (c, next) => {
-    if (isHealthExempt(c.req.path)) return next()
+    if (isHealthExempt(c.req.path) || c.req.path === '/metrics') return next()
     const remote = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming?.socket?.remoteAddress
     const authorization = c.req.header('authorization')
     const xApiKey = c.req.header('x-api-key')
@@ -174,6 +184,8 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
       body,
       requestId,
       headers,
+      method,
+      path,
       ...(clientKeyId ? { clientKeyId } : {}),
       // AbortSignal 透传：node 适配层在断连时 abort（M2b 可选，省略亦可）。
     })
@@ -201,6 +213,13 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
   // 路由表（裸 + /{platform} 前缀；用 all 收口让 parseIntent 决定合法性）。
   // /health 保持 M1 行为（200 { ok: true }），不经 handle/service。
   app.get('/health', (c) => c.json({ ok: true }))
+  // Prometheus /metrics（G10）：免客户端 Key 鉴权（同 /health）。默认仅绑 127.0.0.1，本机可直采；
+  // 若绑 0.0.0.0 会暴露账号计数，应配合 G5 CIDR 白名单或上游反代鉴权再开放。
+  app.get('/metrics', async (c) => {
+    if (deps.metrics === undefined) return c.text('metrics unavailable\n', 404)
+    const body = await deps.metrics()
+    return c.body(body, 200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' })
+  })
   app.all('/v1/chat/completions', handle)
   app.all('/v1/messages', handle)
   app.all('/v1/responses', handle)
@@ -215,10 +234,12 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
   app.all('/:platform/v1beta/models/:tail', handle)
   app.all('/:platform/health', handle)
 
-  // 统一错误体：ApiProxyHttpError 用其携带 status/format；其余 500。
+  // 统一错误体（G14 脱敏）：5xx 强制通用消息（不泄露上游/内部细节）；<500 的消息过 redactString
+  // 剥 Bearer/JWT/凭据后再下发。非 ApiProxyHttpError 一律 500 通用消息。
   app.onError((err, c) => {
     if (err instanceof ApiProxyHttpError) {
-      return c.json(errorBodyForFormat(err.format, err.status, err.message), err.status as 400)
+      const safeMsg = err.status >= 500 ? genericServerMessage(err.status) : redactString(err.message)
+      return c.json(errorBodyForFormat(err.format, err.status, safeMsg), err.status as 400)
     }
     return c.json(errorBodyForFormat('openai', 500, 'Internal server error'), 500)
   })

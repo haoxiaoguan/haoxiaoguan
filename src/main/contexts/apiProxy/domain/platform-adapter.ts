@@ -7,6 +7,7 @@ import type {
 } from './canonical'
 import type { KiroAccountInfo, KiroCredential } from '../infrastructure/adapters/kiro/kiro-ports'
 import type { Dispatcher } from 'undici'
+import type { RequestObservation } from './observability/proxy-request-log'
 
 /** 上游错误分类（故障转移决策）。M4 错误转移/健康追踪。 */
 export type ErrorClass = 'SUSPENDED' | 'AUTH' | 'RATE_LIMIT' | 'SERVER' | 'FATAL'
@@ -33,6 +34,8 @@ export interface UpstreamCtx {
   credential?: KiroCredential
   /** 账号绑定代理 dispatcher（由 FailoverAdapter 注入；undefined = 直连）。 */
   dispatcher?: Dispatcher
+  /** 可观测性回填（G3）：FailoverAdapter 写入选中账号与尝试次数，供 ApiProxyService 记日志。 */
+  observation?: RequestObservation
 }
 
 /**
