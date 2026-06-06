@@ -59,6 +59,8 @@ import type { SessionsService } from '../contexts/sessions/application/sessions-
 import { registerSessionsHandlers } from '../contexts/sessions/ipc/sessions-handlers'
 
 import { registerActivityHandlers } from '../contexts/activity/ipc/activity-handlers'
+import type { ClientConfigService } from '../contexts/clientConfig/application/client-config-service'
+import { registerClientConfigHandlers } from '../contexts/clientConfig/ipc/client-config-handlers'
 import type { ActivitySyncService } from '../contexts/activity/application/activity-sync-service'
 import type { ActivityQueryService } from '../contexts/activity/application/activity-query-service'
 
@@ -134,6 +136,9 @@ export interface Services {
   // activity context (session activity stats — incremental scan + trend query)
   activitySync: ActivitySyncService
   activityQuery: ActivityQueryService
+
+  // client-config context (write reverse-proxy / third-party provider into CLI clients)
+  clientConfigService: ClientConfigService
 }
 
 // Each context contributes a register*Handlers function.
@@ -170,4 +175,5 @@ export function registerAllHandlers(services: Services): void {
   registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs(), services.apiProxyRequestLog)
   registerSessionsHandlers(services.sessionsService)
   registerActivityHandlers(services.activitySync, services.activityQuery)
+  registerClientConfigHandlers(services.clientConfigService)
 }

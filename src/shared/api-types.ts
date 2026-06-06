@@ -693,8 +693,76 @@ export interface HxgApi {
     /** 订阅更新状态推送。返回取消订阅函数。 */
     onStatus(cb: (status: UpdateStatus) => void): () => void
   }
+  clientConfig: {
+    /** 已支持客户端 + 检测状态。 */
+    clients(): Promise<ClientConfigClientInfo[]>
+    /** 列出接入档（省略 clientId 返回全部）。 */
+    list(clientId?: ClientConfigClientId): Promise<ClientConfigProfileDto[]>
+    create(input: CreateClientConfigProfileDto): Promise<ClientConfigProfileDto>
+    update(id: string, patch: UpdateClientConfigProfileDto): Promise<void>
+    delete(id: string): Promise<void>
+    /** 预览将写入客户端配置的 before/after（不写盘）。 */
+    preview(id: string): Promise<ClientConfigDiffFile[]>
+    /** 应用并设为当前生效（写客户端配置，写前自动快照）。 */
+    apply(id: string): Promise<void>
+    /** 从客户端配置移除本接入档（还原）。 */
+    clear(id: string): Promise<void>
+    history(clientId: ClientConfigClientId): Promise<ClientConfigSnapshotDto[]>
+    rollback(clientId: ClientConfigClientId, entryId: string): Promise<void>
+  }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
+}
+
+// ─── clientConfig DTO（与 main domain 同形）─────────────────────────────────
+export type ClientConfigClientId = 'claude' | 'codex' | 'gemini_cli' | 'opencode' | 'openclaw' | 'hermes'
+export interface ClientConfigClientInfo {
+  clientId: ClientConfigClientId
+  displayName: string
+  detected: boolean
+}
+export interface ClientConfigProfileDto {
+  id: string
+  clientId: ClientConfigClientId
+  name: string
+  source: 'local-proxy' | 'manual'
+  baseUrl: string
+  model?: string
+  isCurrent: boolean
+  sortIndex: number
+  createdAt: number
+  updatedAt: number
+  notes?: string
+}
+export interface ClientConfigDiffFile {
+  file: string
+  before: string | null
+  after: string | null
+}
+export interface ClientConfigSnapshotDto {
+  id: string
+  clientId: ClientConfigClientId
+  action: string
+  tsMs: number
+  profileId?: string
+  files: Record<string, string | null>
+}
+export interface CreateClientConfigProfileDto {
+  clientId: ClientConfigClientId
+  name: string
+  source: 'local-proxy' | 'manual'
+  baseUrl: string
+  model?: string
+  apiKey?: string
+  keyRef?: string
+  notes?: string
+}
+export interface UpdateClientConfigProfileDto {
+  name?: string
+  baseUrl?: string
+  model?: string | null
+  apiKey?: string
+  notes?: string | null
 }
 
 export interface WsStatus {

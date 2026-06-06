@@ -1,5 +1,7 @@
 // 客户端接入档应用服务：编排 store（记录）+ writer 注册表 + applier（写盘）+ 快照（历史/回滚）。
-import type { ClientId, ClientConfigProfile } from '../domain/client-profile'
+import { existsSync } from 'node:fs'
+import type { ClientId, ClientConfigProfile, ClientInfo } from '../domain/client-profile'
+import { CLIENT_DISPLAY_NAMES } from '../domain/client-profile'
 import type { ApplyInput, ClientConfigWriter } from '../domain/client-writer'
 import type { ClientConfigStore, CreateProfileInput, UpdateProfileInput } from './client-config-store'
 import type { WriterRegistry } from './writer-registry'
@@ -22,6 +24,15 @@ export class ClientConfigService {
     this.registry = registry
     this.applier = applier
     this.snapshots = snapshots
+  }
+
+  /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI pill 切换器。 */
+  listClients(): ClientInfo[] {
+    return this.registry.clientIds().map((clientId) => {
+      const writer = this.registry.get(clientId)
+      const detected = writer !== undefined && writer.configFiles().some((f) => existsSync(f))
+      return { clientId, displayName: CLIENT_DISPLAY_NAMES[clientId], detected }
+    })
   }
 
   // ---- 记录 CRUD（不碰客户端配置文件）----

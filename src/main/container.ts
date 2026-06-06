@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { SettingsFileService } from './contexts/settings/infrastructure/settings-file-service'
 import { SettingsApplicationService } from './contexts/settings/application/settings-service'
-import { appDataDir } from './platform/persistence/paths'
+import { appDataDir, dotDir } from './platform/persistence/paths'
 import { initDatabase } from './platform/persistence/database'
 import type { Services } from './ipc/registry'
 
@@ -102,6 +102,13 @@ import { ApiHttpServer } from './contexts/apiProxy/infrastructure/http/api-http-
 import { createApiRequestListener } from './contexts/apiProxy/infrastructure/http/hono-app'
 import { SystemProxyResolver } from './platform/net/system-proxy'
 import { session } from 'electron'
+import { ClientConfigProfileRepository } from './contexts/clientConfig/infrastructure/client-config-profile.repository'
+import { WriterRegistry } from './contexts/clientConfig/application/writer-registry'
+import { ClientConfigApplier } from './contexts/clientConfig/application/client-config-applier'
+import { ClientConfigService } from './contexts/clientConfig/application/client-config-service'
+import { ConfigSnapshotStore } from './contexts/clientConfig/infrastructure/config-snapshot'
+import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/claude-writer'
+import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
@@ -588,6 +595,23 @@ export async function buildContainer(): Promise<Container> {
   )
   apiProxyService.attachServer(apiHttpServer)
 
+  // 客户端接入管理（clientConfig）：把反代/第三方 provider 写进各 CLI 客户端配置。
+  // writer 路径经 path-resolver(dotDir) 解析；历史快照存 appDataDir/client-config/history。
+  const clientConfigRegistry = new WriterRegistry()
+  clientConfigRegistry.register(new ClaudeWriter(join(dotDir('claude'), 'settings.json')))
+  clientConfigRegistry.register(
+    new GeminiWriter(join(dotDir('gemini'), '.env'), join(dotDir('gemini'), 'settings.json')),
+  )
+  const clientConfigSnapshots = new ConfigSnapshotStore({
+    baseDir: join(appDataDir(), 'client-config', 'history'),
+  })
+  const clientConfigService = new ClientConfigService(
+    new ClientConfigProfileRepository(cryptoService),
+    clientConfigRegistry,
+    new ClientConfigApplier(clientConfigSnapshots),
+    clientConfigSnapshots,
+  )
+
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。
   // logSources 同时注入 sessionsService 与 activitySync，接新 agent 只动这一个数组。
   const logSources = [new ClaudeSessionSource(), new CodexSessionSource(), new GeminiSessionSource()]
@@ -628,6 +652,7 @@ export async function buildContainer(): Promise<Container> {
     kiroAccountPort,
     apiProxyKeyService,
     apiProxyRequestLog,
+    clientConfigService,
     tokenRefreshScheduler,
     platformQuotaScheduler,
     sessionsService,

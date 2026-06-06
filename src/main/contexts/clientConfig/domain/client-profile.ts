@@ -13,6 +13,23 @@ export const CLIENT_IDS: readonly ClientId[] = [
   'hermes',
 ]
 
+export const CLIENT_DISPLAY_NAMES: Record<ClientId, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  gemini_cli: 'Gemini CLI',
+  opencode: 'OpenCode',
+  openclaw: 'OpenClaw',
+  hermes: 'Hermes',
+}
+
+/** 某客户端的可用性摘要（供 UI pill 切换器显示）。 */
+export interface ClientInfo {
+  clientId: ClientId
+  displayName: string
+  /** 是否检测到该客户端（任一配置文件已存在）。 */
+  detected: boolean
+}
+
 /**
  * 接入档来源：
  * - 'local-proxy'：指向本机反代（http://127.0.0.1:<port>），需要走代理/账号池/IP 的流量经现有 api 路由出站；

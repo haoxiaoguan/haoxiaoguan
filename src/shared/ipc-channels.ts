@@ -244,3 +244,17 @@ export const UPDATER_CHANNELS = {
 export const UPDATE_EVENTS = {
   status: 'updater:status',
 } as const
+
+// 客户端接入管理上下文（clientConfig）—— 把反代/第三方 provider 写进各 CLI 客户端配置。
+export const CLIENT_CONFIG_CHANNELS = {
+  clients: 'clientConfig:clients',
+  list: 'clientConfig:list',
+  create: 'clientConfig:create',
+  update: 'clientConfig:update',
+  delete: 'clientConfig:delete',
+  preview: 'clientConfig:preview',
+  apply: 'clientConfig:apply',
+  clear: 'clientConfig:clear',
+  history: 'clientConfig:history',
+  rollback: 'clientConfig:rollback',
+} as const
