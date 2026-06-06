@@ -47,10 +47,11 @@ export type ProfileSource = 'local-proxy' | 'manual'
  */
 export type WriteMode = 'switch' | 'additive'
 
-/** 客户端 → 写入语义。切换式同时仅一份生效;累加式多份共存。Codex 单文件路由但档内可多 provider 共存,仍按 switch 管。 */
+/** 客户端 → 写入语义。切换式同时仅一份生效;累加式多份共存。
+ *  Codex 为累加式:config.toml 可注入多段 model_providers + profiles 共存,顶层 model_provider 为默认。 */
 export const CLIENT_WRITE_MODE: Record<ClientId, WriteMode> = {
   claude: 'switch',
-  codex: 'switch',
+  codex: 'additive',
   gemini_cli: 'switch',
   opencode: 'additive',
   openclaw: 'additive',

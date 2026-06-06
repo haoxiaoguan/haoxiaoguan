@@ -142,7 +142,7 @@ export class ClientConfigService {
       keyRef: keyId,
       ...(models.length > 0 ? { model: models[0] } : {}),
     })
-    await this.apply(profile.id) // 一键 = 建档 + 写入客户端 + 设为当前生效
+    await this.enable(profile.id) // 一键 = 建档 + 注入客户端 + 生效(enable 内部按 switch/additive 分流)
     return profile
   }
 

@@ -110,6 +110,7 @@ import { ConfigSnapshotStore } from './contexts/clientConfig/infrastructure/conf
 import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/claude-writer'
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
 import { OpenCodeWriter } from './contexts/clientConfig/infrastructure/writers/opencode-writer'
+import { CodexWriter } from './contexts/clientConfig/infrastructure/writers/codex-writer'
 import type { LocalProxyPort } from './contexts/clientConfig/application/local-proxy-port'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
@@ -605,6 +606,7 @@ export async function buildContainer(): Promise<Container> {
     new GeminiWriter(join(dotDir('gemini'), '.env'), join(dotDir('gemini'), 'settings.json')),
   )
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
+  clientConfigRegistry.register(new CodexWriter(join(dotDir('codex'), 'config.toml')))
   const clientConfigSnapshots = new ConfigSnapshotStore({
     baseDir: join(appDataDir(), 'client-config', 'history'),
   })
