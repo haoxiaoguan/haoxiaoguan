@@ -8,6 +8,8 @@ export type FileBundle = Record<string, string | null>
 /** 写入一份接入档时的输入（apiKey 已解密为明文，仅在内存中流转）。 */
 export interface ApplyInput {
   profileId: string
+  /** 接入档显示名（累加式写入器写进 provider 名）。 */
+  name: string
   source: ProfileSource
   baseUrl: string
   apiKey: string

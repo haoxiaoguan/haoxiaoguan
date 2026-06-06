@@ -6,7 +6,7 @@ const P = '/home/u/.claude/settings.json'
 const w = new ClaudeWriter(P)
 
 function input(over: Partial<ApplyInput> = {}): ApplyInput {
-  return { profileId: 'p1', source: 'local-proxy', baseUrl: 'http://127.0.0.1:8788', apiKey: 'sk-hxg-abc', model: 'kiro', ...over }
+  return { profileId: 'p1', name: '本机反代', source: 'local-proxy', baseUrl: 'http://127.0.0.1:8788', apiKey: 'sk-hxg-abc', model: 'kiro', ...over }
 }
 function applyParsed(current: FileBundle, inp = input()): any {
   return JSON.parse(w.renderApply(current, inp)[P]!)

@@ -7,7 +7,7 @@ const SET = '/home/u/.gemini/settings.json'
 const w = new GeminiWriter(ENV, SET)
 
 function input(over: Partial<ApplyInput> = {}): ApplyInput {
-  return { profileId: 'p1', source: 'local-proxy', baseUrl: 'http://127.0.0.1:8788', apiKey: 'k-123', model: 'kiro', ...over }
+  return { profileId: 'p1', name: '本机反代', source: 'local-proxy', baseUrl: 'http://127.0.0.1:8788', apiKey: 'k-123', model: 'kiro', ...over }
 }
 
 describe('GeminiWriter', () => {

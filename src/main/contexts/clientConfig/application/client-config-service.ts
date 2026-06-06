@@ -187,6 +187,7 @@ export class ClientConfigService {
     const apiKey = await this.store.resolveApiKey(id)
     const input: ApplyInput = {
       profileId: profile.id,
+      name: profile.name,
       source: profile.source,
       baseUrl: profile.baseUrl,
       apiKey,

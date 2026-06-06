@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { SettingsFileService } from './contexts/settings/infrastructure/settings-file-service'
 import { SettingsApplicationService } from './contexts/settings/application/settings-service'
-import { appDataDir, dotDir } from './platform/persistence/paths'
+import { appDataDir, dotDir, xdgConfigDir } from './platform/persistence/paths'
 import { initDatabase } from './platform/persistence/database'
 import type { Services } from './ipc/registry'
 
@@ -109,6 +109,7 @@ import { ClientConfigService } from './contexts/clientConfig/application/client-
 import { ConfigSnapshotStore } from './contexts/clientConfig/infrastructure/config-snapshot'
 import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/claude-writer'
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
+import { OpenCodeWriter } from './contexts/clientConfig/infrastructure/writers/opencode-writer'
 import type { LocalProxyPort } from './contexts/clientConfig/application/local-proxy-port'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
@@ -603,6 +604,7 @@ export async function buildContainer(): Promise<Container> {
   clientConfigRegistry.register(
     new GeminiWriter(join(dotDir('gemini'), '.env'), join(dotDir('gemini'), 'settings.json')),
   )
+  clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
   const clientConfigSnapshots = new ConfigSnapshotStore({
     baseDir: join(appDataDir(), 'client-config', 'history'),
   })

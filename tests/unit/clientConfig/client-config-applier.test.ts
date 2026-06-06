@@ -16,7 +16,7 @@ let writer: ClaudeWriter
 let seq: number
 
 const input: ApplyInput = {
-  profileId: 'p1', source: 'local-proxy', baseUrl: 'http://127.0.0.1:8788', apiKey: 'sk-hxg', model: 'kiro',
+  profileId: 'p1', name: '本机反代', source: 'local-proxy', baseUrl: 'http://127.0.0.1:8788', apiKey: 'sk-hxg', model: 'kiro',
 }
 
 beforeEach(async () => {

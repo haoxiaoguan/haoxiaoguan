@@ -20,6 +20,12 @@ export function dotDir(name: string): string {
   return join(homedir(), `.${name}`)
 }
 
+// XDG 配置目录 ~/.config/<name>（跨平台一致，含 macOS）。供使用 XDG 约定的 CLI（如 OpenCode）。
+// 注意：这与 appSupportDir 不同——后者在 macOS 走 ~/Library/Application Support。
+export function xdgConfigDir(name: string): string {
+  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), name)
+}
+
 // haoxiaoguan's own data dir. NOTE: source used bundle id com.haoxiaoguan.app on
 // macOS. Since we do not preserve old data, we use a stable "haoxiaoguan" dir on
 // all platforms; main.ts also sets app.setPath('userData', appDataDir()).
