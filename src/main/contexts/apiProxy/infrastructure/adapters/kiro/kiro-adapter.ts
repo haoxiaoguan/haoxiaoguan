@@ -23,6 +23,7 @@ import type {
   KiroAccountInfo,
 } from './kiro-ports'
 import type { PromptCacheTracker } from '../../../domain/usage/prompt-cache-tracker'
+import { getContextTokensForModel } from '../../../domain/usage/model-context-window'
 import type { PlatformUpstreamAdapter, UpstreamCtx, ModelInfo, ErrorClass } from '../../../domain/platform-adapter'
 import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent, Usage, CacheBreakpointInput } from '../../../domain/canonical'
 import type { BuildConversationStateOpts } from './kiro-wire-types'
@@ -96,7 +97,16 @@ export class KiroAdapter implements PlatformUpstreamAdapter {
   }
 
   listModels(): ModelInfo[] {
-    return KIRO_MODELS.map((id) => ({ id, displayName: id }))
+    // Kiro 暴露的均为 Claude（支持 thinking + prompt caching）；上下文窗口按版本推断。
+    return KIRO_MODELS.map((id) => ({
+      id,
+      displayName: id,
+      contextLength: getContextTokensForModel(id),
+      maxOutputTokens: 64_000,
+      supportsThinking: true,
+      supportsPromptCaching: true,
+      ownedBy: 'anthropic',
+    }))
   }
 
   /** 把上游错误归类（委托 classifyKiroError）。 */

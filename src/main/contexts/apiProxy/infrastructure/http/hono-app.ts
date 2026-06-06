@@ -14,6 +14,7 @@ import {
 } from '../../domain/client-key-auth'
 import type { KeyRateLimiter } from '../../domain/key-rate-limiter'
 import { redactString } from '../../../../platform/log/redact'
+import { isIpAllowed } from '../../domain/ip-access-control'
 
 // Hono app 依赖：编排服务 + 鉴权配置 + 已注册平台名（喂路由意图解析的前缀剥离）。
 export interface HonoAppDeps {
@@ -24,6 +25,10 @@ export interface HonoAppDeps {
   keyRateLimiter?: KeyRateLimiter
   /** 可选：Prometheus /metrics 文本渲染（G10）；不传则 /metrics 返回 404。 */
   metrics?: () => Promise<string>
+  /** 可选：IP CIDR 白/黑名单（G5），闭包读 settings 实时值；不传或皆空=不限制。 */
+  ipAccess?: () => { allowlist: string; denylist: string }
+  /** 可选：请求体大小上限字节（G6），闭包读 settings；返回 0 或不传=不限制。 */
+  maxBodyBytes?: () => number
 }
 
 // 远端地址是否回环。@hono/node-server 把底层 socket 暴露在 c.env.incoming（node IncomingMessage）。
@@ -121,6 +126,21 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
     }),
   )
 
+  // IP 访问控制（G5）：CIDR 白/黑名单，**最外层闸**——先于鉴权且不豁免 /health·/metrics
+  // （/metrics 暴露账号计数尤需 IP 闸）。判定取 socket.remoteAddress，不信 X-Forwarded-For。
+  if (deps.ipAccess !== undefined) {
+    app.use('*', async (c, next) => {
+      const { allowlist, denylist } = deps.ipAccess!()
+      if (allowlist.trim().length === 0 && denylist.trim().length === 0) return next()
+      const remote = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming?.socket?.remoteAddress
+      if (!isIpAllowed(remote, allowlist, denylist)) {
+        console.warn(redactString(`[apiProxy] IP 拒绝 ${remote ?? 'unknown'} → ${c.req.path}`))
+        return c.json(errorBodyForFormat(formatFromPath(c.req.path), 403, 'Forbidden'), 403)
+      }
+      return next()
+    })
+  }
+
   // 鉴权中间件：/health 豁免；其余按客户端 Key 规则。
   app.use('*', async (c, next) => {
     if (isHealthExempt(c.req.path) || c.req.path === '/metrics') return next()
@@ -161,6 +181,14 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
   const handle = async (c: Context) => {
     const method = c.req.method
     const path = c.req.path
+    // 请求体大小上限（G6）：超 Content-Length 即 413，避免全量读入放大内存。
+    if (method === 'POST' && deps.maxBodyBytes !== undefined) {
+      const max = deps.maxBodyBytes()
+      const len = Number(c.req.header('content-length') ?? '')
+      if (max > 0 && Number.isFinite(len) && len > max) {
+        return c.json(errorBodyForFormat(formatFromPath(path), 413, 'Request body too large'), 413)
+      }
+    }
     let body: unknown
     if (method === 'POST') {
       try {

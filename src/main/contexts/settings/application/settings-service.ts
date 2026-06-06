@@ -119,4 +119,21 @@ export class SettingsApplicationService {
   getUpdateFeedUrl(): string {
     return this.file.loadSync().runtime.updateFeedUrl
   }
+
+  /** G5 IP 白名单（CIDR，逗号/换行分隔；空=不限制）。 */
+  getApiProxyIpAllowlist(): string {
+    return this.file.loadSync().runtime.apiProxyIpAllowlist
+  }
+  /** G5 IP 黑名单（CIDR，逗号/换行分隔；空=不限制）。 */
+  getApiProxyIpDenylist(): string {
+    return this.file.loadSync().runtime.apiProxyIpDenylist
+  }
+  /** G6 请求体大小上限（字节；0=不限制）。 */
+  getApiProxyMaxBodyBytes(): number {
+    return this.file.loadSync().runtime.apiProxyMaxBodyBytes
+  }
+  /** G7 是否跟随 OS 系统代理出站（默认 false）。 */
+  getApiProxyFollowSystemProxy(): boolean {
+    return this.file.loadSync().runtime.apiProxyFollowSystemProxy
+  }
 }
