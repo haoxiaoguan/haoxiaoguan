@@ -77,4 +77,18 @@ export function registerClientConfigHandlers(svc: ClientConfigService): void {
       throw new Error(toIpcError(e))
     }
   })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.connectLocalProxy, async (_e, clientId: ClientId) => {
+    try {
+      return await svc.connectLocalProxy(clientId)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.testConnectivity, async (_e, id: string) => {
+    try {
+      return await svc.testConnectivity(id)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
 }

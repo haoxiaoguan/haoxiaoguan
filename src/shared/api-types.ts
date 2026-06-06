@@ -709,6 +709,10 @@ export interface HxgApi {
     clear(id: string): Promise<void>
     history(clientId: ClientConfigClientId): Promise<ClientConfigSnapshotDto[]>
     rollback(clientId: ClientConfigClientId, entryId: string): Promise<void>
+    /** 一键接入本机反代：建 local-proxy 接入档并立即启用（读端口/签发 key/拉模型）。 */
+    connectLocalProxy(clientId: ClientConfigClientId): Promise<ClientConfigProfileDto>
+    /** 测连通（GET /v1/models）。 */
+    testConnectivity(id: string): Promise<ClientConfigConnTest>
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
@@ -763,6 +767,11 @@ export interface UpdateClientConfigProfileDto {
   model?: string | null
   apiKey?: string
   notes?: string | null
+}
+export interface ClientConfigConnTest {
+  ok: boolean
+  status?: number
+  message?: string
 }
 
 export interface WsStatus {

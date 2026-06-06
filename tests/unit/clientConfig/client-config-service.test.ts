@@ -14,6 +14,7 @@ import type {
   CreateProfileInput,
   UpdateProfileInput,
 } from '../../../src/main/contexts/clientConfig/application/client-config-store'
+import type { LocalProxyPort } from '../../../src/main/contexts/clientConfig/application/local-proxy-port'
 
 // 内存假 store（解耦 MikroORM，专测 service 编排）。
 class FakeStore implements ClientConfigStore {
@@ -70,6 +71,7 @@ let settings: string
 let store: FakeStore
 let svc: ClientConfigService
 let seq: number
+let proxyPort: number | null
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'hxg-svc-'))
@@ -83,7 +85,14 @@ beforeEach(async () => {
     clock: () => ++seq,
     genId: () => `s${seq}`,
   })
-  svc = new ClientConfigService(store, registry, new ClientConfigApplier(snapshots), snapshots)
+  proxyPort = 8788
+  const localProxy: LocalProxyPort = {
+    getPort: () => proxyPort,
+    signKey: async (name) => ({ id: `key-${name}`, plaintext: 'sk-proxy-xyz' }),
+    revokeKey: async () => {},
+    listModels: () => ['kiro', 'claude-sonnet-4.5'],
+  }
+  svc = new ClientConfigService(store, registry, new ClientConfigApplier(snapshots), snapshots, localProxy)
 })
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
@@ -131,5 +140,21 @@ describe('ClientConfigService', () => {
   it('未知客户端写入器 → apply 抛错', async () => {
     const p = await svc.create({ clientId: 'hermes', name: 'X', source: 'manual', baseUrl: 'http://h', apiKey: 'k' })
     await expect(svc.apply(p.id)).rejects.toThrow(/客户端写入器/)
+  })
+
+  it('connectLocalProxy：建 local-proxy 接入档并立即写入+启用', async () => {
+    const p = await svc.connectLocalProxy('claude')
+    expect(p.source).toBe('local-proxy')
+    expect(p.baseUrl).toBe('http://127.0.0.1:8788')
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-proxy-xyz')
+    expect(written.env.ANTHROPIC_MODEL).toBe('kiro') // listModels 首个
+    expect((await svc.list('claude'))[0].isCurrent).toBe(true)
+  })
+
+  it('反代未运行(port null) → connectLocalProxy 抛错', async () => {
+    proxyPort = null
+    await expect(svc.connectLocalProxy('claude')).rejects.toThrow(/反代未运行/)
   })
 })

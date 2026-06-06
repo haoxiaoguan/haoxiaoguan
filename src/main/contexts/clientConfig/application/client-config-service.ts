@@ -1,5 +1,7 @@
 // 客户端接入档应用服务：编排 store（记录）+ writer 注册表 + applier（写盘）+ 快照（历史/回滚）。
 import { existsSync } from 'node:fs'
+import { fetch as undiciFetch } from 'undici'
+import type { LocalProxyPort, ConnTestResult } from './local-proxy-port'
 import type { ClientId, ClientConfigProfile, ClientInfo } from '../domain/client-profile'
 import { CLIENT_DISPLAY_NAMES } from '../domain/client-profile'
 import type { ApplyInput, ClientConfigWriter } from '../domain/client-writer'
@@ -13,17 +15,20 @@ export class ClientConfigService {
   private readonly registry: WriterRegistry
   private readonly applier: ClientConfigApplier
   private readonly snapshots: ConfigSnapshotStore
+  private readonly localProxy?: LocalProxyPort
 
   constructor(
     store: ClientConfigStore,
     registry: WriterRegistry,
     applier: ClientConfigApplier,
     snapshots: ConfigSnapshotStore,
+    localProxy?: LocalProxyPort,
   ) {
     this.store = store
     this.registry = registry
     this.applier = applier
     this.snapshots = snapshots
+    this.localProxy = localProxy
   }
 
   /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI pill 切换器。 */
@@ -68,6 +73,40 @@ export class ClientConfigService {
     const profile = await this.requireProfile(id)
     const writer = this.requireWriter(profile.clientId)
     await this.applier.clear(writer, id)
+  }
+
+  // ---- 本机反代接入（phase3 杀手锏）----
+  /** 一键接入本机反代：读端口 → 签发 client key → 拉模型 → 建 local-proxy 接入档并立即启用。 */
+  async connectLocalProxy(clientId: ClientId): Promise<ClientConfigProfile> {
+    if (this.localProxy === undefined) throw new Error('本机反代接入未配置')
+    const port = this.localProxy.getPort()
+    if (port === null) throw new Error('本机反代未运行，请先在「API 服务」开启')
+    const { id: keyId, plaintext } = await this.localProxy.signKey(`client-config:${clientId}`)
+    const models = this.localProxy.listModels()
+    const profile = await this.store.create({
+      clientId,
+      name: '本机反代',
+      source: 'local-proxy',
+      baseUrl: `http://127.0.0.1:${port}`,
+      apiKey: plaintext, // 明文经 store 加密落 key_enc；keyRef 记反代 key id 供吊销
+      keyRef: keyId,
+      ...(models.length > 0 ? { model: models[0] } : {}),
+    })
+    await this.apply(profile.id) // 一键 = 建档 + 写入客户端 + 设为当前生效
+    return profile
+  }
+
+  /** 测连通：用接入档的 baseUrl + key 打 GET /v1/models（绿/红反馈）。 */
+  async testConnectivity(id: string): Promise<ConnTestResult> {
+    const profile = await this.requireProfile(id)
+    const apiKey = await this.store.resolveApiKey(id)
+    const url = `${profile.baseUrl.replace(/\/+$/, '')}/v1/models`
+    try {
+      const res = await undiciFetch(url, { headers: { Authorization: `Bearer ${apiKey}` } })
+      return { ok: res.ok, status: res.status }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
   }
 
   // ---- 历史/回滚 ----

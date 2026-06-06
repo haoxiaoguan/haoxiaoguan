@@ -8,6 +8,7 @@ import type {
   ClientConfigSnapshotDto,
   CreateClientConfigProfileDto,
   UpdateClientConfigProfileDto,
+  ClientConfigConnTest,
 } from '@shared/api-types'
 
 interface ClientConfigState {
@@ -33,6 +34,10 @@ interface ClientConfigState {
   preview: (id: string) => Promise<ClientConfigDiffFile[]>
   history: () => Promise<ClientConfigSnapshotDto[]>
   rollback: (entryId: string) => Promise<void>
+  /** 一键接入本机反代（当前客户端）。 */
+  connectLocalProxy: () => Promise<void>
+  /** 测连通。 */
+  testConnectivity: (id: string) => Promise<ClientConfigConnTest | undefined>
 }
 
 async function run<T>(set: (p: Partial<ClientConfigState>) => void, fn: () => Promise<T>): Promise<T | undefined> {
@@ -103,4 +108,9 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
     await run(set, () => bridge().clientConfig.rollback(get().activeClient, entryId))
     await get().refresh()
   },
+  connectLocalProxy: async () => {
+    await run(set, () => bridge().clientConfig.connectLocalProxy(get().activeClient))
+    await get().refresh()
+  },
+  testConnectivity: async (id) => run(set, () => bridge().clientConfig.testConnectivity(id)),
 }))

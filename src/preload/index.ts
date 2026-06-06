@@ -270,6 +270,8 @@ const api: HxgApi = {
     clear: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clear, id),
     history: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.history, clientId),
     rollback: (clientId, entryId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.rollback, clientId, entryId),
+    connectLocalProxy: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.connectLocalProxy, clientId),
+    testConnectivity: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.testConnectivity, id),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

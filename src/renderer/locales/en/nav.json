@@ -21,6 +21,11 @@
     "rolledBack": "Rolled back",
     "clear": "Revert",
     "cleared": "Reverted from client config",
+    "connectLocalProxy": "Connect local proxy",
+    "connected": "Connected to local proxy & enabled",
+    "testConn": "Test",
+    "connOk": "Connected",
+    "connFail": "Failed: {{msg}}",
     "sourceLocal": "Local proxy",
     "sourceManual": "Third-party",
     "form": {

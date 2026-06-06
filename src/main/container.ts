@@ -109,6 +109,7 @@ import { ClientConfigService } from './contexts/clientConfig/application/client-
 import { ConfigSnapshotStore } from './contexts/clientConfig/infrastructure/config-snapshot'
 import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/claude-writer'
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
+import type { LocalProxyPort } from './contexts/clientConfig/application/local-proxy-port'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
@@ -605,11 +606,25 @@ export async function buildContainer(): Promise<Container> {
   const clientConfigSnapshots = new ConfigSnapshotStore({
     baseDir: join(appDataDir(), 'client-config', 'history'),
   })
+  // 本机反代接入窄端口（phase3）：读端口/签发 key/吊销/模型清单，接 apiProxy 但不引入循环依赖。
+  const clientConfigLocalProxy: LocalProxyPort = {
+    getPort: () => {
+      const s = apiProxyService.getStatus()
+      return s.state === 'running' && s.port !== undefined ? s.port : null
+    },
+    signKey: async (name) => {
+      const { meta, plaintext } = await apiProxyKeyService.create(name)
+      return { id: meta.id, plaintext }
+    },
+    revokeKey: (id) => apiProxyKeyService.delete(id),
+    listModels: () => platformRegistry.listAllModels().map((m) => m.id),
+  }
   const clientConfigService = new ClientConfigService(
     new ClientConfigProfileRepository(cryptoService),
     clientConfigRegistry,
     new ClientConfigApplier(clientConfigSnapshots),
     clientConfigSnapshots,
+    clientConfigLocalProxy,
   )
 
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。

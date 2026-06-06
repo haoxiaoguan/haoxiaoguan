@@ -257,4 +257,6 @@ export const CLIENT_CONFIG_CHANNELS = {
   clear: 'clientConfig:clear',
   history: 'clientConfig:history',
   rollback: 'clientConfig:rollback',
+  connectLocalProxy: 'clientConfig:connectLocalProxy',
+  testConnectivity: 'clientConfig:testConnectivity',
 } as const

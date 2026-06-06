@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Cable, History, Trash2, Eye, Check } from 'lucide-react';
+import { Plus, Cable, History, Trash2, Eye, Check, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import { SegmentedOptions } from '@/components/ui/segmented-options';
@@ -246,6 +246,15 @@ export default function ClientConfig() {
     setHistoryData(null);
     toast.success(t('clientConfigPage.rolledBack'));
   };
+  const onConnectLocalProxy = async () => {
+    await store.connectLocalProxy();
+    if (!useClientConfigStore.getState().error) toast.success(t('clientConfigPage.connected'));
+  };
+  const onTestConn = async (id: string) => {
+    const r = await store.testConnectivity(id);
+    if (r?.ok) toast.success(t('clientConfigPage.connOk'));
+    else toast.error(t('clientConfigPage.connFail', { msg: r?.message ?? String(r?.status ?? '') }));
+  };
 
   return (
     <div className="flex flex-col gap-5 px-6 py-5">
@@ -261,6 +270,10 @@ export default function ClientConfig() {
         <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => void onShowHistory()}>
           <History className="size-3.5" aria-hidden />
           {t('clientConfigPage.history')}
+        </Button>
+        <Button variant="outline" size="sm" disabled={loading} className="h-8 gap-1.5 text-[12px]" onClick={() => void onConnectLocalProxy()}>
+          <Zap className="size-3.5" aria-hidden />
+          {t('clientConfigPage.connectLocalProxy')}
         </Button>
         <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setAddOpen(true)}>
           <Plus className="size-3.5" aria-hidden />
@@ -313,6 +326,9 @@ export default function ClientConfig() {
                   {p.model ? ` · ${p.model}` : ''}
                 </div>
               </div>
+              <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => void onTestConn(p.id)}>
+                {t('clientConfigPage.testConn')}
+              </Button>
               <Button size="sm" variant="ghost" disabled={loading} className="h-7 gap-1 text-[12px]" onClick={() => void onPreview(p.id)}>
                 <Eye className="size-3.5" aria-hidden />
                 {t('clientConfigPage.preview')}

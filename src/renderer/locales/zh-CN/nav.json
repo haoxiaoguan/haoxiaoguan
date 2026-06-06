@@ -21,6 +21,11 @@
     "rolledBack": "已回滚",
     "clear": "还原",
     "cleared": "已从客户端配置还原",
+    "connectLocalProxy": "接入本机反代",
+    "connected": "已接入本机反代并启用",
+    "testConn": "测连通",
+    "connOk": "连通正常",
+    "connFail": "连不通：{{msg}}",
     "sourceLocal": "本机反代",
     "sourceManual": "第三方",
     "form": {
