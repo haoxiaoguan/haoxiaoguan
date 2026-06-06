@@ -124,15 +124,19 @@ export class ClientConfigProfileRepository implements ClientConfigStore {
     const em = this.emFactory()
     const e = await em.findOne(ClientConfigProfileEntity, { id })
     if (e === null) throw new Error(`接入档不存在: ${id}`)
+    // local-proxy 与第三方一致:签发/手填的明文均经 envelope 加密落 key_enc,从这里解出。
+    // local-proxy 档额外把反代 client key id 记在 key_ref,仅用于删档/失败时联动吊销(见 getKeyRef)。
     if (e.keyEnc != null && e.keyEnc.length > 0) {
       const stored = JSON.parse(e.keyEnc) as StoredEnvelope
       return this.crypto.decrypt(stored.envelope, stored.aad)
     }
-    if (e.keyRef != null && e.keyRef.length > 0) {
-      // local-proxy：解析反代 client key 表的明文留待 phase3（接入 ApiProxyKeyService）。
-      throw new Error('local-proxy key 解析待 phase3 接入')
-    }
     return ''
+  }
+
+  async getKeyRef(id: string): Promise<string | null> {
+    const em = this.emFactory()
+    const e = await em.findOne(ClientConfigProfileEntity, { id })
+    return e?.keyRef != null && e.keyRef.length > 0 ? e.keyRef : null
   }
 
   private encryptKey(id: string, createdAt: string, plaintext: string): string {

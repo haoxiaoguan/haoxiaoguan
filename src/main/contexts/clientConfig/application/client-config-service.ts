@@ -11,6 +11,11 @@ import type { WriterRegistry } from './writer-registry'
 import type { ClientConfigApplier, DiffFile } from './client-config-applier'
 import type { ConfigSnapshotStore, SnapshotEntry } from '../infrastructure/config-snapshot'
 
+/** 该档是否指定了非空模型(决定能否充当累加式默认指针)。 */
+function hasModel(profile: ClientConfigProfile): boolean {
+  return profile.model !== undefined && profile.model.length > 0
+}
+
 export class ClientConfigService {
   private readonly store: ClientConfigStore
   private readonly registry: WriterRegistry
@@ -60,8 +65,20 @@ export class ClientConfigService {
   update(id: string, patch: UpdateProfileInput): Promise<void> {
     return this.store.update(id, patch)
   }
-  delete(id: string): Promise<void> {
-    return this.store.delete(id)
+  async delete(id: string): Promise<void> {
+    // local-proxy 档:删档时联动吊销其反代 client key(keyRef),避免 key 与 profile 生命周期脱钩
+    // 而积累孤儿凭证。吊销失败不阻塞删除(可在「API 服务」页手动清理)。
+    if (this.localProxy !== undefined) {
+      const keyRef = await this.store.getKeyRef(id)
+      if (keyRef !== null) {
+        try {
+          await this.localProxy.revokeKey(keyRef)
+        } catch {
+          // 吊销失败不阻塞删除
+        }
+      }
+    }
+    await this.store.delete(id)
   }
 
   // ---- 写盘相关 ----
@@ -103,7 +120,9 @@ export class ClientConfigService {
     }
     const siblings = await this.store.list(profile.clientId)
     const hasDefault = siblings.some((p) => p.isDefault && p.id !== id)
-    const makeDefault = profile.isDefault || !hasDefault
+    // 仅当本档指定了模型才有资格当默认指针——无模型档无法构成有效默认(<provider>/<model>），
+    // 否则 store 标默认而 live 指针不变,造成 store↔live 静默分叉。
+    const makeDefault = (profile.isDefault || !hasDefault) && hasModel(profile)
     const { writer: w, input } = await this.resolve(id, { isDefault: makeDefault })
     await this.applier.apply(w, input, 'apply')
     await this.store.setEnabled(id, true)
@@ -123,6 +142,7 @@ export class ClientConfigService {
     const profile = await this.requireProfile(id)
     const writer = this.requireWriter(clientId)
     if (writer.writeMode !== 'additive') throw new Error('仅累加式客户端支持默认指针')
+    if (!hasModel(profile)) throw new Error('该接入档未指定模型，无法设为默认')
     const { writer: w, input } = await this.resolve(id, { isDefault: true })
     await this.applier.apply(w, input, 'apply')
     await this.store.setEnabled(id, true)
@@ -138,17 +158,45 @@ export class ClientConfigService {
     if (port === null) throw new Error('本机反代未运行，请先在「API 服务」开启')
     const { id: keyId, plaintext } = await this.localProxy.signKey(`client-config:${clientId}`)
     const models = this.localProxy.listModels()
-    const profile = await this.store.create({
-      clientId,
-      name: '本机反代',
-      source: 'local-proxy',
-      baseUrl: `http://127.0.0.1:${port}`,
-      apiKey: plaintext, // 明文经 store 加密落 key_enc；keyRef 记反代 key id 供吊销
-      keyRef: keyId,
-      ...(models.length > 0 ? { model: models[0] } : {}),
-    })
-    await this.enable(profile.id) // 一键 = 建档 + 注入客户端 + 生效(enable 内部按 switch/additive 分流)
+    // 失败补偿:key 已签发,若后续建档/注入失败(如目标客户端配置损坏拒写),
+    // 必须吊销这把 key 并回滚半截 profile,否则积累已授权的孤儿凭证。
+    let profile: ClientConfigProfile
+    try {
+      profile = await this.store.create({
+        clientId,
+        name: '本机反代',
+        source: 'local-proxy',
+        baseUrl: `http://127.0.0.1:${port}`,
+        apiKey: plaintext, // 明文经 store 加密落 key_enc；keyRef 记反代 key id 供吊销
+        keyRef: keyId,
+        ...(models.length > 0 ? { model: models[0] } : {}),
+      })
+    } catch (e) {
+      await this.revokeQuietly(keyId)
+      throw e
+    }
+    try {
+      await this.enable(profile.id) // 一键 = 建档 + 注入客户端 + 生效(enable 内部按 switch/additive 分流)
+    } catch (e) {
+      await this.revokeQuietly(keyId)
+      try {
+        await this.store.delete(profile.id)
+      } catch {
+        // 回滚 profile 失败可忽略(已吊销 key,无凭证泄漏)
+      }
+      throw e
+    }
     return profile
+  }
+
+  /** 吊销反代 key,吞掉吊销本身的错误(用于失败补偿,不让补偿掩盖原始错误)。 */
+  private async revokeQuietly(keyId: string): Promise<void> {
+    if (this.localProxy === undefined) return
+    try {
+      await this.localProxy.revokeKey(keyId)
+    } catch {
+      // 补偿吊销失败可忽略
+    }
   }
 
   /** 测连通：用接入档的 baseUrl + key 打 GET /v1/models（绿/红反馈）。 */

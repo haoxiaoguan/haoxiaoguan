@@ -34,6 +34,8 @@ export interface ClientConfigStore {
   setEnabled(id: string, enabled: boolean): Promise<void>
   /** 累加式:设默认指针（同 client 其余置否）。 */
   setDefault(clientId: ClientId, id: string): Promise<void>
-  /** 解出该接入档的明文 api key（解密 key_enc；local-proxy 的 key_ref 解析见 phase3）。 */
+  /** 解出该接入档的明文 api key（local-proxy 与第三方均解密 key_enc）。 */
   resolveApiKey(id: string): Promise<string>
+  /** 取该档的 keyRef（local-proxy 档指向的反代 client key id；无则 null）。供删档时联动吊销。 */
+  getKeyRef(id: string): Promise<string | null>
 }

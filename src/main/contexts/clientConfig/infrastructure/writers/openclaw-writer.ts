@@ -3,12 +3,22 @@
 // 默认指针是独立节点 agents.defaults.model.primary = '<providerKey>/<modelId>'。
 // 不变式：只动本档 provider 段与（指向本档时的）默认指针,保留用户其余 provider/agents/env/tools。
 // 注意：openclaw.json 实为 JSON5；MVP 用严格 JSON 解析(含注释则判损坏拒写,安全)。
+import { ClientConfigCorruptError } from '../../domain/client-writer'
 import type { ClientConfigWriter, ApplyInput, FileBundle } from '../../domain/client-writer'
 import { parseJsonObject, stringifyJson, isObject } from '../config-text'
 
 /** 本档在 openclaw.json models.providers 下的键(稳定、可识别为号小管所写)。 */
 export function openClawProviderId(profileId: string): string {
   return `hxg-${profileId}`
+}
+
+/** 容器字段必须是对象:缺省→{};已存在但非对象→视为结构异常拒写(不静默丢用户内容)。 */
+function requireObjectField(v: unknown, field: string, file: string): Record<string, unknown> {
+  if (v === undefined || v === null) return {}
+  if (!isObject(v)) {
+    throw new ClientConfigCorruptError(file, `OpenClaw openclaw.json 的 ${field} 不是对象，拒绝写入：${file}`)
+  }
+  return { ...v }
 }
 
 export class OpenClawWriter implements ClientConfigWriter {
@@ -28,9 +38,9 @@ export class OpenClawWriter implements ClientConfigWriter {
     const obj = parseJsonObject(current[this.configPath] ?? null, this.configPath)
     const pid = openClawProviderId(input.profileId)
 
-    const models = isObject(obj.models) ? { ...obj.models } : {}
+    const models = requireObjectField(obj.models, 'models', this.configPath)
     if (typeof models.mode !== 'string') models.mode = 'merge'
-    const providers = isObject(models.providers) ? { ...models.providers } : {}
+    const providers = requireObjectField(models.providers, 'models.providers', this.configPath)
     const providerModels =
       input.model !== undefined && input.model.length > 0 ? [{ id: input.model, name: input.model }] : []
     providers[pid] = {

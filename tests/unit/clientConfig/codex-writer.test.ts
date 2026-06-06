@@ -99,4 +99,12 @@ describe('CodexWriter (additive 注入)', () => {
   it('configFiles 仅含 config.toml（auth.json 从不修改）', () => {
     expect(w.configFiles()).toEqual([P])
   })
+
+  it('默认切到无模型档 → 清残留顶层 model(不留脏指针)', () => {
+    const a1 = w.renderApply({ [P]: null }, input({ isDefault: true })) // p1 model=kiro
+    const a2 = w.renderApply(a1, input({ profileId: 'p2', name: 'B', model: undefined, isDefault: true }))
+    const cfg = TOML.parse(a2[P]!) as any
+    expect(cfg.model_provider).toBe(pid2)
+    expect(cfg.model).toBeUndefined() // 不残留 p1 的 kiro
+  })
 })

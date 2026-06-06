@@ -71,4 +71,26 @@ describe('HermesWriter (additive, YAML)', () => {
   it('损坏 YAML → 抛 ClientConfigCorruptError', () => {
     expect(() => w.renderApply({ [P]: 'foo: [unclosed' }, input())).toThrow(ClientConfigCorruptError)
   })
+
+  it('默认切到无模型档 → 清残留 model.default(不留跨档脏指针)', () => {
+    const a1 = w.renderApply({ [P]: null }, input({ isDefault: true })) // p1 default=kiro
+    const a2 = w.renderApply(a1, input({ profileId: 'p2', name: 'B', model: undefined, isDefault: true }))
+    const cfg = yaml.load(a2[P]!) as any
+    expect(cfg.model.provider).toBe(n2)
+    expect(cfg.model.default).toBeUndefined() // 不残留 p1 的 kiro
+  })
+
+  it('custom_providers 非序列(用户写成 mapping) → 抛 ClientConfigCorruptError 拒写', () => {
+    const bad = yaml.dump({ custom_providers: { weird: 'mapping' } })
+    expect(() => w.renderApply({ [P]: bad }, input())).toThrow(ClientConfigCorruptError)
+  })
+
+  it('二次 upsert 保持原有顺序(原位替换,不挪到末尾)', () => {
+    let b: FileBundle = { [P]: null }
+    b = w.renderApply(b, input()) as FileBundle // p1
+    b = w.renderApply(b, input({ profileId: 'p2', name: 'B', baseUrl: 'http://b', apiKey: 'k', model: 'm' })) as FileBundle
+    b = w.renderApply(b, input({ baseUrl: 'http://changed' })) as FileBundle // re-upsert p1
+    const cfg = yaml.load(b[P]!) as any
+    expect(cfg.custom_providers.map((e: any) => e.name)).toEqual([n1, n2]) // p1 仍在首位
+  })
 })

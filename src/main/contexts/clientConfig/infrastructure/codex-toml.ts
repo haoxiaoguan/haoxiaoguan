@@ -79,7 +79,9 @@ export function upsertCodexProvider(
 
   if (input.isDefault) {
     next.model_provider = input.id
+    // 有模型才设 model;无模型时清除残留 model,避免 model_provider→本档、model→他档模型的脏指针。
     if (input.model !== undefined && input.model.length > 0) next.model = input.model
+    else delete next.model
   }
   return next
 }

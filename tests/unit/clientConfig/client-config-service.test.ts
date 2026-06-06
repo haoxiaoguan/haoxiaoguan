@@ -25,6 +25,7 @@ import type { LocalProxyPort } from '../../../src/main/contexts/clientConfig/app
 class FakeStore implements ClientConfigStore {
   profiles: ClientConfigProfile[] = []
   keys = new Map<string, string>()
+  keyRefs = new Map<string, string>()
   private n = 0
   async list(clientId?: ClientId) {
     return this.profiles
@@ -52,6 +53,7 @@ class FakeStore implements ClientConfigStore {
     }
     this.profiles.push(p)
     if (input.apiKey !== undefined) this.keys.set(id, input.apiKey)
+    if (input.keyRef !== undefined) this.keyRefs.set(id, input.keyRef)
     return p
   }
   async update(id: string, patch: UpdateProfileInput) {
@@ -64,6 +66,7 @@ class FakeStore implements ClientConfigStore {
   async delete(id: string) {
     this.profiles = this.profiles.filter((p) => p.id !== id)
     this.keys.delete(id)
+    this.keyRefs.delete(id)
   }
   async setCurrent(clientId: ClientId, id: string) {
     for (const p of this.profiles) if (p.clientId === clientId) p.isCurrent = p.id === id
@@ -77,6 +80,9 @@ class FakeStore implements ClientConfigStore {
   }
   async resolveApiKey(id: string) {
     return this.keys.get(id) ?? ''
+  }
+  async getKeyRef(id: string) {
+    return this.keyRefs.get(id) ?? null
   }
 }
 
@@ -107,13 +113,31 @@ class FakeAdditiveWriter implements ClientConfigWriter {
   }
 }
 
+// 内存假写入器:renderApply 总是抛(模拟目标客户端配置损坏拒写),验失败补偿。
+class ThrowingWriter implements ClientConfigWriter {
+  readonly clientId: ClientId = 'hermes'
+  readonly writeMode = 'additive' as const
+  configFiles() {
+    return ['/tmp/hxg-throwing/never']
+  }
+  renderApply(): FileBundle {
+    throw new Error('模拟配置损坏拒写')
+  }
+  renderClear(): FileBundle {
+    return {}
+  }
+}
+
 let root: string
 let settings: string
 let ocPath: string
 let store: FakeStore
 let svc: ClientConfigService
+let registry: WriterRegistry
 let seq: number
 let proxyPort: number | null
+let proxyModels: string[]
+let revokedKeys: string[]
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'hxg-svc-'))
@@ -121,7 +145,7 @@ beforeEach(async () => {
   ocPath = join(root, 'opencode', 'opencode.json')
   seq = 0
   store = new FakeStore()
-  const registry = new WriterRegistry()
+  registry = new WriterRegistry()
   registry.register(new ClaudeWriter(settings))
   registry.register(new FakeAdditiveWriter(ocPath))
   const snapshots = new ConfigSnapshotStore({
@@ -130,11 +154,15 @@ beforeEach(async () => {
     genId: () => `s${seq}`,
   })
   proxyPort = 8788
+  proxyModels = ['kiro', 'claude-sonnet-4.5']
+  revokedKeys = []
   const localProxy: LocalProxyPort = {
     getPort: () => proxyPort,
     signKey: async (name) => ({ id: `key-${name}`, plaintext: 'sk-proxy-xyz' }),
-    revokeKey: async () => {},
-    listModels: () => ['kiro', 'claude-sonnet-4.5'],
+    revokeKey: async (id) => {
+      revokedKeys.push(id)
+    },
+    listModels: () => proxyModels,
   }
   svc = new ClientConfigService(store, registry, new ClientConfigApplier(snapshots), snapshots, localProxy)
 })
@@ -248,5 +276,32 @@ describe('ClientConfigService', () => {
   it('switch 客户端 setDefault → 抛错（仅累加式支持）', async () => {
     const p = await newClaude('A', 'http://a', 'key-a')
     await expect(svc.setDefault('claude', p.id)).rejects.toThrow(/累加式/)
+  })
+
+  // ---- review 修复回归 ----
+  it('setDefault 到无模型档 → 抛错(无法设默认,防 store↔live 分叉)', async () => {
+    const p = await svc.create({ clientId: 'opencode', name: 'X', source: 'manual', baseUrl: 'http://x', apiKey: 'k' })
+    await expect(svc.setDefault('opencode', p.id)).rejects.toThrow(/未指定模型/)
+  })
+
+  it('enable 无模型档(首个) → 注入并 enabled 但不设默认', async () => {
+    const p = await svc.create({ clientId: 'opencode', name: 'X', source: 'manual', baseUrl: 'http://x', apiKey: 'k' })
+    await svc.enable(p.id)
+    const list = await svc.list('opencode')
+    expect(list[0].enabled).toBe(true)
+    expect(list[0].isDefault).toBe(false) // 无模型不充当默认,store 与 live 不分叉
+  })
+
+  it('删 local-proxy 接入档 → 联动吊销 keyRef 反代 key', async () => {
+    const p = await svc.connectLocalProxy('claude')
+    await svc.delete(p.id)
+    expect(revokedKeys).toContain('key-client-config:claude')
+  })
+
+  it('connectLocalProxy 注入失败 → 吊销 key 且不留半截 profile', async () => {
+    registry.register(new ThrowingWriter()) // hermes 写入器 renderApply 抛错
+    await expect(svc.connectLocalProxy('hermes')).rejects.toThrow(/损坏/)
+    expect(revokedKeys).toContain('key-client-config:hermes')
+    expect((await svc.list('hermes')).length).toBe(0) // 半截 profile 已回滚
   })
 })

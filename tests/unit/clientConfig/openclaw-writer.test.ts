@@ -66,4 +66,14 @@ describe('OpenClawWriter (additive)', () => {
   it('损坏 JSON → 抛 ClientConfigCorruptError', () => {
     expect(() => w.renderApply({ [P]: '{ bad' }, input())).toThrow(ClientConfigCorruptError)
   })
+
+  it('models.providers 非对象(用户写成数组) → 抛 ClientConfigCorruptError 拒写', () => {
+    const bad = JSON.stringify({ models: { mode: 'merge', providers: ['x'] } })
+    expect(() => w.renderApply({ [P]: bad }, input())).toThrow(ClientConfigCorruptError)
+  })
+
+  it('models 非对象 → 抛 ClientConfigCorruptError 拒写', () => {
+    const bad = JSON.stringify({ models: 'oops' })
+    expect(() => w.renderApply({ [P]: bad }, input())).toThrow(ClientConfigCorruptError)
+  })
 })
