@@ -22,6 +22,7 @@ import {
   ACTIVITY_CHANNELS,
   UPDATER_CHANNELS,
   UPDATE_EVENTS,
+  CLIENT_CONFIG_CHANNELS,
 } from '../shared/ipc-channels'
 import type { HxgApi, UpdateStatus, ProxyRequestRecord } from '../shared/api-types'
 
@@ -257,6 +258,18 @@ const api: HxgApi = {
       ipcRenderer.on(UPDATE_EVENTS.status, listener)
       return () => ipcRenderer.removeListener(UPDATE_EVENTS.status, listener)
     },
+  },
+  clientConfig: {
+    clients: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clients),
+    list: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.list, clientId),
+    create: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.create, input),
+    update: (id, patch) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.update, id, patch),
+    delete: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.delete, id),
+    preview: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.preview, id),
+    apply: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.apply, id),
+    clear: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clear, id),
+    history: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.history, clientId),
+    rollback: (clientId, entryId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.rollback, clientId, entryId),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

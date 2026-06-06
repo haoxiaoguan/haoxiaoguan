@@ -51,6 +51,8 @@ import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infr
 
 import { ApiProxyKeyEntity } from '../../contexts/apiProxy/infrastructure/api-proxy-key.entity'
 
+import { ClientConfigProfileEntity } from '../../contexts/clientConfig/infrastructure/client-config-profile.entity'
+
 import { ActivityEventEntity } from '../../contexts/activity/infrastructure/activity-event.entity'
 import { ActivityDailyRollupEntity } from '../../contexts/activity/infrastructure/activity-daily-rollup.entity'
 import { ActivityScanStateEntity } from '../../contexts/activity/infrastructure/activity-scan-state.entity'
@@ -87,6 +89,8 @@ export const ALL_ENTITIES: unknown[] = [
   AccountGroupProxyBindingEntity,
   // api-proxy context
   ApiProxyKeyEntity,
+  // client-config context (1 table: client_config_profiles)
+  ClientConfigProfileEntity,
   // activity context
   ActivityEventEntity,
   ActivityDailyRollupEntity,

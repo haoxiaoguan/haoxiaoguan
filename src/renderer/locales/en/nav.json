@@ -4,6 +4,51 @@
   "skills": "Skills",
   "mcp": "MCP",
   "apiService": "API Service",
+  "clientConfig": "Client Setup",
+  "clientConfigPage": {
+    "title": "Client Setup",
+    "subtitle": "Write the reverse proxy or a third-party provider into AI client configs in one click (auto-backup, revertible).",
+    "addProfile": "Add Profile",
+    "history": "History",
+    "empty": "No profiles for this client yet",
+    "emptyHint": "Click \"Add Profile\" to write a provider into its config",
+    "current": "Active",
+    "detected": "Client detected",
+    "notDetected": "Client not detected",
+    "enable": "Enable",
+    "preview": "Preview",
+    "applied": "Applied & enabled",
+    "rolledBack": "Rolled back",
+    "clear": "Revert",
+    "cleared": "Reverted from client config",
+    "sourceLocal": "Local proxy",
+    "sourceManual": "Third-party",
+    "form": {
+      "createTitle": "Add Profile",
+      "name": "Name",
+      "namePlaceholder": "e.g. My Proxy",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "model": "Model (optional)",
+      "create": "Create",
+      "cancel": "Cancel"
+    },
+    "diff": {
+      "title": "Preview Changes",
+      "before": "Before",
+      "after": "After",
+      "apply": "Apply & Enable",
+      "noChange": "No changes or preview failed",
+      "empty": "(empty)",
+      "deleted": "(deleted)"
+    },
+    "historyDialog": {
+      "title": "History / Rollback",
+      "empty": "No history",
+      "rollback": "Roll back to this",
+      "close": "Close"
+    }
+  },
   "copy": "Copy",
   "service": {
     "baseUrlLabel": "Base URL",
