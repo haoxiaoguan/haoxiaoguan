@@ -50,4 +50,25 @@ describe('GeminiWriter', () => {
     expect(out[ENV]).not.toContain('GEMINI_API_KEY')
     expect(SET in out).toBe(false) // settings 不在 clear 输出 → 不改动
   })
+
+  it('切到无 model 的档移除旧 GEMINI_MODEL（switch 语义，修复残留）', () => {
+    const cur: FileBundle = { [ENV]: 'GEMINI_MODEL=old\nFOO=bar\n', [SET]: null }
+    const out = w.renderApply(cur, input({ model: undefined }))
+    expect(out[ENV]).not.toContain('GEMINI_MODEL')
+    expect(out[ENV]).toContain('FOO=bar')
+  })
+
+  it('export 前缀的已存在键被替换而非重复', () => {
+    const out = w.renderApply({ [ENV]: 'export GEMINI_API_KEY=old\n', [SET]: null }, input())
+    const keyLines = out[ENV]!.split('\n').filter((l) => l.includes('GEMINI_API_KEY'))
+    expect(keyLines).toHaveLength(1)
+    expect(out[ENV]).toContain('GEMINI_API_KEY=k-123')
+    expect(out[ENV]).not.toContain('old')
+  })
+
+  it('clear 能移除 export 前缀的旧键', () => {
+    const out = w.renderClear({ [ENV]: 'export GEMINI_API_KEY=old\nFOO=bar\n' }, 'p1')
+    expect(out[ENV]).not.toContain('GEMINI_API_KEY')
+    expect(out[ENV]).toContain('FOO=bar')
+  })
 })

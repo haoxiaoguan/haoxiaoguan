@@ -19,6 +19,8 @@
     "preview": "Preview",
     "applied": "Applied & enabled",
     "rolledBack": "Rolled back",
+    "clear": "Revert",
+    "cleared": "Reverted from client config",
     "sourceLocal": "Local proxy",
     "sourceManual": "Third-party",
     "form": {
@@ -35,7 +37,10 @@
       "title": "Preview Changes",
       "before": "Before",
       "after": "After",
-      "apply": "Apply & Enable"
+      "apply": "Apply & Enable",
+      "noChange": "No changes or preview failed",
+      "empty": "(empty)",
+      "deleted": "(deleted)"
     },
     "historyDialog": {
       "title": "History / Rollback",

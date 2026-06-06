@@ -19,6 +19,8 @@
     "preview": "预览",
     "applied": "已应用并启用",
     "rolledBack": "已回滚",
+    "clear": "还原",
+    "cleared": "已从客户端配置还原",
     "sourceLocal": "本机反代",
     "sourceManual": "第三方",
     "form": {
@@ -35,7 +37,10 @@
       "title": "预览改动",
       "before": "改动前",
       "after": "改动后",
-      "apply": "应用并启用"
+      "apply": "应用并启用",
+      "noChange": "无改动或预览失败",
+      "empty": "(空)",
+      "deleted": "(已删除)"
     },
     "historyDialog": {
       "title": "历史 / 回滚",

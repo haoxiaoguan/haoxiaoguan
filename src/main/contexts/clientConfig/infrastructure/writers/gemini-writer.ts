@@ -22,10 +22,15 @@ export class GeminiWriter implements ClientConfigWriter {
   }
 
   renderApply(current: FileBundle, input: ApplyInput): FileBundle {
-    const env = upsertEnvLines(current[this.envPath] ?? null, {
+    const hasModel = input.model !== undefined && input.model.length > 0
+    // model 为空时先移除旧 GEMINI_MODEL，保证 switch 语义（切到无 model 档不残留上一档模型）。
+    const base = hasModel
+      ? (current[this.envPath] ?? null)
+      : removeEnvKeys(current[this.envPath] ?? null, ['GEMINI_MODEL'])
+    const env = upsertEnvLines(base, {
       GOOGLE_GEMINI_BASE_URL: input.baseUrl,
       GEMINI_API_KEY: input.apiKey,
-      ...(input.model !== undefined && input.model.length > 0 ? { GEMINI_MODEL: input.model } : {}),
+      ...(hasModel ? { GEMINI_MODEL: input.model } : {}),
     })
     const settings = parseJsonObject(current[this.settingsPath] ?? null, this.settingsPath)
     const security = isObject(settings.security) ? { ...settings.security } : {}

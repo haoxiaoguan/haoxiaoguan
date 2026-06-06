@@ -57,8 +57,28 @@ export class ClientConfigApplier {
     const current = await readBundle(writer.configFiles())
     const next = render(current) // 先算（损坏即抛，发生在任何快照/写盘之前）
     await this.snapshots.capture(writer.clientId, action, writer.configFiles(), profileId)
-    for (const [path, content] of Object.entries(next)) {
-      if (content !== null) await atomicWrite(path, content)
+    // 多文件（如 Gemini 的 .env + settings.json）写中途失败 → best-effort 把已写文件回滚到
+    // 写前内容，避免停在不一致中间态（快照亦留存供手动恢复）。
+    const written: string[] = []
+    try {
+      for (const [path, content] of Object.entries(next)) {
+        if (content !== null) {
+          await atomicWrite(path, content)
+          written.push(path)
+        }
+      }
+    } catch (err) {
+      for (const path of written) {
+        const prev = current[path]
+        if (prev !== null) {
+          try {
+            await atomicWrite(path, prev)
+          } catch {
+            // 补偿回滚已尽力；写前快照仍可手动恢复
+          }
+        }
+      }
+      throw err
     }
   }
 }

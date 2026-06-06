@@ -132,11 +132,11 @@ function DiffDialog({
               <div className="grid grid-cols-2 gap-2">
                 <pre className="overflow-x-auto rounded-[8px] border border-border/60 bg-muted/30 p-2 font-mono text-[11px] leading-relaxed">
                   <div className="mb-1 text-[10px] uppercase text-muted-foreground/60">{t('clientConfigPage.diff.before')}</div>
-                  {f.before ?? '(empty)'}
+                  {f.before ?? t('clientConfigPage.diff.empty')}
                 </pre>
                 <pre className="overflow-x-auto rounded-[8px] border border-primary/40 bg-primary/[0.04] p-2 font-mono text-[11px] leading-relaxed">
                   <div className="mb-1 text-[10px] uppercase text-primary/70">{t('clientConfigPage.diff.after')}</div>
-                  {f.after ?? '(deleted)'}
+                  {f.after ?? t('clientConfigPage.diff.deleted')}
                 </pre>
               </div>
             </div>
@@ -203,7 +203,7 @@ function HistoryDialog({
 export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
-  const { clients, activeClient, profiles, error } = store;
+  const { clients, activeClient, profiles, error, loading } = store;
   const [addOpen, setAddOpen] = useState(false);
   const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
@@ -221,7 +221,16 @@ export default function ClientConfig() {
 
   const onPreview = async (id: string) => {
     const files = await store.preview(id);
+    // 预览失败(store 吞错返回 [])或无改动时不弹空弹窗。
+    if (files.length === 0) {
+      toast.message(t('clientConfigPage.diff.noChange'));
+      return;
+    }
     setDiff({ id, files });
+  };
+  const onClear = async (id: string) => {
+    await store.clear(id);
+    toast.success(t('clientConfigPage.cleared'));
   };
   const onApplyFromDiff = async () => {
     if (!diff) return;
@@ -304,14 +313,19 @@ export default function ClientConfig() {
                   {p.model ? ` · ${p.model}` : ''}
                 </div>
               </div>
-              <Button size="sm" variant="ghost" className="h-7 gap-1 text-[12px]" onClick={() => void onPreview(p.id)}>
+              <Button size="sm" variant="ghost" disabled={loading} className="h-7 gap-1 text-[12px]" onClick={() => void onPreview(p.id)}>
                 <Eye className="size-3.5" aria-hidden />
                 {t('clientConfigPage.preview')}
               </Button>
-              <Button size="sm" variant={p.isCurrent ? 'outline' : 'default'} className="h-7 text-[12px]" onClick={() => void store.apply(p.id)}>
+              <Button size="sm" disabled={loading} variant={p.isCurrent ? 'outline' : 'default'} className="h-7 text-[12px]" onClick={() => void store.apply(p.id)}>
                 {t('clientConfigPage.enable')}
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => void store.remove(p.id)}>
+              {p.isCurrent && (
+                <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => void onClear(p.id)}>
+                  {t('clientConfigPage.clear')}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => void store.remove(p.id)}>
                 <Trash2 className="size-3.5" aria-hidden />
               </Button>
             </div>

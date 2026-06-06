@@ -6,8 +6,9 @@
 //   - 回滚（restore）本身**先拍一条当前状态的快照（action='rollback'）再写回**——双向可逆、可多层撤销。
 //   - 内容为 null 的文件回滚时删除（还原「当时不存在」的状态）。
 import { mkdir, readFile, writeFile, readdir, unlink } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { atomicWrite } from '../../../platform/fs/atomic-write'
 import type { ClientId } from '../domain/client-profile'
 
 export type SnapshotAction = 'apply' | 'switch' | 'clear' | 'rollback'
@@ -104,8 +105,8 @@ export class ConfigSnapshotStore {
       if (content === null) {
         await this.deleteIfExists(path)
       } else {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(path, content, 'utf8')
+        // 回滚是 apply 出错后的最后退路，写回也走原子写（tmp+rename），避免半截损坏。
+        await atomicWrite(path, content)
       }
     }
   }

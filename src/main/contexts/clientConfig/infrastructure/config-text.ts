@@ -25,7 +25,8 @@ export function stringifyJson(obj: Record<string, unknown>): string {
   return JSON.stringify(obj, null, 2) + '\n'
 }
 
-const ENV_KEY_RE = /^([A-Za-z_][A-Za-z0-9_]*)=/
+// 容忍可选 `export ` 前缀（捕获到 m[1] 以便替换时保留）；键名在 m[2]。
+const ENV_KEY_RE = /^(\s*export\s+)?([A-Za-z_][A-Za-z0-9_]*)=/
 
 /** 行级合并 .env：已存在的键替换其值行，新键追加到末尾；其余行（注释/空行/他键）原样保留。 */
 export function upsertEnvLines(raw: string | null, kv: Record<string, string>): string {
@@ -33,9 +34,9 @@ export function upsertEnvLines(raw: string | null, kv: Record<string, string>): 
   const remaining = new Set(Object.keys(kv))
   const out = lines.map((line) => {
     const m = line.match(ENV_KEY_RE)
-    if (m !== null && remaining.has(m[1])) {
-      remaining.delete(m[1])
-      return `${m[1]}=${kv[m[1]]}`
+    if (m !== null && remaining.has(m[2])) {
+      remaining.delete(m[2])
+      return `${m[1] ?? ''}${m[2]}=${kv[m[2]]}` // 保留原 `export ` 前缀
     }
     return line
   })
@@ -55,7 +56,7 @@ export function removeEnvKeys(raw: string | null, keys: string[]): string {
   const drop = new Set(keys)
   const out = raw.split('\n').filter((line) => {
     const m = line.match(ENV_KEY_RE)
-    return !(m !== null && drop.has(m[1]))
+    return !(m !== null && drop.has(m[2]))
   })
   let res = out.join('\n')
   if (res.length > 0 && !res.endsWith('\n')) res += '\n'
