@@ -100,6 +100,8 @@ import { WebSocketApplicationService } from './contexts/websocket/application/we
 // (M2b: 中间件链 + 三协议路由 + Echo 占位上游)。
 import { ApiHttpServer } from './contexts/apiProxy/infrastructure/http/api-http-server'
 import { createApiRequestListener } from './contexts/apiProxy/infrastructure/http/hono-app'
+import { SystemProxyResolver } from './platform/net/system-proxy'
+import { session } from 'electron'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
@@ -432,9 +434,24 @@ export async function buildContainer(): Promise<Container> {
     },
   }
   const kiroAccountPort = makeKiroAccountPort(accountRepo as any)
+  // G7 系统代理兜底：无账号/组代理绑定时，按 settings 开关跟随 env / OS 系统代理出站。
+  // resolveOsProxy 接 Electron session.resolveProxy（含 macOS 系统设置 / Win 注册表 / PAC）。
+  const systemProxyResolver = new SystemProxyResolver({
+    resolveOsProxy: async (url) => {
+      try {
+        return await session.defaultSession.resolveProxy(url)
+      } catch {
+        return undefined
+      }
+    },
+  })
   const kiroDispatcherPort: KiroDispatcherPort = {
-    dispatcherForAccount(accountId: string) {
-      return proxyResolver.dispatcherForAccount(accountId)
+    async dispatcherForAccount(accountId: string) {
+      const bound = await proxyResolver.dispatcherForAccount(accountId)
+      if (bound !== undefined) return bound
+      // 账号/组无绑定：仅当用户启用「跟随系统代理」时才兜底；否则直连。
+      if (!settings.getApiProxyFollowSystemProxy()) return undefined
+      return systemProxyResolver.resolveDispatcher()
     },
   }
   const kiroTokenRefresher: KiroTokenRefresher = {
@@ -560,6 +577,12 @@ export async function buildContainer(): Promise<Container> {
       knownPlatforms: platformRegistry.knownPlatforms(),
       keyRateLimiter: apiProxyKeyRateLimiter,
       metrics: apiProxyMetrics,
+      // G5 IP 白/黑名单 + G6 请求体上限：闭包读 settings 实时值（运行时改设置即生效）。
+      ipAccess: () => ({
+        allowlist: settings.getApiProxyIpAllowlist(),
+        denylist: settings.getApiProxyIpDenylist(),
+      }),
+      maxBodyBytes: () => settings.getApiProxyMaxBodyBytes(),
     }),
     { port: settings.getApiProxyPort(), ...tlsConfig },
   )

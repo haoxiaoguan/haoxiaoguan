@@ -12,10 +12,20 @@ import type { RequestObservation } from './observability/proxy-request-log'
 /** 上游错误分类（故障转移决策）。M4 错误转移/健康追踪。 */
 export type ErrorClass = 'SUSPENDED' | 'AUTH' | 'RATE_LIMIT' | 'SERVER' | 'FATAL'
 
-/** 模型信息（M2b 最小）。M3 可扩 contextWindow / maxOutputTokens / capabilities。 */
+/** 模型信息 + 能力字段（G8 客户端能力下发；能力字段可选，未填则 buildModelsBody 退最简形状）。 */
 export interface ModelInfo {
   id: string
   displayName?: string
+  /** 上下文窗口 token 数。 */
+  contextLength?: number
+  /** 最大输出 token 数（提示值）。 */
+  maxOutputTokens?: number
+  /** 是否支持扩展思考（thinking）——客户端据此决定是否发送 thinking 参数。 */
+  supportsThinking?: boolean
+  /** 是否支持 prompt caching。 */
+  supportsPromptCaching?: boolean
+  /** 模型归属（owned_by；展示用）。 */
+  ownedBy?: string
 }
 
 /**

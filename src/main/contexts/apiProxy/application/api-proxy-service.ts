@@ -539,11 +539,34 @@ export class ApiProxyService {
   private buildModelsBody(intent: RequestIntent): unknown {
     const models = this.registry ? this.registry.listAllModels(intent.platform) : []
     if (intent.format === 'gemini') {
-      // Gemini: { models: [{ name: 'models/<id>' }] }
-      return { models: models.map((m) => ({ name: `models/${m.id}`, displayName: m.displayName ?? m.id })) }
+      // Gemini: { models: [{ name, displayName, inputTokenLimit?, outputTokenLimit?, supportedGenerationMethods }] }
+      return {
+        models: models.map((m) => ({
+          name: `models/${m.id}`,
+          displayName: m.displayName ?? m.id,
+          ...(m.contextLength !== undefined ? { inputTokenLimit: m.contextLength } : {}),
+          ...(m.maxOutputTokens !== undefined ? { outputTokenLimit: m.maxOutputTokens } : {}),
+          supportedGenerationMethods: ['generateContent', 'streamGenerateContent'],
+        })),
+      }
     }
-    // OpenAI/Anthropic: { object:'list', data:[{ id, object:'model' }] }
-    return { object: 'list', data: models.map((m) => ({ id: m.id, object: 'model' })) }
+    // OpenAI/Anthropic: { object:'list', data:[{ id, object:'model', owned_by, context_length?, capabilities }] }
+    // 能力字段（尤其 capabilities.thinking）让客户端据此决定是否发送 thinking 参数（G8）。
+    return {
+      object: 'list',
+      data: models.map((m) => ({
+        id: m.id,
+        object: 'model',
+        created: 0,
+        owned_by: m.ownedBy ?? 'kiro',
+        ...(m.contextLength !== undefined ? { context_length: m.contextLength } : {}),
+        ...(m.maxOutputTokens !== undefined ? { max_output_tokens: m.maxOutputTokens } : {}),
+        capabilities: {
+          ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}),
+          ...(m.supportsPromptCaching !== undefined ? { prompt_caching: m.supportsPromptCaching } : {}),
+        },
+      })),
+    }
   }
 }
 

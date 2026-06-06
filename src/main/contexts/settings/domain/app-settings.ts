@@ -57,6 +57,14 @@ export interface RuntimeSettings {
   // 空串则用打包的 app-update.yml 默认）。
   autoUpdateEnabled: boolean
   updateFeedUrl: string
+  // G5 IP 访问控制：CIDR 白/黑名单（逗号或换行分隔，IPv4/IPv6）。空=不限制。判定取
+  // socket.remoteAddress（不信 X-Forwarded-For）：命中黑名单或「白名单非空且未命中」→ 拒绝。
+  apiProxyIpAllowlist: string
+  apiProxyIpDenylist: string
+  // G6 请求体大小上限（字节）。默认 10MB；超 Content-Length 返回 413。0 = 不限制。
+  apiProxyMaxBodyBytes: number
+  // G7 无账号/组代理绑定时是否跟随 OS 系统代理（含 HTTP(S)_PROXY 环境变量）出站。默认 false。
+  apiProxyFollowSystemProxy: boolean
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -92,6 +100,10 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   terminalLaunchTemplate: '',
   autoUpdateEnabled: true,
   updateFeedUrl: '',
+  apiProxyIpAllowlist: '',
+  apiProxyIpDenylist: '',
+  apiProxyMaxBodyBytes: 10 * 1024 * 1024,
+  apiProxyFollowSystemProxy: false,
 }
 
 export class AppSettings {
@@ -163,6 +175,10 @@ export class AppSettings {
       terminal_launch_template: this.runtime.terminalLaunchTemplate,
       auto_update_enabled: String(this.runtime.autoUpdateEnabled),
       update_feed_url: this.runtime.updateFeedUrl,
+      api_proxy_ip_allowlist: this.runtime.apiProxyIpAllowlist,
+      api_proxy_ip_denylist: this.runtime.apiProxyIpDenylist,
+      api_proxy_max_body_bytes: String(this.runtime.apiProxyMaxBodyBytes),
+      api_proxy_follow_system_proxy: String(this.runtime.apiProxyFollowSystemProxy),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -250,6 +266,15 @@ export class AppSettings {
             // 非法 URL：丢弃
           }
         }
+      } else if (k === 'api_proxy_ip_allowlist') {
+        this.runtime.apiProxyIpAllowlist = v.trim()
+      } else if (k === 'api_proxy_ip_denylist') {
+        this.runtime.apiProxyIpDenylist = v.trim()
+      } else if (k === 'api_proxy_max_body_bytes') {
+        const n = Number(v)
+        if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyMaxBodyBytes = n
+      } else if (k === 'api_proxy_follow_system_proxy') {
+        this.runtime.apiProxyFollowSystemProxy = v === 'true'
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)
