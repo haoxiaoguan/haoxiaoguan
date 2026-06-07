@@ -49,6 +49,8 @@
       "baseUrl": "Base URL",
       "apiKey": "API Key",
       "model": "Model (optional)",
+      "upstreamProtocol": "Upstream protocol",
+      "upstreamProtocolHint": "If it differs from this client's protocol, traffic is converted & relayed via the local proxy",
       "create": "Create",
       "cancel": "Cancel"
     },

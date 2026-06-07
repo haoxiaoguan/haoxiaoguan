@@ -3,6 +3,22 @@
 // 预设按客户端预填 baseUrl/model/settings。模型名可由用户改;baseUrl 与协议按各客户端形态校准。
 import type { ClientConfigClientId } from '@shared/api-types';
 
+// ─── 客户端原生协议 & 上游协议选项 ──────────────────────────────────────────
+/** 固定协议客户端的原生协议值。flexible 客户端(opencode/openclaw/hermes)不在此表,不需要上游协议字段。 */
+export const CLIENT_NATIVE_PROTOCOL_UI: Partial<Record<ClientConfigClientId, 'anthropic' | 'openai-responses' | 'gemini'>> = {
+  claude: 'anthropic',
+  codex: 'openai-responses',
+  gemini_cli: 'gemini',
+};
+
+export interface UpstreamProtocolOption { value: string; label: string }
+export const UPSTREAM_PROTOCOL_OPTIONS: UpstreamProtocolOption[] = [
+  { value: 'openai-chat', label: 'OpenAI Chat Completions' },
+  { value: 'openai-responses', label: 'OpenAI Responses' },
+  { value: 'anthropic', label: 'Anthropic Messages' },
+  { value: 'gemini', label: 'Gemini' },
+];
+
 export interface FieldOption {
   value: string;
   label: string;

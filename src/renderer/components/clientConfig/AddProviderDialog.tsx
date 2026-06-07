@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ClientLogo } from './ClientLogo';
-import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS } from './provider-templates';
+import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
 
 export interface AddProviderValue {
@@ -47,6 +47,7 @@ export function AddProviderDialog({
 }) {
   const { t } = useTranslation('nav');
   const extra = CLIENT_EXTRA_FIELD[clientId];
+  const nativeProtoUi = CLIENT_NATIVE_PROTOCOL_UI[clientId];
   const presets = CLIENT_PRESETS[clientId] ?? [];
 
   const [presetId, setPresetId] = useState(CUSTOM);
@@ -55,6 +56,7 @@ export function AddProviderDialog({
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [extraValue, setExtraValue] = useState(extra?.default ?? '');
+  const [upstreamProtocol, setUpstreamProtocol] = useState(nativeProtoUi ?? '');
   const [busy, setBusy] = useState(false);
 
   // 打开/切客户端时重置。
@@ -66,6 +68,7 @@ export function AddProviderDialog({
       setApiKey('');
       setModel('');
       setExtraValue(CLIENT_EXTRA_FIELD[clientId]?.default ?? '');
+      setUpstreamProtocol(CLIENT_NATIVE_PROTOCOL_UI[clientId] ?? '');
     }
   }, [open, clientId]);
 
@@ -91,7 +94,10 @@ export function AddProviderDialog({
         baseUrl: baseUrl.trim(),
         apiKey: apiKey.trim(),
         model: model.trim(),
-        ...(extra ? { settings: { [extra.key]: extraValue } } : {}),
+        settings: {
+          ...(extra ? { [extra.key]: extraValue } : {}),
+          ...(nativeProtoUi ? { upstreamProtocol } : {}),
+        },
       });
       onOpenChange(false);
     } finally {
@@ -163,6 +169,28 @@ export function AddProviderDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </label>
+          )}
+
+          {/* 固定协议客户端(claude/codex/gemini_cli):上游协议选择 */}
+          {nativeProtoUi && (
+            <label className="text-[12px] font-medium text-muted-foreground">
+              {t('clientConfigPage.form.upstreamProtocol')}
+              <Select value={upstreamProtocol} onValueChange={setUpstreamProtocol}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {UPSTREAM_PROTOCOL_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[11px] text-muted-foreground/70">
+                {t('clientConfigPage.form.upstreamProtocolHint')}
+              </p>
             </label>
           )}
         </div>

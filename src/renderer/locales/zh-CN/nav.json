@@ -49,6 +49,8 @@
       "baseUrl": "Base URL",
       "apiKey": "API Key",
       "model": "模型（可选）",
+      "upstreamProtocol": "第三方上游协议",
+      "upstreamProtocolHint": "与本客户端协议不同时，将经号小管反代转换转发",
       "create": "创建",
       "cancel": "取消"
     },
