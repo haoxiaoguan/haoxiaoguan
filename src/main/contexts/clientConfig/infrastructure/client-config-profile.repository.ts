@@ -14,7 +14,20 @@ import type {
 
 const AAD_PROVIDER = '__clientconfig_key__'
 
+function parseSettings(raw: string | undefined): Record<string, unknown> | undefined {
+  if (raw == null || raw.length === 0) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined
+  } catch {
+    return undefined // settings 损坏不阻塞列表;写入器会用默认值
+  }
+}
+
 function toProfile(e: ClientConfigProfileEntity): ClientConfigProfile {
+  const settings = parseSettings(e.settingsConfig)
   return {
     id: e.id,
     clientId: e.clientId as ClientId,
@@ -22,6 +35,7 @@ function toProfile(e: ClientConfigProfileEntity): ClientConfigProfile {
     source: e.source as ProfileSource,
     baseUrl: e.baseUrl,
     ...(e.model != null ? { model: e.model } : {}),
+    ...(settings !== undefined ? { settings } : {}),
     isCurrent: e.isCurrent,
     enabled: e.enabled ?? false,
     isDefault: e.isDefault ?? false,
@@ -66,6 +80,7 @@ export class ClientConfigProfileRepository implements ClientConfigStore {
     e.source = input.source
     e.baseUrl = input.baseUrl
     if (input.model !== undefined) e.model = input.model
+    if (input.settings !== undefined) e.settingsConfig = JSON.stringify(input.settings)
     if (input.apiKey !== undefined && input.apiKey.length > 0) e.keyEnc = this.encryptKey(id, now, input.apiKey)
     if (input.keyRef !== undefined) e.keyRef = input.keyRef
     e.isCurrent = false
@@ -87,6 +102,7 @@ export class ClientConfigProfileRepository implements ClientConfigStore {
     if (patch.name !== undefined) e.name = patch.name
     if (patch.baseUrl !== undefined) e.baseUrl = patch.baseUrl
     if (patch.model !== undefined) e.model = patch.model === null ? undefined : patch.model
+    if (patch.settings !== undefined) e.settingsConfig = patch.settings === null ? undefined : JSON.stringify(patch.settings)
     if (patch.notes !== undefined) e.notes = patch.notes === null ? undefined : patch.notes
     if (patch.apiKey !== undefined && patch.apiKey.length > 0) e.keyEnc = this.encryptKey(e.id, e.createdAt, patch.apiKey)
     e.updatedAt = new Date().toISOString()

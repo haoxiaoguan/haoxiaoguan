@@ -3,9 +3,11 @@
 // 互不覆盖（号小管账号模型与第三方模型可同时出现在模型菜单）。默认指针写顶层 model。
 // 不变式：只动属于本档的 provider.<hxg-id>（与 default 指针），保留用户其余 provider/mcp/plugin 等。
 import type { ClientConfigWriter, ApplyInput, FileBundle } from '../../domain/client-writer'
-import { parseJsonObject, stringifyJson, isObject } from '../config-text'
+import { parseJsonObject, stringifyJson, isObject, settingStr } from '../config-text'
 
 const OPENCODE_SCHEMA = 'https://opencode.ai/config.json'
+/** OpenCode provider 的 npm 适配器默认值（OpenAI 兼容,最广覆盖）。 */
+const DEFAULT_OPENCODE_NPM = '@ai-sdk/openai-compatible'
 
 /** 本档在 opencode.json 中的 provider 键（稳定、可识别为号小管所写，便于精准移除）。 */
 export function opencodeProviderId(profileId: string): string {
@@ -37,7 +39,7 @@ export class OpenCodeWriter implements ClientConfigWriter {
       models[input.model] = { name: input.model }
     }
     provider[pid] = {
-      npm: '@ai-sdk/openai-compatible',
+      npm: settingStr(input.settings, 'npm', DEFAULT_OPENCODE_NPM),
       name: input.name,
       options: { baseURL: input.baseUrl, apiKey: input.apiKey },
       models,

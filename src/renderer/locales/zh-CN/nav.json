@@ -40,6 +40,9 @@
     "defaultSet": "已设为默认",
     "form": {
       "createTitle": "添加接入档",
+      "createTitleFor": "为 {{client}} 添加供应商",
+      "preset": "预设",
+      "custom": "自定义",
       "thirdPartyHint": "填写第三方 provider 的地址与密钥（直连）；走号小管反代请用「接入本机反代」",
       "name": "名称",
       "namePlaceholder": "如 我的反代",

@@ -4,6 +4,7 @@
 // 第三方/反代 key 入 [model_providers.<id>].experimental_bearer_token——绝不触碰 ~/.codex/auth.json，
 // 以保住用户的 ChatGPT 登录态。MVP 暂不生成 model_catalog_json（模型仍可用，/model 选择器枚举增强留后）。
 import type { ClientConfigWriter, ApplyInput, FileBundle } from '../../domain/client-writer'
+import { settingStr } from '../config-text'
 import {
   parseCodexToml,
   stringifyCodexToml,
@@ -35,7 +36,7 @@ export class CodexWriter implements ClientConfigWriter {
       id: codexProviderId(input.profileId),
       name: input.name,
       baseUrl: input.baseUrl,
-      wireApi: DEFAULT_WIRE_API,
+      wireApi: settingStr(input.settings, 'wireApi', DEFAULT_WIRE_API),
       bearerToken: input.apiKey,
       ...(input.model !== undefined ? { model: input.model } : {}),
       isDefault: input.isDefault === true,

@@ -4,18 +4,10 @@ import { Plus, History, Trash2, Eye, Check, Zap, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
+import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
 import { cn } from '@/lib/utils';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetFooter,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
 import {
   Dialog,
   DialogContent,
@@ -25,89 +17,10 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import type {
-  ClientConfigClientId,
   ClientConfigProfileDto,
   ClientConfigDiffFile,
   ClientConfigSnapshotDto,
 } from '@shared/api-types';
-
-// ─── 添加接入档 Sheet（手动填写第三方地址；本机反代走头部「接入本机反代」按钮）─────
-function AddProfileSheet({
-  clientId,
-  open,
-  onOpenChange,
-  onCreate,
-}: {
-  clientId: ClientConfigClientId;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  onCreate: (v: { name: string; baseUrl: string; apiKey: string; model: string }) => Promise<void>;
-}) {
-  const { t } = useTranslation('nav');
-  const [name, setName] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setName('');
-      setBaseUrl('');
-      setApiKey('');
-      setModel('');
-    }
-  }, [open, clientId]);
-
-  const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
-  const submit = async () => {
-    if (!canSubmit) return;
-    setBusy(true);
-    try {
-      await onCreate({ name: name.trim(), baseUrl: baseUrl.trim(), apiKey: apiKey.trim(), model: model.trim() });
-      onOpenChange(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[420px] sm:max-w-[420px]">
-        <SheetHeader>
-          <SheetTitle>{t('clientConfigPage.form.createTitle')}</SheetTitle>
-          <SheetDescription>{t('clientConfigPage.form.thirdPartyHint')}</SheetDescription>
-        </SheetHeader>
-        <div className="flex flex-col gap-3 px-4 py-3">
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.name')}
-            <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('clientConfigPage.form.namePlaceholder')} />
-          </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.baseUrl')}
-            <Input className="mt-1 font-mono" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com" />
-          </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.apiKey')}
-            <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
-          </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.model')}
-            <Input className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="kiro" />
-          </label>
-        </div>
-        <SheetFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('clientConfigPage.form.cancel')}
-          </Button>
-          <Button disabled={!canSubmit} onClick={() => void submit()}>
-            {t('clientConfigPage.form.create')}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 // ─── 双栏 diff 预览弹窗 ───────────────────────────────────────────────────
 function DiffDialog({
@@ -472,8 +385,9 @@ export default function ClientConfig() {
         </ScrollArea>
       </section>
 
-      <AddProfileSheet
+      <AddProviderDialog
         clientId={activeClient}
+        clientName={activeInfo?.displayName ?? ''}
         open={addOpen}
         onOpenChange={setAddOpen}
         onCreate={(v) =>
@@ -484,6 +398,7 @@ export default function ClientConfig() {
             baseUrl: v.baseUrl,
             ...(v.apiKey ? { apiKey: v.apiKey } : {}),
             ...(v.model ? { model: v.model } : {}),
+            ...(v.settings ? { settings: v.settings } : {}),
           })
         }
       />

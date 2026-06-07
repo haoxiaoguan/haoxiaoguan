@@ -5,6 +5,10 @@
 import { ClientConfigCorruptError } from '../../domain/client-writer'
 import type { ClientConfigWriter, ApplyInput, FileBundle } from '../../domain/client-writer'
 import { parseYamlObject, stringifyYaml } from '../hermes-yaml'
+import { settingStr } from '../config-text'
+
+/** Hermes provider 的 api_mode 默认值。 */
+const DEFAULT_HERMES_API_MODE = 'chat_completions'
 
 /** 本档在 custom_providers 中的 name（稳定、可识别为号小管所写）。 */
 export function hermesProviderName(profileId: string): string {
@@ -45,7 +49,7 @@ export class HermesWriter implements ClientConfigWriter {
       name,
       base_url: input.baseUrl,
       api_key: input.apiKey,
-      api_mode: 'chat_completions',
+      api_mode: settingStr(input.settings, 'apiMode', DEFAULT_HERMES_API_MODE),
     }
     if (input.model !== undefined && input.model.length > 0) {
       element.model = input.model // 单数:运行时/选择器读取

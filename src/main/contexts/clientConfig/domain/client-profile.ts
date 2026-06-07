@@ -67,6 +67,9 @@ export interface ClientConfigProfile {
   baseUrl: string
   /** 选定模型（写进客户端配置的 model 字段）。 */
   model?: string
+  /** 客户端专属配置（per-client 表单的额外字段，如 codex.wireApi / opencode.npm /
+   *  openclaw.api / hermes.apiMode）。写入器按客户端读取,缺省用各自默认值。 */
+  settings?: Record<string, unknown>
   /** 切换式:是否当前生效（每客户端至多一份）。累加式忽略。 */
   isCurrent: boolean
   /** 累加式:是否已注入 live（多份可同时为 true）。切换式忽略。 */

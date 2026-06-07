@@ -76,4 +76,9 @@ describe('OpenClawWriter (additive)', () => {
     const bad = JSON.stringify({ models: 'oops' })
     expect(() => w.renderApply({ [P]: bad }, input())).toThrow(ClientConfigCorruptError)
   })
+
+  it('settings.api 覆盖默认协议', () => {
+    const cfg = apply({ [P]: null }, input({ settings: { api: 'anthropic-messages' } }))
+    expect(cfg.models.providers[pid1].api).toBe('anthropic-messages')
+  })
 })

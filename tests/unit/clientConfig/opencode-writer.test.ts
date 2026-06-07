@@ -63,6 +63,11 @@ describe('OpenCodeWriter (additive)', () => {
     expect(cleared2.model).toBe('other/x')
   })
 
+  it('settings.npm 覆盖默认适配器', () => {
+    const cfg = apply({ [P]: null }, input({ settings: { npm: '@ai-sdk/anthropic' } }))
+    expect(cfg.provider[opencodeProviderId('p1')].npm).toBe('@ai-sdk/anthropic')
+  })
+
   it('损坏 JSON → 抛 ClientConfigCorruptError', () => {
     expect(() => w.renderApply({ [P]: '{ not json' }, input())).toThrow(ClientConfigCorruptError)
   })

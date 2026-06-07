@@ -40,6 +40,9 @@
     "defaultSet": "Set as default",
     "form": {
       "createTitle": "Add Profile",
+      "createTitleFor": "Add provider for {{client}}",
+      "preset": "Preset",
+      "custom": "Custom",
       "thirdPartyHint": "Enter a third-party provider URL & key (direct). For the reverse proxy, use \"Connect local proxy\".",
       "name": "Name",
       "namePlaceholder": "e.g. My Proxy",

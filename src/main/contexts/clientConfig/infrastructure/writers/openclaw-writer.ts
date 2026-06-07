@@ -5,7 +5,10 @@
 // 注意：openclaw.json 实为 JSON5；MVP 用严格 JSON 解析(含注释则判损坏拒写,安全)。
 import { ClientConfigCorruptError } from '../../domain/client-writer'
 import type { ClientConfigWriter, ApplyInput, FileBundle } from '../../domain/client-writer'
-import { parseJsonObject, stringifyJson, isObject } from '../config-text'
+import { parseJsonObject, stringifyJson, isObject, settingStr } from '../config-text'
+
+/** OpenClaw provider 的 api 协议默认值。 */
+const DEFAULT_OPENCLAW_API = 'openai-completions'
 
 /** 本档在 openclaw.json models.providers 下的键(稳定、可识别为号小管所写)。 */
 export function openClawProviderId(profileId: string): string {
@@ -46,7 +49,7 @@ export class OpenClawWriter implements ClientConfigWriter {
     providers[pid] = {
       baseUrl: input.baseUrl,
       apiKey: input.apiKey,
-      api: 'openai-completions',
+      api: settingStr(input.settings, 'api', DEFAULT_OPENCLAW_API),
       models: providerModels,
     }
     models.providers = providers

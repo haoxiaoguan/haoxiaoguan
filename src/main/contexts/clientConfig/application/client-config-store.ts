@@ -7,6 +7,8 @@ export interface CreateProfileInput {
   source: ProfileSource
   baseUrl: string
   model?: string
+  /** 客户端专属配置（per-client 额外字段）。 */
+  settings?: Record<string, unknown>
   /** 第三方明文 key（加密落库）。local-proxy 走 keyRef。 */
   apiKey?: string
   keyRef?: string
@@ -18,6 +20,8 @@ export interface UpdateProfileInput {
   baseUrl?: string
   /** null = 清空 model。 */
   model?: string | null
+  /** null = 清空 settings。 */
+  settings?: Record<string, unknown> | null
   apiKey?: string
   notes?: string | null
 }

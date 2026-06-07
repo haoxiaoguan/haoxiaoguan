@@ -6,6 +6,16 @@ export function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** 从 per-client settings 取一个非空字符串字段,缺省/非串/空串回落到 fallback。 */
+export function settingStr(
+  settings: Record<string, unknown> | undefined,
+  key: string,
+  fallback: string,
+): string {
+  const v = settings?.[key]
+  return typeof v === 'string' && v.length > 0 ? v : fallback
+}
+
 /** 解析 JSON 对象：null/空 → {}；非对象或解析失败 → 抛 ClientConfigCorruptError（拒绝覆盖损坏文件）。 */
 export function parseJsonObject(raw: string | null, file: string): Record<string, unknown> {
   if (raw === null || raw.trim() === '') return {}

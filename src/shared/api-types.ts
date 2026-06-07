@@ -740,6 +740,7 @@ export interface ClientConfigProfileDto {
   source: 'local-proxy' | 'manual'
   baseUrl: string
   model?: string
+  settings?: Record<string, unknown>
   isCurrent: boolean
   enabled: boolean
   isDefault: boolean
@@ -767,6 +768,7 @@ export interface CreateClientConfigProfileDto {
   source: 'local-proxy' | 'manual'
   baseUrl: string
   model?: string
+  settings?: Record<string, unknown>
   apiKey?: string
   keyRef?: string
   notes?: string
@@ -775,6 +777,7 @@ export interface UpdateClientConfigProfileDto {
   name?: string
   baseUrl?: string
   model?: string | null
+  settings?: Record<string, unknown> | null
   apiKey?: string
   notes?: string | null
 }

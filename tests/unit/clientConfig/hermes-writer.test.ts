@@ -85,6 +85,11 @@ describe('HermesWriter (additive, YAML)', () => {
     expect(() => w.renderApply({ [P]: bad }, input())).toThrow(ClientConfigCorruptError)
   })
 
+  it('settings.apiMode 覆盖默认模式', () => {
+    const cfg = apply({ [P]: null }, input({ settings: { apiMode: 'anthropic_messages' } }))
+    expect(find(cfg, n1).api_mode).toBe('anthropic_messages')
+  })
+
   it('二次 upsert 保持原有顺序(原位替换,不挪到末尾)', () => {
     let b: FileBundle = { [P]: null }
     b = w.renderApply(b, input()) as FileBundle // p1

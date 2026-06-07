@@ -100,6 +100,11 @@ describe('CodexWriter (additive 注入)', () => {
     expect(w.configFiles()).toEqual([P])
   })
 
+  it('settings.wireApi 覆盖默认 wire_api', () => {
+    const cfg = apply({ [P]: null }, input({ settings: { wireApi: 'chat' } }))
+    expect(cfg.model_providers[pid1].wire_api).toBe('chat')
+  })
+
   it('默认切到无模型档 → 清残留顶层 model(不留脏指针)', () => {
     const a1 = w.renderApply({ [P]: null }, input({ isDefault: true })) // p1 model=kiro
     const a2 = w.renderApply(a1, input({ profileId: 'p2', name: 'B', model: undefined, isDefault: true }))

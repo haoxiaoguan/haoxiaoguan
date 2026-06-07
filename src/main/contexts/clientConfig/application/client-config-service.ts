@@ -245,6 +245,7 @@ export class ClientConfigService {
       baseUrl: profile.baseUrl,
       apiKey,
       ...(profile.model !== undefined ? { model: profile.model } : {}),
+      ...(profile.settings !== undefined ? { settings: profile.settings } : {}),
       ...(opts?.isDefault !== undefined ? { isDefault: opts.isDefault } : {}),
     }
     return { profile, writer, input }

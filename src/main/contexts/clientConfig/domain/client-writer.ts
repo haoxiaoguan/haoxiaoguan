@@ -14,6 +14,8 @@ export interface ApplyInput {
   baseUrl: string
   apiKey: string
   model?: string
+  /** 客户端专属配置（per-client 额外字段:codex.wireApi / opencode.npm / openclaw.api / hermes.apiMode）。 */
+  settings?: Record<string, unknown>
   /** 累加式:本次注入是否同时设为默认指针（写客户端顶层默认模型）。切换式写入器忽略。 */
   isDefault?: boolean
 }
