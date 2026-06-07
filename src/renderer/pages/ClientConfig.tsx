@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
 import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
+import { EditProviderDialog } from '@/components/clientConfig/EditProviderDialog';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -22,6 +23,7 @@ import type {
   ClientConfigProfileDto,
   ClientConfigDiffFile,
   ClientConfigSnapshotDto,
+  UpdateClientConfigProfileDto,
 } from '@shared/api-types';
 
 // ─── 双栏 diff 预览弹窗 ───────────────────────────────────────────────────
@@ -263,6 +265,7 @@ export default function ClientConfig() {
   const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<ClientConfigProfileDto | null>(null);
 
   useEffect(() => {
     void store.init();
@@ -445,7 +448,7 @@ export default function ClientConfig() {
                   onEnable={(id) => void onEnable(id)}
                   onDisable={(id) => void onDisable(id)}
                   onSetDefault={(id) => void onSetDefault(id)}
-                  onEdit={() => {}}
+                  onEdit={(pp) => setEditing(pp)}
                   onDuplicate={(pp) => void onDuplicate(pp)}
                   onRemove={(id) => void store.remove(id)}
                 />
@@ -471,6 +474,20 @@ export default function ClientConfig() {
             ...(v.settings ? { settings: v.settings } : {}),
           })
         }
+      />
+      <EditProviderDialog
+        profile={editing}
+        open={editing !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditing(null);
+        }}
+        onSave={async (id, patch: UpdateClientConfigProfileDto) => {
+          await store.update(id, patch);
+          if (!useClientConfigStore.getState().error) {
+            setEditing(null);
+            toast.success(t('clientConfigPage.form.save'));
+          }
+        }}
       />
       <DiffDialog files={diff?.files ?? null} onApply={() => void onApplyFromDiff()} onClose={() => setDiff(null)} />
       <HistoryDialog entries={historyData} onRollback={(id) => void onRollback(id)} onClose={() => setHistoryData(null)} />
