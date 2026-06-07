@@ -40,6 +40,11 @@
     "setDefault": "Set default",
     "disable": "Disable",
     "defaultSet": "Set as default",
+    "duplicate": "Duplicate",
+    "copySuffix": "copy",
+    "searchPlaceholder": "Search name / URL / model",
+    "noSearchResults": "No matching providers",
+    "edit": "Edit",
     "form": {
       "createTitle": "Add Profile",
       "createTitleFor": "Add provider for {{client}}",

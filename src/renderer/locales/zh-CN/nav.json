@@ -40,6 +40,11 @@
     "setDefault": "设为默认",
     "disable": "停用",
     "defaultSet": "已设为默认",
+    "duplicate": "复制",
+    "copySuffix": "副本",
+    "searchPlaceholder": "搜索名称 / 地址 / 模型",
+    "noSearchResults": "无匹配的供应商",
+    "edit": "编辑",
     "form": {
       "createTitle": "添加接入档",
       "createTitleFor": "为 {{client}} 添加供应商",

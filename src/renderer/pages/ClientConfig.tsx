@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, History, Trash2, Eye, Check, Zap, Star } from 'lucide-react';
+import { Plus, History, Trash2, Eye, Check, Zap, Star, Copy, Pencil, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
+import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
 import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
 import { cn } from '@/lib/utils';
 import {
@@ -126,6 +128,8 @@ function ProviderRow({
   onEnable,
   onDisable,
   onSetDefault,
+  onEdit,
+  onDuplicate,
   onRemove,
 }: {
   p: ClientConfigProfileDto;
@@ -138,13 +142,24 @@ function ProviderRow({
   onEnable: (id: string) => void;
   onDisable: (id: string) => void;
   onSetDefault: (id: string) => void;
+  onEdit: (p: ClientConfigProfileDto) => void;
+  onDuplicate: (p: ClientConfigProfileDto) => void;
   onRemove: (id: string) => void;
 }) {
   const { t } = useTranslation('nav');
   // 高亮：切换式看 isCurrent，累加式看 enabled。
   const active = isAdditive ? p.enabled : p.isCurrent;
+  // 品牌图标元数据(添加时写入 settings.uiMeta);本机反代档用主题色「号」标识。
+  const uiMeta = (p.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
+  const isLocal = p.source === 'local-proxy';
+  const iconName = isLocal ? '号小管' : p.name;
   return (
     <div className={cn('flex items-center gap-3 rounded-[8px] border px-4 py-3', active ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/60')}>
+      <ProviderBrandIcon
+        icon={isLocal ? undefined : uiMeta.icon}
+        iconColor={isLocal ? 'hsl(var(--primary))' : uiMeta.iconColor}
+        name={iconName}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="truncate text-[13px] font-medium text-foreground">{p.name}</span>
@@ -222,6 +237,16 @@ function ProviderRow({
           )}
         </>
       )}
+      {p.source === 'manual' && (
+        <>
+          <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onEdit(p)} title={t('clientConfigPage.edit')}>
+            <Pencil className="size-3.5" aria-hidden />
+          </Button>
+          <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onDuplicate(p)} title={t('clientConfigPage.duplicate')}>
+            <Copy className="size-3.5" aria-hidden />
+          </Button>
+        </>
+      )}
       <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => onRemove(p.id)}>
         <Trash2 className="size-3.5" aria-hidden />
       </Button>
@@ -237,6 +262,7 @@ export default function ClientConfig() {
   const [addOpen, setAddOpen] = useState(false);
   const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     void store.init();
@@ -297,6 +323,25 @@ export default function ClientConfig() {
     await store.setDefault(id);
     toast.success(t('clientConfigPage.defaultSet'));
   };
+  const onDuplicate = async (p: ClientConfigProfileDto) => {
+    const newName = `${p.name} ${t('clientConfigPage.copySuffix')}`;
+    // 复制不带 apiKey(密钥需用户在编辑里重填);settings 含 uiMeta 品牌图标一并复制。
+    await store.create({
+      clientId: p.clientId,
+      name: newName,
+      source: 'manual',
+      baseUrl: p.baseUrl,
+      ...(p.model ? { model: p.model } : {}),
+      ...(p.settings ? { settings: p.settings } : {}),
+    });
+    if (!useClientConfigStore.getState().error) toast.success(newName);
+  };
+
+  // 搜索过滤(名称/地址/模型)。
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? profiles.filter((p) => [p.name, p.baseUrl, p.model].some((f) => f?.toLowerCase().includes(q)))
+    : profiles;
 
   return (
     <div className="flex h-[calc(100vh-96px)] w-full max-w-full min-w-0 overflow-hidden bg-card">
@@ -352,6 +397,15 @@ export default function ClientConfig() {
               {isAdditive ? t('clientConfigPage.coexistHint') : t('clientConfigPage.switchHint')}
             </div>
           </div>
+          <div className="relative w-44 shrink-0">
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('clientConfigPage.searchPlaceholder')}
+              className="h-8 pl-7 text-[12px]"
+            />
+          </div>
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => void onShowHistory()}>
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
@@ -373,8 +427,12 @@ export default function ClientConfig() {
                 <div className="text-[13px] text-muted-foreground">{t('clientConfigPage.empty')}</div>
                 <div className="mt-1 text-[12px] text-muted-foreground/60">{t('clientConfigPage.emptyHint')}</div>
               </div>
+            ) : filtered.length === 0 ? (
+              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-10 text-center text-[13px] text-muted-foreground">
+                {t('clientConfigPage.noSearchResults')}
+              </div>
             ) : (
-              profiles.map((p) => (
+              filtered.map((p) => (
                 <ProviderRow
                   key={p.id}
                   p={p}
@@ -387,6 +445,8 @@ export default function ClientConfig() {
                   onEnable={(id) => void onEnable(id)}
                   onDisable={(id) => void onDisable(id)}
                   onSetDefault={(id) => void onSetDefault(id)}
+                  onEdit={() => {}}
+                  onDuplicate={(pp) => void onDuplicate(pp)}
                   onRemove={(id) => void store.remove(id)}
                 />
               ))
