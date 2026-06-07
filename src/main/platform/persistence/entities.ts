@@ -14,7 +14,7 @@
 //   - quota       (2 tables: quota_cache, account_quota_state)
 //   - mcp         (1 table: mcp_servers)
 //   - proxy       (2 tables: proxies, account_proxy_bindings)
-//   - api-proxy   (1 table: api_proxy_keys)
+//   - api-proxy   (2 tables: api_proxy_keys, relay_upstreams)
 //
 // The `credentials` table is owned by the credential context's CredentialEntity
 // (it supersedes the account context's former TEMP CredentialRefEntity, now
@@ -50,6 +50,7 @@ import { AccountGroupMembershipEntity } from '../../contexts/accountGroup/infras
 import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infrastructure/account-group-proxy-binding.entity'
 
 import { ApiProxyKeyEntity } from '../../contexts/apiProxy/infrastructure/api-proxy-key.entity'
+import { RelayUpstreamEntity } from '../../contexts/apiProxy/infrastructure/relay/relay-upstream.entity'
 
 import { ClientConfigProfileEntity } from '../../contexts/clientConfig/infrastructure/client-config-profile.entity'
 
@@ -89,6 +90,7 @@ export const ALL_ENTITIES: unknown[] = [
   AccountGroupProxyBindingEntity,
   // api-proxy context
   ApiProxyKeyEntity,
+  RelayUpstreamEntity,
   // client-config context (1 table: client_config_profiles)
   ClientConfigProfileEntity,
   // activity context
