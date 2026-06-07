@@ -671,15 +671,18 @@ export async function buildContainer(): Promise<Container> {
   const clientConfigRelayProvisioning: RelayProvisioningPort = {
     async ensureRelayUpstream(input) {
       const { profileId, displayName, protocol, baseUrl, apiKey, models } = input
-      // WireProtocol → relay 上游协议映射（仅支持 openai/anthropic）
+      // WireProtocol → relay 上游协议映射（openai-chat/anthropic/gemini 已支持;
+      // openai-responses 暂无对应出站 codec，仍直连/换端点）。
       let relayProtocol: string
       if (protocol === 'openai-chat') {
         relayProtocol = 'openai'
       } else if (protocol === 'anthropic') {
         relayProtocol = 'anthropic'
+      } else if (protocol === 'gemini') {
+        relayProtocol = 'gemini'
       } else {
         throw new Error(
-          `该上游协议暂不支持中转，请直连或选 openai/anthropic 兼容端点（protocol=${protocol}）`,
+          `该上游协议暂不支持中转，请直连或选 openai/anthropic/gemini 兼容端点（protocol=${protocol}）`,
         )
       }
       const modelInfos = models.map((id) => ({ id, displayName: id }))
