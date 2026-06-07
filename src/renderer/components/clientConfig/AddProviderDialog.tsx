@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ClientLogo } from './ClientLogo';
+import { ProviderPresetGrid } from './ProviderPresetGrid';
 import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
 
@@ -60,6 +61,8 @@ export function AddProviderDialog({
   const [extraValue, setExtraValue] = useState(extra?.default ?? '');
   const [upstreamProtocol, setUpstreamProtocol] = useState(nativeProtoUi ?? '');
   const [routeViaProxy, setRouteViaProxy] = useState(false);
+  // 选中预设的品牌元数据(图标/颜色/品牌 id),提交时写进 settings.uiMeta。
+  const [brand, setBrand] = useState<{ brandId?: string; icon?: string; iconColor?: string }>({});
   const [busy, setBusy] = useState(false);
 
   // 协议不匹配（如 Claude 配 openai-chat、Codex 配 openai-chat 而非 openai-responses）→ 必须经反代转换。
@@ -78,6 +81,7 @@ export function AddProviderDialog({
       setUpstreamProtocol(proto);
       // 重置默认直连；mismatch 由下方 effect 强制为 true。
       setRouteViaProxy(false);
+      setBrand({});
     }
   }, [open, clientId]);
 
@@ -94,6 +98,7 @@ export function AddProviderDialog({
     setName(p.label);
     setBaseUrl(p.baseUrl);
     setModel(p.model ?? '');
+    setBrand({ brandId: p.brandId, icon: p.icon, iconColor: p.iconColor });
     const e = CLIENT_EXTRA_FIELD[clientId];
     if (e) setExtraValue((p.settings?.[e.key] as string | undefined) ?? e.default);
   };
@@ -113,6 +118,16 @@ export function AddProviderDialog({
           ...(nativeProtoUi ? { upstreamProtocol } : {}),
           // 仅固定协议客户端写 routeViaProxy；落库为布尔（后端读 === true）。
           ...(nativeProtoUi ? { routeViaProxy } : {}),
+          // 品牌元数据(图标/颜色/品牌 id),供卡片展示;writer 不读此键,不写盘。
+          ...(brand.brandId || brand.icon
+            ? {
+                uiMeta: {
+                  ...(brand.brandId ? { brandId: brand.brandId } : {}),
+                  ...(brand.icon ? { icon: brand.icon } : {}),
+                  ...(brand.iconColor ? { iconColor: brand.iconColor } : {}),
+                },
+              }
+            : {}),
         },
       });
       onOpenChange(false);
@@ -123,7 +138,7 @@ export function AddProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClientLogo clientId={clientId} className="size-6" imageClassName="size-3.5" />
@@ -134,22 +149,12 @@ export function AddProviderDialog({
 
         <div className="flex flex-col gap-3 py-1">
           {presets.length > 0 && (
-            <label className="text-[12px] font-medium text-muted-foreground">
-              {t('clientConfigPage.form.preset')}
-              <Select value={presetId} onValueChange={onPickPreset}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={CUSTOM}>{t('clientConfigPage.form.custom')}</SelectItem>
-                  {presets.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
+            <div>
+              <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
+                {t('clientConfigPage.form.preset')}
+              </div>
+              <ProviderPresetGrid presets={presets} value={presetId} onPick={onPickPreset} />
+            </div>
           )}
 
           <label className="text-[12px] font-medium text-muted-foreground">
