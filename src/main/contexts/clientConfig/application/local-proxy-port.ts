@@ -3,6 +3,11 @@
 export interface LocalProxyPort {
   /** 反代当前监听端口；未运行返回 null。 */
   getPort(): number | null
+  /**
+   * 确保反代已运行并返回其监听端口（路由联动用）：已运行直接返回当前端口；
+   * 未运行则先启动反代再取端口。取不到端口（启动后仍未就绪）抛清晰错误。
+   */
+  ensureStarted(): Promise<number>
   /** 签发一把客户端 key（加密落库），返回 id + 一次性明文。 */
   signKey(name: string): Promise<{ id: string; plaintext: string }>
   /** 吊销客户端 key（删 profile 联动用；phase6）。 */

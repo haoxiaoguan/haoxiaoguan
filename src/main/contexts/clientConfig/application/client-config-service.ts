@@ -267,7 +267,9 @@ export class ClientConfigService {
 
   /**
    * 在 resolve 基础上，对 manual 档做「relay 改写」：
-   * - 有 upstreamProtocol 且判定为 relay → ensureRelayUpstream + 改写 baseUrl/apiKey 指向反代
+   * - 协议不匹配（resolveRelayDecisionForClient==='relay'）→ 强制走反代
+   * - 协议匹配但用户主动开启 settings.routeViaProxy===true → 也走反代
+   * - 走反代时联动自动开启 API 服务（反代未运行则启动它），改写 baseUrl/apiKey 指向反代
    * - 否则（direct / 非 manual / 无 upstreamProtocol / 未注入 relayProvisioning）→ 原样返回
    */
   private async resolveWithRelay(
@@ -278,27 +280,36 @@ export class ClientConfigService {
     const { profile, writer, input } = base
 
     // 只对 manual 档且 settings.upstreamProtocol 存在才考虑 relay 分流
-    if (profile.source !== 'manual') return base
     const upstreamProtocol = profile.settings?.upstreamProtocol as WireProtocol | undefined
-    if (upstreamProtocol === undefined) return base
+    const routeViaProxy = profile.settings?.routeViaProxy === true
+    const mismatch =
+      upstreamProtocol !== undefined &&
+      resolveRelayDecisionForClient(profile.clientId, upstreamProtocol) === 'relay'
+    // 不匹配→强制走反代；匹配但用户主动开关→也走反代。
+    const shouldRelay =
+      profile.source === 'manual' && upstreamProtocol !== undefined && (mismatch || routeViaProxy)
+    if (!shouldRelay) return base
 
-    const decision = resolveRelayDecisionForClient(profile.clientId, upstreamProtocol)
-    if (decision !== 'relay') return base
-
-    // relay 分支：要求 localProxy + relayProvisioning 都已注入且反代正在运行
+    // relay 分支：要求 localProxy + relayProvisioning 都已注入
     if (this.localProxy === undefined || this.relayProvisioning === undefined) {
-      throw new Error('需走反代中转，但本机反代未运行，请先在 API 服务开启')
+      throw new Error('需走反代中转，但本机反代接入未配置')
     }
-    const port = this.localProxy.getPort()
-    if (port === null) {
-      throw new Error('需走反代中转，但本机反代未运行，请先在 API 服务开启')
+    // 联动自动开启 API 服务：反代已运行→取当前端口；未运行→启动后取端口。
+    let port: number
+    try {
+      port = await this.localProxy.ensureStarted()
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e)
+      throw new Error(`无法自动开启 API 服务以支持路由：${reason}`)
     }
 
+    // upstreamProtocol 已在 shouldRelay 中校验非 undefined，此处断言以满足 ensureRelayUpstream 入参类型。
+    const relayProtocol = upstreamProtocol as WireProtocol
     // 建/更新 relay 上游
     const { platform } = await this.relayProvisioning.ensureRelayUpstream({
       profileId: profile.id,
       displayName: profile.name,
-      protocol: upstreamProtocol,
+      protocol: relayProtocol,
       baseUrl: profile.baseUrl,
       apiKey: input.apiKey, // 第三方明文 key（由 resolve 解出）
       models: profile.model !== undefined ? [profile.model] : [],

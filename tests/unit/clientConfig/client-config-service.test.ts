@@ -138,6 +138,9 @@ let svc: ClientConfigService
 let registry: WriterRegistry
 let seq: number
 let proxyPort: number | null
+let proxyRunning: boolean
+let proxyStartCalls: number
+let ensureStartedCalls: number
 let proxyModels: string[]
 let revokedKeys: string[]
 let relayEnsureCalls: Array<Parameters<RelayProvisioningPort['ensureRelayUpstream']>[0]>
@@ -159,13 +162,26 @@ beforeEach(async () => {
     genId: () => `s${seq}`,
   })
   proxyPort = 8788
+  proxyRunning = true
+  proxyStartCalls = 0
+  ensureStartedCalls = 0
   proxyModels = ['kiro', 'claude-sonnet-4.5']
   revokedKeys = []
   relayEnsureCalls = []
   relayRemoveCalls = []
   relayPlatformCounter = 0
   const localProxy: LocalProxyPort = {
-    getPort: () => proxyPort,
+    getPort: () => (proxyRunning ? proxyPort : null),
+    ensureStarted: async () => {
+      ensureStartedCalls++
+      // 模拟联动自动开启：未运行则「启动」反代（标记 running），再取端口。
+      if (!proxyRunning) {
+        proxyStartCalls++
+        proxyRunning = true
+      }
+      if (proxyPort === null) throw new Error('API 服务已启动但未就绪（无监听端口）')
+      return proxyPort
+    },
     signKey: async (name) => ({ id: `key-${name}`, plaintext: `sk-${name}` }),
     revokeKey: async (id) => {
       revokedKeys.push(id)
@@ -355,6 +371,8 @@ describe('ClientConfigService', () => {
       settings: { upstreamProtocol: 'openai-chat' },
     })
     await svc.apply(p.id)
+    // 不匹配 → 联动调用 ensureStarted + ensureRelayUpstream
+    expect(ensureStartedCalls).toBeGreaterThanOrEqual(1)
     // 调了 ensureRelayUpstream，参数含第三方 baseUrl/key
     expect(relayEnsureCalls.length).toBe(1)
     expect(relayEnsureCalls[0].baseUrl).toBe('http://openai-compat')
@@ -381,17 +399,89 @@ describe('ClientConfigService', () => {
     expect(written.env.ANTHROPIC_BASE_URL).toBe('http://legacy')
   })
 
-  it('relay-反代未运行(port null) + relay 决策 → apply 抛清晰错误', async () => {
-    proxyPort = null
+  it('relay-反代未运行 + relay 决策 → 联动 ensureStarted 自动开启后成功写盘（不抛「反代未运行」）', async () => {
+    proxyRunning = false // 反代起初未运行
     const p = await svc.create({
       clientId: 'claude',
-      name: 'relay-no-proxy',
+      name: 'relay-autostart',
       source: 'manual',
       baseUrl: 'http://openai-compat',
       apiKey: 'oai-key',
       settings: { upstreamProtocol: 'openai-chat' },
     })
-    await expect(svc.apply(p.id)).rejects.toThrow(/反代未运行/)
+    await svc.apply(p.id) // 不应抛错
+    // 联动自动开启：ensureStarted 被调用且触发了一次「启动」。
+    expect(ensureStartedCalls).toBeGreaterThanOrEqual(1)
+    expect(proxyStartCalls).toBe(1)
+    expect(relayEnsureCalls.length).toBe(1)
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/relay-1')
+  })
+
+  it('relay-ensureStarted 失败（启动后仍无端口）→ apply 抛「无法自动开启 API 服务」', async () => {
+    proxyRunning = false
+    proxyPort = null // 启动后也取不到端口
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'relay-no-port',
+      source: 'manual',
+      baseUrl: 'http://openai-compat',
+      apiKey: 'oai-key',
+      settings: { upstreamProtocol: 'openai-chat' },
+    })
+    await expect(svc.apply(p.id)).rejects.toThrow(/无法自动开启 API 服务/)
+  })
+
+  it('relay-用户主动开关：claude 档 upstreamProtocol=anthropic（协议匹配）+ routeViaProxy=true → 仍走 relay', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'route-via-proxy-on',
+      source: 'manual',
+      baseUrl: 'http://anthropic-compat',
+      apiKey: 'ant-key',
+      model: 'claude-3',
+      settings: { upstreamProtocol: 'anthropic', routeViaProxy: true },
+    })
+    await svc.apply(p.id)
+    // 协议匹配但用户开了开关 → 走反代
+    expect(ensureStartedCalls).toBeGreaterThanOrEqual(1)
+    expect(relayEnsureCalls.length).toBe(1)
+    expect(relayEnsureCalls[0].protocol).toBe('anthropic')
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/relay-1')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe(`sk-client-config:relay:${p.id}`)
+  })
+
+  it('relay-direct：协议匹配且无 routeViaProxy → direct，不调 ensureStarted/ensureRelayUpstream', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'matched-no-toggle',
+      source: 'manual',
+      baseUrl: 'http://anthropic-compat',
+      apiKey: 'ant-key',
+      settings: { upstreamProtocol: 'anthropic' },
+    })
+    await svc.apply(p.id)
+    expect(ensureStartedCalls).toBe(0)
+    expect(relayEnsureCalls.length).toBe(0)
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://anthropic-compat')
+  })
+
+  it('relay-routeViaProxy=true 但无 upstreamProtocol → 仍 direct（无协议无从中转）', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'toggle-without-protocol',
+      source: 'manual',
+      baseUrl: 'http://legacy2',
+      apiKey: 'legacy2-key',
+      settings: { routeViaProxy: true },
+    })
+    await svc.apply(p.id)
+    expect(ensureStartedCalls).toBe(0)
+    expect(relayEnsureCalls.length).toBe(0)
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://legacy2')
   })
 
   it('relay-delete：删 manual 档 → 调 removeRelayUpstream(id)', async () => {

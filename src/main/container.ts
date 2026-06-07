@@ -660,6 +660,18 @@ export async function buildContainer(): Promise<Container> {
       const s = apiProxyService.getStatus()
       return s.state === 'running' && s.port !== undefined ? s.port : null
     },
+    ensureStarted: async () => {
+      // 路由联动：反代已运行直接取端口；未运行则启动后再取（自动开启 API 服务）。
+      let s = apiProxyService.getStatus()
+      if (!(s.state === 'running' && s.port !== undefined)) {
+        await apiProxyService.start()
+        s = apiProxyService.getStatus()
+      }
+      if (s.state !== 'running' || s.port === undefined) {
+        throw new Error('API 服务已启动但未就绪（无监听端口）')
+      }
+      return s.port
+    },
     signKey: async (name) => {
       const { meta, plaintext } = await apiProxyKeyService.create(name)
       return { id: meta.id, plaintext }
