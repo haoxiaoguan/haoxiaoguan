@@ -114,6 +114,7 @@ import { CodexWriter } from './contexts/clientConfig/infrastructure/writers/code
 import { OpenClawWriter } from './contexts/clientConfig/infrastructure/writers/openclaw-writer'
 import { HermesWriter } from './contexts/clientConfig/infrastructure/writers/hermes-writer'
 import type { LocalProxyPort } from './contexts/clientConfig/application/local-proxy-port'
+import type { RelayProvisioningPort } from './contexts/clientConfig/application/relay-provisioning-port'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
@@ -250,6 +251,8 @@ export interface Container extends Services {
    * 供 T5b IPC（增删上游后调用）使用。
    */
   reloadRelayUpstreams: () => Promise<void>
+  /** clientConfig relay 桥：按 profileId 建/删 relay 上游并热重载（T8）。 */
+  clientConfigRelayProvisioning: RelayProvisioningPort
 }
 
 // Builds and wires all service singletons (the Electron equivalent of the
@@ -664,6 +667,38 @@ export async function buildContainer(): Promise<Container> {
     revokeKey: (id) => apiProxyKeyService.delete(id),
     listModels: () => platformRegistry.listAllModels().map((m) => m.id),
   }
+  // relay 桥（T8）：按 clientConfig 接入档 id 建/删 relay 上游并热重载。
+  const clientConfigRelayProvisioning: RelayProvisioningPort = {
+    async ensureRelayUpstream(input) {
+      const { profileId, displayName, protocol, baseUrl, apiKey, models } = input
+      // WireProtocol → relay 上游协议映射（仅支持 openai/anthropic）
+      let relayProtocol: string
+      if (protocol === 'openai-chat') {
+        relayProtocol = 'openai'
+      } else if (protocol === 'anthropic') {
+        relayProtocol = 'anthropic'
+      } else {
+        throw new Error(
+          `该上游协议暂不支持中转，请直连或选 openai/anthropic 兼容端点（protocol=${protocol}）`,
+        )
+      }
+      const modelInfos = models.map((id) => ({ id, displayName: id }))
+      const record = await relayUpstreamRepo.upsertByProfileId(profileId, {
+        displayName,
+        protocol: relayProtocol,
+        baseUrl,
+        apiKey,
+        models: modelInfos,
+      })
+      await reloadRelayUpstreams()
+      return { platform: `relay-${record.id}` }
+    },
+    async removeRelayUpstream(profileId) {
+      await relayUpstreamRepo.deleteByProfileId(profileId)
+      await reloadRelayUpstreams()
+    },
+  }
+
   const clientConfigService = new ClientConfigService(
     new ClientConfigProfileRepository(cryptoService),
     clientConfigRegistry,
@@ -720,5 +755,6 @@ export async function buildContainer(): Promise<Container> {
     activityQuery,
     relayUpstreamRepo,
     reloadRelayUpstreams,
+    clientConfigRelayProvisioning,
   }
 }

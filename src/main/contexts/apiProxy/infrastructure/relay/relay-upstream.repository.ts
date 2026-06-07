@@ -22,6 +22,7 @@ export interface RelayUpstreamRecord {
   enabled: boolean
   createdAt: string
   updatedAt: string
+  profileId?: string
 }
 
 /** 创建上游的输入（含明文 apiKey）。 */
@@ -45,7 +46,7 @@ export interface UpdateRelayUpstreamPatch {
 }
 
 function toRecord(e: RelayUpstreamEntity): RelayUpstreamRecord {
-  return {
+  const rec: RelayUpstreamRecord = {
     id: e.id,
     displayName: e.displayName,
     protocol: e.protocol,
@@ -55,6 +56,10 @@ function toRecord(e: RelayUpstreamEntity): RelayUpstreamRecord {
     createdAt: e.createdAt,
     updatedAt: e.updatedAt,
   }
+  if (e.profileId !== null && e.profileId !== undefined) {
+    rec.profileId = e.profileId
+  }
+  return rec
 }
 
 /** 第三方中转上游仓储：CRUD + 解密 apiKey。 */
@@ -97,6 +102,7 @@ export class RelayUpstreamRepository {
     entity.enabled = input.enabled ?? true
     entity.createdAt = now
     entity.updatedAt = now
+    entity.profileId = null
 
     em.persist(entity)
     await em.flush()
@@ -142,5 +148,74 @@ export class RelayUpstreamRepository {
     if (entity === null) throw new Error(`relay upstream not found: ${id}`)
     const stored = JSON.parse(entity.keyEnc) as StoredEnvelope
     return this.crypto.decrypt(stored.envelope, stored.aad)
+  }
+
+  /** 按 profileId 查找关联的 relay 上游；不存在返回 null。 */
+  async getByProfileId(profileId: string): Promise<RelayUpstreamRecord | null> {
+    const em = this.emFactory()
+    const e = await em.findOne(RelayUpstreamEntity, { profileId })
+    if (e === null) return null
+    return toRecord(e)
+  }
+
+  /**
+   * 按 profileId 建/更上游：存在则 patch，不存在则 create。
+   * input 含 displayName/protocol/baseUrl/apiKey/models（同 create 输入）。
+   */
+  async upsertByProfileId(
+    profileId: string,
+    input: CreateRelayUpstreamInput,
+  ): Promise<RelayUpstreamRecord> {
+    const em = this.emFactory()
+    const existing = await em.findOne(RelayUpstreamEntity, { profileId })
+    if (existing !== null) {
+      // update 已有记录
+      const now = new Date().toISOString()
+      existing.displayName = input.displayName
+      existing.protocol = input.protocol
+      existing.baseUrl = input.baseUrl
+      existing.modelsJson = input.models !== undefined && input.models.length > 0
+        ? JSON.stringify(input.models)
+        : null
+      if (input.enabled !== undefined) existing.enabled = input.enabled
+      const aad = buildAad(AAD_PROVIDER as never, existing.id, existing.createdAt)
+      const envelope = this.crypto.encrypt(input.apiKey, aad)
+      const stored: StoredEnvelope = { aad, envelope }
+      existing.keyEnc = JSON.stringify(stored)
+      existing.updatedAt = now
+      await em.flush()
+      return toRecord(existing)
+    }
+
+    // create 新记录，并绑定 profileId
+    const id = randomUUID()
+    const now = new Date().toISOString()
+    const aad = buildAad(AAD_PROVIDER as never, id, now)
+    const envelope = this.crypto.encrypt(input.apiKey, aad)
+    const stored: StoredEnvelope = { aad, envelope }
+
+    const entity = new RelayUpstreamEntity()
+    entity.id = id
+    entity.displayName = input.displayName
+    entity.protocol = input.protocol
+    entity.baseUrl = input.baseUrl
+    entity.keyEnc = JSON.stringify(stored)
+    entity.modelsJson = input.models !== undefined && input.models.length > 0
+      ? JSON.stringify(input.models)
+      : null
+    entity.enabled = input.enabled ?? true
+    entity.createdAt = now
+    entity.updatedAt = now
+    entity.profileId = profileId
+
+    em.persist(entity)
+    await em.flush()
+    return toRecord(entity)
+  }
+
+  /** 按 profileId 删除关联的 relay 上游（不存在则静默跳过）。 */
+  async deleteByProfileId(profileId: string): Promise<void> {
+    const em = this.emFactory()
+    await em.nativeDelete(RelayUpstreamEntity, { profileId })
   }
 }

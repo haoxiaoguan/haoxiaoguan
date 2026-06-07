@@ -14,4 +14,6 @@ export class RelayUpstreamEntity {
   @Property({ type: 'boolean', fieldName: 'enabled' }) enabled!: boolean
   @Property({ type: 'string', fieldName: 'created_at' }) createdAt!: string
   @Property({ type: 'string', fieldName: 'updated_at' }) updatedAt!: string
+  /** 关联 clientConfig 接入档的 profileId（一对一，nullable）。 */
+  @Property({ type: 'string', fieldName: 'profile_id', nullable: true }) profileId!: string | null
 }
