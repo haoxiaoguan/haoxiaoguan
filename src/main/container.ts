@@ -705,6 +705,7 @@ export async function buildContainer(): Promise<Container> {
     new ClientConfigApplier(clientConfigSnapshots),
     clientConfigSnapshots,
     clientConfigLocalProxy,
+    clientConfigRelayProvisioning,
   )
 
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。

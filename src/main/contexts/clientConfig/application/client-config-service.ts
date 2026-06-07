@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fetch as undiciFetch } from 'undici'
 import type { LocalProxyPort, ConnTestResult } from './local-proxy-port'
+import type { RelayProvisioningPort } from './relay-provisioning-port'
 import type { ClientId, ClientConfigProfile, ClientInfo } from '../domain/client-profile'
 import { CLIENT_DISPLAY_NAMES, CLIENT_WRITE_MODE } from '../domain/client-profile'
 import type { ApplyInput, ClientConfigWriter } from '../domain/client-writer'
@@ -10,6 +11,8 @@ import type { ClientConfigStore, CreateProfileInput, UpdateProfileInput } from '
 import type { WriterRegistry } from './writer-registry'
 import type { ClientConfigApplier, DiffFile } from './client-config-applier'
 import type { ConfigSnapshotStore, SnapshotEntry } from '../infrastructure/config-snapshot'
+import { resolveRelayDecisionForClient } from '../domain/protocol-routing'
+import type { WireProtocol } from '../domain/protocol-routing'
 
 /** 该档是否指定了非空模型(决定能否充当累加式默认指针)。 */
 function hasModel(profile: ClientConfigProfile): boolean {
@@ -22,6 +25,7 @@ export class ClientConfigService {
   private readonly applier: ClientConfigApplier
   private readonly snapshots: ConfigSnapshotStore
   private readonly localProxy?: LocalProxyPort
+  private readonly relayProvisioning?: RelayProvisioningPort
 
   constructor(
     store: ClientConfigStore,
@@ -29,12 +33,14 @@ export class ClientConfigService {
     applier: ClientConfigApplier,
     snapshots: ConfigSnapshotStore,
     localProxy?: LocalProxyPort,
+    relayProvisioning?: RelayProvisioningPort,
   ) {
     this.store = store
     this.registry = registry
     this.applier = applier
     this.snapshots = snapshots
     this.localProxy = localProxy
+    this.relayProvisioning = relayProvisioning
   }
 
   /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI 左侧客户端列表。 */
@@ -78,6 +84,14 @@ export class ClientConfigService {
         }
       }
     }
+    // relay 档:删档时联动清理 relay 上游（失败不阻塞删除，与 keyRef 吊销同风格）。
+    if (this.relayProvisioning !== undefined) {
+      try {
+        await this.relayProvisioning.removeRelayUpstream(id)
+      } catch {
+        // 清理失败不阻塞删除
+      }
+    }
     await this.store.delete(id)
   }
 
@@ -90,7 +104,7 @@ export class ClientConfigService {
 
   /** 应用并设为当前生效（switch 语义：写选中档 + 标记 current）。 */
   async apply(id: string): Promise<void> {
-    const { profile, writer, input } = await this.resolve(id)
+    const { profile, writer, input } = await this.resolveWithRelay(id)
     await this.applier.apply(writer, input, 'switch')
     await this.store.setCurrent(profile.clientId, id)
   }
@@ -123,7 +137,7 @@ export class ClientConfigService {
     // 仅当本档指定了模型才有资格当默认指针——无模型档无法构成有效默认(<provider>/<model>），
     // 否则 store 标默认而 live 指针不变,造成 store↔live 静默分叉。
     const makeDefault = (profile.isDefault || !hasDefault) && hasModel(profile)
-    const { writer: w, input } = await this.resolve(id, { isDefault: makeDefault })
+    const { writer: w, input } = await this.resolveWithRelay(id, { isDefault: makeDefault })
     await this.applier.apply(w, input, 'apply')
     await this.store.setEnabled(id, true)
     if (makeDefault) await this.store.setDefault(profile.clientId, id)
@@ -249,5 +263,56 @@ export class ClientConfigService {
       ...(opts?.isDefault !== undefined ? { isDefault: opts.isDefault } : {}),
     }
     return { profile, writer, input }
+  }
+
+  /**
+   * 在 resolve 基础上，对 manual 档做「relay 改写」：
+   * - 有 upstreamProtocol 且判定为 relay → ensureRelayUpstream + 改写 baseUrl/apiKey 指向反代
+   * - 否则（direct / 非 manual / 无 upstreamProtocol / 未注入 relayProvisioning）→ 原样返回
+   */
+  private async resolveWithRelay(
+    id: string,
+    opts?: { isDefault?: boolean },
+  ): Promise<{ profile: ClientConfigProfile; writer: ClientConfigWriter; input: ApplyInput }> {
+    const base = await this.resolve(id, opts)
+    const { profile, writer, input } = base
+
+    // 只对 manual 档且 settings.upstreamProtocol 存在才考虑 relay 分流
+    if (profile.source !== 'manual') return base
+    const upstreamProtocol = profile.settings?.upstreamProtocol as WireProtocol | undefined
+    if (upstreamProtocol === undefined) return base
+
+    const decision = resolveRelayDecisionForClient(profile.clientId, upstreamProtocol)
+    if (decision !== 'relay') return base
+
+    // relay 分支：要求 localProxy + relayProvisioning 都已注入且反代正在运行
+    if (this.localProxy === undefined || this.relayProvisioning === undefined) {
+      throw new Error('需走反代中转，但本机反代未运行，请先在 API 服务开启')
+    }
+    const port = this.localProxy.getPort()
+    if (port === null) {
+      throw new Error('需走反代中转，但本机反代未运行，请先在 API 服务开启')
+    }
+
+    // 建/更新 relay 上游
+    const { platform } = await this.relayProvisioning.ensureRelayUpstream({
+      profileId: profile.id,
+      displayName: profile.name,
+      protocol: upstreamProtocol,
+      baseUrl: profile.baseUrl,
+      apiKey: input.apiKey, // 第三方明文 key（由 resolve 解出）
+      models: profile.model !== undefined ? [profile.model] : [],
+    })
+
+    // 签发号小管 client key
+    const { plaintext: relayKey } = await this.localProxy.signKey(`client-config:relay:${profile.id}`)
+
+    // 改写 ApplyInput：baseUrl 指向反代/platform，apiKey 换成号小管 client key
+    const relayInput: ApplyInput = {
+      ...input,
+      baseUrl: `http://127.0.0.1:${port}/${platform}`,
+      apiKey: relayKey,
+    }
+    return { profile, writer, input: relayInput }
   }
 }

@@ -20,6 +20,7 @@ import type {
   UpdateProfileInput,
 } from '../../../src/main/contexts/clientConfig/application/client-config-store'
 import type { LocalProxyPort } from '../../../src/main/contexts/clientConfig/application/local-proxy-port'
+import type { RelayProvisioningPort } from '../../../src/main/contexts/clientConfig/application/relay-provisioning-port'
 
 // 内存假 store（解耦 MikroORM，专测 service 编排）。
 class FakeStore implements ClientConfigStore {
@@ -44,6 +45,7 @@ class FakeStore implements ClientConfigStore {
       source: input.source,
       baseUrl: input.baseUrl,
       ...(input.model !== undefined ? { model: input.model } : {}),
+      ...(input.settings !== undefined ? { settings: input.settings } : {}),
       isCurrent: false,
       enabled: false,
       isDefault: false,
@@ -138,6 +140,9 @@ let seq: number
 let proxyPort: number | null
 let proxyModels: string[]
 let revokedKeys: string[]
+let relayEnsureCalls: Array<Parameters<RelayProvisioningPort['ensureRelayUpstream']>[0]>
+let relayRemoveCalls: string[]
+let relayPlatformCounter: number
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'hxg-svc-'))
@@ -156,15 +161,28 @@ beforeEach(async () => {
   proxyPort = 8788
   proxyModels = ['kiro', 'claude-sonnet-4.5']
   revokedKeys = []
+  relayEnsureCalls = []
+  relayRemoveCalls = []
+  relayPlatformCounter = 0
   const localProxy: LocalProxyPort = {
     getPort: () => proxyPort,
-    signKey: async (name) => ({ id: `key-${name}`, plaintext: 'sk-proxy-xyz' }),
+    signKey: async (name) => ({ id: `key-${name}`, plaintext: `sk-${name}` }),
     revokeKey: async (id) => {
       revokedKeys.push(id)
     },
     listModels: () => proxyModels,
   }
-  svc = new ClientConfigService(store, registry, new ClientConfigApplier(snapshots), snapshots, localProxy)
+  const relayProvisioning: RelayProvisioningPort = {
+    ensureRelayUpstream: async (input) => {
+      relayEnsureCalls.push(input)
+      relayPlatformCounter++
+      return { platform: `relay-${relayPlatformCounter}` }
+    },
+    removeRelayUpstream: async (profileId) => {
+      relayRemoveCalls.push(profileId)
+    },
+  }
+  svc = new ClientConfigService(store, registry, new ClientConfigApplier(snapshots), snapshots, localProxy, relayProvisioning)
 })
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
@@ -220,7 +238,7 @@ describe('ClientConfigService', () => {
     expect(p.baseUrl).toBe('http://127.0.0.1:8788')
     const written = JSON.parse(await readFile(settings, 'utf8'))
     expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788')
-    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-proxy-xyz')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-client-config:claude')
     expect(written.env.ANTHROPIC_MODEL).toBe('kiro') // listModels 首个
     expect((await svc.list('claude'))[0].isCurrent).toBe(true)
   })
@@ -303,5 +321,88 @@ describe('ClientConfigService', () => {
     await expect(svc.connectLocalProxy('hermes')).rejects.toThrow(/损坏/)
     expect(revokedKeys).toContain('key-client-config:hermes')
     expect((await svc.list('hermes')).length).toBe(0) // 半截 profile 已回滚
+  })
+
+  // ---- relay 分流（T9）----
+
+  it('relay-direct：claude 档 upstreamProtocol=anthropic（与 claude 原生协议匹配）→ apply 用原始 baseUrl/key，未调 ensureRelayUpstream', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'third-party-direct',
+      source: 'manual',
+      baseUrl: 'http://third-party',
+      apiKey: 'tp-key',
+      model: 'gpt-4o',
+      settings: { upstreamProtocol: 'anthropic' },
+    })
+    await svc.apply(p.id)
+    // 未调 ensureRelayUpstream
+    expect(relayEnsureCalls.length).toBe(0)
+    // 写盘的 baseUrl/key 是原始第三方值
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://third-party')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('tp-key')
+  })
+
+  it('relay-relay：claude 档 upstreamProtocol=openai-chat（不匹配）→ apply 调 ensureRelayUpstream，写盘指向反代', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'third-party-relay',
+      source: 'manual',
+      baseUrl: 'http://openai-compat',
+      apiKey: 'oai-key',
+      model: 'gpt-4o',
+      settings: { upstreamProtocol: 'openai-chat' },
+    })
+    await svc.apply(p.id)
+    // 调了 ensureRelayUpstream，参数含第三方 baseUrl/key
+    expect(relayEnsureCalls.length).toBe(1)
+    expect(relayEnsureCalls[0].baseUrl).toBe('http://openai-compat')
+    expect(relayEnsureCalls[0].apiKey).toBe('oai-key')
+    expect(relayEnsureCalls[0].protocol).toBe('openai-chat')
+    expect(relayEnsureCalls[0].profileId).toBe(p.id)
+    // 写盘 baseUrl 指向反代 platform，key 是号小管 client key
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/relay-1')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe(`sk-client-config:relay:${p.id}`)
+  })
+
+  it('relay-无 upstreamProtocol：普通 manual 档（无该 settings）→ direct，不调 ensureRelayUpstream（向后兼容）', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'legacy-manual',
+      source: 'manual',
+      baseUrl: 'http://legacy',
+      apiKey: 'legacy-key',
+    })
+    await svc.apply(p.id)
+    expect(relayEnsureCalls.length).toBe(0)
+    const written = JSON.parse(await readFile(settings, 'utf8'))
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://legacy')
+  })
+
+  it('relay-反代未运行(port null) + relay 决策 → apply 抛清晰错误', async () => {
+    proxyPort = null
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'relay-no-proxy',
+      source: 'manual',
+      baseUrl: 'http://openai-compat',
+      apiKey: 'oai-key',
+      settings: { upstreamProtocol: 'openai-chat' },
+    })
+    await expect(svc.apply(p.id)).rejects.toThrow(/反代未运行/)
+  })
+
+  it('relay-delete：删 manual 档 → 调 removeRelayUpstream(id)', async () => {
+    const p = await svc.create({
+      clientId: 'claude',
+      name: 'to-delete',
+      source: 'manual',
+      baseUrl: 'http://x',
+      apiKey: 'k',
+    })
+    await svc.delete(p.id)
+    expect(relayRemoveCalls).toContain(p.id)
   })
 })
