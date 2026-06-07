@@ -253,6 +253,7 @@ export const CLIENT_CONFIG_CHANNELS = {
   update: 'clientConfig:update',
   delete: 'clientConfig:delete',
   preview: 'clientConfig:preview',
+  previewDraft: 'clientConfig:previewDraft',
   apply: 'clientConfig:apply',
   clear: 'clientConfig:clear',
   enable: 'clientConfig:enable',

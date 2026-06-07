@@ -21,6 +21,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { ClientLogo } from './ClientLogo';
 import { ProviderPresetGrid } from './ProviderPresetGrid';
+import { ConfigPreview } from './ConfigPreview';
 import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
 
@@ -103,6 +104,12 @@ export function AddProviderDialog({
     if (e) setExtraValue((p.settings?.[e.key] as string | undefined) ?? e.default);
   };
 
+  // 写入用的功能 settings(供应商专属字段 + 固定协议客户端的上游协议/路由)。预览与提交共用。
+  const draftSettings: Record<string, unknown> = {
+    ...(extra ? { [extra.key]: extraValue } : {}),
+    ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
+  };
+
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
   const submit = async () => {
     if (!canSubmit) return;
@@ -114,10 +121,7 @@ export function AddProviderDialog({
         apiKey: apiKey.trim(),
         model: model.trim(),
         settings: {
-          ...(extra ? { [extra.key]: extraValue } : {}),
-          ...(nativeProtoUi ? { upstreamProtocol } : {}),
-          // 仅固定协议客户端写 routeViaProxy；落库为布尔（后端读 === true）。
-          ...(nativeProtoUi ? { routeViaProxy } : {}),
+          ...draftSettings,
           // 品牌元数据(图标/颜色/品牌 id),供卡片展示;writer 不读此键,不写盘。
           ...(brand.brandId || brand.icon
             ? {
@@ -240,6 +244,16 @@ export function AddProviderDialog({
               )}
             </div>
           )}
+
+          <ConfigPreview
+            clientId={clientId}
+            name={name}
+            baseUrl={baseUrl}
+            apiKey={apiKey}
+            model={model}
+            settings={draftSettings}
+            footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+          />
         </div>
 
         <DialogFooter>

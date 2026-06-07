@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ProviderBrandIcon } from './ProviderBrandIcon';
+import { ConfigPreview } from './ConfigPreview';
 import { CLIENT_EXTRA_FIELD, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigProfileDto, UpdateClientConfigProfileDto } from '@shared/api-types';
 
@@ -51,6 +52,13 @@ export function EditProviderDialog({
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
   const uiMeta = (profile?.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
 
+  // 从原 settings 起改,保留 uiMeta 与其它未知键,再覆盖功能键。预览与保存共用。
+  const draftSettings: Record<string, unknown> = {
+    ...((profile?.settings ?? {}) as Record<string, unknown>),
+    ...(extra ? { [extra.key]: extraValue } : {}),
+    ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
+  };
+
   // 打开/切换被编辑档时,从 profile 预填。
   useEffect(() => {
     if (!open || !profile) return;
@@ -76,18 +84,11 @@ export function EditProviderDialog({
     if (!canSubmit || !profile) return;
     setBusy(true);
     try {
-      // 从原 settings 起改,保留 uiMeta 与其它未知键,再覆盖功能键。
-      const nextSettings: Record<string, unknown> = { ...(profile.settings ?? {}) };
-      if (extra) nextSettings[extra.key] = extraValue;
-      if (nativeProtoUi) {
-        nextSettings.upstreamProtocol = upstreamProtocol;
-        nextSettings.routeViaProxy = routeViaProxy;
-      }
       await onSave(profile.id, {
         name: name.trim(),
         baseUrl: baseUrl.trim(),
         model: model.trim() ? model.trim() : null,
-        settings: nextSettings,
+        settings: draftSettings,
         // key 留空 = 不修改;后端 apiKey 省略时保留原 key_enc。
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       });
@@ -175,6 +176,18 @@ export function EditProviderDialog({
                 <p className="mt-1.5 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.routingHint')}</p>
               )}
             </div>
+          )}
+
+          {profile && (
+            <ConfigPreview
+              clientId={clientId}
+              name={name}
+              baseUrl={baseUrl}
+              apiKey={apiKey}
+              model={model}
+              settings={draftSettings}
+              footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+            />
           )}
         </div>
 

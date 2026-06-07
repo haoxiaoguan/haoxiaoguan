@@ -102,6 +102,33 @@ export class ClientConfigService {
     return this.applier.preview(writer, input)
   }
 
+  /**
+   * 用表单草稿值 dry-render 预览将写入的配置（不存档、不写盘、不快照）。
+   * apiKey 由调用方传明文或留空(留空时配置里 token 字段为空)。relay 改写不在预览阶段发生,
+   * 此处展示「直连形态」配置(与 preview(id) 同语义)。
+   */
+  async previewDraft(input: {
+    clientId: ClientId
+    name: string
+    baseUrl: string
+    apiKey?: string
+    model?: string
+    settings?: Record<string, unknown>
+  }): Promise<DiffFile[]> {
+    const writer = this.requireWriter(input.clientId)
+    const applyInput: ApplyInput = {
+      profileId: 'draft',
+      name: input.name,
+      source: 'manual',
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey ?? '',
+      ...(input.model !== undefined && input.model.length > 0 ? { model: input.model } : {}),
+      ...(input.settings !== undefined ? { settings: input.settings } : {}),
+      isDefault: false,
+    }
+    return this.applier.preview(writer, applyInput)
+  }
+
   /** 应用并设为当前生效（switch 语义：写选中档 + 标记 current）。 */
   async apply(id: string): Promise<void> {
     const { profile, writer, input } = await this.resolveWithRelay(id)

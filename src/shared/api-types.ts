@@ -703,6 +703,8 @@ export interface HxgApi {
     delete(id: string): Promise<void>
     /** 预览将写入客户端配置的 before/after（不写盘）。 */
     preview(id: string): Promise<ClientConfigDiffFile[]>
+    /** 用表单草稿值直接 dry-render 预览将写入的配置（不存档、不写盘）。 */
+    previewDraft(input: ClientConfigDraftInput): Promise<ClientConfigDiffFile[]>
     /** 应用并设为当前生效（写客户端配置，写前自动快照）。 */
     apply(id: string): Promise<void>
     /** 从客户端配置移除本接入档（还原）。 */
@@ -780,6 +782,15 @@ export interface UpdateClientConfigProfileDto {
   settings?: Record<string, unknown> | null
   apiKey?: string
   notes?: string | null
+}
+/** 配置预览草稿入参（表单值,不存档）。 */
+export interface ClientConfigDraftInput {
+  clientId: ClientConfigClientId
+  name: string
+  baseUrl: string
+  apiKey?: string
+  model?: string
+  settings?: Record<string, unknown>
 }
 export interface ClientConfigConnTest {
   ok: boolean

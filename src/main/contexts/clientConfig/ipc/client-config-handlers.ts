@@ -49,6 +49,19 @@ export function registerClientConfigHandlers(svc: ClientConfigService): void {
       throw new Error(toIpcError(e))
     }
   })
+  ipcMain.handle(
+    CLIENT_CONFIG_CHANNELS.previewDraft,
+    async (
+      _e,
+      input: { clientId: ClientId; name: string; baseUrl: string; apiKey?: string; model?: string; settings?: Record<string, unknown> },
+    ) => {
+      try {
+        return await svc.previewDraft(input)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.apply, async (_e, id: string) => {
     try {
       await svc.apply(id)
