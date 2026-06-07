@@ -1,6 +1,9 @@
 // 编辑供应商弹窗:从 profile 预填,key 留空则不改;回写完整 settings(保留 uiMeta 与功能键)。
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Download } from 'lucide-react';
+import { toast } from 'sonner';
+import { bridge } from '../../services/bridge';
 import {
   Dialog,
   DialogContent,
@@ -49,7 +52,32 @@ export function EditProviderDialog({
   const [upstreamProtocol, setUpstreamProtocol] = useState('');
   const [routeViaProxy, setRouteViaProxy] = useState(false);
   const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
+  const [models, setModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const doFetchModels = async () => {
+    if (!profile || baseUrl.trim().length === 0 || fetchingModels) return;
+    setFetchingModels(true);
+    try {
+      const list = await bridge().clientConfig.fetchModels({
+        clientId,
+        baseUrl: baseUrl.trim(),
+        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+        profileId: profile.id,
+      });
+      setModels(list);
+      toast.success(
+        list.length > 0
+          ? t('clientConfigPage.form.fetchModelsDone', { count: list.length })
+          : t('clientConfigPage.form.fetchModelsEmpty'),
+      );
+    } catch (e) {
+      toast.error(t('clientConfigPage.form.fetchModelsFailed', { msg: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setFetchingModels(false);
+    }
+  };
 
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
   const uiMeta = (profile?.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
@@ -93,6 +121,7 @@ export function EditProviderDialog({
       sonnet: typeof mm.sonnet === 'string' ? mm.sonnet : '',
       opus: typeof mm.opus === 'string' ? mm.opus : '',
     });
+    setModels([]);
   }, [open, profile]);
 
   // 协议不匹配时强制开启路由(不可关)。
@@ -143,13 +172,35 @@ export function EditProviderDialog({
             {t('clientConfigPage.form.apiKey')}
             <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={t('clientConfigPage.form.apiKeyKeepPlaceholder')} />
           </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.model')}
-            <Input className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
-          </label>
+          <div className="text-[12px] font-medium text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <span>{t('clientConfigPage.form.model')}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={fetchingModels || baseUrl.trim().length === 0}
+                className="h-6 gap-1 text-[11px]"
+                onClick={() => void doFetchModels()}
+              >
+                <Download className="size-3" aria-hidden />
+                {t('clientConfigPage.form.fetchModels')}
+              </Button>
+            </div>
+            <Input list="hxg-model-edit" className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
+          </div>
+          <datalist id="hxg-model-edit">
+            {models.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
 
           {clientId === 'claude' && (
-            <ClaudeModelMapFields value={modelMap} onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))} />
+            <ClaudeModelMapFields
+              value={modelMap}
+              datalistId="hxg-model-edit"
+              onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))}
+            />
           )}
 
           {extra && (

@@ -267,6 +267,7 @@ const api: HxgApi = {
     delete: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.delete, id),
     preview: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.preview, id),
     previewDraft: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.previewDraft, input),
+    fetchModels: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.fetchModels, input),
     apply: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.apply, id),
     clear: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clear, id),
     enable: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.enable, id),

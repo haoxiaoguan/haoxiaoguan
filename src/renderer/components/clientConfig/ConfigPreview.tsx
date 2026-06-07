@@ -33,6 +33,12 @@ export function ConfigPreview({
       setErr(null);
       return;
     }
+    // preload 较旧(dev 改 preload 未重启)时 previewDraft 不存在:显示提示而非报错。
+    if (typeof bridge().clientConfig.previewDraft !== 'function') {
+      setFiles(null);
+      setErr(null);
+      return;
+    }
     let alive = true;
     const handle = setTimeout(() => {
       void (async () => {

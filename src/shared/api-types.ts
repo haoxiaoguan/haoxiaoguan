@@ -705,6 +705,8 @@ export interface HxgApi {
     preview(id: string): Promise<ClientConfigDiffFile[]>
     /** 用表单草稿值直接 dry-render 预览将写入的配置（不存档、不写盘）。 */
     previewDraft(input: ClientConfigDraftInput): Promise<ClientConfigDiffFile[]>
+    /** 拉取供应商可用模型列表（GET /v1/models）。失败抛错。 */
+    fetchModels(input: ClientConfigFetchModelsInput): Promise<string[]>
     /** 应用并设为当前生效（写客户端配置，写前自动快照）。 */
     apply(id: string): Promise<void>
     /** 从客户端配置移除本接入档（还原）。 */
@@ -791,6 +793,13 @@ export interface ClientConfigDraftInput {
   apiKey?: string
   model?: string
   settings?: Record<string, unknown>
+}
+/** 拉取模型列表入参:apiKey 为空且给 profileId 时由后端解出已存档的 key。 */
+export interface ClientConfigFetchModelsInput {
+  clientId: ClientConfigClientId
+  baseUrl: string
+  apiKey?: string
+  profileId?: string
 }
 export interface ClientConfigConnTest {
   ok: boolean

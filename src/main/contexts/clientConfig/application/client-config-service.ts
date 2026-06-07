@@ -129,6 +129,37 @@ export class ClientConfigService {
     return this.applier.preview(writer, applyInput)
   }
 
+  /**
+   * 拉取供应商模型列表（GET /v1/models）。claude 走 anthropic 头(x-api-key+anthropic-version),
+   * 其余走 Bearer。apiKey 为空且给 profileId 时解出已存档明文 key（编辑态用)。解析 data[].id。
+   */
+  async fetchModels(input: {
+    clientId: ClientId
+    baseUrl: string
+    apiKey?: string
+    profileId?: string
+  }): Promise<string[]> {
+    let key = input.apiKey ?? ''
+    if (key.length === 0 && input.profileId !== undefined) {
+      try {
+        key = await this.store.resolveApiKey(input.profileId)
+      } catch {
+        // 解 key 失败则用空 key 尝试(部分端点 /models 无需鉴权)
+      }
+    }
+    const base = input.baseUrl.replace(/\/+$/, '')
+    const url = /\/v1$/.test(base) ? `${base}/models` : `${base}/v1/models`
+    const headers: Record<string, string> =
+      input.clientId === 'claude'
+        ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+        : { Authorization: `Bearer ${key}` }
+    const res = await undiciFetch(url, { headers })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = (await res.json()) as { data?: Array<{ id?: unknown }> }
+    if (!Array.isArray(json.data)) return []
+    return json.data.map((m) => (typeof m.id === 'string' ? m.id : null)).filter((x): x is string => x !== null)
+  }
+
   /** 应用并设为当前生效（switch 语义：写选中档 + 标记 current）。 */
   async apply(id: string): Promise<void> {
     const { profile, writer, input } = await this.resolveWithRelay(id)

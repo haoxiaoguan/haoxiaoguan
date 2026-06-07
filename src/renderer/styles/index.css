@@ -154,6 +154,15 @@ body {
   app-region: no-drag;
 }
 
+/* 模态/弹出层 portal 到拖拽区之外:默认元素不会从窗口拖拽命中区里"挖洞",
+   故须显式 no-drag,否则覆盖在 -webkit-app-region:drag 区域上的关闭按钮/控件无法点击。 */
+[role='dialog'],
+[role='alertdialog'],
+[data-radix-popper-content-wrapper] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 /* Scrollbar：Tauri 三引擎统一 */
 ::-webkit-scrollbar {
   width: var(--scrollbar-size);

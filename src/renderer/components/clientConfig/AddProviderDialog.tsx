@@ -1,6 +1,9 @@
 // 添加供应商弹窗(每客户端模板不同):预设选择 + 公共字段 + 该客户端专属字段。
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Download } from 'lucide-react';
+import { toast } from 'sonner';
+import { bridge } from '../../services/bridge';
 import {
   Dialog,
   DialogContent,
@@ -67,7 +70,32 @@ export function AddProviderDialog({
   const [brand, setBrand] = useState<{ brandId?: string; icon?: string; iconColor?: string }>({});
   // Claude 分级模型映射(仅 claude 客户端使用)。
   const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
+  // 「获取模型列表」拉到的模型(供 datalist 下拉)。
+  const [models, setModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const doFetchModels = async () => {
+    if (baseUrl.trim().length === 0 || fetchingModels) return;
+    setFetchingModels(true);
+    try {
+      const list = await bridge().clientConfig.fetchModels({
+        clientId,
+        baseUrl: baseUrl.trim(),
+        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+      });
+      setModels(list);
+      toast.success(
+        list.length > 0
+          ? t('clientConfigPage.form.fetchModelsDone', { count: list.length })
+          : t('clientConfigPage.form.fetchModelsEmpty'),
+      );
+    } catch (e) {
+      toast.error(t('clientConfigPage.form.fetchModelsFailed', { msg: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setFetchingModels(false);
+    }
+  };
 
   // 协议不匹配（如 Claude 配 openai-chat、Codex 配 openai-chat 而非 openai-responses）→ 必须经反代转换。
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
@@ -87,6 +115,7 @@ export function AddProviderDialog({
       setRouteViaProxy(false);
       setBrand({});
       setModelMap(EMPTY_MODEL_MAP);
+      setModels([]);
     }
   }, [open, clientId]);
 
@@ -187,14 +216,36 @@ export function AddProviderDialog({
             {t('clientConfigPage.form.apiKey')}
             <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
           </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.model')}
-            <Input className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
-          </label>
+          <div className="text-[12px] font-medium text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <span>{t('clientConfigPage.form.model')}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={fetchingModels || baseUrl.trim().length === 0}
+                className="h-6 gap-1 text-[11px]"
+                onClick={() => void doFetchModels()}
+              >
+                <Download className="size-3" aria-hidden />
+                {t('clientConfigPage.form.fetchModels')}
+              </Button>
+            </div>
+            <Input list="hxg-model-add" className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
+          </div>
+          <datalist id="hxg-model-add">
+            {models.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
 
           {/* Claude 分级模型映射(可选) */}
           {clientId === 'claude' && (
-            <ClaudeModelMapFields value={modelMap} onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))} />
+            <ClaudeModelMapFields
+              value={modelMap}
+              datalistId="hxg-model-add"
+              onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))}
+            />
           )}
 
           {/* 该客户端专属字段(Codex wire_api / OpenCode npm / OpenClaw api / Hermes api_mode) */}
