@@ -173,6 +173,11 @@ import { MikroOrmActivityRepository } from './contexts/activity/infrastructure/m
 import { ActivitySyncService } from './contexts/activity/application/activity-sync-service'
 import { ActivityQueryService } from './contexts/activity/application/activity-query-service'
 
+// relay 上游注册表 — 第三方中转接入，container 启动时注册 + 热重载。
+import { RelayUpstreamRepository } from './contexts/apiProxy/infrastructure/relay/relay-upstream.repository'
+import { RelayUpstreamRegistry } from './contexts/apiProxy/infrastructure/relay/relay-upstream-registry'
+import { RelayUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/relay/relay-upstream-client'
+
 /**
  * Account capability-registry adapter (quota manifest §5b).
  *
@@ -238,6 +243,13 @@ export interface Container extends Services {
   tokenRefreshScheduler: TokenRefreshScheduler
   /** Per-platform quota refresh scheduler (start on ready, stop on quit). */
   platformQuotaScheduler: PlatformQuotaScheduler
+  /** 第三方中转上游仓储，供 T5b IPC 做 CRUD。 */
+  relayUpstreamRepo: RelayUpstreamRepository
+  /**
+   * 热重载 relay 适配器：先移除所有 relay-* 平台，再从仓储重建并注册。
+   * 供 T5b IPC（增删上游后调用）使用。
+   */
+  reloadRelayUpstreams: () => Promise<void>
 }
 
 // Builds and wires all service singletons (the Electron equivalent of the
@@ -531,6 +543,31 @@ export async function buildContainer(): Promise<Container> {
     random: Math.random,
   }))
 
+  // 第三方中转上游（relay）— DB 已初始化、cryptoService 已建，安全注册。
+  const relayUpstreamRepo = new RelayUpstreamRepository(cryptoService)
+  const relayUpstreamRegistry = new RelayUpstreamRegistry({
+    repository: relayUpstreamRepo,
+    client: new RelayUpstreamClient(),
+  })
+  // 记录当前注册的 relay platform 名，供热重载时精确移除。
+  let currentRelayPlatforms: string[] = []
+  for (const adapter of await relayUpstreamRegistry.buildAdapters()) {
+    platformRegistry.register(adapter)
+    currentRelayPlatforms.push(adapter.platform)
+  }
+
+  /** 移除旧 relay-* 适配器，从仓储重建并注册最新列表。 */
+  async function reloadRelayUpstreams(): Promise<void> {
+    for (const platform of currentRelayPlatforms) {
+      platformRegistry.unregister(platform)
+    }
+    currentRelayPlatforms = []
+    for (const adapter of await relayUpstreamRegistry.buildAdapters()) {
+      platformRegistry.register(adapter)
+      currentRelayPlatforms.push(adapter.platform)
+    }
+  }
+
   // M5 Key 加密存储：复用已有 cryptoService（不建第二个 master key）。
   const apiProxyKeyRepo = new ApiProxyKeyRepository(cryptoService)
   const apiProxyKeyService = new ApiProxyKeyService(apiProxyKeyRepo)
@@ -681,5 +718,7 @@ export async function buildContainer(): Promise<Container> {
     sessionsService,
     activitySync,
     activityQuery,
+    relayUpstreamRepo,
+    reloadRelayUpstreams,
   }
 }

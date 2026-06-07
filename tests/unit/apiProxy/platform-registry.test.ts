@@ -70,4 +70,36 @@ describe('PlatformRegistry', () => {
     expect(r.listAllModels('b').map((m) => m.id)).toEqual(['shared', 'm2'])
     expect(r.listAllModels('nope')).toEqual([])
   })
+
+  it('unregister removes adapter; selectAdapter no longer hits it', () => {
+    const r = new PlatformRegistry()
+    r.register(fake('relay-1', ['relay-model']))
+    expect(r.get('relay-1')).toBeDefined()
+
+    r.unregister('relay-1')
+
+    expect(r.get('relay-1')).toBeUndefined()
+    expect([...r.knownPlatforms()]).not.toContain('relay-1')
+    expect(() =>
+      r.selectAdapter({ platform: 'relay-1', format: 'openai', action: 'chat', model: 'relay-model', stream: false }),
+    ).toThrow(NoUpstreamError)
+  })
+
+  it('unregister on non-existent platform is idempotent (no throw)', () => {
+    const r = new PlatformRegistry()
+    expect(() => r.unregister('does-not-exist')).not.toThrow()
+  })
+
+  it('unregister only removes the named platform, leaving others intact', () => {
+    const r = new PlatformRegistry()
+    r.register(fake('relay-1', ['m1']))
+    r.register(fake('relay-2', ['m2']))
+    r.register(fake('kiro', ['kiro-model']))
+
+    r.unregister('relay-1')
+
+    expect(r.get('relay-1')).toBeUndefined()
+    expect(r.get('relay-2')?.platform).toBe('relay-2')
+    expect(r.get('kiro')?.platform).toBe('kiro')
+  })
 })

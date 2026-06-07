@@ -61,6 +61,14 @@ export class PlatformRegistry {
     return matches[0]
   }
 
+  /**
+   * 移除指定平台适配器；platform 不存在时静默忽略（幂等）。
+   * 仅供 relay 上游热重载使用，不影响 echo/kiro 等固定适配器。
+   */
+  unregister(platform: string): void {
+    this.adapters.delete(platform)
+  }
+
   /** 聚合模型列表：platform 给则仅该平台，否则所有平台（去重按 id，先注册者胜）。 */
   listAllModels(platform?: string): ModelInfo[] {
     const seen = new Set<string>()
