@@ -8,7 +8,7 @@
   "clientConfigPage": {
     "title": "Client Setup",
     "subtitle": "Write the reverse proxy or a third-party provider into AI client configs in one click (auto-backup, revertible).",
-    "addProfile": "Add Profile",
+    "addProfile": "Add provider",
     "history": "History",
     "empty": "No profiles for this client yet",
     "emptyHint": "Click \"Add Profile\" to write a provider into its config",
@@ -28,6 +28,8 @@
     "connFail": "Failed: {{msg}}",
     "sourceLocal": "Local proxy",
     "sourceManual": "Third-party",
+    "sourceDirect": "Direct",
+    "sourceRelay": "Via proxy",
     "clients": "Clients",
     "coexist": "Coexist",
     "switchMode": "Switch",
@@ -51,6 +53,9 @@
       "model": "Model (optional)",
       "upstreamProtocol": "Upstream protocol",
       "upstreamProtocolHint": "If it differs from this client's protocol, traffic is converted & relayed via the local proxy",
+      "routing": "Route via local proxy",
+      "routingForcedHint": "This upstream protocol differs from the client's; traffic must be converted & relayed via the local proxy.",
+      "routingHint": "When on, third-party traffic is relayed via the proxy (account pool / IP). The API service auto-starts on enable if it's not running.",
       "create": "Create",
       "cancel": "Cancel"
     },

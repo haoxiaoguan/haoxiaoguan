@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { ClientLogo } from './ClientLogo';
 import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
@@ -27,7 +28,8 @@ export interface AddProviderValue {
   baseUrl: string;
   apiKey: string;
   model: string;
-  settings?: Record<string, string>;
+  // 值类型用 unknown：routeViaProxy 落库为布尔 true（后端读 settings.routeViaProxy === true）。
+  settings?: Record<string, unknown>;
 }
 
 const CUSTOM = 'custom';
@@ -57,7 +59,11 @@ export function AddProviderDialog({
   const [model, setModel] = useState('');
   const [extraValue, setExtraValue] = useState(extra?.default ?? '');
   const [upstreamProtocol, setUpstreamProtocol] = useState(nativeProtoUi ?? '');
+  const [routeViaProxy, setRouteViaProxy] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // 协议不匹配（如 Claude 配 openai-chat、Codex 配 openai-chat 而非 openai-responses）→ 必须经反代转换。
+  const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
 
   // 打开/切客户端时重置。
   useEffect(() => {
@@ -68,9 +74,17 @@ export function AddProviderDialog({
       setApiKey('');
       setModel('');
       setExtraValue(CLIENT_EXTRA_FIELD[clientId]?.default ?? '');
-      setUpstreamProtocol(CLIENT_NATIVE_PROTOCOL_UI[clientId] ?? '');
+      const proto = CLIENT_NATIVE_PROTOCOL_UI[clientId] ?? '';
+      setUpstreamProtocol(proto);
+      // 重置默认直连；mismatch 由下方 effect 强制为 true。
+      setRouteViaProxy(false);
     }
   }, [open, clientId]);
+
+  // 协议不匹配时强制开启路由（不可关）；匹配时保持用户选择。
+  useEffect(() => {
+    if (mismatch) setRouteViaProxy(true);
+  }, [mismatch]);
 
   const onPickPreset = (id: string) => {
     setPresetId(id);
@@ -97,6 +111,8 @@ export function AddProviderDialog({
         settings: {
           ...(extra ? { [extra.key]: extraValue } : {}),
           ...(nativeProtoUi ? { upstreamProtocol } : {}),
+          // 仅固定协议客户端写 routeViaProxy；落库为布尔（后端读 === true）。
+          ...(nativeProtoUi ? { routeViaProxy } : {}),
         },
       });
       onOpenChange(false);
@@ -192,6 +208,32 @@ export function AddProviderDialog({
                 {t('clientConfigPage.form.upstreamProtocolHint')}
               </p>
             </label>
+          )}
+
+          {/* 固定协议客户端：经号小管反代路由开关。协议不匹配时强制开启且不可关。 */}
+          {nativeProtoUi && (
+            <div className="rounded-[8px] border border-border/60 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[12px] font-medium text-foreground">
+                  {t('clientConfigPage.form.routing')}
+                </span>
+                <Switch
+                  checked={routeViaProxy}
+                  disabled={mismatch}
+                  onCheckedChange={setRouteViaProxy}
+                  aria-label={t('clientConfigPage.form.routing')}
+                />
+              </div>
+              {mismatch ? (
+                <p className="mt-1.5 text-[11px] text-destructive">
+                  {t('clientConfigPage.form.routingForcedHint')}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[11px] text-muted-foreground/70">
+                  {t('clientConfigPage.form.routingHint')}
+                </p>
+              )}
+            </div>
           )}
         </div>
 

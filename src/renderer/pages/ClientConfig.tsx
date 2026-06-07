@@ -166,9 +166,19 @@ function ProviderRow({
               {t('clientConfigPage.default')}
             </span>
           )}
-          <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
-            {p.source === 'local-proxy' ? t('clientConfigPage.sourceLocal') : t('clientConfigPage.sourceManual')}
-          </span>
+          {p.source === 'local-proxy' ? (
+            <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
+              {t('clientConfigPage.sourceLocal')}
+            </span>
+          ) : p.settings?.routeViaProxy === true ? (
+            <span className="rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+              {t('clientConfigPage.sourceRelay')}
+            </span>
+          ) : (
+            <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
+              {t('clientConfigPage.sourceDirect')}
+            </span>
+          )}
         </div>
         <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
           {p.baseUrl}

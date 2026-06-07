@@ -8,7 +8,7 @@
   "clientConfigPage": {
     "title": "客户端接入",
     "subtitle": "把反代或第三方 provider 一键写进 AI 客户端配置（自动备份，可还原）",
-    "addProfile": "添加接入档",
+    "addProfile": "添加供应商",
     "history": "历史",
     "empty": "该客户端暂无接入档",
     "emptyHint": "点「添加接入档」把一个 provider 写进它的配置",
@@ -28,6 +28,8 @@
     "connFail": "连不通：{{msg}}",
     "sourceLocal": "本机反代",
     "sourceManual": "第三方",
+    "sourceDirect": "直连",
+    "sourceRelay": "经反代",
     "clients": "客户端",
     "coexist": "共存",
     "switchMode": "切换",
@@ -51,6 +53,9 @@
       "model": "模型（可选）",
       "upstreamProtocol": "第三方上游协议",
       "upstreamProtocolHint": "与本客户端协议不同时，将经号小管反代转换转发",
+      "routing": "经号小管反代路由",
+      "routingForcedHint": "该上游协议与本客户端不一致，必须经号小管反代转换转发",
+      "routingHint": "开启后第三方流量经号小管转发（享账号池/IP）；启用时若 API 服务未开会自动开启",
       "create": "创建",
       "cancel": "取消"
     },
