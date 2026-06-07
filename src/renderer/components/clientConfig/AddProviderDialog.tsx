@@ -22,6 +22,7 @@ import { Switch } from '@/components/ui/switch';
 import { ClientLogo } from './ClientLogo';
 import { ProviderPresetGrid } from './ProviderPresetGrid';
 import { ConfigPreview } from './ConfigPreview';
+import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap } from './ClaudeModelMapFields';
 import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
 
@@ -64,6 +65,8 @@ export function AddProviderDialog({
   const [routeViaProxy, setRouteViaProxy] = useState(false);
   // 选中预设的品牌元数据(图标/颜色/品牌 id),提交时写进 settings.uiMeta。
   const [brand, setBrand] = useState<{ brandId?: string; icon?: string; iconColor?: string }>({});
+  // Claude 分级模型映射(仅 claude 客户端使用)。
+  const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
   const [busy, setBusy] = useState(false);
 
   // 协议不匹配（如 Claude 配 openai-chat、Codex 配 openai-chat 而非 openai-responses）→ 必须经反代转换。
@@ -83,6 +86,7 @@ export function AddProviderDialog({
       // 重置默认直连；mismatch 由下方 effect 强制为 true。
       setRouteViaProxy(false);
       setBrand({});
+      setModelMap(EMPTY_MODEL_MAP);
     }
   }, [open, clientId]);
 
@@ -104,10 +108,20 @@ export function AddProviderDialog({
     if (e) setExtraValue((p.settings?.[e.key] as string | undefined) ?? e.default);
   };
 
-  // 写入用的功能 settings(供应商专属字段 + 固定协议客户端的上游协议/路由)。预览与提交共用。
+  // Claude 分级模型映射:仅保留非空档位。
+  const modelMapClean: Record<string, string> = {};
+  if (clientId === 'claude') {
+    for (const tier of ['haiku', 'sonnet', 'opus'] as const) {
+      const v = modelMap[tier].trim();
+      if (v) modelMapClean[tier] = v;
+    }
+  }
+
+  // 写入用的功能 settings(供应商专属字段 + 固定协议客户端的上游协议/路由 + Claude 分级映射)。预览与提交共用。
   const draftSettings: Record<string, unknown> = {
     ...(extra ? { [extra.key]: extraValue } : {}),
     ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
+    ...(Object.keys(modelMapClean).length > 0 ? { modelMap: modelMapClean } : {}),
   };
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
@@ -177,6 +191,11 @@ export function AddProviderDialog({
             {t('clientConfigPage.form.model')}
             <Input className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
           </label>
+
+          {/* Claude 分级模型映射(可选) */}
+          {clientId === 'claude' && (
+            <ClaudeModelMapFields value={modelMap} onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))} />
+          )}
 
           {/* 该客户端专属字段(Codex wire_api / OpenCode npm / OpenClaw api / Hermes api_mode) */}
           {extra && (

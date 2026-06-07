@@ -21,6 +21,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { ProviderBrandIcon } from './ProviderBrandIcon';
 import { ConfigPreview } from './ConfigPreview';
+import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap } from './ClaudeModelMapFields';
 import { CLIENT_EXTRA_FIELD, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigProfileDto, UpdateClientConfigProfileDto } from '@shared/api-types';
 
@@ -47,10 +48,20 @@ export function EditProviderDialog({
   const [extraValue, setExtraValue] = useState('');
   const [upstreamProtocol, setUpstreamProtocol] = useState('');
   const [routeViaProxy, setRouteViaProxy] = useState(false);
+  const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
   const [busy, setBusy] = useState(false);
 
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
   const uiMeta = (profile?.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
+
+  // Claude 分级模型映射:仅保留非空档位。
+  const modelMapClean: Record<string, string> = {};
+  if (clientId === 'claude') {
+    for (const tier of ['haiku', 'sonnet', 'opus'] as const) {
+      const v = modelMap[tier].trim();
+      if (v) modelMapClean[tier] = v;
+    }
+  }
 
   // 从原 settings 起改,保留 uiMeta 与其它未知键,再覆盖功能键。预览与保存共用。
   const draftSettings: Record<string, unknown> = {
@@ -58,6 +69,10 @@ export function EditProviderDialog({
     ...(extra ? { [extra.key]: extraValue } : {}),
     ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
   };
+  if (clientId === 'claude') {
+    if (Object.keys(modelMapClean).length > 0) draftSettings.modelMap = modelMapClean;
+    else delete draftSettings.modelMap;
+  }
 
   // 打开/切换被编辑档时,从 profile 预填。
   useEffect(() => {
@@ -72,6 +87,12 @@ export function EditProviderDialog({
     setExtraValue((s[ex?.key ?? ''] as string | undefined) ?? ex?.default ?? '');
     setUpstreamProtocol((s.upstreamProtocol as string | undefined) ?? proto ?? '');
     setRouteViaProxy(s.routeViaProxy === true);
+    const mm = (typeof s.modelMap === 'object' && s.modelMap !== null ? s.modelMap : {}) as Record<string, unknown>;
+    setModelMap({
+      haiku: typeof mm.haiku === 'string' ? mm.haiku : '',
+      sonnet: typeof mm.sonnet === 'string' ? mm.sonnet : '',
+      opus: typeof mm.opus === 'string' ? mm.opus : '',
+    });
   }, [open, profile]);
 
   // 协议不匹配时强制开启路由(不可关)。
@@ -126,6 +147,10 @@ export function EditProviderDialog({
             {t('clientConfigPage.form.model')}
             <Input className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
           </label>
+
+          {clientId === 'claude' && (
+            <ClaudeModelMapFields value={modelMap} onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))} />
+          )}
 
           {extra && (
             <label className="text-[12px] font-medium text-muted-foreground">
