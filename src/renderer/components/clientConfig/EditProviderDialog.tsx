@@ -121,7 +121,7 @@ export function EditProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="flex max-h-[88vh] max-w-xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ProviderBrandIcon icon={uiMeta.icon} iconColor={uiMeta.iconColor} name={name || profile?.name || '?'} />
@@ -130,7 +130,7 @@ export function EditProviderDialog({
           <DialogDescription>{t('clientConfigPage.form.thirdPartyHint')}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 py-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-1 pr-1">
           <label className="text-[12px] font-medium text-muted-foreground">
             {t('clientConfigPage.form.name')}
             <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('clientConfigPage.form.namePlaceholder')} />

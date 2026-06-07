@@ -156,7 +156,7 @@ export function AddProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="flex max-h-[88vh] max-w-xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClientLogo clientId={clientId} className="size-6" imageClassName="size-3.5" />
@@ -165,7 +165,7 @@ export function AddProviderDialog({
           <DialogDescription>{t('clientConfigPage.form.thirdPartyHint')}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 py-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-1 pr-1">
           {presets.length > 0 && (
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
