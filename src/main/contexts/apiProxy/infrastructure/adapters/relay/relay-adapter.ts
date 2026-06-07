@@ -70,7 +70,7 @@ export class RelayAdapter implements PlatformUpstreamAdapter {
     const { client, apiKey, baseUrl, codec } = this.opts
     const outReq = codec.renderRequest(ir, false)
     const headers = codec.authHeaders(apiKey)
-    const url = joinUrl(baseUrl, codec.endpointPath())
+    const url = joinUrl(baseUrl, codec.endpointPath(ir, false))
 
     const resp = await runWithDispatcher(ctx.dispatcher, () =>
       client.post(url, headers, outReq),
@@ -87,7 +87,7 @@ export class RelayAdapter implements PlatformUpstreamAdapter {
       const { client, apiKey, baseUrl, codec } = self.opts
       const outReq = codec.renderRequest(ir, true)
       const headers = codec.authHeaders(apiKey)
-      const url = joinUrl(baseUrl, codec.endpointPath())
+      const url = joinUrl(baseUrl, codec.endpointPath(ir, true))
 
       // 在 dispatcher context 内发起 fetch，拿到 chunks（body 已绑 dispatcher）。
       const streamResp = await runWithDispatcher(ctx.dispatcher, () =>

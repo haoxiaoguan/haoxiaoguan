@@ -2,7 +2,7 @@
 // 内部复用 openai-outbound.ts（R0）的三函数，不重复实现协议逻辑。
 // bytecode 安全：无 class-property 箭头初始化，纯方法。
 // 禁：Date.now/Math.random/crypto.randomUUID（确定性）；禁动态 import()。
-import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent } from '../../../domain/canonical'
+import type { CanonicalRequest, CanonicalResponse } from '../../../domain/canonical'
 import type { OpenAIChatCompletion } from '../../inbound/openai'
 import type { RelayOutboundCodec, RelayStreamParser } from './relay-codec'
 import {
@@ -19,7 +19,7 @@ import {
 export class OpenAiChatCodec implements RelayOutboundCodec {
   readonly protocol = 'openai'
 
-  endpointPath(): string {
+  endpointPath(_ir: CanonicalRequest, _stream: boolean): string {
     return '/chat/completions'
   }
 

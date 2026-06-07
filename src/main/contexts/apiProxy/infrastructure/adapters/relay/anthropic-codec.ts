@@ -19,7 +19,7 @@ import {
 export class AnthropicCodec implements RelayOutboundCodec {
   readonly protocol = 'anthropic'
 
-  endpointPath(): string {
+  endpointPath(_ir: CanonicalRequest, _stream: boolean): string {
     return '/messages'
   }
 

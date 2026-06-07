@@ -16,8 +16,11 @@ export interface RelayStreamParser {
 export interface RelayOutboundCodec {
   /** 协议标识（'openai' | 'anthropic' | 'gemini'）。 */
   readonly protocol: string
-  /** 上游请求路径（相对 baseUrl），如 '/chat/completions'。 */
-  endpointPath(): string
+  /**
+   * 上游请求路径（相对 baseUrl），如 '/chat/completions'。
+   * ir 与 stream 参数供 Gemini 等协议动态生成路径；OpenAI/Anthropic 可忽略。
+   */
+  endpointPath(ir: CanonicalRequest, stream: boolean): string
   /** 鉴权及必要请求头（apiKey 注入）。 */
   authHeaders(apiKey: string): Record<string, string>
   /** IR → 上游请求体（stream 决定是否带流式开关）。 */

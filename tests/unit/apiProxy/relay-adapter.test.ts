@@ -410,8 +410,10 @@ describe('OpenAiChatCodec', () => {
     expect(codec.protocol).toBe('openai')
   })
 
-  it('⑥ endpointPath() = "/chat/completions"', () => {
-    expect(codec.endpointPath()).toBe('/chat/completions')
+  it('⑥ endpointPath(ir, stream) = "/chat/completions"（忽略参数）', () => {
+    const ir = { model: 'gpt-4o', messages: [], stream: false } as CanonicalRequest
+    expect(codec.endpointPath(ir, false)).toBe('/chat/completions')
+    expect(codec.endpointPath(ir, true)).toBe('/chat/completions')
   })
 
   it('⑥ authHeaders 包含 Bearer 和 content-type', () => {

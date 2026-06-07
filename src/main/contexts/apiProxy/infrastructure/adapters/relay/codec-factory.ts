@@ -4,10 +4,11 @@
 import type { RelayOutboundCodec } from './relay-codec'
 import { OpenAiChatCodec } from './openai-codec'
 import { AnthropicCodec } from './anthropic-codec'
+import { GeminiCodec } from './gemini-codec'
 
 /**
  * 根据协议标识创建对应的 RelayOutboundCodec 实例。
- * 支持: 'openai' | 'anthropic'；'gemini' 后续添加。
+ * 支持: 'openai' | 'anthropic' | 'gemini'。
  */
 export function createRelayCodec(protocol: string): RelayOutboundCodec {
   switch (protocol) {
@@ -15,6 +16,8 @@ export function createRelayCodec(protocol: string): RelayOutboundCodec {
       return new OpenAiChatCodec()
     case 'anthropic':
       return new AnthropicCodec()
+    case 'gemini':
+      return new GeminiCodec()
     default:
       throw new Error(`暂不支持的中转上游协议: ${protocol}`)
   }
