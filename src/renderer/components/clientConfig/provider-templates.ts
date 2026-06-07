@@ -2,6 +2,7 @@
 // 不同 agent 表单字段不同(Codex wire_api / OpenCode npm 适配器 / OpenClaw api 协议 / Hermes api_mode);
 // 预设按客户端预填 baseUrl/model/settings。模型名可由用户改;baseUrl 与协议按各客户端形态校准。
 import type { ClientConfigClientId } from '@shared/api-types';
+import { BRAND_PRESETS, brandToPreset, type DerivedBrandPreset } from './brand-presets';
 
 // ─── 客户端原生协议 & 上游协议选项 ──────────────────────────────────────────
 /** 固定协议客户端的原生协议值。flexible 客户端(opencode/openclaw/hermes)不在此表,不需要上游协议字段。 */
@@ -39,6 +40,12 @@ export interface ProviderPreset {
   baseUrl: string;
   model?: string;
   settings?: Record<string, string>;
+  /** 品牌 id(写入 settings.uiMeta.brandId)。 */
+  brandId?: string;
+  /** 品牌图标文件名(见 ProviderBrandIcon)。 */
+  icon?: string;
+  /** 兜底头像底色。 */
+  iconColor?: string;
 }
 
 // ─── 每客户端额外字段 ───────────────────────────────────────────────────
@@ -89,27 +96,36 @@ export const CLIENT_EXTRA_FIELD: Partial<Record<ClientConfigClientId, ExtraField
   },
 };
 
-// ─── 每客户端常用预设(少量,可自行编辑) ─────────────────────────────────
-// Claude Code 走各家 Anthropic 兼容端点(通常 /anthropic 子路径);
-// Codex/OpenCode/OpenClaw/Hermes 走 OpenAI 兼容端点(/v1 或各自路径)。
-const OPENAI_COMPAT: ProviderPreset[] = [
-  { id: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { id: 'zhipu', label: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.6' },
-  { id: 'moonshot', label: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2-0905-preview' },
-  { id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
-  { id: 'siliconflow', label: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1' },
-];
+// ─── 每客户端常用预设(从品牌注册表派生) ─────────────────────────────────
+// claude 走各家 Anthropic 兼容端点;codex/opencode/openclaw/hermes 走 OpenAI 兼容端点。
+// 每客户端注入其专属字段默认(codex wireApi / opencode npm / openclaw api / hermes apiMode)。
+function derivedToPreset(d: DerivedBrandPreset, settings?: Record<string, string>): ProviderPreset {
+  return {
+    id: d.brandId,
+    label: d.label,
+    baseUrl: d.baseUrl,
+    ...(d.model ? { model: d.model } : {}),
+    brandId: d.brandId,
+    ...(d.icon ? { icon: d.icon } : {}),
+    ...(d.iconColor ? { iconColor: d.iconColor } : {}),
+    ...(settings ? { settings } : {}),
+  };
+}
+
+function presetsFor(clientId: ClientConfigClientId, settings?: Record<string, string>): ProviderPreset[] {
+  const out: ProviderPreset[] = [];
+  for (const brand of BRAND_PRESETS) {
+    const d = brandToPreset(brand, clientId);
+    if (d) out.push(derivedToPreset(d, settings));
+  }
+  return out;
+}
 
 export const CLIENT_PRESETS: Record<ClientConfigClientId, ProviderPreset[]> = {
-  claude: [
-    { id: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/anthropic', model: 'deepseek-chat' },
-    { id: 'zhipu', label: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/anthropic', model: 'glm-4.6' },
-    { id: 'moonshot', label: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/anthropic', model: 'kimi-k2-0905-preview' },
-    { id: 'siliconflow', label: '硅基流动', baseUrl: 'https://api.siliconflow.cn' },
-  ],
-  gemini_cli: [],
-  codex: OPENAI_COMPAT.map((p) => ({ ...p, settings: { wireApi: 'chat' } })),
-  opencode: OPENAI_COMPAT.map((p) => ({ ...p, settings: { npm: '@ai-sdk/openai-compatible' } })),
-  openclaw: OPENAI_COMPAT.map((p) => ({ ...p, settings: { api: 'openai-completions' } })),
-  hermes: OPENAI_COMPAT.map((p) => ({ ...p, settings: { apiMode: 'chat_completions' } })),
+  claude: presetsFor('claude'),
+  gemini_cli: presetsFor('gemini_cli'),
+  codex: presetsFor('codex', { wireApi: 'chat' }),
+  opencode: presetsFor('opencode', { npm: '@ai-sdk/openai-compatible' }),
+  openclaw: presetsFor('openclaw', { api: 'openai-completions' }),
+  hermes: presetsFor('hermes', { apiMode: 'chat_completions' }),
 };
