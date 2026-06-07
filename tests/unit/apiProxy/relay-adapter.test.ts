@@ -6,8 +6,10 @@
 //   ③ supportsModel / listModels
 //   ④ classifyError 各状态映射
 //   ⑤ joinUrl 末尾斜杠稳定性
+//   ⑥ OpenAiChatCodec 单测（endpointPath / authHeaders / renderRequest 形状）
 import { describe, it, expect } from 'vitest'
 import { RelayAdapter } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/relay/relay-adapter'
+import { OpenAiChatCodec } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/relay/openai-codec'
 import {
   RelayUpstreamClient,
   RelayHttpError,
@@ -79,7 +81,7 @@ function makeAdapter(fetchImpl: (url: string, init: unknown) => Promise<unknown>
   })
   return new RelayAdapter({
     platform: 'deepseek',
-    protocol: 'openai',
+    codec: new OpenAiChatCodec(),
     baseUrl: 'https://api.deepseek.com/v1',
     apiKey: 'sk-test',
     models: MODELS,
@@ -386,7 +388,7 @@ describe('RelayAdapter joinUrl robustness', () => {
     const client = new RelayUpstreamClient({ fetchImpl: fakeFetch as Parameters<typeof RelayUpstreamClient>[0] extends { fetchImpl?: infer F } ? F : never })
     const adapter = new RelayAdapter({
       platform: 'test',
-      protocol: 'openai',
+      codec: new OpenAiChatCodec(),
       baseUrl: 'https://api.example.com/v1/', // 末尾斜杠
       apiKey: 'k',
       models: [],
@@ -396,5 +398,54 @@ describe('RelayAdapter joinUrl robustness', () => {
     expect(capturedUrl).toBe('https://api.example.com/v1/chat/completions')
     // 路径部分不含双斜杠（协议头 https:// 不算）
     expect(capturedUrl.replace(/^https?:\/\//, '')).not.toContain('//')
+  })
+})
+
+// ─── OpenAiChatCodec 单测 ───────────────────────────────────────────────────
+
+describe('OpenAiChatCodec', () => {
+  const codec = new OpenAiChatCodec()
+
+  it('⑥ protocol = "openai"', () => {
+    expect(codec.protocol).toBe('openai')
+  })
+
+  it('⑥ endpointPath() = "/chat/completions"', () => {
+    expect(codec.endpointPath()).toBe('/chat/completions')
+  })
+
+  it('⑥ authHeaders 包含 Bearer 和 content-type', () => {
+    const headers = codec.authHeaders('sk-abc')
+    expect(headers['Authorization']).toBe('Bearer sk-abc')
+    expect(headers['content-type']).toBe('application/json')
+  })
+
+  it('⑥ renderRequest 非流式 → stream=false，含 model/messages', () => {
+    const ir: CanonicalRequest = {
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+      stream: false,
+    }
+    const body = codec.renderRequest(ir, false) as Record<string, unknown>
+    expect(body['model']).toBe('gpt-4o')
+    expect(body['stream']).toBe(false)
+    expect(Array.isArray(body['messages'])).toBe(true)
+  })
+
+  it('⑥ renderRequest 流式 → stream=true，含 stream_options', () => {
+    const ir: CanonicalRequest = {
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+      stream: false,
+    }
+    const body = codec.renderRequest(ir, true) as Record<string, unknown>
+    expect(body['stream']).toBe(true)
+    expect(body['stream_options']).toEqual({ include_usage: true })
+  })
+
+  it('⑥ createStreamParser() 返回含 push/flush 的解析器', () => {
+    const parser = codec.createStreamParser()
+    expect(typeof parser.push).toBe('function')
+    expect(typeof parser.flush).toBe('function')
   })
 })
