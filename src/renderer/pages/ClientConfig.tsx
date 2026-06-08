@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, History, Trash2, Eye, Check, Star, Copy, Pencil, Search, Wifi } from 'lucide-react';
+import { Plus, History, Trash2, Check, Star, Copy, Pencil, Wifi } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
@@ -19,11 +18,9 @@ import {
   DialogHeader,
   DialogFooter,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import type {
   ClientConfigProfileDto,
-  ClientConfigDiffFile,
   ClientConfigSnapshotDto,
   UpdateClientConfigProfileDto,
 } from '@shared/api-types';
@@ -58,52 +55,6 @@ function IconAction({
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
-  );
-}
-
-// ─── 双栏 diff 预览弹窗 ───────────────────────────────────────────────────
-function DiffDialog({
-  files,
-  onApply,
-  onClose,
-}: {
-  files: ClientConfigDiffFile[] | null;
-  onApply: () => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation('nav');
-  return (
-    <Dialog open={files !== null} onOpenChange={(o) => (o ? undefined : onClose())}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{t('clientConfigPage.diff.title')}</DialogTitle>
-          <DialogDescription>{t('clientConfigPage.subtitle')}</DialogDescription>
-        </DialogHeader>
-        <div className="max-h-[55vh] space-y-4 overflow-y-auto">
-          {(files ?? []).map((f) => (
-            <div key={f.file}>
-              <div className="mb-1 font-mono text-[11px] text-muted-foreground">{f.file}</div>
-              <div className="grid grid-cols-2 gap-2">
-                <pre className="overflow-x-auto rounded-[8px] border border-border/60 bg-muted/30 p-2 font-mono text-[11px] leading-relaxed">
-                  <div className="mb-1 text-[10px] uppercase text-muted-foreground/60">{t('clientConfigPage.diff.before')}</div>
-                  {f.before ?? t('clientConfigPage.diff.empty')}
-                </pre>
-                <pre className="overflow-x-auto rounded-[8px] border border-primary/40 bg-primary/[0.04] p-2 font-mono text-[11px] leading-relaxed">
-                  <div className="mb-1 text-[10px] uppercase text-primary/70">{t('clientConfigPage.diff.after')}</div>
-                  {f.after ?? t('clientConfigPage.diff.deleted')}
-                </pre>
-              </div>
-            </div>
-          ))}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t('clientConfigPage.form.cancel')}
-          </Button>
-          <Button onClick={onApply}>{t('clientConfigPage.diff.apply')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -158,7 +109,6 @@ function ProviderRow({
   p,
   isAdditive,
   loading,
-  onPreview,
   onTestConn,
   onApply,
   onClear,
@@ -172,7 +122,6 @@ function ProviderRow({
   p: ClientConfigProfileDto;
   isAdditive: boolean;
   loading: boolean;
-  onPreview: (id: string) => void;
   onTestConn: (id: string) => void;
   onApply: (id: string) => void;
   onClear: (id: string) => void;
@@ -241,14 +190,12 @@ function ProviderRow({
       </div>
       <TooltipProvider delayDuration={200}>
         <div className="flex items-center gap-0.5">
-          <IconAction icon={Wifi} label={t('clientConfigPage.testConn')} disabled={loading} onClick={() => onTestConn(p.id)} />
-          <IconAction icon={Eye} label={t('clientConfigPage.preview')} disabled={loading} onClick={() => onPreview(p.id)} />
-          {/* 主按钮:仅「启用 / 使用中」用文字按钮显示;点击在启用↔停用/还原间切换。 */}
+          {/* 主操作前置:仅「启用 / 使用中」用文字按钮显示;点击在启用↔停用/还原间切换。 */}
           <Button
             size="sm"
             disabled={loading}
             variant={active ? 'outline' : 'default'}
-            className="ml-1 h-7 gap-1 px-2.5 text-[12px]"
+            className="mr-1 h-7 gap-1 px-2.5 text-[12px]"
             onClick={() => {
               if (active) {
                 if (isAdditive) onDisable(p.id);
@@ -262,6 +209,7 @@ function ProviderRow({
             {active && <Check className="size-3.5" aria-hidden />}
             {active ? t('clientConfigPage.inUse') : t('clientConfigPage.enable')}
           </Button>
+          <IconAction icon={Wifi} label={t('clientConfigPage.testConn')} disabled={loading} onClick={() => onTestConn(p.id)} />
           {isAdditive && p.enabled && !p.isDefault && (
             <IconAction icon={Star} label={t('clientConfigPage.setDefault')} disabled={loading} onClick={() => onSetDefault(p.id)} />
           )}
@@ -304,9 +252,7 @@ export default function ClientConfig() {
   const [view, setView] = useState<
     { mode: 'list' } | { mode: 'add' } | { mode: 'edit'; profile: ClientConfigProfileDto }
   >({ mode: 'list' });
-  const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
-  const [query, setQuery] = useState('');
 
   useEffect(() => {
     void store.init();
@@ -319,24 +265,9 @@ export default function ClientConfig() {
   const activeInfo = clients.find((c) => c.clientId === activeClient);
   const isAdditive = activeInfo?.writeMode === 'additive';
 
-  const onPreview = async (id: string) => {
-    const files = await store.preview(id);
-    if (files.length === 0) {
-      toast.message(t('clientConfigPage.diff.noChange'));
-      return;
-    }
-    setDiff({ id, files });
-  };
   const onClear = async (id: string) => {
     await store.clear(id);
     toast.success(t('clientConfigPage.cleared'));
-  };
-  const onApplyFromDiff = async () => {
-    if (!diff) return;
-    if (isAdditive) await store.enable(diff.id);
-    else await store.apply(diff.id);
-    setDiff(null);
-    toast.success(t('clientConfigPage.applied'));
   };
   const onShowHistory = async () => {
     setHistoryData(await store.history());
@@ -381,14 +312,9 @@ export default function ClientConfig() {
     if (!useClientConfigStore.getState().error) toast.success(newName);
   };
 
-  // 搜索过滤(名称/地址/模型)。
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? profiles.filter((p) => [p.name, p.baseUrl, p.model].some((f) => f?.toLowerCase().includes(q)))
-    : profiles;
-  // 号小管账号(账号额度反代)= local-proxy 档,固定置顶;第三方 = manual 档(走搜索过滤)。
+  // 号小管账号(账号额度反代)= local-proxy 档,固定置顶;第三方 = manual 档。
   const accountProfile = profiles.find((p) => p.source === 'local-proxy');
-  const thirdParty = filtered.filter((p) => p.source === 'manual');
+  const thirdParty = profiles.filter((p) => p.source === 'manual');
 
   const onCreateProvider = async (v: { name: string; baseUrl: string; apiKey: string; model: string; settings?: Record<string, unknown> }) => {
     await store.create({
@@ -478,15 +404,6 @@ export default function ClientConfig() {
               {isAdditive ? t('clientConfigPage.coexistHint') : t('clientConfigPage.switchHint')}
             </div>
           </div>
-          <div className="relative w-44 shrink-0">
-            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('clientConfigPage.searchPlaceholder')}
-              className="h-8 pl-7 text-[12px]"
-            />
-          </div>
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => void onShowHistory()}>
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
@@ -506,7 +423,6 @@ export default function ClientConfig() {
                 p={accountProfile}
                 isAdditive={isAdditive}
                 loading={loading}
-                onPreview={(id) => void onPreview(id)}
                 onTestConn={(id) => void onTestConn(id)}
                 onApply={(id) => void store.apply(id)}
                 onClear={(id) => void onClear(id)}
@@ -524,7 +440,7 @@ export default function ClientConfig() {
             {/* 第三方供应商 */}
             {thirdParty.length === 0 ? (
               <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-8 text-center text-[12px] text-muted-foreground/70">
-                {q ? t('clientConfigPage.noSearchResults') : t('clientConfigPage.emptyThirdParty')}
+                {t('clientConfigPage.emptyThirdParty')}
               </div>
             ) : (
               thirdParty.map((p) => (
@@ -533,8 +449,7 @@ export default function ClientConfig() {
                   p={p}
                   isAdditive={isAdditive}
                   loading={loading}
-                  onPreview={(id) => void onPreview(id)}
-                  onTestConn={(id) => void onTestConn(id)}
+                    onTestConn={(id) => void onTestConn(id)}
                   onApply={(id) => void store.apply(id)}
                   onClear={(id) => void onClear(id)}
                   onEnable={(id) => void onEnable(id)}
@@ -552,7 +467,6 @@ export default function ClientConfig() {
         )}
       </section>
 
-      <DiffDialog files={diff?.files ?? null} onApply={() => void onApplyFromDiff()} onClose={() => setDiff(null)} />
       <HistoryDialog entries={historyData} onRollback={(id) => void onRollback(id)} onClose={() => setHistoryData(null)} />
     </div>
   );
