@@ -45,6 +45,9 @@
     "searchPlaceholder": "Search name / URL / model",
     "noSearchResults": "No matching providers",
     "edit": "Edit",
+    "accountProvider": "号小管 Account",
+    "accountProviderHint": "Use your account quota via the local reverse proxy",
+    "emptyThirdParty": "No third-party providers yet — click \"Add provider\"",
     "form": {
       "createTitle": "Add Profile",
       "createTitleFor": "Add provider for {{client}}",

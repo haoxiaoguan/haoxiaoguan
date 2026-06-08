@@ -45,6 +45,9 @@
     "searchPlaceholder": "搜索名称 / 地址 / 模型",
     "noSearchResults": "无匹配的供应商",
     "edit": "编辑",
+    "accountProvider": "号小管账号",
+    "accountProviderHint": "用你的账号额度，经本机反代接入此客户端",
+    "emptyThirdParty": "暂无第三方供应商，点「添加供应商」接入",
     "form": {
       "createTitle": "添加接入档",
       "createTitleFor": "为 {{client}} 添加供应商",

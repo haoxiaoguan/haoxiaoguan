@@ -226,8 +226,14 @@ export class ClientConfigService {
   /** 一键接入本机反代：读端口 → 签发 client key → 拉模型 → 建 local-proxy 接入档并立即启用。 */
   async connectLocalProxy(clientId: ClientId): Promise<ClientConfigProfile> {
     if (this.localProxy === undefined) throw new Error('本机反代接入未配置')
-    const port = this.localProxy.getPort()
-    if (port === null) throw new Error('本机反代未运行，请先在「API 服务」开启')
+    // 联动自动开启 API 服务：未运行则启动后取端口（与第三方路由开关一致,免去手动去「API 服务」开启）。
+    let port: number
+    try {
+      port = await this.localProxy.ensureStarted()
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e)
+      throw new Error(`无法自动开启 API 服务：${reason}`)
+    }
     const { id: keyId, plaintext } = await this.localProxy.signKey(`client-config:${clientId}`)
     const models = this.localProxy.listModels()
     // 失败补偿:key 已签发,若后续建档/注入失败(如目标客户端配置损坏拒写),
@@ -236,7 +242,7 @@ export class ClientConfigService {
     try {
       profile = await this.store.create({
         clientId,
-        name: '本机反代',
+        name: '号小管账号',
         source: 'local-proxy',
         baseUrl: `http://127.0.0.1:${port}`,
         apiKey: plaintext, // 明文经 store 加密落 key_enc；keyRef 记反代 key id 供吊销

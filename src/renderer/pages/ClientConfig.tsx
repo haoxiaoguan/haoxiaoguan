@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, History, Trash2, Eye, Check, Zap, Star, Copy, Pencil, Search } from 'lucide-react';
+import { Plus, History, Trash2, Eye, Check, Star, Copy, Pencil, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import { Button } from '@/components/ui/button';
@@ -164,7 +164,9 @@ function ProviderRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-foreground">{p.name}</span>
+          <span className="truncate text-[13px] font-medium text-foreground">
+            {isLocal ? t('clientConfigPage.accountProvider') : p.name}
+          </span>
           {!isAdditive && p.isCurrent && (
             <span className="inline-flex h-5 items-center gap-1 rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
               <Check className="size-3" aria-hidden />
@@ -251,6 +253,23 @@ function ProviderRow({
       )}
       <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => onRemove(p.id)}>
         <Trash2 className="size-3.5" aria-hidden />
+      </Button>
+    </div>
+  );
+}
+
+// ─── 号小管账号占位卡片（未接入时）：点启用 = 接入本机反代（账号额度反代）───────────
+function AccountPlaceholderCard({ onConnect, loading }: { onConnect: () => void; loading: boolean }) {
+  const { t } = useTranslation('nav');
+  return (
+    <div className="flex items-center gap-3 rounded-[8px] border border-dashed border-primary/40 bg-primary/[0.03] px-4 py-3">
+      <ProviderBrandIcon iconColor="hsl(var(--primary))" name="号小管" />
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-foreground">{t('clientConfigPage.accountProvider')}</div>
+        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{t('clientConfigPage.accountProviderHint')}</div>
+      </div>
+      <Button size="sm" disabled={loading} className="h-7 text-[12px]" onClick={onConnect}>
+        {t('clientConfigPage.enable')}
       </Button>
     </div>
   );
@@ -345,6 +364,9 @@ export default function ClientConfig() {
   const filtered = q
     ? profiles.filter((p) => [p.name, p.baseUrl, p.model].some((f) => f?.toLowerCase().includes(q)))
     : profiles;
+  // 号小管账号(账号额度反代)= local-proxy 档,固定置顶;第三方 = manual 档(走搜索过滤)。
+  const accountProfile = profiles.find((p) => p.source === 'local-proxy');
+  const thirdParty = filtered.filter((p) => p.source === 'manual');
 
   return (
     <div className="flex h-[calc(100vh-96px)] w-full max-w-full min-w-0 overflow-hidden bg-card">
@@ -413,10 +435,6 @@ export default function ClientConfig() {
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
           </Button>
-          <Button variant="outline" size="sm" disabled={loading} className="h-8 gap-1.5 text-[12px]" onClick={() => void onConnectLocalProxy()}>
-            <Zap className="size-3.5" aria-hidden />
-            {t('clientConfigPage.connectLocalProxy')}
-          </Button>
           <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setAddOpen(true)}>
             <Plus className="size-3.5" aria-hidden />
             {t('clientConfigPage.addProfile')}
@@ -425,17 +443,35 @@ export default function ClientConfig() {
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-2 px-5 py-4">
-            {profiles.length === 0 ? (
-              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-10 text-center">
-                <div className="text-[13px] text-muted-foreground">{t('clientConfigPage.empty')}</div>
-                <div className="mt-1 text-[12px] text-muted-foreground/60">{t('clientConfigPage.emptyHint')}</div>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-10 text-center text-[13px] text-muted-foreground">
-                {t('clientConfigPage.noSearchResults')}
+            {/* 号小管账号(账号额度反代)固定置顶:已接入显示真实档,未接入显示占位卡片。 */}
+            {accountProfile ? (
+              <ProviderRow
+                key={accountProfile.id}
+                p={accountProfile}
+                isAdditive={isAdditive}
+                loading={loading}
+                onPreview={(id) => void onPreview(id)}
+                onTestConn={(id) => void onTestConn(id)}
+                onApply={(id) => void store.apply(id)}
+                onClear={(id) => void onClear(id)}
+                onEnable={(id) => void onEnable(id)}
+                onDisable={(id) => void onDisable(id)}
+                onSetDefault={(id) => void onSetDefault(id)}
+                onEdit={(pp) => setEditing(pp)}
+                onDuplicate={(pp) => void onDuplicate(pp)}
+                onRemove={(id) => void store.remove(id)}
+              />
+            ) : (
+              <AccountPlaceholderCard onConnect={() => void onConnectLocalProxy()} loading={loading} />
+            )}
+
+            {/* 第三方供应商 */}
+            {thirdParty.length === 0 ? (
+              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-8 text-center text-[12px] text-muted-foreground/70">
+                {q ? t('clientConfigPage.noSearchResults') : t('clientConfigPage.emptyThirdParty')}
               </div>
             ) : (
-              filtered.map((p) => (
+              thirdParty.map((p) => (
                 <ProviderRow
                   key={p.id}
                   p={p}
