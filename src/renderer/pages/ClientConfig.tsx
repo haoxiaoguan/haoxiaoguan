@@ -280,11 +280,13 @@ export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
   const { clients, activeClient, profiles, counts, error, loading } = store;
-  const [addOpen, setAddOpen] = useState(false);
+  // 右侧视图:列表 / 添加(页面) / 编辑(页面)。添加/编辑作为页面渲染在右侧,带返回。
+  const [view, setView] = useState<
+    { mode: 'list' } | { mode: 'add' } | { mode: 'edit'; profile: ClientConfigProfileDto }
+  >({ mode: 'list' });
   const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<ClientConfigProfileDto | null>(null);
 
   useEffect(() => {
     void store.init();
@@ -368,6 +370,22 @@ export default function ClientConfig() {
   const accountProfile = profiles.find((p) => p.source === 'local-proxy');
   const thirdParty = filtered.filter((p) => p.source === 'manual');
 
+  const onCreateProvider = async (v: { name: string; baseUrl: string; apiKey: string; model: string; settings?: Record<string, unknown> }) => {
+    await store.create({
+      clientId: activeClient,
+      name: v.name,
+      source: 'manual',
+      baseUrl: v.baseUrl,
+      ...(v.apiKey ? { apiKey: v.apiKey } : {}),
+      ...(v.model ? { model: v.model } : {}),
+      ...(v.settings ? { settings: v.settings } : {}),
+    });
+  };
+  const onSaveProvider = async (id: string, patch: UpdateClientConfigProfileDto) => {
+    await store.update(id, patch);
+    if (!useClientConfigStore.getState().error) toast.success(t('clientConfigPage.form.save'));
+  };
+
   return (
     <div className="flex h-[calc(100vh-96px)] w-full max-w-full min-w-0 overflow-hidden bg-card">
       {/* 左：客户端列表 */}
@@ -382,7 +400,10 @@ export default function ClientConfig() {
                 <button
                   key={c.clientId}
                   type="button"
-                  onClick={() => void store.selectClient(c.clientId)}
+                  onClick={() => {
+                    setView({ mode: 'list' });
+                    void store.selectClient(c.clientId);
+                  }}
                   className={cn(
                     'flex h-11 w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 text-left transition-colors',
                     selected ? 'bg-primary/10' : 'hover:bg-muted',
@@ -408,8 +429,23 @@ export default function ClientConfig() {
         </ScrollArea>
       </aside>
 
-      {/* 右：供应商列表 */}
+      {/* 右：供应商列表 / 添加 / 编辑(页面) */}
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {view.mode === 'add' ? (
+          <AddProviderDialog
+            clientId={activeClient}
+            clientName={activeInfo?.displayName ?? ''}
+            onBack={() => setView({ mode: 'list' })}
+            onCreate={onCreateProvider}
+          />
+        ) : view.mode === 'edit' ? (
+          <EditProviderDialog
+            profile={view.profile}
+            onBack={() => setView({ mode: 'list' })}
+            onSave={onSaveProvider}
+          />
+        ) : (
+          <>
         <div className="flex min-w-0 items-center gap-2.5 border-b border-border/60 px-5 py-3.5">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -435,7 +471,7 @@ export default function ClientConfig() {
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
           </Button>
-          <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setAddOpen(true)}>
+          <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setView({ mode: 'add' })}>
             <Plus className="size-3.5" aria-hidden />
             {t('clientConfigPage.addProfile')}
           </Button>
@@ -457,7 +493,7 @@ export default function ClientConfig() {
                 onEnable={(id) => void onEnable(id)}
                 onDisable={(id) => void onDisable(id)}
                 onSetDefault={(id) => void onSetDefault(id)}
-                onEdit={(pp) => setEditing(pp)}
+                onEdit={(pp) => setView({ mode: 'edit', profile: pp })}
                 onDuplicate={(pp) => void onDuplicate(pp)}
                 onRemove={(id) => void store.remove(id)}
               />
@@ -484,7 +520,7 @@ export default function ClientConfig() {
                   onEnable={(id) => void onEnable(id)}
                   onDisable={(id) => void onDisable(id)}
                   onSetDefault={(id) => void onSetDefault(id)}
-                  onEdit={(pp) => setEditing(pp)}
+                  onEdit={(pp) => setView({ mode: 'edit', profile: pp })}
                   onDuplicate={(pp) => void onDuplicate(pp)}
                   onRemove={(id) => void store.remove(id)}
                 />
@@ -492,39 +528,10 @@ export default function ClientConfig() {
             )}
           </div>
         </ScrollArea>
+          </>
+        )}
       </section>
 
-      <AddProviderDialog
-        clientId={activeClient}
-        clientName={activeInfo?.displayName ?? ''}
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onCreate={(v) =>
-          store.create({
-            clientId: activeClient,
-            name: v.name,
-            source: 'manual',
-            baseUrl: v.baseUrl,
-            ...(v.apiKey ? { apiKey: v.apiKey } : {}),
-            ...(v.model ? { model: v.model } : {}),
-            ...(v.settings ? { settings: v.settings } : {}),
-          })
-        }
-      />
-      <EditProviderDialog
-        profile={editing}
-        open={editing !== null}
-        onOpenChange={(o) => {
-          if (!o) setEditing(null);
-        }}
-        onSave={async (id, patch: UpdateClientConfigProfileDto) => {
-          await store.update(id, patch);
-          if (!useClientConfigStore.getState().error) {
-            setEditing(null);
-            toast.success(t('clientConfigPage.form.save'));
-          }
-        }}
-      />
       <DiffDialog files={diff?.files ?? null} onApply={() => void onApplyFromDiff()} onClose={() => setDiff(null)} />
       <HistoryDialog entries={historyData} onRollback={(id) => void onRollback(id)} onClose={() => setHistoryData(null)} />
     </div>

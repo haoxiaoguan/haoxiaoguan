@@ -53,6 +53,7 @@
       "createTitleFor": "为 {{client}} 添加供应商",
       "editTitleFor": "编辑 {{name}}",
       "save": "保存",
+      "back": "返回",
       "apiKeyKeepPlaceholder": "留空则不修改",
       "previewTitle": "配置预览",
       "previewHint": "填写地址后预览将写入的配置",

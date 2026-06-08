@@ -1,17 +1,9 @@
-// 编辑供应商弹窗:从 profile 预填,key 留空则不改;回写完整 settings(保留 uiMeta 与功能键)。
+// 编辑供应商:作为右侧页面(非弹窗)。从 profile 预填,key 留空则不改;回写完整 settings(保留 uiMeta 与功能键)。
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { bridge } from '../../services/bridge';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -31,17 +23,16 @@ import type { ClientConfigProfileDto, UpdateClientConfigProfileDto } from '@shar
 
 export function EditProviderDialog({
   profile,
-  open,
-  onOpenChange,
+  onBack,
   onSave,
 }: {
-  profile: ClientConfigProfileDto | null;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
+  profile: ClientConfigProfileDto;
+  /** 返回列表。 */
+  onBack: () => void;
   onSave: (id: string, patch: UpdateClientConfigProfileDto) => Promise<void>;
 }) {
   const { t } = useTranslation('nav');
-  const clientId = profile?.clientId ?? 'claude';
+  const clientId = profile.clientId;
   const extra = CLIENT_EXTRA_FIELD[clientId];
   const nativeProtoUi = CLIENT_NATIVE_PROTOCOL_UI[clientId];
 
@@ -58,7 +49,7 @@ export function EditProviderDialog({
   const [busy, setBusy] = useState(false);
 
   const doFetchModels = async () => {
-    if (!profile || baseUrl.trim().length === 0 || fetchingModels) return;
+    if (baseUrl.trim().length === 0 || fetchingModels) return;
     setFetchingModels(true);
     try {
       const list = await bridge().clientConfig.fetchModels({
@@ -81,7 +72,7 @@ export function EditProviderDialog({
   };
 
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
-  const uiMeta = (profile?.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
+  const uiMeta = (profile.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
 
   // 配置预览源码编辑回写(仅 Claude settings.json):解析 env.* → 表单字段。
   const applyClaudeConfigEdit = (text: string): boolean => {
@@ -121,7 +112,7 @@ export function EditProviderDialog({
 
   // 从原 settings 起改,保留 uiMeta 与其它未知键,再覆盖功能键。预览与保存共用。
   const draftSettings: Record<string, unknown> = {
-    ...((profile?.settings ?? {}) as Record<string, unknown>),
+    ...((profile.settings ?? {}) as Record<string, unknown>),
     ...(extra ? { [extra.key]: extraValue } : {}),
     ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
   };
@@ -130,9 +121,8 @@ export function EditProviderDialog({
     else delete draftSettings.modelMap;
   }
 
-  // 打开/切换被编辑档时,从 profile 预填。
+  // 进入编辑(或切换被编辑档)时,从 profile 预填。
   useEffect(() => {
-    if (!open || !profile) return;
     const s = (profile.settings ?? {}) as Record<string, unknown>;
     const ex = CLIENT_EXTRA_FIELD[profile.clientId];
     const proto = CLIENT_NATIVE_PROTOCOL_UI[profile.clientId];
@@ -154,7 +144,7 @@ export function EditProviderDialog({
     };
     setModelMap({ haiku: readTier(mm.haiku), sonnet: readTier(mm.sonnet), opus: readTier(mm.opus) });
     setModels([]);
-  }, [open, profile]);
+  }, [profile]);
 
   // 协议不匹配时强制开启路由(不可关)。
   useEffect(() => {
@@ -163,7 +153,7 @@ export function EditProviderDialog({
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
   const submit = async () => {
-    if (!canSubmit || !profile) return;
+    if (!canSubmit) return;
     setBusy(true);
     try {
       await onSave(profile.id, {
@@ -174,138 +164,140 @@ export function EditProviderDialog({
         // key 留空 = 不修改;后端 apiKey 省略时保留原 key_enc。
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       });
-      onOpenChange(false);
+      onBack();
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ProviderBrandIcon icon={uiMeta.icon} iconColor={uiMeta.iconColor} name={name || profile?.name || '?'} />
-            {t('clientConfigPage.form.editTitleFor', { name: profile?.name ?? '' })}
-          </DialogTitle>
-          <DialogDescription>{t('clientConfigPage.form.thirdPartyHint')}</DialogDescription>
-        </DialogHeader>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* 头部:返回 + 标题 */}
+      <div className="flex min-w-0 items-center gap-2.5 border-b border-border/60 px-5 py-3">
+        <Button variant="outline" size="icon" className="size-8 shrink-0 rounded-lg" onClick={onBack} aria-label={t('clientConfigPage.form.back')}>
+          <ArrowLeft className="size-4" aria-hidden />
+        </Button>
+        <ProviderBrandIcon icon={uiMeta.icon} iconColor={uiMeta.iconColor} name={name || profile.name || '?'} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-semibold text-foreground">{t('clientConfigPage.form.editTitleFor', { name: profile.name })}</div>
+          <div className="truncate text-[11.5px] text-muted-foreground">{t('clientConfigPage.form.thirdPartyHint')}</div>
+        </div>
+      </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-1 pr-1">
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.name')}
-            <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('clientConfigPage.form.namePlaceholder')} />
-          </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.baseUrl')}
-            <Input className="mt-1 font-mono" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
-          </label>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.apiKey')}
-            <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={t('clientConfigPage.form.apiKeyKeepPlaceholder')} />
-          </label>
-          <div className="text-[12px] font-medium text-muted-foreground">
-            <div className="flex items-center justify-between">
-              <span>{t('clientConfigPage.form.model')}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={fetchingModels || baseUrl.trim().length === 0}
-                className="h-6 gap-1 text-[11px]"
-                onClick={() => void doFetchModels()}
-              >
-                <Download className="size-3" aria-hidden />
-                {t('clientConfigPage.form.fetchModels')}
-              </Button>
-            </div>
-            <div className="mt-1">
-              <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
-            </div>
+      {/* 滚动表单体 */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+        <label className="text-[12px] font-medium text-muted-foreground">
+          {t('clientConfigPage.form.name')}
+          <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('clientConfigPage.form.namePlaceholder')} />
+        </label>
+        <label className="text-[12px] font-medium text-muted-foreground">
+          {t('clientConfigPage.form.baseUrl')}
+          <Input className="mt-1 font-mono" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+        </label>
+        <label className="text-[12px] font-medium text-muted-foreground">
+          {t('clientConfigPage.form.apiKey')}
+          <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={t('clientConfigPage.form.apiKeyKeepPlaceholder')} />
+        </label>
+        <div className="text-[12px] font-medium text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>{t('clientConfigPage.form.model')}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={fetchingModels || baseUrl.trim().length === 0}
+              className="h-6 gap-1 text-[11px]"
+              onClick={() => void doFetchModels()}
+            >
+              <Download className="size-3" aria-hidden />
+              {t('clientConfigPage.form.fetchModels')}
+            </Button>
           </div>
-
-          {clientId === 'claude' && (
-            <ClaudeModelMapFields
-              value={modelMap}
-              options={models}
-              onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
-            />
-          )}
-
-          {extra && (
-            <label className="text-[12px] font-medium text-muted-foreground">
-              {extra.label}
-              <Select value={extraValue} onValueChange={setExtraValue}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {extra.options.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-          )}
-
-          {nativeProtoUi && (
-            <label className="text-[12px] font-medium text-muted-foreground">
-              {t('clientConfigPage.form.upstreamProtocol')}
-              <Select value={upstreamProtocol} onValueChange={setUpstreamProtocol}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UPSTREAM_PROTOCOL_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.upstreamProtocolHint')}</p>
-            </label>
-          )}
-
-          {nativeProtoUi && (
-            <div className="rounded-[8px] border border-border/60 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[12px] font-medium text-foreground">{t('clientConfigPage.form.routing')}</span>
-                <Switch checked={routeViaProxy} disabled={mismatch} onCheckedChange={setRouteViaProxy} aria-label={t('clientConfigPage.form.routing')} />
-              </div>
-              {mismatch ? (
-                <p className="mt-1.5 text-[11px] text-destructive">{t('clientConfigPage.form.routingForcedHint')}</p>
-              ) : (
-                <p className="mt-1.5 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.routingHint')}</p>
-              )}
-            </div>
-          )}
-
-          {profile && (
-            <ConfigPreview
-              clientId={clientId}
-              name={name}
-              baseUrl={baseUrl}
-              apiKey={apiKey}
-              model={model}
-              settings={draftSettings}
-              footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
-              onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : undefined}
-            />
-          )}
+          <div className="mt-1">
+            <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
+          </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('clientConfigPage.form.cancel')}
-          </Button>
-          <Button disabled={!canSubmit} onClick={() => void submit()}>
-            {t('clientConfigPage.form.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {clientId === 'claude' && (
+          <ClaudeModelMapFields
+            value={modelMap}
+            options={models}
+            onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
+          />
+        )}
+
+        {extra && (
+          <label className="text-[12px] font-medium text-muted-foreground">
+            {extra.label}
+            <Select value={extraValue} onValueChange={setExtraValue}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {extra.options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
+
+        {nativeProtoUi && (
+          <label className="text-[12px] font-medium text-muted-foreground">
+            {t('clientConfigPage.form.upstreamProtocol')}
+            <Select value={upstreamProtocol} onValueChange={setUpstreamProtocol}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UPSTREAM_PROTOCOL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.upstreamProtocolHint')}</p>
+          </label>
+        )}
+
+        {nativeProtoUi && (
+          <div className="rounded-[8px] border border-border/60 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[12px] font-medium text-foreground">{t('clientConfigPage.form.routing')}</span>
+              <Switch checked={routeViaProxy} disabled={mismatch} onCheckedChange={setRouteViaProxy} aria-label={t('clientConfigPage.form.routing')} />
+            </div>
+            {mismatch ? (
+              <p className="mt-1.5 text-[11px] text-destructive">{t('clientConfigPage.form.routingForcedHint')}</p>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.routingHint')}</p>
+            )}
+          </div>
+        )}
+
+        <ConfigPreview
+          clientId={clientId}
+          name={name}
+          baseUrl={baseUrl}
+          apiKey={apiKey}
+          model={model}
+          settings={draftSettings}
+          footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+          onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : undefined}
+        />
+      </div>
+
+      {/* 底部操作 */}
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
+        <Button variant="outline" onClick={onBack}>
+          {t('clientConfigPage.form.cancel')}
+        </Button>
+        <Button disabled={!canSubmit} onClick={() => void submit()}>
+          {t('clientConfigPage.form.save')}
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -53,6 +53,7 @@
       "createTitleFor": "Add provider for {{client}}",
       "editTitleFor": "Edit {{name}}",
       "save": "Save",
+      "back": "Back",
       "apiKeyKeepPlaceholder": "Leave blank to keep unchanged",
       "previewTitle": "Config preview",
       "previewHint": "Enter a URL to preview the config to be written",
