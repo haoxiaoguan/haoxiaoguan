@@ -25,6 +25,7 @@ import { Switch } from '@/components/ui/switch';
 import { ClientLogo } from './ClientLogo';
 import { ProviderPresetGrid } from './ProviderPresetGrid';
 import { ConfigPreview } from './ConfigPreview';
+import { ModelCombobox } from './ModelCombobox';
 import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap } from './ClaudeModelMapFields';
 import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
@@ -137,12 +138,13 @@ export function AddProviderDialog({
     if (e) setExtraValue((p.settings?.[e.key] as string | undefined) ?? e.default);
   };
 
-  // Claude 分级模型映射:仅保留非空档位。
-  const modelMapClean: Record<string, string> = {};
+  // Claude 分级模型映射:仅保留有 model 或 name 的档位。
+  const modelMapClean: Record<string, { model?: string; name?: string }> = {};
   if (clientId === 'claude') {
     for (const tier of ['haiku', 'sonnet', 'opus'] as const) {
-      const v = modelMap[tier].trim();
-      if (v) modelMapClean[tier] = v;
+      const m = modelMap[tier].model.trim();
+      const n = modelMap[tier].name.trim();
+      if (m || n) modelMapClean[tier] = { ...(m ? { model: m } : {}), ...(n ? { name: n } : {}) };
     }
   }
 
@@ -185,7 +187,7 @@ export function AddProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] max-w-xl flex-col">
+      <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClientLogo clientId={clientId} className="size-6" imageClassName="size-3.5" />
@@ -231,20 +233,17 @@ export function AddProviderDialog({
                 {t('clientConfigPage.form.fetchModels')}
               </Button>
             </div>
-            <Input list="hxg-model-add" className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
+            <div className="mt-1">
+              <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
+            </div>
           </div>
-          <datalist id="hxg-model-add">
-            {models.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
 
           {/* Claude 分级模型映射(可选) */}
           {clientId === 'claude' && (
             <ClaudeModelMapFields
               value={modelMap}
-              datalistId="hxg-model-add"
-              onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))}
+              options={models}
+              onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
             />
           )}
 

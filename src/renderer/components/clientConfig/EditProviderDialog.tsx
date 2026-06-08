@@ -24,7 +24,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { ProviderBrandIcon } from './ProviderBrandIcon';
 import { ConfigPreview } from './ConfigPreview';
-import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap } from './ClaudeModelMapFields';
+import { ModelCombobox } from './ModelCombobox';
+import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap, type ModelTier } from './ClaudeModelMapFields';
 import { CLIENT_EXTRA_FIELD, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigProfileDto, UpdateClientConfigProfileDto } from '@shared/api-types';
 
@@ -82,12 +83,13 @@ export function EditProviderDialog({
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
   const uiMeta = (profile?.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
 
-  // Claude 分级模型映射:仅保留非空档位。
-  const modelMapClean: Record<string, string> = {};
+  // Claude 分级模型映射:仅保留有 model 或 name 的档位。
+  const modelMapClean: Record<string, { model?: string; name?: string }> = {};
   if (clientId === 'claude') {
     for (const tier of ['haiku', 'sonnet', 'opus'] as const) {
-      const v = modelMap[tier].trim();
-      if (v) modelMapClean[tier] = v;
+      const m = modelMap[tier].model.trim();
+      const n = modelMap[tier].name.trim();
+      if (m || n) modelMapClean[tier] = { ...(m ? { model: m } : {}), ...(n ? { name: n } : {}) };
     }
   }
 
@@ -116,11 +118,15 @@ export function EditProviderDialog({
     setUpstreamProtocol((s.upstreamProtocol as string | undefined) ?? proto ?? '');
     setRouteViaProxy(s.routeViaProxy === true);
     const mm = (typeof s.modelMap === 'object' && s.modelMap !== null ? s.modelMap : {}) as Record<string, unknown>;
-    setModelMap({
-      haiku: typeof mm.haiku === 'string' ? mm.haiku : '',
-      sonnet: typeof mm.sonnet === 'string' ? mm.sonnet : '',
-      opus: typeof mm.opus === 'string' ? mm.opus : '',
-    });
+    const readTier = (v: unknown): ModelTier => {
+      if (typeof v === 'string') return { model: v, name: '' }; // 旧版:值为模型字符串
+      if (typeof v === 'object' && v !== null) {
+        const o = v as Record<string, unknown>;
+        return { model: typeof o.model === 'string' ? o.model : '', name: typeof o.name === 'string' ? o.name : '' };
+      }
+      return { model: '', name: '' };
+    };
+    setModelMap({ haiku: readTier(mm.haiku), sonnet: readTier(mm.sonnet), opus: readTier(mm.opus) });
     setModels([]);
   }, [open, profile]);
 
@@ -150,7 +156,7 @@ export function EditProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] max-w-xl flex-col">
+      <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ProviderBrandIcon icon={uiMeta.icon} iconColor={uiMeta.iconColor} name={name || profile?.name || '?'} />
@@ -187,19 +193,16 @@ export function EditProviderDialog({
                 {t('clientConfigPage.form.fetchModels')}
               </Button>
             </div>
-            <Input list="hxg-model-edit" className="mt-1 font-mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
+            <div className="mt-1">
+              <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
+            </div>
           </div>
-          <datalist id="hxg-model-edit">
-            {models.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
 
           {clientId === 'claude' && (
             <ClaudeModelMapFields
               value={modelMap}
-              datalistId="hxg-model-edit"
-              onChange={(patch) => setModelMap((prev) => ({ ...prev, ...patch }))}
+              options={models}
+              onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
             />
           )}
 
