@@ -138,6 +138,32 @@ export function AddProviderDialog({
     if (e) setExtraValue((p.settings?.[e.key] as string | undefined) ?? e.default);
   };
 
+  // 配置预览源码编辑回写(仅 Claude settings.json):解析 env.* → 表单字段。
+  const applyClaudeConfigEdit = (text: string): boolean => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return false;
+    }
+    if (typeof parsed !== 'object' || parsed === null) return false;
+    const env = (parsed as { env?: unknown }).env;
+    if (typeof env !== 'object' || env === null) return false;
+    const e = env as Record<string, unknown>;
+    const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+    const bu = str(e.ANTHROPIC_BASE_URL);
+    if (bu !== undefined) setBaseUrl(bu);
+    const tok = str(e.ANTHROPIC_AUTH_TOKEN);
+    if (tok !== undefined && tok.length > 0) setApiKey(tok); // 空不覆盖
+    setModel(str(e.ANTHROPIC_MODEL) ?? '');
+    setModelMap({
+      haiku: { model: str(e.ANTHROPIC_DEFAULT_HAIKU_MODEL) ?? '', name: str(e.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME) ?? '' },
+      sonnet: { model: str(e.ANTHROPIC_DEFAULT_SONNET_MODEL) ?? '', name: str(e.ANTHROPIC_DEFAULT_SONNET_MODEL_NAME) ?? '' },
+      opus: { model: str(e.ANTHROPIC_DEFAULT_OPUS_MODEL) ?? '', name: str(e.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME) ?? '' },
+    });
+    return true;
+  };
+
   // Claude 分级模型映射:仅保留有 model 或 name 的档位。
   const modelMapClean: Record<string, { model?: string; name?: string }> = {};
   if (clientId === 'claude') {
@@ -322,6 +348,7 @@ export function AddProviderDialog({
             model={model}
             settings={draftSettings}
             footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+            onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : undefined}
           />
         </div>
 

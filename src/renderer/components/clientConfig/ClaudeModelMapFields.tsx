@@ -50,7 +50,7 @@ export function ClaudeModelMapFields({
     <div className="rounded-[8px] border border-border/60 px-3 py-3">
       <div className="text-[12px] font-medium text-foreground">{t('clientConfigPage.form.modelMapTitle')}</div>
       <p className="mb-2.5 mt-0.5 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.modelMapHint')}</p>
-      <div className="grid grid-cols-[52px_1fr_1.3fr_auto] items-center gap-x-2.5 gap-y-2">
+      <div className="grid grid-cols-[100px_1fr_1.3fr_auto] items-center gap-x-2.5 gap-y-2">
         {/* 表头 */}
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">{t('clientConfigPage.form.modelRole')}</span>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">{t('clientConfigPage.form.modelDisplayName')}</span>
@@ -60,7 +60,13 @@ export function ClaudeModelMapFields({
           const { base, oneM } = splitOneM(value[tier].model);
           return (
             <div key={tier} className="contents">
-              <span className="text-[12px] font-medium text-muted-foreground">{t(`clientConfigPage.form.model_${tier}`)}</span>
+              <Input
+                value={t(`clientConfigPage.form.model_${tier}`)}
+                disabled
+                readOnly
+                aria-label={t('clientConfigPage.form.modelRole')}
+                className="bg-muted/50 text-[12px] font-medium text-muted-foreground disabled:opacity-100"
+              />
               <Input
                 className="text-[12px]"
                 value={value[tier].name}
