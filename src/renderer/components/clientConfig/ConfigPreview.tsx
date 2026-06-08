@@ -1,20 +1,12 @@
 // 配置预览:用表单草稿值防抖调后端 dry-render,展示将写入客户端的真实配置。
-// JSON 文件(如 Claude settings.json)用 Monaco 可编辑,编辑后经 onApplyEdit 解析回写表单字段;
-// 非 JSON(TOML/YAML)保持只读展示。
-import { useEffect, useState } from 'react';
+// 提供 onApplyEdit 时单文件可 Monaco 编辑(JSON 走 json 语言、其它如 Codex TOML 走纯文本),
+// 编辑后经 onApplyEdit 解析回写表单字段;焦点守卫:编辑期间不被 dry-render 覆盖(防光标跳)。
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { bridge } from '../../services/bridge';
 import { JsonEditor } from '@/components/ui/json-editor';
 import type { ClientConfigClientId, ClientConfigDiffFile } from '@shared/api-types';
 
-/** 语义相等(忽略空白/格式差异);任一非法 JSON → 视为不等。 */
-function jsonEqual(a: string, b: string): boolean {
-  try {
-    return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(b));
-  } catch {
-    return false;
-  }
-}
 function isJson(s: string | null | undefined): boolean {
   if (s == null) return false;
   try {
@@ -50,6 +42,8 @@ export function ConfigPreview({
   const [files, setFiles] = useState<ClientConfigDiffFile[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const focusedRef = useRef(false);
+  const editTargetRef = useRef('');
   const settingsKey = JSON.stringify(settings ?? {});
 
   useEffect(() => {
@@ -96,14 +90,17 @@ export function ConfigPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, name, baseUrl, apiKey, model, settingsKey]);
 
-  // 单文件且为 JSON 且提供了回写函数 → 可编辑。
-  const editable = onApplyEdit != null && files != null && files.length === 1 && isJson(files[0].after);
+  // 单文件且提供了回写函数 → 可编辑(JSON 与 TOML/纯文本均可)。
+  const editable = onApplyEdit != null && files != null && files.length === 1;
   const editTarget = editable ? (files![0].after ?? '') : '';
+  const editLang = isJson(editTarget) ? 'json' : 'plaintext';
+  editTargetRef.current = editTarget;
 
-  // dry-render 变化时同步到编辑器;但与当前编辑文本"语义相等"则保持不变(避免打字时光标跳动)。
+  // dry-render 变化时同步到编辑器;但编辑器获得焦点(用户正在改)时不覆盖,避免光标跳动。
   useEffect(() => {
     if (!editable) return;
-    setEditText((cur) => (jsonEqual(cur, editTarget) ? cur : editTarget));
+    if (focusedRef.current) return;
+    setEditText(editTarget);
   }, [editable, editTarget]);
 
   return (
@@ -117,9 +114,15 @@ export function ConfigPreview({
             <div className="mb-0.5 font-mono text-[10px] text-muted-foreground/60">{files[0].file}</div>
             <JsonEditor
               value={editText}
+              language={editLang}
               onChange={(v) => {
                 setEditText(v);
                 onApplyEdit?.(v);
+              }}
+              onFocusChange={(f) => {
+                focusedRef.current = f;
+                // 失焦后回到 dry-render 规范化结果(反映已回填的表单)。
+                if (!f) setEditText(editTargetRef.current);
               }}
               height={200}
               ariaLabel={t('clientConfigPage.form.previewTitle')}

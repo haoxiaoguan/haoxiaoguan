@@ -151,6 +151,26 @@ export function AddProviderDialog({
     return true;
   };
 
+  // 配置预览源码编辑回写(Codex config.toml):正则提取注入的 [model_providers.hxg_*] / [profiles.hxg_*] 段 → 表单。
+  const applyCodexConfigEdit = (text: string): boolean => {
+    const grabIn = (block: string, key: string): string | undefined => {
+      const m = block.match(new RegExp(`^\\s*${key}\\s*=\\s*["']([^"'\\n]*)["']`, 'm'));
+      return m ? m[1] : undefined;
+    };
+    const prov = text.match(/\[model_providers\.hxg_[^\]]*\]([\s\S]*?)(?=\n\[|$)/);
+    if (!prov) return false;
+    const prof = text.match(/\[profiles\.hxg_[^\]]*\]([\s\S]*?)(?=\n\[|$)/);
+    const bu = grabIn(prov[1], 'base_url');
+    const wire = grabIn(prov[1], 'wire_api');
+    const tok = grabIn(prov[1], 'experimental_bearer_token');
+    const mdl = prof ? grabIn(prof[1], 'model') : undefined;
+    if (bu !== undefined) setBaseUrl(bu);
+    if (tok !== undefined && tok.length > 0) setApiKey(tok);
+    if (wire !== undefined) setExtraValue(wire); // codex extra.key === 'wireApi'
+    if (mdl !== undefined) setModel(mdl);
+    return true;
+  };
+
   // Claude 分级模型映射:仅保留有 model 或 name 的档位。
   const modelMapClean: Record<string, { model?: string; name?: string }> = {};
   if (clientId === 'claude') {
@@ -324,7 +344,7 @@ export function AddProviderDialog({
           model={model}
           settings={draftSettings}
           footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
-          onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : undefined}
+          onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : clientId === 'codex' ? applyCodexConfigEdit : undefined}
         />
       </div>
 
