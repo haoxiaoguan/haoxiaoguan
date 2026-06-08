@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, History, Trash2, Eye, Check, Star, Copy, Pencil, Search } from 'lucide-react';
+import { Plus, History, Trash2, Eye, Check, Star, Copy, Pencil, Search, Wifi } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
@@ -25,6 +27,39 @@ import type {
   ClientConfigSnapshotDto,
   UpdateClientConfigProfileDto,
 } from '@shared/api-types';
+
+// ─── 图标工具按钮 + tooltip ──────────────────────────────────────────────
+function IconAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          disabled={disabled}
+          aria-label={label}
+          onClick={onClick}
+          className={cn('size-7 text-muted-foreground', danger && 'hover:text-destructive')}
+        >
+          <Icon className="size-3.5" aria-hidden />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 // ─── 双栏 diff 预览弹窗 ───────────────────────────────────────────────────
 function DiffDialog({
@@ -204,56 +239,41 @@ function ProviderRow({
           {p.model ? ` · ${p.model}` : ''}
         </div>
       </div>
-      <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onTestConn(p.id)}>
-        {t('clientConfigPage.testConn')}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={loading} className="h-7 gap-1 text-[12px]" onClick={() => onPreview(p.id)}>
-        <Eye className="size-3.5" aria-hidden />
-        {t('clientConfigPage.preview')}
-      </Button>
-
-      {isAdditive ? (
-        <>
-          {p.enabled && !p.isDefault && (
-            <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-amber-600" onClick={() => onSetDefault(p.id)}>
-              {t('clientConfigPage.setDefault')}
-            </Button>
-          )}
-          {p.enabled ? (
-            <Button size="sm" variant="outline" disabled={loading} className="h-7 text-[12px]" onClick={() => onDisable(p.id)}>
-              {t('clientConfigPage.disable')}
-            </Button>
-          ) : (
-            <Button size="sm" disabled={loading} className="h-7 text-[12px]" onClick={() => onEnable(p.id)}>
-              {t('clientConfigPage.enable')}
-            </Button>
-          )}
-        </>
-      ) : (
-        <>
-          <Button size="sm" disabled={loading} variant={p.isCurrent ? 'outline' : 'default'} className="h-7 text-[12px]" onClick={() => onApply(p.id)}>
-            {t('clientConfigPage.enable')}
+      <TooltipProvider delayDuration={200}>
+        <div className="flex items-center gap-0.5">
+          <IconAction icon={Wifi} label={t('clientConfigPage.testConn')} disabled={loading} onClick={() => onTestConn(p.id)} />
+          <IconAction icon={Eye} label={t('clientConfigPage.preview')} disabled={loading} onClick={() => onPreview(p.id)} />
+          {/* 主按钮:仅「启用 / 使用中」用文字按钮显示;点击在启用↔停用/还原间切换。 */}
+          <Button
+            size="sm"
+            disabled={loading}
+            variant={active ? 'outline' : 'default'}
+            className="ml-1 h-7 gap-1 px-2.5 text-[12px]"
+            onClick={() => {
+              if (active) {
+                if (isAdditive) onDisable(p.id);
+                else onClear(p.id);
+              } else {
+                if (isAdditive) onEnable(p.id);
+                else onApply(p.id);
+              }
+            }}
+          >
+            {active && <Check className="size-3.5" aria-hidden />}
+            {active ? t('clientConfigPage.inUse') : t('clientConfigPage.enable')}
           </Button>
-          {p.isCurrent && (
-            <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onClear(p.id)}>
-              {t('clientConfigPage.clear')}
-            </Button>
+          {isAdditive && p.enabled && !p.isDefault && (
+            <IconAction icon={Star} label={t('clientConfigPage.setDefault')} disabled={loading} onClick={() => onSetDefault(p.id)} />
           )}
-        </>
-      )}
-      {p.source === 'manual' && (
-        <>
-          <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onEdit(p)} title={t('clientConfigPage.edit')}>
-            <Pencil className="size-3.5" aria-hidden />
-          </Button>
-          <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onDuplicate(p)} title={t('clientConfigPage.duplicate')}>
-            <Copy className="size-3.5" aria-hidden />
-          </Button>
-        </>
-      )}
-      <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => onRemove(p.id)}>
-        <Trash2 className="size-3.5" aria-hidden />
-      </Button>
+          {p.source === 'manual' && (
+            <>
+              <IconAction icon={Pencil} label={t('clientConfigPage.edit')} disabled={loading} onClick={() => onEdit(p)} />
+              <IconAction icon={Copy} label={t('clientConfigPage.duplicate')} disabled={loading} onClick={() => onDuplicate(p)} />
+            </>
+          )}
+          <IconAction icon={Trash2} label={t('clientConfigPage.delete')} danger disabled={loading} onClick={() => onRemove(p.id)} />
+        </div>
+      </TooltipProvider>
     </div>
   );
 }

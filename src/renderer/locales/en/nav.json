@@ -45,6 +45,8 @@
     "searchPlaceholder": "Search name / URL / model",
     "noSearchResults": "No matching providers",
     "edit": "Edit",
+    "delete": "Delete",
+    "inUse": "In use",
     "accountProvider": "号小管 Account",
     "accountProviderHint": "Use your account quota via the local reverse proxy",
     "emptyThirdParty": "No third-party providers yet — click \"Add provider\"",
