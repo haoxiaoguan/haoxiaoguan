@@ -4,7 +4,9 @@ import { Plus, History, Trash2, Check, Star, Copy, Pencil, Wifi } from 'lucide-r
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
@@ -248,6 +250,9 @@ export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
   const { clients, activeClient, profiles, counts, error, loading } = store;
+  const codexRelay = useSettingsStore((s) => s.codexRelayInjectionEnabled);
+  const setCodexRelay = useSettingsStore((s) => s.setCodexRelayInjectionEnabled);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
   // 右侧视图:列表 / 添加(页面) / 编辑(页面)。添加/编辑作为页面渲染在右侧,带返回。
   const [view, setView] = useState<
     { mode: 'list' } | { mode: 'add' } | { mode: 'edit'; profile: ClientConfigProfileDto }
@@ -256,6 +261,7 @@ export default function ClientConfig() {
 
   useEffect(() => {
     void store.init();
+    void loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -408,6 +414,20 @@ export default function ClientConfig() {
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
           </Button>
+          {/* Codex 专属:中转注入(L2 真共存)开关 */}
+          {activeClient === 'codex' && (
+            <label
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-border/60 px-2.5"
+              title={t('clientConfigPage.relayInjectionHint')}
+            >
+              <span className="text-[12px] text-muted-foreground">{t('clientConfigPage.relayInjection')}</span>
+              <Switch
+                checked={codexRelay}
+                onCheckedChange={(v) => void setCodexRelay(v)}
+                aria-label={t('clientConfigPage.relayInjection')}
+              />
+            </label>
+          )}
           <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setView({ mode: 'add' })}>
             <Plus className="size-3.5" aria-hidden />
             {t('clientConfigPage.addProfile')}

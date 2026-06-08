@@ -47,6 +47,8 @@
     "edit": "编辑",
     "delete": "删除",
     "inUse": "使用中",
+    "relayInjection": "中转注入",
+    "relayInjectionHint": "开启后 Codex 只接入号小管反代,账号 + 第三方模型聚合在 /model 可选(真共存);关闭则各供应商独立切换",
     "accountProvider": "号小管账号",
     "accountProviderHint": "用你的账号额度，经本机反代接入此客户端",
     "emptyThirdParty": "暂无第三方供应商，点「添加供应商」接入",

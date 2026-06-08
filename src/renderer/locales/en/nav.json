@@ -47,6 +47,8 @@
     "edit": "Edit",
     "delete": "Delete",
     "inUse": "In use",
+    "relayInjection": "Relay injection",
+    "relayInjectionHint": "When on, Codex connects only to the 号小管 proxy; account + third-party models are aggregated in /model (true coexistence). When off, providers switch individually.",
     "accountProvider": "号小管 Account",
     "accountProviderHint": "Use your account quota via the local reverse proxy",
     "emptyThirdParty": "No third-party providers yet — click \"Add provider\"",

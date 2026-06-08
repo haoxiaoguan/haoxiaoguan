@@ -65,6 +65,9 @@ export interface RuntimeSettings {
   apiProxyMaxBodyBytes: number
   // G7 无账号/组代理绑定时是否跟随 OS 系统代理（含 HTTP(S)_PROXY 环境变量）出站。默认 false。
   apiProxyFollowSystemProxy: boolean
+  // Codex「中转注入」(L2 真共存):开启时 Codex 只注入一个指向本机反代裸 /v1 的 provider,
+  // 反代聚合「账号 + 已启用第三方」模型并按模型名路由;关闭则维持每档独立注入(L1)。默认 false。
+  codexRelayInjectionEnabled: boolean
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -104,6 +107,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyIpDenylist: '',
   apiProxyMaxBodyBytes: 10 * 1024 * 1024,
   apiProxyFollowSystemProxy: false,
+  codexRelayInjectionEnabled: false,
 }
 
 export class AppSettings {
@@ -179,6 +183,7 @@ export class AppSettings {
       api_proxy_ip_denylist: this.runtime.apiProxyIpDenylist,
       api_proxy_max_body_bytes: String(this.runtime.apiProxyMaxBodyBytes),
       api_proxy_follow_system_proxy: String(this.runtime.apiProxyFollowSystemProxy),
+      codex_relay_injection_enabled: String(this.runtime.codexRelayInjectionEnabled),
     }
     for (const [platform, minutes] of Object.entries(this.runtime.refreshIntervals)) {
       kv[`refresh_interval_${platform}`] = String(minutes)
@@ -275,6 +280,8 @@ export class AppSettings {
         if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyMaxBodyBytes = n
       } else if (k === 'api_proxy_follow_system_proxy') {
         this.runtime.apiProxyFollowSystemProxy = v === 'true'
+      } else if (k === 'codex_relay_injection_enabled') {
+        this.runtime.codexRelayInjectionEnabled = v === 'true'
       } else if (k.startsWith('refresh_interval_')) {
         const n = Number(v)
         const platform = k.slice('refresh_interval_'.length)

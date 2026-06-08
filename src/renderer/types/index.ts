@@ -230,6 +230,7 @@ export interface Settings {
   utilityButtons: string;
   allowStaleKiroImport: boolean;
   terminalLaunchTemplate: string;
+  codexRelayInjectionEnabled: boolean;
 }
 
 export interface UpdateSettingsRequest {

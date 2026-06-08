@@ -29,6 +29,8 @@ interface SettingsState {
   allowStaleKiroImport: boolean;
   /** 「会话」恢复用的终端启动命令模板，占位符 {cwd}/{command}。空串=未配置（前端降级为复制）。 */
   terminalLaunchTemplate: string;
+  /** Codex「中转注入」(L2 真共存) 开关。 */
+  codexRelayInjectionEnabled: boolean;
   /** Loading state */
   loading: boolean;
   /** Error message */
@@ -62,6 +64,8 @@ interface SettingsState {
   setAllowStaleKiroImport: (enabled: boolean) => Promise<void>;
   /** Update terminal launch template (for session resume) */
   setTerminalLaunchTemplate: (template: string) => Promise<void>;
+  /** Update Codex 中转注入 (L2) toggle */
+  setCodexRelayInjectionEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -78,6 +82,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   utilityButtons: 'device,support,docs,notification',
   allowStaleKiroImport: false,
   terminalLaunchTemplate: '',
+  codexRelayInjectionEnabled: false,
   loading: false,
   error: null,
 
@@ -107,6 +112,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         utilityButtons: settings.utilityButtons,
         allowStaleKiroImport: settings.allowStaleKiroImport,
         terminalLaunchTemplate: settings.terminalLaunchTemplate ?? '',
+        codexRelayInjectionEnabled: settings.codexRelayInjectionEnabled ?? false,
         loading: false,
       });
     } catch (err) {
@@ -244,6 +250,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       await settingsService.updateSettings({ settings: { terminal_launch_template: template } });
       set({ terminalLaunchTemplate: template });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setCodexRelayInjectionEnabled: async (enabled: boolean) => {
+    try {
+      await settingsService.updateSettings({ settings: { codex_relay_injection_enabled: enabled ? 'true' : 'false' } });
+      set({ codexRelayInjectionEnabled: enabled });
     } catch (err) {
       set({ error: String(err) });
     }

@@ -18,6 +18,7 @@ export interface SettingsResponse {
   utilityButtons: string
   allowStaleKiroImport: boolean
   terminalLaunchTemplate: string
+  codexRelayInjectionEnabled: boolean
 }
 export interface AppDirs {
   dataDir: string
