@@ -253,6 +253,8 @@ export const CLIENT_CONFIG_CHANNELS = {
   update: 'clientConfig:update',
   delete: 'clientConfig:delete',
   preview: 'clientConfig:preview',
+  previewDraft: 'clientConfig:previewDraft',
+  fetchModels: 'clientConfig:fetchModels',
   apply: 'clientConfig:apply',
   clear: 'clientConfig:clear',
   enable: 'clientConfig:enable',
@@ -262,4 +264,6 @@ export const CLIENT_CONFIG_CHANNELS = {
   rollback: 'clientConfig:rollback',
   connectLocalProxy: 'clientConfig:connectLocalProxy',
   testConnectivity: 'clientConfig:testConnectivity',
+  setCodexRelayInjection: 'clientConfig:setCodexRelayInjection',
+  setCodexProviderEnabled: 'clientConfig:setCodexProviderEnabled',
 } as const

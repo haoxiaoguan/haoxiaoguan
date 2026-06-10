@@ -55,30 +55,39 @@ export class ClientConfigApplier {
     profileId: string,
   ): Promise<void> {
     const current = await readBundle(writer.configFiles())
-    const next = render(current) // 先算（损坏即抛，发生在任何快照/写盘之前）
-    await this.snapshots.capture(writer.clientId, action, writer.configFiles(), profileId)
-    // 多文件（如 Gemini 的 .env + settings.json）写中途失败 → best-effort 把已写文件回滚到
-    // 写前内容，避免停在不一致中间态（快照亦留存供手动恢复）。
-    const written: string[] = []
+    const next = render(current) // 先算（损坏即抛，发生在任何进程/快照/写盘之前 → 配置损坏时不会白停 App）
+    // 进程生命周期（仅 Codex 桌面 App 挂载）：停 App → 写盘 → 重启 App，
+    // 否则运行中的 Codex App 会按内存反写 config.toml 抹掉本次写入。beforeWrite 停不掉会抛错中止。
+    const lifecycle = writer.lifecycle
+    const token = lifecycle !== undefined ? await lifecycle.beforeWrite() : undefined
     try {
-      for (const [path, content] of Object.entries(next)) {
-        if (content !== null) {
-          await atomicWrite(path, content)
-          written.push(path)
-        }
-      }
-    } catch (err) {
-      for (const path of written) {
-        const prev = current[path]
-        if (prev !== null) {
-          try {
-            await atomicWrite(path, prev)
-          } catch {
-            // 补偿回滚已尽力；写前快照仍可手动恢复
+      await this.snapshots.capture(writer.clientId, action, writer.configFiles(), profileId)
+      // 多文件（如 Gemini 的 .env + settings.json）写中途失败 → best-effort 把已写文件回滚到
+      // 写前内容，避免停在不一致中间态（快照亦留存供手动恢复）。
+      const written: string[] = []
+      try {
+        for (const [path, content] of Object.entries(next)) {
+          if (content !== null) {
+            await atomicWrite(path, content)
+            written.push(path)
           }
         }
+      } catch (err) {
+        for (const path of written) {
+          const prev = current[path]
+          if (prev !== null) {
+            try {
+              await atomicWrite(path, prev)
+            } catch {
+              // 补偿回滚已尽力；写前快照仍可手动恢复
+            }
+          }
+        }
+        throw err
       }
-      throw err
+    } finally {
+      // 无论写成功或回滚都重启 App，恢复用户的 Codex（仅在 beforeWrite 真停过时才重启）。
+      if (lifecycle !== undefined && token !== undefined) await lifecycle.afterWrite(token)
     }
   }
 }

@@ -49,6 +49,29 @@ export function registerClientConfigHandlers(svc: ClientConfigService): void {
       throw new Error(toIpcError(e))
     }
   })
+  ipcMain.handle(
+    CLIENT_CONFIG_CHANNELS.previewDraft,
+    async (
+      _e,
+      input: { clientId: ClientId; name: string; baseUrl: string; apiKey?: string; model?: string; settings?: Record<string, unknown> },
+    ) => {
+      try {
+        return await svc.previewDraft(input)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+  ipcMain.handle(
+    CLIENT_CONFIG_CHANNELS.fetchModels,
+    async (_e, input: { clientId: ClientId; baseUrl: string; apiKey?: string; profileId?: string }) => {
+      try {
+        return await svc.fetchModels(input)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.apply, async (_e, id: string) => {
     try {
       await svc.apply(id)
@@ -108,6 +131,20 @@ export function registerClientConfigHandlers(svc: ClientConfigService): void {
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.testConnectivity, async (_e, id: string) => {
     try {
       return await svc.testConnectivity(id)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setCodexRelayInjection, async (_e, enabled: boolean) => {
+    try {
+      await svc.setCodexRelayInjection(enabled)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setCodexProviderEnabled, async (_e, id: string, enabled: boolean) => {
+    try {
+      await svc.setCodexProviderEnabled(id, enabled)
     } catch (e) {
       throw new Error(toIpcError(e))
     }

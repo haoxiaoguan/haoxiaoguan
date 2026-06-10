@@ -57,10 +57,22 @@ export interface GeminiGenerationConfig {
   topP?: number
 }
 
+export type GeminiFunctionCallingMode = 'AUTO' | 'ANY' | 'NONE'
+
+export interface GeminiFunctionCallingConfig {
+  mode: GeminiFunctionCallingMode
+  allowedFunctionNames?: string[]
+}
+
+export interface GeminiToolConfig {
+  functionCallingConfig?: GeminiFunctionCallingConfig
+}
+
 export interface GeminiGenerateContentRequest {
   contents: GeminiContent[]
   systemInstruction?: { parts: GeminiPart[] }
   tools?: GeminiTool[]
+  toolConfig?: GeminiToolConfig
   generationConfig?: GeminiGenerationConfig
 }
 

@@ -30,6 +30,10 @@ interface JsonEditorProps {
   onChange: (value: string) => void;
   /** 校验结果回调：errorCount > 0 表示存在 JSON 语法/结构错误 */
   onValidate?: (errorCount: number) => void;
+  /** 语言(默认 json);非 json 时不启用 JSON 诊断,作纯文本/其它语言编辑。 */
+  language?: string;
+  /** 编辑器获得/失去焦点回调(用于外部"编辑中不覆盖"的焦点守卫)。 */
+  onFocusChange?: (focused: boolean) => void;
   height?: number | string;
   placeholder?: string;
   readOnly?: boolean;
@@ -46,6 +50,8 @@ export function JsonEditor({
   value,
   onChange,
   onValidate,
+  language = 'json',
+  onFocusChange,
   height = 280,
   placeholder,
   readOnly = false,
@@ -67,13 +73,19 @@ export function JsonEditor({
 
   const handleMount: OnMount = (editor) => {
     editorRef.current = editor;
-    // 开启 JSON 诊断与格式校验（jsonDefaults 来自具名导入，避免依赖 languages.json 命名空间）
-    jsonDefaults.setDiagnosticsOptions({
-      validate: true,
-      allowComments: false,
-      schemaValidation: 'error',
-      trailingCommas: 'error',
-    });
+    // 仅 JSON 启用诊断与格式校验（jsonDefaults 来自具名导入，避免依赖 languages.json 命名空间）。
+    if (language === 'json') {
+      jsonDefaults.setDiagnosticsOptions({
+        validate: true,
+        allowComments: false,
+        schemaValidation: 'error',
+        trailingCommas: 'error',
+      });
+    }
+    if (onFocusChange) {
+      editor.onDidFocusEditorWidget(() => onFocusChange(true));
+      editor.onDidBlurEditorWidget(() => onFocusChange(false));
+    }
   };
 
   const handleValidate: OnValidate = (markers) => {
@@ -94,7 +106,7 @@ export function JsonEditor({
       style={{ height }}
     >
       <Editor
-        language="json"
+        language={language}
         theme={theme}
         value={value}
         onChange={(next) => onChange(next ?? '')}

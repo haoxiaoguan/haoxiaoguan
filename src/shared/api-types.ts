@@ -18,6 +18,7 @@ export interface SettingsResponse {
   utilityButtons: string
   allowStaleKiroImport: boolean
   terminalLaunchTemplate: string
+  codexRelayInjectionEnabled: boolean
 }
 export interface AppDirs {
   dataDir: string
@@ -703,6 +704,10 @@ export interface HxgApi {
     delete(id: string): Promise<void>
     /** 预览将写入客户端配置的 before/after（不写盘）。 */
     preview(id: string): Promise<ClientConfigDiffFile[]>
+    /** 用表单草稿值直接 dry-render 预览将写入的配置（不存档、不写盘）。 */
+    previewDraft(input: ClientConfigDraftInput): Promise<ClientConfigDiffFile[]>
+    /** 拉取供应商可用模型列表（GET /v1/models）。失败抛错。 */
+    fetchModels(input: ClientConfigFetchModelsInput): Promise<string[]>
     /** 应用并设为当前生效（写客户端配置，写前自动快照）。 */
     apply(id: string): Promise<void>
     /** 从客户端配置移除本接入档（还原）。 */
@@ -719,6 +724,10 @@ export interface HxgApi {
     connectLocalProxy(clientId: ClientConfigClientId): Promise<ClientConfigProfileDto>
     /** 测连通（GET /v1/models）。 */
     testConnectivity(id: string): Promise<ClientConfigConnTest>
+    /** Codex L2「中转注入」：开→注入单反代 provider(/v1)+写 model_catalog_json；关→清除。idempotent。 */
+    setCodexRelayInjection(enabled: boolean): Promise<void>
+    /** Codex L2 下切换第三方供应商启用态：标记 enabled + 重聚合(供/撤 relay、刷新 catalog)，不做 L1 注入。 */
+    setCodexProviderEnabled(id: string, enabled: boolean): Promise<void>
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
@@ -780,6 +789,22 @@ export interface UpdateClientConfigProfileDto {
   settings?: Record<string, unknown> | null
   apiKey?: string
   notes?: string | null
+}
+/** 配置预览草稿入参（表单值,不存档）。 */
+export interface ClientConfigDraftInput {
+  clientId: ClientConfigClientId
+  name: string
+  baseUrl: string
+  apiKey?: string
+  model?: string
+  settings?: Record<string, unknown>
+}
+/** 拉取模型列表入参:apiKey 为空且给 profileId 时由后端解出已存档的 key。 */
+export interface ClientConfigFetchModelsInput {
+  clientId: ClientConfigClientId
+  baseUrl: string
+  apiKey?: string
+  profileId?: string
 }
 export interface ClientConfigConnTest {
   ok: boolean

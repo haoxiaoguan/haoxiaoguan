@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, History, Trash2, Eye, Check, Zap, Star } from 'lucide-react';
+import { Plus, History, Trash2, Check, Star, Copy, Pencil, Wifi } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
+import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
 import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
+import { EditProviderDialog } from '@/components/clientConfig/EditProviderDialog';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -14,57 +20,43 @@ import {
   DialogHeader,
   DialogFooter,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import type {
   ClientConfigProfileDto,
-  ClientConfigDiffFile,
   ClientConfigSnapshotDto,
+  UpdateClientConfigProfileDto,
 } from '@shared/api-types';
 
-// ─── 双栏 diff 预览弹窗 ───────────────────────────────────────────────────
-function DiffDialog({
-  files,
-  onApply,
-  onClose,
+// ─── 图标工具按钮 + tooltip ──────────────────────────────────────────────
+function IconAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  danger,
 }: {
-  files: ClientConfigDiffFile[] | null;
-  onApply: () => void;
-  onClose: () => void;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
 }) {
-  const { t } = useTranslation('nav');
   return (
-    <Dialog open={files !== null} onOpenChange={(o) => (o ? undefined : onClose())}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{t('clientConfigPage.diff.title')}</DialogTitle>
-          <DialogDescription>{t('clientConfigPage.subtitle')}</DialogDescription>
-        </DialogHeader>
-        <div className="max-h-[55vh] space-y-4 overflow-y-auto">
-          {(files ?? []).map((f) => (
-            <div key={f.file}>
-              <div className="mb-1 font-mono text-[11px] text-muted-foreground">{f.file}</div>
-              <div className="grid grid-cols-2 gap-2">
-                <pre className="overflow-x-auto rounded-[8px] border border-border/60 bg-muted/30 p-2 font-mono text-[11px] leading-relaxed">
-                  <div className="mb-1 text-[10px] uppercase text-muted-foreground/60">{t('clientConfigPage.diff.before')}</div>
-                  {f.before ?? t('clientConfigPage.diff.empty')}
-                </pre>
-                <pre className="overflow-x-auto rounded-[8px] border border-primary/40 bg-primary/[0.04] p-2 font-mono text-[11px] leading-relaxed">
-                  <div className="mb-1 text-[10px] uppercase text-primary/70">{t('clientConfigPage.diff.after')}</div>
-                  {f.after ?? t('clientConfigPage.diff.deleted')}
-                </pre>
-              </div>
-            </div>
-          ))}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t('clientConfigPage.form.cancel')}
-          </Button>
-          <Button onClick={onApply}>{t('clientConfigPage.diff.apply')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          disabled={disabled}
+          aria-label={label}
+          onClick={onClick}
+          className={cn('size-7 text-muted-foreground', danger && 'hover:text-destructive')}
+        >
+          <Icon className="size-3.5" aria-hidden />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -119,35 +111,48 @@ function ProviderRow({
   p,
   isAdditive,
   loading,
-  onPreview,
   onTestConn,
   onApply,
   onClear,
   onEnable,
   onDisable,
   onSetDefault,
+  onEdit,
+  onDuplicate,
   onRemove,
 }: {
   p: ClientConfigProfileDto;
   isAdditive: boolean;
   loading: boolean;
-  onPreview: (id: string) => void;
   onTestConn: (id: string) => void;
   onApply: (id: string) => void;
   onClear: (id: string) => void;
   onEnable: (id: string) => void;
   onDisable: (id: string) => void;
   onSetDefault: (id: string) => void;
+  onEdit: (p: ClientConfigProfileDto) => void;
+  onDuplicate: (p: ClientConfigProfileDto) => void;
   onRemove: (id: string) => void;
 }) {
   const { t } = useTranslation('nav');
   // 高亮：切换式看 isCurrent，累加式看 enabled。
   const active = isAdditive ? p.enabled : p.isCurrent;
+  // 品牌图标元数据(添加时写入 settings.uiMeta);本机反代档用主题色「号」标识。
+  const uiMeta = (p.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
+  const isLocal = p.source === 'local-proxy';
+  const iconName = isLocal ? '号小管' : p.name;
   return (
     <div className={cn('flex items-center gap-3 rounded-[8px] border px-4 py-3', active ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/60')}>
+      <ProviderBrandIcon
+        icon={isLocal ? undefined : uiMeta.icon}
+        iconColor={isLocal ? 'hsl(var(--primary))' : uiMeta.iconColor}
+        name={iconName}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-foreground">{p.name}</span>
+          <span className="truncate text-[13px] font-medium text-foreground">
+            {isLocal ? t('clientConfigPage.accountProvider') : p.name}
+          </span>
           {!isAdditive && p.isCurrent && (
             <span className="inline-flex h-5 items-center gap-1 rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
               <Check className="size-3" aria-hidden />
@@ -166,54 +171,75 @@ function ProviderRow({
               {t('clientConfigPage.default')}
             </span>
           )}
-          <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
-            {p.source === 'local-proxy' ? t('clientConfigPage.sourceLocal') : t('clientConfigPage.sourceManual')}
-          </span>
+          {p.source === 'local-proxy' ? (
+            <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
+              {t('clientConfigPage.sourceLocal')}
+            </span>
+          ) : p.settings?.routeViaProxy === true ? (
+            <span className="rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+              {t('clientConfigPage.sourceRelay')}
+            </span>
+          ) : (
+            <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
+              {t('clientConfigPage.sourceDirect')}
+            </span>
+          )}
         </div>
         <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
           {p.baseUrl}
           {p.model ? ` · ${p.model}` : ''}
         </div>
       </div>
-      <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onTestConn(p.id)}>
-        {t('clientConfigPage.testConn')}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={loading} className="h-7 gap-1 text-[12px]" onClick={() => onPreview(p.id)}>
-        <Eye className="size-3.5" aria-hidden />
-        {t('clientConfigPage.preview')}
-      </Button>
-
-      {isAdditive ? (
-        <>
-          {p.enabled && !p.isDefault && (
-            <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-amber-600" onClick={() => onSetDefault(p.id)}>
-              {t('clientConfigPage.setDefault')}
-            </Button>
-          )}
-          {p.enabled ? (
-            <Button size="sm" variant="outline" disabled={loading} className="h-7 text-[12px]" onClick={() => onDisable(p.id)}>
-              {t('clientConfigPage.disable')}
-            </Button>
-          ) : (
-            <Button size="sm" disabled={loading} className="h-7 text-[12px]" onClick={() => onEnable(p.id)}>
-              {t('clientConfigPage.enable')}
-            </Button>
-          )}
-        </>
-      ) : (
-        <>
-          <Button size="sm" disabled={loading} variant={p.isCurrent ? 'outline' : 'default'} className="h-7 text-[12px]" onClick={() => onApply(p.id)}>
-            {t('clientConfigPage.enable')}
+      <TooltipProvider delayDuration={200}>
+        <div className="flex items-center gap-0.5">
+          {/* 主操作前置:仅「启用 / 使用中」用文字按钮显示;点击在启用↔停用/还原间切换。 */}
+          <Button
+            size="sm"
+            disabled={loading}
+            variant={active ? 'outline' : 'default'}
+            className="mr-1 h-7 gap-1 px-2.5 text-[12px]"
+            onClick={() => {
+              if (active) {
+                if (isAdditive) onDisable(p.id);
+                else onClear(p.id);
+              } else {
+                if (isAdditive) onEnable(p.id);
+                else onApply(p.id);
+              }
+            }}
+          >
+            {active && <Check className="size-3.5" aria-hidden />}
+            {active ? t('clientConfigPage.inUse') : t('clientConfigPage.enable')}
           </Button>
-          {p.isCurrent && (
-            <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground" onClick={() => onClear(p.id)}>
-              {t('clientConfigPage.clear')}
-            </Button>
+          <IconAction icon={Wifi} label={t('clientConfigPage.testConn')} disabled={loading} onClick={() => onTestConn(p.id)} />
+          {isAdditive && p.enabled && !p.isDefault && (
+            <IconAction icon={Star} label={t('clientConfigPage.setDefault')} disabled={loading} onClick={() => onSetDefault(p.id)} />
           )}
-        </>
-      )}
-      <Button size="sm" variant="ghost" disabled={loading} className="h-7 text-[12px] text-muted-foreground hover:text-destructive" onClick={() => onRemove(p.id)}>
-        <Trash2 className="size-3.5" aria-hidden />
+          {p.source === 'manual' && (
+            <>
+              <IconAction icon={Pencil} label={t('clientConfigPage.edit')} disabled={loading} onClick={() => onEdit(p)} />
+              <IconAction icon={Copy} label={t('clientConfigPage.duplicate')} disabled={loading} onClick={() => onDuplicate(p)} />
+            </>
+          )}
+          <IconAction icon={Trash2} label={t('clientConfigPage.delete')} danger disabled={loading} onClick={() => onRemove(p.id)} />
+        </div>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+// ─── 号小管账号占位卡片（未接入时）：点启用 = 接入本机反代（账号额度反代）───────────
+function AccountPlaceholderCard({ onConnect, loading }: { onConnect: () => void; loading: boolean }) {
+  const { t } = useTranslation('nav');
+  return (
+    <div className="flex items-center gap-3 rounded-[8px] border border-dashed border-primary/40 bg-primary/[0.03] px-4 py-3">
+      <ProviderBrandIcon iconColor="hsl(var(--primary))" name="号小管" />
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-foreground">{t('clientConfigPage.accountProvider')}</div>
+        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{t('clientConfigPage.accountProviderHint')}</div>
+      </div>
+      <Button size="sm" disabled={loading} className="h-7 text-[12px]" onClick={onConnect}>
+        {t('clientConfigPage.enable')}
       </Button>
     </div>
   );
@@ -224,12 +250,18 @@ export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
   const { clients, activeClient, profiles, counts, error, loading } = store;
-  const [addOpen, setAddOpen] = useState(false);
-  const [diff, setDiff] = useState<{ id: string; files: ClientConfigDiffFile[] } | null>(null);
+  const codexRelay = useSettingsStore((s) => s.codexRelayInjectionEnabled);
+  const setCodexRelay = useSettingsStore((s) => s.setCodexRelayInjectionEnabled);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
+  // 右侧视图:列表 / 添加(页面) / 编辑(页面)。添加/编辑作为页面渲染在右侧,带返回。
+  const [view, setView] = useState<
+    { mode: 'list' } | { mode: 'add' } | { mode: 'edit'; profile: ClientConfigProfileDto }
+  >({ mode: 'list' });
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
 
   useEffect(() => {
     void store.init();
+    void loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -239,24 +271,9 @@ export default function ClientConfig() {
   const activeInfo = clients.find((c) => c.clientId === activeClient);
   const isAdditive = activeInfo?.writeMode === 'additive';
 
-  const onPreview = async (id: string) => {
-    const files = await store.preview(id);
-    if (files.length === 0) {
-      toast.message(t('clientConfigPage.diff.noChange'));
-      return;
-    }
-    setDiff({ id, files });
-  };
   const onClear = async (id: string) => {
     await store.clear(id);
     toast.success(t('clientConfigPage.cleared'));
-  };
-  const onApplyFromDiff = async () => {
-    if (!diff) return;
-    if (isAdditive) await store.enable(diff.id);
-    else await store.apply(diff.id);
-    setDiff(null);
-    toast.success(t('clientConfigPage.applied'));
   };
   const onShowHistory = async () => {
     setHistoryData(await store.history());
@@ -275,6 +292,15 @@ export default function ClientConfig() {
     if (r?.ok) toast.success(t('clientConfigPage.connOk'));
     else toast.error(t('clientConfigPage.connFail', { msg: r?.message ?? String(r?.status ?? '') }));
   };
+  // Codex L2「中转注入」开关：持久化设置 + 注入单反代 provider(/v1)+catalog（开）或清除（关）。
+  const onToggleCodexRelay = async (v: boolean) => {
+    await setCodexRelay(v);
+    await store.setCodexRelayInjection(v);
+    if (!useClientConfigStore.getState().error) {
+      toast.success(v ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
+    }
+  };
+  // 启停供应商。Codex 为单选语义(enable 内部已委托：清掉其它+按中转注入模式注入所选)；其余客户端常规。
   const onEnable = async (id: string) => {
     await store.enable(id);
     toast.success(t('clientConfigPage.applied'));
@@ -286,6 +312,39 @@ export default function ClientConfig() {
   const onSetDefault = async (id: string) => {
     await store.setDefault(id);
     toast.success(t('clientConfigPage.defaultSet'));
+  };
+  const onDuplicate = async (p: ClientConfigProfileDto) => {
+    const newName = `${p.name} ${t('clientConfigPage.copySuffix')}`;
+    // 复制不带 apiKey(密钥需用户在编辑里重填);settings 含 uiMeta 品牌图标一并复制。
+    await store.create({
+      clientId: p.clientId,
+      name: newName,
+      source: 'manual',
+      baseUrl: p.baseUrl,
+      ...(p.model ? { model: p.model } : {}),
+      ...(p.settings ? { settings: p.settings } : {}),
+    });
+    if (!useClientConfigStore.getState().error) toast.success(newName);
+  };
+
+  // 号小管账号(账号额度反代)= local-proxy 档,固定置顶;第三方 = manual 档。
+  const accountProfile = profiles.find((p) => p.source === 'local-proxy');
+  const thirdParty = profiles.filter((p) => p.source === 'manual');
+
+  const onCreateProvider = async (v: { name: string; baseUrl: string; apiKey: string; model: string; settings?: Record<string, unknown> }) => {
+    await store.create({
+      clientId: activeClient,
+      name: v.name,
+      source: 'manual',
+      baseUrl: v.baseUrl,
+      ...(v.apiKey ? { apiKey: v.apiKey } : {}),
+      ...(v.model ? { model: v.model } : {}),
+      ...(v.settings ? { settings: v.settings } : {}),
+    });
+  };
+  const onSaveProvider = async (id: string, patch: UpdateClientConfigProfileDto) => {
+    await store.update(id, patch);
+    if (!useClientConfigStore.getState().error) toast.success(t('clientConfigPage.form.save'));
   };
 
   return (
@@ -302,7 +361,10 @@ export default function ClientConfig() {
                 <button
                   key={c.clientId}
                   type="button"
-                  onClick={() => void store.selectClient(c.clientId)}
+                  onClick={() => {
+                    setView({ mode: 'list' });
+                    void store.selectClient(c.clientId);
+                  }}
                   className={cn(
                     'flex h-11 w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 text-left transition-colors',
                     selected ? 'bg-primary/10' : 'hover:bg-muted',
@@ -328,8 +390,23 @@ export default function ClientConfig() {
         </ScrollArea>
       </aside>
 
-      {/* 右：供应商列表 */}
+      {/* 右：供应商列表 / 添加 / 编辑(页面) */}
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {view.mode === 'add' ? (
+          <AddProviderDialog
+            clientId={activeClient}
+            clientName={activeInfo?.displayName ?? ''}
+            onBack={() => setView({ mode: 'list' })}
+            onCreate={onCreateProvider}
+          />
+        ) : view.mode === 'edit' ? (
+          <EditProviderDialog
+            profile={view.profile}
+            onBack={() => setView({ mode: 'list' })}
+            onSave={onSaveProvider}
+          />
+        ) : (
+          <>
         <div className="flex min-w-0 items-center gap-2.5 border-b border-border/60 px-5 py-3.5">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -346,11 +423,25 @@ export default function ClientConfig() {
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
           </Button>
-          <Button variant="outline" size="sm" disabled={loading} className="h-8 gap-1.5 text-[12px]" onClick={() => void onConnectLocalProxy()}>
-            <Zap className="size-3.5" aria-hidden />
-            {t('clientConfigPage.connectLocalProxy')}
-          </Button>
-          <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setAddOpen(true)}>
+          {/* Codex 专属:中转注入(L2 真共存)开关。提示用项目 Tooltip 组件(不用原生 title,样式统一)。 */}
+          {activeClient === 'codex' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-border/60 px-2.5">
+                  <span className="text-[12px] text-muted-foreground">{t('clientConfigPage.relayInjection')}</span>
+                  <Switch
+                    checked={codexRelay}
+                    onCheckedChange={(v) => void onToggleCodexRelay(v)}
+                    aria-label={t('clientConfigPage.relayInjection')}
+                  />
+                </label>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px] leading-relaxed">
+                {t('clientConfigPage.relayInjectionHint')}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setView({ mode: 'add' })}>
             <Plus className="size-3.5" aria-hidden />
             {t('clientConfigPage.addProfile')}
           </Button>
@@ -358,51 +449,57 @@ export default function ClientConfig() {
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-2 px-5 py-4">
-            {profiles.length === 0 ? (
-              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-10 text-center">
-                <div className="text-[13px] text-muted-foreground">{t('clientConfigPage.empty')}</div>
-                <div className="mt-1 text-[12px] text-muted-foreground/60">{t('clientConfigPage.emptyHint')}</div>
+            {/* 号小管账号(账号额度反代)固定置顶:已接入显示真实档,未接入显示占位卡片。 */}
+            {accountProfile ? (
+              <ProviderRow
+                key={accountProfile.id}
+                p={accountProfile}
+                isAdditive={isAdditive}
+                loading={loading}
+                onTestConn={(id) => void onTestConn(id)}
+                onApply={(id) => void store.apply(id)}
+                onClear={(id) => void onClear(id)}
+                onEnable={(id) => void onEnable(id)}
+                onDisable={(id) => void onDisable(id)}
+                onSetDefault={(id) => void onSetDefault(id)}
+                onEdit={(pp) => setView({ mode: 'edit', profile: pp })}
+                onDuplicate={(pp) => void onDuplicate(pp)}
+                onRemove={(id) => void store.remove(id)}
+              />
+            ) : (
+              <AccountPlaceholderCard onConnect={() => void onConnectLocalProxy()} loading={loading} />
+            )}
+
+            {/* 第三方供应商 */}
+            {thirdParty.length === 0 ? (
+              <div className="rounded-[8px] border border-dashed border-border/60 px-4 py-8 text-center text-[12px] text-muted-foreground/70">
+                {t('clientConfigPage.emptyThirdParty')}
               </div>
             ) : (
-              profiles.map((p) => (
+              thirdParty.map((p) => (
                 <ProviderRow
                   key={p.id}
                   p={p}
                   isAdditive={isAdditive}
                   loading={loading}
-                  onPreview={(id) => void onPreview(id)}
-                  onTestConn={(id) => void onTestConn(id)}
+                    onTestConn={(id) => void onTestConn(id)}
                   onApply={(id) => void store.apply(id)}
                   onClear={(id) => void onClear(id)}
                   onEnable={(id) => void onEnable(id)}
                   onDisable={(id) => void onDisable(id)}
                   onSetDefault={(id) => void onSetDefault(id)}
+                  onEdit={(pp) => setView({ mode: 'edit', profile: pp })}
+                  onDuplicate={(pp) => void onDuplicate(pp)}
                   onRemove={(id) => void store.remove(id)}
                 />
               ))
             )}
           </div>
         </ScrollArea>
+          </>
+        )}
       </section>
 
-      <AddProviderDialog
-        clientId={activeClient}
-        clientName={activeInfo?.displayName ?? ''}
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onCreate={(v) =>
-          store.create({
-            clientId: activeClient,
-            name: v.name,
-            source: 'manual',
-            baseUrl: v.baseUrl,
-            ...(v.apiKey ? { apiKey: v.apiKey } : {}),
-            ...(v.model ? { model: v.model } : {}),
-            ...(v.settings ? { settings: v.settings } : {}),
-          })
-        }
-      />
-      <DiffDialog files={diff?.files ?? null} onApply={() => void onApplyFromDiff()} onClose={() => setDiff(null)} />
       <HistoryDialog entries={historyData} onRollback={(id) => void onRollback(id)} onClose={() => setHistoryData(null)} />
     </div>
   );

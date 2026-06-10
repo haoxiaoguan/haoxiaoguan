@@ -34,6 +34,11 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.apiProxyEnabled
   }
 
+  /** Codex「中转注入」(L2 真共存) 是否开启（默认 false）。供 clientConfig 应用 Codex 档时决定注入形态。 */
+  getCodexRelayInjectionEnabled(): boolean {
+    return this.file.loadSync().runtime.codexRelayInjectionEnabled
+  }
+
   /** 反代服务监听端口（默认 8788）。 */
   getApiProxyPort(): number {
     return this.file.loadSync().runtime.apiProxyPort

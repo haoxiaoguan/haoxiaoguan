@@ -104,6 +104,7 @@ export class ClientConfigProfileRepository implements ClientConfigStore {
     if (patch.model !== undefined) e.model = patch.model === null ? undefined : patch.model
     if (patch.settings !== undefined) e.settingsConfig = patch.settings === null ? undefined : JSON.stringify(patch.settings)
     if (patch.notes !== undefined) e.notes = patch.notes === null ? undefined : patch.notes
+    if (patch.keyRef !== undefined) e.keyRef = patch.keyRef === null ? undefined : patch.keyRef
     if (patch.apiKey !== undefined && patch.apiKey.length > 0) e.keyEnc = this.encryptKey(e.id, e.createdAt, patch.apiKey)
     e.updatedAt = new Date().toISOString()
     await em.flush()

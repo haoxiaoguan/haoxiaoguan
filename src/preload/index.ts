@@ -266,6 +266,8 @@ const api: HxgApi = {
     update: (id, patch) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.update, id, patch),
     delete: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.delete, id),
     preview: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.preview, id),
+    previewDraft: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.previewDraft, input),
+    fetchModels: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.fetchModels, input),
     apply: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.apply, id),
     clear: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clear, id),
     enable: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.enable, id),
@@ -275,6 +277,10 @@ const api: HxgApi = {
     rollback: (clientId, entryId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.rollback, clientId, entryId),
     connectLocalProxy: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.connectLocalProxy, clientId),
     testConnectivity: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.testConnectivity, id),
+    setCodexRelayInjection: (enabled) =>
+      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setCodexRelayInjection, enabled),
+    setCodexProviderEnabled: (id, enabled) =>
+      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setCodexProviderEnabled, id, enabled),
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
