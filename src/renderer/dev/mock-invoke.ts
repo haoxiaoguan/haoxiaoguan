@@ -772,7 +772,7 @@ export function installAccountsMock(): void {
         case 'sessions:repairPreview':
           return { available: false, counts: [], repairable: 0, codexRunning: false };
         case 'sessions:repair':
-          return { updatedThreads: 0, rewrittenRollouts: 0, skippedRollouts: 0, backupId: 'mock' };
+          return { updatedThreads: 0, userEventRows: 0, cwdRows: 0, globalStateKeys: 0, changedRollouts: 0, skippedRollouts: 0, backupId: 'mock' };
         case 'sessions:repairRollback':
           return undefined;
         case 'validate_batch':
