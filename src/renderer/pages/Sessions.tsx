@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import type { SessionSummaryDto } from '@shared/api-types';
 import { TOOL_CONFIG, formatTime, shortDir, SessionListSkeleton, EmptyState } from '@/components/sessions/shared';
 import { SessionDetailDialog } from '@/components/sessions/SessionDetailDialog';
+import { RepairSessionsDialog } from '@/components/sessions/RepairSessionsDialog';
 import { ProviderTag } from '@/components/sessions/ProviderTag';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 
@@ -562,8 +563,8 @@ export default function Sessions() {
         onDelete={(s) => setDeleteTarget(s)}
       />
 
-      {/* ── 修复会话占位（Task 12 才实现 RepairSessionsDialog）── */}
-      {repairOpen && null}
+      {/* ── 修复会话对话框 ── */}
+      <RepairSessionsDialog open={repairOpen} onOpenChange={setRepairOpen} />
 
       {/* ── 单条删除确认 ── */}
       <AlertDialog
