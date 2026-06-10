@@ -151,52 +151,51 @@ export class CodexSessionRepair {
       const backupId = await this.backup.capture(this.codexHome, dbPath, backupEntries)
       onProgress?.({ phase: 'backup', percent: 42, message: '备份中…' })
 
-      // ── 3. 改写 rollout ──────────────────────────────────────────────────
+      // ── 3. 改写 rollout + 4. SQLite + 5. global-state ────────────────────
+      // 任一步失败 → 从备份完整回滚(db + config/global-state + 已改 rollout)再抛错,避免停在
+      // 「rollout 改了但 SQLite 没改」或「SQLite 改了但 global-state 半写」的不一致中间态。
       let changedRollouts = 0
       let skippedRollouts = 0
-      const writtenPaths: string[] = []
-
-      if (req.rewriteRollout !== false) {
-        const changedTotal = changed.length
-        for (let i = 0; i < changed.length; i++) {
-          const c = changed[i]
-          try {
-            await writeRolloutPreservingMtime(c.path, c.nextText)
-            writtenPaths.push(c.path)
-            changedRollouts++
-          } catch (err: unknown) {
-            const code = (err as NodeJS.ErrnoException).code
-            if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
-              skippedRollouts++
-            } else {
-              skippedRollouts++
-            }
-          }
-          if (i % 20 === 0 || i === changedTotal - 1) {
-            onProgress?.({
-              phase: 'rollout',
-              percent: 42 + (changedTotal > 0 ? Math.round((i + 1) / changedTotal * 46) : 0),
-              message: '改写会话文件',
-              current: i + 1,
-              total: changedTotal,
-            })
-          }
-        }
-        if (changed.length === 0) {
-          onProgress?.({ phase: 'rollout', percent: 88, message: '改写会话文件', current: 0, total: 0 })
-        }
-      } else {
-        onProgress?.({ phase: 'rollout', percent: 88, message: '改写会话文件（已跳过）' })
-      }
-
-      // ── 4. SQLite + 5. global-state (失败时回滚已写 rollout) ─────────────
       let providerRows = 0
       let userEventRows = 0
       let cwdRows = 0
       let globalStateKeys = 0
 
       try {
-        // SQLite
+        // 3. 改写 rollout(锁文件跳过计数;其它 IO 错误中止→回滚,对齐 codex++ apply_session_changes)
+        if (req.rewriteRollout !== false) {
+          const changedTotal = changed.length
+          for (let i = 0; i < changedTotal; i++) {
+            const c = changed[i]
+            try {
+              await writeRolloutPreservingMtime(c.path, c.nextText)
+              changedRollouts++
+            } catch (err: unknown) {
+              const code = (err as NodeJS.ErrnoException).code
+              if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
+                skippedRollouts++ // 文件被占用→跳过,不中止
+              } else {
+                throw err // 其它 IO 错误→中止并回滚
+              }
+            }
+            if (i % 20 === 0 || i === changedTotal - 1) {
+              onProgress?.({
+                phase: 'rollout',
+                percent: 42 + (changedTotal > 0 ? Math.round((i + 1) / changedTotal * 46) : 0),
+                message: '改写会话文件',
+                current: i + 1,
+                total: changedTotal,
+              })
+            }
+          }
+          if (changedTotal === 0) {
+            onProgress?.({ phase: 'rollout', percent: 88, message: '改写会话文件', current: 0, total: 0 })
+          }
+        } else {
+          onProgress?.({ phase: 'rollout', percent: 88, message: '改写会话文件（已跳过）' })
+        }
+
+        // 4. SQLite(单事务:provider 全量 + has_user_event + cwd)
         const db = new CodexStateDb(dbPath)
         try {
           const counts = db.applyUpdates(req.targetProvider, userEventThreadIds, cwdByThreadId)
@@ -208,20 +207,12 @@ export class CodexSessionRepair {
         }
         onProgress?.({ phase: 'sqlite', percent: 92, message: '更新数据库索引' })
 
-        // global-state
-        const gsPath = join(this.codexHome, '.codex-global-state.json')
-        globalStateKeys = await applyGlobalStateUpdate(gsPath)
+        // 5. global-state
+        globalStateKeys = await applyGlobalStateUpdate(join(this.codexHome, '.codex-global-state.json'))
         onProgress?.({ phase: 'globalstate', percent: 97, message: '整理工作区索引' })
       } catch (err) {
-        // 回滚已写 rollout
-        for (const p of writtenPaths) {
-          const entry = backupEntries.find((e) => e.path === p)
-          if (entry) {
-            try { await rewriteRolloutLines(p, entry.originalSessionMetaLines) } catch { /* best effort */ }
-          }
-        }
-        // 回滚 db
-        try { await this.backup.restoreDbOnly(backupId, dbPath) } catch { /* best effort */ }
+        // 完整回滚(与 rollback() 同一路径):db + config/global-state + 已改 rollout。
+        await this.restoreFromBackup(backupId).catch(() => {})
         throw err
       }
 
@@ -243,25 +234,34 @@ export class CodexSessionRepair {
   }
 
   async rollback(backupId: string): Promise<void> {
-    const manifest = await this.backup.readManifest(backupId)
     const token = await this.lifecycle.beforeWrite()
     try {
-      await this.backup.restoreDbOnly(backupId, manifest.dbPath)
-      await this.backup.restoreConfigAndGlobalState(backupId, manifest.home)
-      const entries = await this.backup.readSessionMetaBackup(backupId)
-      for (const entry of entries) {
-        if (existsSync(entry.path)) {
-          try {
-            await rewriteRolloutLines(entry.path, entry.originalSessionMetaLines)
-          } catch { /* best effort */ }
-        }
-      }
+      await this.restoreFromBackup(backupId)
     } finally {
       await this.lifecycle.afterWrite(token)
     }
   }
 
   // ── private helpers ───────────────────────────────────────────────────────
+
+  /**
+   * 从备份完整回滚:db(含删修复期 live wal/shm)+ config/.codex-global-state(+.bak)
+   * + 所有已改 rollout 文件的 session_meta 行。供 repair 失败内联回滚与 rollback() 复用,
+   * 保证两条回滚路径一致(opus 复审 I-1/I-2)。调用方负责停-写-启生命周期。
+   */
+  private async restoreFromBackup(backupId: string): Promise<void> {
+    const manifest = await this.backup.readManifest(backupId)
+    await this.backup.restoreDbOnly(backupId, manifest.dbPath)
+    await this.backup.restoreConfigAndGlobalState(backupId, manifest.home)
+    const entries = await this.backup.readSessionMetaBackup(backupId)
+    for (const entry of entries) {
+      if (existsSync(entry.path)) {
+        try {
+          await rewriteRolloutLines(entry.path, entry.originalSessionMetaLines)
+        } catch { /* best effort */ }
+      }
+    }
+  }
 
   private async collectRolloutFiles(): Promise<string[]> {
     const files: string[] = []

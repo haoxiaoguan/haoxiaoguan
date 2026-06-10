@@ -1,5 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { atomicWrite } from '../../../platform/fs/atomic-write'
 import { toDesktopWorkspacePath } from './codex-rollout-rewrite'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ export async function applyGlobalStateUpdate(path: string): Promise<number> {
     merged[key] = value
   }
   const text = JSON.stringify(merged, null, 2)
-  await writeFile(path, text, 'utf8')
-  await writeFile(path + '.bak', text, 'utf8')
+  await atomicWrite(path, text)
+  await atomicWrite(path + '.bak', text)
   return changed.length
 }

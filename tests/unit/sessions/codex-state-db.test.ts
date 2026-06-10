@@ -74,50 +74,7 @@ describe('CodexStateDb', () => {
     } finally { db.close() }
   })
 
-  it('listRefs: 返回非 target 且非 archived 的 thread', async () => {
-    const p = join(home, 'state_5.sqlite')
-    seedDb(p, [
-      { id: 'a', provider: 'openai', rollout: '/r/a.jsonl' },
-      { id: 'c', provider: 'hxg_x', rollout: '/r/c.jsonl' },
-    ])
-    const db = new CodexStateDb(p)
-    try {
-      expect(db.listRefs('hxg_x')).toEqual([{ id: 'a', rolloutPath: '/r/a.jsonl', provider: 'openai' }])
-    } finally { db.close() }
-  })
-
-  // ── updateProvider: 全量(包含 archived,去掉 fromProviders 过滤逻辑但保持 API 兼容) ──
-
-  it('updateProvider: 全量包含 archived 行也改', async () => {
-    const p = join(home, 'state_5.sqlite')
-    seedDb(p, [
-      { id: 'a', provider: 'openai', rollout: '/r/a.jsonl' },
-      { id: 'b', provider: 'custom', rollout: '/r/b.jsonl' },
-      { id: 'c', provider: 'hxg_x', rollout: '/r/c.jsonl' },
-      { id: 'd', provider: 'openai', rollout: '/r/d.jsonl', archived: 1 }, // 也应被改
-    ])
-    const db = new CodexStateDb(p)
-    try {
-      const changed = db.updateProvider('hxg_x')
-      expect(changed).toBe(3) // a, b, d
-      const raw = new Database(p, { readonly: true })
-      const rows = raw.prepare('SELECT model_provider FROM threads').all() as Array<{ model_provider: string }>
-      raw.close()
-      expect(rows.every(r => r.model_provider === 'hxg_x')).toBe(true)
-    } finally { db.close() }
-  })
-
-  it('updateProvider: 向后兼容 — 传可选第二参数时仍可工作（不报错）', async () => {
-    const p = join(home, 'state_5.sqlite')
-    seedDb(p, [
-      { id: 'a', provider: 'openai', rollout: '/r/a.jsonl' },
-    ])
-    const db = new CodexStateDb(p)
-    try {
-      // 传了 fromProviders 也不应报错
-      expect(() => db.updateProvider('hxg_x', ['openai'])).not.toThrow()
-    } finally { db.close() }
-  })
+  // ── provider 全量更新由 applyUpdates 覆盖(含 archived 行)——见下方 applyUpdates 用例 ──
 
   // ── hasColumn ──────────────────────────────────────────────────────────────
 
@@ -141,6 +98,7 @@ describe('CodexStateDb', () => {
       { id: 'a', provider: 'openai', rollout: '/r/a.jsonl', hasUserEvent: 0, cwd: '/old' },
       { id: 'b', provider: 'openai', rollout: '/r/b.jsonl', hasUserEvent: null, cwd: null },
       { id: 'c', provider: 'hxg_x', rollout: '/r/c.jsonl', hasUserEvent: 1, cwd: '/c' },
+      { id: 'd', provider: 'openai', rollout: '/r/d.jsonl', hasUserEvent: 1, cwd: '/d', archived: 1 }, // 归档行 provider 也应改(对齐 codex++ 不过滤 archived)
     ])
     const db = new CodexStateDb(p)
     try {
@@ -149,8 +107,8 @@ describe('CodexStateDb', () => {
         ['a', 'b'],                       // userEventThreadIds
         { a: '/new-cwd', b: '/cwd-b' },   // cwdByThreadId
       )
-      // provider: a+b changed (2), c already hxg_x (0)
-      expect(result.providerRows).toBe(2)
+      // provider: a+b+d changed (3, 含 archived 的 d), c already hxg_x (0)
+      expect(result.providerRows).toBe(3)
       // has_user_event: a(0→1) + b(null→1) = 2
       expect(result.userEventRows).toBe(2)
       // cwd: a(/old→/new-cwd) + b(null→/cwd-b) = 2

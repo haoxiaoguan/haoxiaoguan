@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import type { CodexProviderCount, CodexThreadRef } from '../domain/codex-repair'
+import type { CodexProviderCount } from '../domain/codex-repair'
 
 const STATE_RE = /^state_(\d+)\.sqlite$/
 
@@ -53,27 +53,6 @@ export class CodexStateDb {
         `SELECT model_provider AS provider, COUNT(*) AS count FROM threads GROUP BY model_provider ORDER BY count DESC`,
       )
       .all() as CodexProviderCount[]
-  }
-
-  /** 非 target(可选限定 fromProviders)且 archived=0 的 thread 引用(供 rollout 改写)。 */
-  listRefs(target: string, fromProviders?: string[]): CodexThreadRef[] {
-    const params: unknown[] = [target]
-    let sql = `SELECT id, rollout_path AS rolloutPath, model_provider AS provider FROM threads WHERE archived = 0 AND model_provider <> ?`
-    if (fromProviders && fromProviders.length > 0) {
-      sql += ` AND model_provider IN (${fromProviders.map(() => '?').join(',')})`
-      params.push(...fromProviders)
-    }
-    return this.db.prepare(sql).all(...params) as CodexThreadRef[]
-  }
-
-  /**
-   * 全量把非 target 的 model_provider 改成 target（含 archived 行）。返回改动行数。
-   * 向后兼容：第二参数保留但忽略（codex++ 无此过滤）。
-   */
-  updateProvider(target: string, _fromProviders?: string[]): number {
-    const sql = `UPDATE threads SET model_provider = ? WHERE COALESCE(model_provider, '') <> ?`
-    const info = this.db.prepare(sql).run(target, target)
-    return info.changes
   }
 
   /**
