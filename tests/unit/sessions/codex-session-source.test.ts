@@ -97,4 +97,22 @@ describe('CodexSessionSource', () => {
     await source().delete(a, 'dddddddd-0000-0000-0000-000000000000')
     expect(existsSync(a)).toBe(false)
   })
+
+  it('archived_sessions 目录下的会话 archived===true；sessions 目录下的 archived 为 undefined', async () => {
+    await mkdir(join(dir, 'archived_sessions'), { recursive: true })
+    // archived 条目
+    const archivedPath = join(dir, 'archived_sessions', 'rollout-arch-aaaaaaaa-1111-1111-1111-111111111111.jsonl')
+    await writeFile(archivedPath, JSON.stringify({ timestamp: '2026-06-02T00:00:00.000Z', type: 'session_meta', payload: { id: 'aaaaaaaa-1111-1111-1111-111111111111', cwd: '/z' } }))
+    // 普通 sessions 条目（已在 beforeEach 的目录里，复用 writeRollout）
+    await writeRollout('rollout-norm-bbbbbbbb-2222-2222-2222-222222222222.jsonl', [
+      { timestamp: '2026-06-01T00:00:00.000Z', type: 'session_meta', payload: { id: 'bbbbbbbb-2222-2222-2222-222222222222', cwd: '/w' } },
+    ])
+    const page = await source().scan()
+    const archivedItem = page.items.find((s) => s.sessionId === 'aaaaaaaa-1111-1111-1111-111111111111')
+    const normalItem = page.items.find((s) => s.sessionId === 'bbbbbbbb-2222-2222-2222-222222222222')
+    expect(archivedItem).toBeDefined()
+    expect(archivedItem?.archived).toBe(true)
+    expect(normalItem).toBeDefined()
+    expect(normalItem?.archived).toBeFalsy()
+  })
 })

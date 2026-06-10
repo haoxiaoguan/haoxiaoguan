@@ -126,6 +126,8 @@ export class CodexSessionSource implements SessionSource {
       if (lastActiveAt === undefined && typeof v.timestamp === 'string') lastActiveAt = parseTimestampToMs(v.timestamp)
     }
 
+    const archivedRoot = join(this.rootDir, 'archived_sessions')
+    const isArchived = path.startsWith(archivedRoot + '/')
     return {
       tool: this.tool,
       sessionId,
@@ -137,6 +139,7 @@ export class CodexSessionSource implements SessionSource {
       sourcePath: path,
       resumeCommand: `codex resume ${sessionId}`,
       ...(provider ? { provider } : {}),
+      ...(isArchived ? { archived: true } : {}),
     }
   }
 

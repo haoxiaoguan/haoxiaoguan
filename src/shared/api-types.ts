@@ -415,6 +415,7 @@ export interface SessionSummaryDto {
   sourcePath: string
   resumeCommand?: string
   provider?: string
+  archived?: boolean
 }
 export interface SessionMessageDto {
   role: 'user' | 'assistant' | 'tool' | 'system'
@@ -454,6 +455,14 @@ export interface CodexRepairResultDto {
   rewrittenRollouts: number
   skippedRollouts: number
   backupId: string
+}
+
+export interface CodexRepairProgressDto {
+  phase: 'backup' | 'sqlite' | 'rollout' | 'done'
+  percent: number
+  message: string
+  current?: number
+  total?: number
 }
 
 export interface SessionDeleteRequestDto {
@@ -709,6 +718,7 @@ export interface HxgApi {
     repairPreview(): Promise<CodexRepairPreviewDto>
     repair(req: CodexRepairRequestDto): Promise<CodexRepairResultDto>
     repairRollback(backupId: string): Promise<void>
+    onRepairProgress(cb: (p: CodexRepairProgressDto) => void): () => void
   }
   updater: {
     /** 手动检查更新（dev 下 no-op）。 */

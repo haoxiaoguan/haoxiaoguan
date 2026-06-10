@@ -15,6 +15,7 @@ export interface SessionSummary {
   sourcePath: string // 定位符（起步为纯文件绝对路径）
   resumeCommand?: string // 工具不支持恢复时不填
   provider?: string // Codex:session_meta.payload.model_provider;其它工具留空
+  archived?: boolean // true=已归档(Codex 的 archived_sessions 目录);其它工具不设
 }
 
 export interface SessionMessage {
