@@ -78,6 +78,16 @@ describe('CodexSessionSource', () => {
     expect(msgs).toEqual([{ role: 'tool', content: '{"ok":true}', ts: Date.parse('2026-06-01T00:00:01.000Z') }])
   })
 
+  it('scan：带出 session_meta.payload.model_provider 为 provider', async () => {
+    await writeRollout('rollout-p-019e0000-0000-0000-0000-000000000001.jsonl', [
+      { timestamp: '2026-06-01T00:00:00.000Z', type: 'session_meta', payload: { id: '019e0000-0000-0000-0000-000000000001', cwd: '/work/p', model_provider: 'openai' } },
+      { timestamp: '2026-06-01T00:00:01.000Z', type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'q' }] } },
+    ])
+    const page = await source().scan()
+    const item = page.items.find((s) => s.sessionId === '019e0000-0000-0000-0000-000000000001')
+    expect(item?.provider).toBe('openai')
+  })
+
   it('archived_sessions 也被扫描；delete 删文件无 sidecar', async () => {
     await mkdir(join(dir, 'archived_sessions'), { recursive: true })
     const a = join(dir, 'archived_sessions', 'rollout-9-dddddddd-0000-0000-0000-000000000000.jsonl')
