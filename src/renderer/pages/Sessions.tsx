@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Search,
   SquareCheck,
+  Trash2,
   Wrench,
 } from 'lucide-react';
 import { useSessionsStore, CLIENT_TO_TOOL } from '../stores/sessionsStore';
@@ -34,7 +35,8 @@ import type { SessionSummaryDto } from '@shared/api-types';
 import { TOOL_CONFIG, formatTime, shortDir, SessionListSkeleton, EmptyState } from '@/components/sessions/shared';
 import { SessionDetailDialog } from '@/components/sessions/SessionDetailDialog';
 import { RepairSessionsDialog } from '@/components/sessions/RepairSessionsDialog';
-import { ProviderTag } from '@/components/sessions/ProviderTag';
+import { ProviderTag, providerLabel } from '@/components/sessions/ProviderTag';
+import { StatusBadge } from '@/components/sessions/StatusBadge';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 
 // ──────────────────────────────────────────────
@@ -47,6 +49,7 @@ function SessionRow({
   checked,
   onSelect,
   onCheck,
+  onDelete,
 }: {
   session: SessionSummaryDto;
   active: boolean;
@@ -54,7 +57,9 @@ function SessionRow({
   checked: boolean;
   onSelect: () => void;
   onCheck: (checked: boolean) => void;
+  onDelete: () => void;
 }) {
+  const { t } = useTranslation('nav');
   const toolCfg = TOOL_CONFIG[session.tool] ?? {
     color: 'bg-muted text-muted-foreground',
     label: session.tool,
@@ -99,25 +104,84 @@ function SessionRow({
 
       {/* 文字内容 */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-semibold leading-5 text-foreground">
-            {session.title ?? session.sessionId}
-          </span>
-          {/* provider tag 行内 */}
-          <ProviderTag provider={session.provider} />
-        </div>
-        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-          {session.projectDir && (
-            <span className="truncate">{shortDir(session.projectDir)}</span>
-          )}
-          {session.projectDir && session.lastActiveAt && (
-            <span className="shrink-0 text-border">·</span>
-          )}
-          {session.lastActiveAt && (
-            <span className="shrink-0">{formatTime(session.lastActiveAt)}</span>
-          )}
-        </div>
+        {selectMode ? (
+          /* 选择模式：保留原有简洁布局 */
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[13px] font-semibold leading-5 text-foreground">
+                {session.title ?? session.sessionId}
+              </span>
+              <ProviderTag provider={session.provider} />
+            </div>
+            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+              {session.projectDir && (
+                <span className="truncate">{shortDir(session.projectDir)}</span>
+              )}
+              {session.projectDir && session.lastActiveAt && (
+                <span className="shrink-0 text-border">·</span>
+              )}
+              {session.lastActiveAt && (
+                <span className="shrink-0">{formatTime(session.lastActiveAt)}</span>
+              )}
+            </div>
+          </>
+        ) : (
+          /* 非选择模式：codex++ 布局 */
+          <>
+            {/* 第一行：标题（粗） */}
+            <div className="truncate text-[13px] font-semibold leading-5 text-foreground">
+              {session.title ?? session.sessionId}
+            </div>
+            {/* 第二行：sessionId（mono 小字） */}
+            <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+              {session.sessionId}
+            </div>
+            {/* 第三行：projectDir */}
+            {session.projectDir && (
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {shortDir(session.projectDir)}
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {/* 右元区（非选择模式） */}
+      {!selectMode && (
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {/* 第一行：状态徽章 */}
+          <StatusBadge archived={session.archived} />
+          {/* 第二行：provider */}
+          <span className="text-[10px] text-muted-foreground">
+            {session.provider ? providerLabel(session.provider) : t('sessionsView.providerUnknown')}
+          </span>
+          {/* 第三行：时间 */}
+          {session.lastActiveAt && (
+            <span className="text-[10px] text-muted-foreground">
+              {formatTime(session.lastActiveAt)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 行尾删除按钮（非选择模式） */}
+      {!selectMode && (
+        <div
+          className="shrink-0 self-center"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 rounded-[7px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+            aria-label={t('sessionsView.delete')}
+            onClick={onDelete}
+          >
+            <Trash2 className="size-3.5" strokeWidth={1.9} />
+          </Button>
+        </div>
+      )}
     </button>
   );
 }
@@ -371,13 +435,13 @@ export default function Sessions() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1.5 rounded-[7px] px-2.5 text-[12px]"
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 rounded-[7px] text-muted-foreground hover:text-foreground"
+                            aria-label={t('sessionsView.repair')}
                             onClick={() => setRepairOpen(true)}
                           >
                             <Wrench className="size-3.5" strokeWidth={1.9} />
-                            {t('sessionsView.repair')}
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">{t('sessionsView.repair')}</TooltipContent>
@@ -530,6 +594,7 @@ export default function Sessions() {
                             return next;
                           });
                         }}
+                        onDelete={() => setDeleteTarget(s)}
                       />
                     ))}
 

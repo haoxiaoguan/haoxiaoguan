@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { sessionsService } from '@/services/tauri'
 import { providerLabel } from './ProviderTag'
-import type { CodexRepairPreviewDto, CodexRepairResultDto } from '@shared/api-types'
+import type { CodexRepairPreviewDto, CodexRepairProgressDto, CodexRepairResultDto } from '@shared/api-types'
 
 export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { t } = useTranslation('nav')
@@ -14,20 +14,23 @@ export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; on
   const [rewriteRollout, setRewriteRollout] = useState(true)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<CodexRepairResultDto | null>(null)
+  const [progress, setProgress] = useState<CodexRepairProgressDto | null>(null)
 
   useEffect(() => {
-    if (!open) { setPreview(null); setResult(null); return }
+    if (!open) { setPreview(null); setResult(null); setProgress(null); return }
     void sessionsService.repairPreview().then(setPreview).catch((e) => toast.error(String(e)))
   }, [open])
 
   const onRepair = async () => {
     if (!preview?.currentProvider) return
     setBusy(true)
+    setProgress(null)
+    const unsub = sessionsService.onRepairProgress((p) => setProgress(p))
     try {
       const r = await sessionsService.repair({ targetProvider: preview.currentProvider, rewriteRollout })
       setResult(r)
       toast.success(t('sessionsView.repairDone', { n: r.updatedThreads }))
-    } catch (e) { toast.error(String(e)) } finally { setBusy(false) }
+    } catch (e) { toast.error(String(e)) } finally { unsub(); setBusy(false) }
   }
 
   const onUndo = async () => {
@@ -59,6 +62,26 @@ export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; on
             <label className="flex items-center justify-between"><span>{t('sessionsView.repairRewriteRollout')}</span>
               <Switch checked={rewriteRollout} onCheckedChange={setRewriteRollout} /></label>
             <p className="text-[11px] text-muted-foreground/70">{t('sessionsView.repairEncryptedNote')}</p>
+          </div>
+        )}
+        {/* 进度条：仅 busy 时显示 */}
+        {busy && progress && (
+          <div className="space-y-1.5 px-1">
+            <div className="flex items-center justify-between text-[11.5px] text-muted-foreground">
+              <span>
+                {progress.message}
+                {progress.current != null && progress.total != null
+                  ? ` (${progress.current}/${progress.total})`
+                  : null}
+              </span>
+              <span className="shrink-0 tabular-nums">{progress.percent}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-200"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
           </div>
         )}
         <DialogFooter>

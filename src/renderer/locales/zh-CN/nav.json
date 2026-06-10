@@ -218,7 +218,11 @@
     "repairUndone": "已撤销修复",
     "repairUnavailable": "未检测到可修复的 Codex 会话库",
     "unsupportedTitle": "暂不支持会话历史",
-    "unsupportedSub": "该客户端的会话浏览即将支持"
+    "unsupportedSub": "该客户端的会话浏览即将支持",
+    "statusNormal": "正常",
+    "statusArchived": "归档",
+    "providerUnknown": "provider 未记录",
+    "repairProgress": "修复进度"
   },
   "proxies": "代理管理",
   "groups": "分组管理",
