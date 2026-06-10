@@ -1,4 +1,4 @@
-import { mkdir, copyFile, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, copyFile, writeFile, readFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -40,8 +40,13 @@ export class CodexRepairBackup {
   /** 只恢复 db 文件(回滚时配合 rollout 反写;rollout 反写由 repair service 用 manifest 驱动)。 */
   async restoreDbOnly(id: string, dbPath: string): Promise<void> {
     const dir = join(this.baseDir, id)
+    // 先删修复期间产生的 live WAL/SHM:否则拷回旧主库后,残留的修复期 WAL 会被 SQLite
+    // 下次打开时重放——轻则把修复改动重新应用(回滚失效),重则与还原后的主库页/salt 不一致损坏库。
+    for (const suffix of ['-wal', '-shm']) {
+      if (existsSync(dbPath + suffix)) await rm(dbPath + suffix, { force: true })
+    }
     await copyFile(join(dir, 'db.bak'), dbPath)
-    // wal/shm:删旧的让 SQLite 重建(避免与恢复后的 db 不一致)。
+    // 再还原备份时刻的 WAL/SHM(与 db.bak 同一时刻、内部一致);备份时无则保持无 WAL。
     for (const suffix of ['-wal', '-shm']) {
       const src = join(dir, 'db.bak' + suffix)
       if (existsSync(src)) await copyFile(src, dbPath + suffix)
