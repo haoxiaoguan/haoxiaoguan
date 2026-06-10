@@ -40,11 +40,13 @@ export function SessionDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[80vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+      {/* 定高(非 max-h):ScrollArea viewport 的 h-full 需要确定高度链才能触发滚动 */}
+      <DialogContent className="flex h-[80vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
         {session ? (
           <>
             {/* 详情头部 */}
-            <div className="shrink-0 border-b border-border/80 px-5 py-3.5">
+            {/* pr-12 给 DialogContent 内置的关闭按钮(absolute right-4)留出空间 */}
+            <div className="shrink-0 border-b border-border/80 py-3.5 pl-5 pr-12">
               <div className="flex min-w-0 items-start justify-between gap-3">
                 {/* 标题 + 目录 */}
                 <div className="min-w-0 flex-1">
@@ -55,8 +57,9 @@ export function SessionDetailDialog({
                     <h2 className="truncate text-[14px] font-semibold leading-6 text-foreground">
                       {session.title ?? session.sessionId}
                     </h2>
-                    {/* 工具 badge */}
+                    {/* 工具 badge:outline variant 避免 default 的 hover:bg-primary 盖掉工具配色 */}
                     <Badge
+                      variant="outline"
                       className={cn(
                         'h-5 shrink-0 border-transparent px-1.5 text-[11px]',
                         TOOL_CONFIG[session.tool]?.color ?? 'bg-muted text-muted-foreground',

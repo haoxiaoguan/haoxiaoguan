@@ -4,9 +4,9 @@
   "skills": "Skills",
   "mcp": "MCP",
   "apiService": "API Service",
-  "clientConfig": "Client Setup",
+  "clientConfig": "Provider Config",
   "clientConfigPage": {
-    "title": "Client Setup",
+    "title": "Provider Config",
     "subtitle": "Write the reverse proxy or a third-party provider into AI client configs in one click (auto-backup, revertible).",
     "addProfile": "Add provider",
     "history": "History",

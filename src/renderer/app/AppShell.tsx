@@ -61,11 +61,11 @@ interface NavItem {
 const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav:dashboard', icon: LayoutGrid, end: true },
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
+  { to: '/client-config', labelKey: 'nav:clientConfig', icon: Cable },
+  { to: '/api-service', labelKey: 'nav:apiService', icon: Plug },
+  { to: '/sessions', labelKey: 'nav:sessions', icon: History },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
-  { to: '/api-service', labelKey: 'nav:apiService', icon: Plug },
-  { to: '/client-config', labelKey: 'nav:clientConfig', icon: Cable },
-  { to: '/sessions', labelKey: 'nav:sessions', icon: History },
 ];
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [

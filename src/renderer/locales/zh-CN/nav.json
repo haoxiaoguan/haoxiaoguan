@@ -4,9 +4,9 @@
   "skills": "Skills 管理",
   "mcp": "MCP 管理",
   "apiService": "API 服务",
-  "clientConfig": "客户端接入",
+  "clientConfig": "供应商配置",
   "clientConfigPage": {
-    "title": "客户端接入",
+    "title": "供应商配置",
     "subtitle": "把反代或第三方 provider 一键写进 AI 客户端配置（自动备份，可还原）",
     "addProfile": "添加供应商",
     "history": "历史",
