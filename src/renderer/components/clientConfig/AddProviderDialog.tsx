@@ -19,6 +19,7 @@ import { ProviderPresetGrid } from './ProviderPresetGrid';
 import { ConfigPreview } from './ConfigPreview';
 import { ModelCombobox } from './ModelCombobox';
 import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap } from './ClaudeModelMapFields';
+import { CodexModelListFields, type CodexModelItem } from './CodexModelListFields';
 import { CLIENT_EXTRA_FIELD, CLIENT_PRESETS, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigClientId } from '@shared/api-types';
 
@@ -62,6 +63,8 @@ export function AddProviderDialog({
   const [brand, setBrand] = useState<{ brandId?: string; icon?: string; iconColor?: string }>({});
   // Claude 分级模型映射(仅 claude 客户端使用)。
   const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
+  // Codex 模型列表(仅 codex 客户端使用)。
+  const [codexModels, setCodexModels] = useState<CodexModelItem[]>([]);
   // 「获取模型列表」拉到的模型(供下拉)。
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
@@ -104,13 +107,14 @@ export function AddProviderDialog({
     setRouteViaProxy(false);
     setBrand({});
     setModelMap(EMPTY_MODEL_MAP);
+    setCodexModels([]);
     setModels([]);
   }, [clientId]);
 
-  // 协议不匹配时强制开启路由（不可关）；匹配时保持用户选择。
+  // 协议不匹配时强制开启路由（不可关）；匹配时保持用户选择。codex 不走此逻辑（无 routeViaProxy 开关）。
   useEffect(() => {
-    if (mismatch) setRouteViaProxy(true);
-  }, [mismatch]);
+    if (mismatch && clientId !== 'codex') setRouteViaProxy(true);
+  }, [mismatch, clientId]);
 
   const onPickPreset = (id: string) => {
     setPresetId(id);
@@ -161,12 +165,10 @@ export function AddProviderDialog({
     if (!prov) return false;
     const prof = text.match(/\[profiles\.hxg_[^\]]*\]([\s\S]*?)(?=\n\[|$)/);
     const bu = grabIn(prov[1], 'base_url');
-    const wire = grabIn(prov[1], 'wire_api');
     const tok = grabIn(prov[1], 'experimental_bearer_token');
     const mdl = prof ? grabIn(prof[1], 'model') : undefined;
     if (bu !== undefined) setBaseUrl(bu);
     if (tok !== undefined && tok.length > 0) setApiKey(tok);
-    if (wire !== undefined) setExtraValue(wire); // codex extra.key === 'wireApi'
     if (mdl !== undefined) setModel(mdl);
     return true;
   };
@@ -181,23 +183,33 @@ export function AddProviderDialog({
     }
   }
 
+  // Codex 模型列表：过滤掉 id 为空的行。
+  const codexModelsClean = clientId === 'codex' ? codexModels.filter((m) => m.id.trim().length > 0) : [];
+
   // 写入用的功能 settings(供应商专属字段 + 固定协议客户端的上游协议/路由 + Claude 分级映射)。预览与提交共用。
+  // codex 不写 routeViaProxy（主进程 codex 路径不读该键）。
   const draftSettings: Record<string, unknown> = {
     ...(extra ? { [extra.key]: extraValue } : {}),
-    ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
+    ...(nativeProtoUi && clientId !== 'codex' ? { upstreamProtocol, routeViaProxy } : {}),
+    ...(nativeProtoUi && clientId === 'codex' ? { upstreamProtocol } : {}),
     ...(Object.keys(modelMapClean).length > 0 ? { modelMap: modelMapClean } : {}),
+    ...(clientId === 'codex' && codexModelsClean.length > 0 ? { codexModels: codexModelsClean } : {}),
   };
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
+    // codex：顶层 model 取列表首项 id（向后兼容卡片显示与老逻辑）；无列表则用单一 model 字段。
+    const effectiveModel = clientId === 'codex' && codexModelsClean.length > 0
+      ? codexModelsClean[0].id
+      : model.trim();
     try {
       await onCreate({
         name: name.trim(),
         baseUrl: baseUrl.trim(),
         apiKey: apiKey.trim(),
-        model: model.trim(),
+        model: effectiveModel,
         settings: {
           ...draftSettings,
           // 品牌元数据(图标/颜色/品牌 id),供卡片展示;writer 不读此键,不写盘。
@@ -253,55 +265,8 @@ export function AddProviderDialog({
           {t('clientConfigPage.form.apiKey')}
           <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
         </label>
-        <div className="text-[12px] font-medium text-muted-foreground">
-          <div className="flex items-center justify-between">
-            <span>{t('clientConfigPage.form.model')}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={fetchingModels || baseUrl.trim().length === 0}
-              className="h-6 gap-1 text-[11px]"
-              onClick={() => void doFetchModels()}
-            >
-              <Download className="size-3" aria-hidden />
-              {t('clientConfigPage.form.fetchModels')}
-            </Button>
-          </div>
-          <div className="mt-1">
-            <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
-          </div>
-        </div>
 
-        {/* Claude 分级模型映射(可选) */}
-        {clientId === 'claude' && (
-          <ClaudeModelMapFields
-            value={modelMap}
-            options={models}
-            onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
-          />
-        )}
-
-        {/* 该客户端专属字段(Codex wire_api / OpenCode npm / OpenClaw api / Hermes api_mode) */}
-        {extra && (
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {extra.label}
-            <Select value={extraValue} onValueChange={setExtraValue}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {extra.options.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-        )}
-
-        {/* 固定协议客户端(claude/codex/gemini_cli):上游协议选择 */}
+        {/* 固定协议客户端(claude/codex/gemini_cli):上游协议选择。置于模型区块之前(连接信息聚拢)。 */}
         {nativeProtoUi && (
           <label className="text-[12px] font-medium text-muted-foreground">
             {t('clientConfigPage.form.upstreamProtocol')}
@@ -321,8 +286,83 @@ export function AddProviderDialog({
           </label>
         )}
 
-        {/* 固定协议客户端：经号小管反代路由开关。协议不匹配时强制开启且不可关。 */}
-        {nativeProtoUi && (
+        {/* 单一模型字段：codex 用列表组件替代，其它客户端保留 */}
+        {clientId !== 'codex' && (
+          <div className="text-[12px] font-medium text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <span>{t('clientConfigPage.form.model')}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={fetchingModels || baseUrl.trim().length === 0}
+                className="h-6 gap-1 text-[11px]"
+                onClick={() => void doFetchModels()}
+              >
+                <Download className="size-3" aria-hidden />
+                {t('clientConfigPage.form.fetchModels')}
+              </Button>
+            </div>
+            <div className="mt-1">
+              <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
+            </div>
+          </div>
+        )}
+
+        {/* Claude 分级模型映射(可选) */}
+        {clientId === 'claude' && (
+          <ClaudeModelMapFields
+            value={modelMap}
+            options={models}
+            onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
+          />
+        )}
+
+        {/* Codex 模型列表 + 获取按钮 */}
+        {clientId === 'codex' && (
+          <>
+            <div className="flex items-center justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={fetchingModels || baseUrl.trim().length === 0}
+                className="h-6 gap-1 text-[11px]"
+                onClick={() => void doFetchModels()}
+              >
+                <Download className="size-3" aria-hidden />
+                {t('clientConfigPage.form.fetchModels')}
+              </Button>
+            </div>
+            <CodexModelListFields
+              value={codexModels}
+              options={models}
+              onChange={setCodexModels}
+            />
+          </>
+        )}
+
+        {/* 该客户端专属字段(OpenCode npm / OpenClaw api / Hermes api_mode) */}
+        {extra && (
+          <label className="text-[12px] font-medium text-muted-foreground">
+            {extra.label}
+            <Select value={extraValue} onValueChange={setExtraValue}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {extra.options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
+
+        {/* 固定协议客户端：经号小管反代路由开关。协议不匹配时强制开启且不可关。codex 不渲染此区块。 */}
+        {nativeProtoUi && clientId !== 'codex' && (
           <div className="rounded-[8px] border border-border/60 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[12px] font-medium text-foreground">{t('clientConfigPage.form.routing')}</span>
@@ -343,7 +383,7 @@ export function AddProviderDialog({
           apiKey={apiKey}
           model={model}
           settings={draftSettings}
-          footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+          footNote={nativeProtoUi && clientId !== 'codex' && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
           onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : clientId === 'codex' ? applyCodexConfigEdit : undefined}
         />
       </div>

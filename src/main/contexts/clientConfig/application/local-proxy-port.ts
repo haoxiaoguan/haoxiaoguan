@@ -14,6 +14,29 @@ export interface LocalProxyPort {
   revokeKey(id: string): Promise<void>
   /** 反代暴露的模型 id 列表（预填默认模型用）。 */
   listModels(): string[]
+  /**
+   * 反代暴露的**非原生**模型（Codex L2 catalog 用）：排除 Codex 原生模型（由 Codex 自带
+   * models_cache 提供）与占位 echo，只留账号池 Claude + 第三方 relay 模型。
+   */
+  listCatalogModels(): CatalogModel[]
+  /**
+   * 仅「号小管账号池」(Kiro/Claude) 的模型 —— 用于 L2 下「号小管账号」这个供应商被启用时，
+   * 把账号池模型并入 catalog（与第三方 relay 模型区分开，按启用态精确聚合）。
+   */
+  listAccountPoolModels(): CatalogModel[]
+  /**
+   * 原生（ChatGPT 登录账号）的模型 slug 列表。
+   * 供 responses 透传供应商「ON 撞名别名」逻辑检测是否需要加 -hxg 后缀。
+   * 未配置（无 auth.json）时返回空数组。
+   */
+  listNativeModelSlugs?(): string[]
+}
+
+/** L2 catalog 条目所需的最小模型信息。 */
+export interface CatalogModel {
+  id: string
+  displayName?: string
+  contextLength?: number
 }
 
 /** 测连通结果。 */

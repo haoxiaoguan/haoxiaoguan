@@ -46,6 +46,10 @@ interface ClientConfigState {
   connectLocalProxy: () => Promise<void>
   /** 测连通。 */
   testConnectivity: (id: string) => Promise<ClientConfigConnTest | undefined>
+  /** Codex L2「中转注入」开关（开→注入单反代 provider+catalog；关→清除）。 */
+  setCodexRelayInjection: (enabled: boolean) => Promise<void>
+  /** Codex L2 下切换第三方供应商启用态（标记+重聚合，不走 L1 注入）。 */
+  setCodexProviderEnabled: (id: string, enabled: boolean) => Promise<void>
 }
 
 function countByClient(all: ClientConfigProfileDto[]): Record<string, number> {
@@ -146,4 +150,12 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
     await get().refresh()
   },
   testConnectivity: async (id) => run(set, () => bridge().clientConfig.testConnectivity(id)),
+  setCodexRelayInjection: async (enabled) => {
+    await run(set, () => bridge().clientConfig.setCodexRelayInjection(enabled))
+    await get().refresh()
+  },
+  setCodexProviderEnabled: async (id, enabled) => {
+    await run(set, () => bridge().clientConfig.setCodexProviderEnabled(id, enabled))
+    await get().refresh()
+  },
 }))

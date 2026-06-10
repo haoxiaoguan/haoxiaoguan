@@ -724,6 +724,10 @@ export interface HxgApi {
     connectLocalProxy(clientId: ClientConfigClientId): Promise<ClientConfigProfileDto>
     /** 测连通（GET /v1/models）。 */
     testConnectivity(id: string): Promise<ClientConfigConnTest>
+    /** Codex L2「中转注入」：开→注入单反代 provider(/v1)+写 model_catalog_json；关→清除。idempotent。 */
+    setCodexRelayInjection(enabled: boolean): Promise<void>
+    /** Codex L2 下切换第三方供应商启用态：标记 enabled + 重聚合(供/撤 relay、刷新 catalog)，不做 L1 注入。 */
+    setCodexProviderEnabled(id: string, enabled: boolean): Promise<void>
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>

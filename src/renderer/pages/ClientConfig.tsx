@@ -292,6 +292,15 @@ export default function ClientConfig() {
     if (r?.ok) toast.success(t('clientConfigPage.connOk'));
     else toast.error(t('clientConfigPage.connFail', { msg: r?.message ?? String(r?.status ?? '') }));
   };
+  // Codex L2「中转注入」开关：持久化设置 + 注入单反代 provider(/v1)+catalog（开）或清除（关）。
+  const onToggleCodexRelay = async (v: boolean) => {
+    await setCodexRelay(v);
+    await store.setCodexRelayInjection(v);
+    if (!useClientConfigStore.getState().error) {
+      toast.success(v ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
+    }
+  };
+  // 启停供应商。Codex 为单选语义(enable 内部已委托：清掉其它+按中转注入模式注入所选)；其余客户端常规。
   const onEnable = async (id: string) => {
     await store.enable(id);
     toast.success(t('clientConfigPage.applied'));
@@ -414,19 +423,23 @@ export default function ClientConfig() {
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
           </Button>
-          {/* Codex 专属:中转注入(L2 真共存)开关 */}
+          {/* Codex 专属:中转注入(L2 真共存)开关。提示用项目 Tooltip 组件(不用原生 title,样式统一)。 */}
           {activeClient === 'codex' && (
-            <label
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-border/60 px-2.5"
-              title={t('clientConfigPage.relayInjectionHint')}
-            >
-              <span className="text-[12px] text-muted-foreground">{t('clientConfigPage.relayInjection')}</span>
-              <Switch
-                checked={codexRelay}
-                onCheckedChange={(v) => void setCodexRelay(v)}
-                aria-label={t('clientConfigPage.relayInjection')}
-              />
-            </label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-border/60 px-2.5">
+                  <span className="text-[12px] text-muted-foreground">{t('clientConfigPage.relayInjection')}</span>
+                  <Switch
+                    checked={codexRelay}
+                    onCheckedChange={(v) => void onToggleCodexRelay(v)}
+                    aria-label={t('clientConfigPage.relayInjection')}
+                  />
+                </label>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px] leading-relaxed">
+                {t('clientConfigPage.relayInjectionHint')}
+              </TooltipContent>
+            </Tooltip>
           )}
           <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => setView({ mode: 'add' })}>
             <Plus className="size-3.5" aria-hidden />

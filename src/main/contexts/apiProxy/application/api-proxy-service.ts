@@ -29,6 +29,8 @@ import {
 import { responsesToIR } from '../infrastructure/inbound/responses/responses-input'
 import { irToResponsesResponse } from '../infrastructure/inbound/responses/responses-response'
 import { serializeResponsesStream } from '../infrastructure/inbound/responses/responses-stream'
+import type { CodexNativePassthrough } from '../domain/codex-native-passthrough'
+import type { ResponsesPassthroughUpstream } from '../infrastructure/adapters/relay/responses-passthrough-upstream'
 import { expandPreviousResponseHistory } from '../infrastructure/responses-store/responses-history'
 import type { ResponsesStore, StoredResponseDoc } from '../infrastructure/responses-store/responses-store'
 import type { ResponsesRequest } from '../infrastructure/inbound/responses/responses-types'
@@ -128,6 +130,21 @@ export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHtt
   }
 }
 
+/** 原生透传错误 → HTTP（按 error.name，避免 application 反向依赖 infrastructure 错误类）。 */
+export function classifyCodexNativeError(err: unknown): ApiProxyHttpError {
+  if (err instanceof ApiProxyHttpError) return err
+  const e = err as { name?: string; status?: number; message?: string }
+  const msg = e?.message ?? 'codex-native upstream error'
+  if (e?.name === 'CodexNativeNoLoginError') {
+    return new ApiProxyHttpError(401, msg, 'openai-responses')
+  }
+  if (e?.name === 'RelayHttpError' && typeof e.status === 'number') {
+    // 上游状态直透（401/403/429/4xx/5xx），保留语义。
+    return new ApiProxyHttpError(e.status, msg, 'openai-responses')
+  }
+  return new ApiProxyHttpError(502, msg, 'openai-responses')
+}
+
 // 把异步事件流收集成数组（Gemini/Responses drain 路径仍使用）。
 async function drainStream(
   stream: AsyncIterable<CanonicalStreamEvent>,
@@ -167,6 +184,10 @@ async function* prependFirst(
 export class ApiProxyService {
   private readonly registry?: PlatformRegistry
   private readonly converters: InboundConverters
+  // 原生（ChatGPT OAuth）透传：注入则对 /v1/responses 的原生模型走 HTTP 级原始透传（不转 IR）。
+  private readonly codexNative?: CodexNativePassthrough
+  // responses 第三方透传适配器列表：对 /v1/responses 的第三方模型走 HTTP 级透传到对应上游。
+  private readonly responsesPassthroughs: ResponsesPassthroughUpstream[]
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘）；仅 /v1/responses 用。
   private readonly responsesStore?: ResponsesStore
   // 请求级可观测性（G3）：注入则记录每请求落点 + 累计计数器（喂 G10 /metrics）。
@@ -184,11 +205,15 @@ export class ApiProxyService {
       responsesStore?: ResponsesStore
       observability?: ProxyRequestLog
       clock?: () => number
+      codexNative?: CodexNativePassthrough
+      responsesPassthroughs?: ResponsesPassthroughUpstream[]
     } = {},
   ) {
     this.server = server
     this.registry = deps.registry
     this.converters = deps.converters ?? DEFAULT_INBOUND_CONVERTERS
+    this.codexNative = deps.codexNative
+    this.responsesPassthroughs = deps.responsesPassthroughs ?? []
     this.responsesStore = deps.responsesStore
     this.observability = deps.observability
     this.clock = deps.clock ?? Date.now
@@ -270,6 +295,18 @@ export class ApiProxyService {
     // Responses 协议有专属编排（历史链 + store 落盘 + 语义 SSE），走独立分支，
     // 不复用下方 chat 类的 toIR/toResponseBody/serializeStream。
     if (intent.format === 'openai-responses') {
+      // 原生（ChatGPT 登录账号）模型：HTTP 级原始透传到 ChatGPT 后端，不转 IR、不动 store。
+      if (this.codexNative !== undefined && this.codexNative.isNativeModel(intent.model)) {
+        return this.proxyCodexNative(body, requestId, intent.stream, signal, input.headers)
+      }
+      // 第三方 responses 上游：HTTP 级透传到对应第三方端点（alias→real 映射 + Bearer 替换）。
+      if (intent.model !== undefined) {
+        for (const pt of this.responsesPassthroughs) {
+          if (pt.supportsModel(intent.model)) {
+            return this.proxyResponsesPassthrough(pt, body, requestId, intent.stream, signal, input.headers)
+          }
+        }
+      }
       return this.handleResponses(intent, body, requestId, obs, signal, input.headers, input.clientKeyId)
     }
 
@@ -389,6 +426,68 @@ export class ApiProxyService {
         createdAt: 0,
         ...(req.previous_response_id ? { previousResponseId: req.previous_response_id } : {}),
       }),
+    }
+  }
+
+  /**
+   * 原生透传：把 Responses 请求原样转发到 ChatGPT 后端（OAuth），SSE 帧不缓冲回吐。
+   * 不转 IR、不动 responsesStore —— ChatGPT 后端自管 store/previous_response_id。
+   * 错误按来源映射 HTTP：无登录→401、上游 RelayHttpError→透传其状态、其余→502。
+   */
+  private async proxyCodexNative(
+    body: unknown,
+    requestId: string,
+    stream: boolean,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<HandleResult> {
+    if (this.codexNative === undefined) {
+      throw new ApiProxyHttpError(503, 'codex-native passthrough not configured', 'openai-responses')
+    }
+    try {
+      const result = await this.codexNative.proxyResponses({
+        body,
+        requestId,
+        stream,
+        ...(signal ? { signal } : {}),
+        ...(headers ? { headers } : {}),
+      })
+      if (result.stream !== undefined) {
+        return { kind: 'stream', status: result.status, contentType: 'text/event-stream', frames: result.stream }
+      }
+      return { kind: 'json', status: result.status, body: result.body }
+    } catch (e) {
+      throw classifyCodexNativeError(e)
+    }
+  }
+
+  /**
+   * responses 第三方透传：把 Responses 请求原样转发到第三方上游（alias→real 映射 + Bearer 替换），
+   * SSE 帧不缓冲回吐。不转 IR、不动 responsesStore。
+   * 错误按来源映射 HTTP（RelayHttpError→透传状态、其余→502）。
+   */
+  private async proxyResponsesPassthrough(
+    pt: ResponsesPassthroughUpstream,
+    body: unknown,
+    requestId: string,
+    stream: boolean,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<HandleResult> {
+    try {
+      const result = await pt.proxyResponses({
+        body,
+        requestId,
+        stream,
+        ...(signal ? { signal } : {}),
+        ...(headers ? { headers } : {}),
+      })
+      if (result.stream !== undefined) {
+        return { kind: 'stream', status: result.status, contentType: 'text/event-stream', frames: result.stream }
+      }
+      return { kind: 'json', status: result.status, body: result.body }
+    } catch (e) {
+      throw classifyCodexNativeError(e)
     }
   }
 

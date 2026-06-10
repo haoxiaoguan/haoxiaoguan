@@ -1,5 +1,5 @@
 // 每客户端「添加供应商」的专属模板:额外字段定义 + 少量常用预设。
-// 不同 agent 表单字段不同(Codex wire_api / OpenCode npm 适配器 / OpenClaw api 协议 / Hermes api_mode);
+// 不同 agent 表单字段不同(OpenCode npm 适配器 / OpenClaw api 协议 / Hermes api_mode);
 // 预设按客户端预填 baseUrl/model/settings。模型名可由用户改;baseUrl 与协议按各客户端形态校准。
 import type { ClientConfigClientId } from '@shared/api-types';
 import { BRAND_PRESETS, brandToPreset, type DerivedBrandPreset } from './brand-presets';
@@ -49,16 +49,9 @@ export interface ProviderPreset {
 }
 
 // ─── 每客户端额外字段 ───────────────────────────────────────────────────
+// Codex 无专属字段：wire_api 唯一合法值是 responses（chat 已被 Codex 移除，写入会令其整个
+// config 解析失败），由写入器恒写；chat-only 上游经「上游协议」字段走号小管反代转换。
 export const CLIENT_EXTRA_FIELD: Partial<Record<ClientConfigClientId, ExtraFieldSpec>> = {
-  codex: {
-    key: 'wireApi',
-    label: 'Wire API',
-    default: 'responses',
-    options: [
-      { value: 'responses', label: 'Responses' },
-      { value: 'chat', label: 'Chat Completions' },
-    ],
-  },
   opencode: {
     key: 'npm',
     label: 'SDK 适配器',
@@ -98,7 +91,7 @@ export const CLIENT_EXTRA_FIELD: Partial<Record<ClientConfigClientId, ExtraField
 
 // ─── 每客户端常用预设(从品牌注册表派生) ─────────────────────────────────
 // claude 走各家 Anthropic 兼容端点;codex/opencode/openclaw/hermes 走 OpenAI 兼容端点。
-// 每客户端注入其专属字段默认(codex wireApi / opencode npm / openclaw api / hermes apiMode)。
+// 每客户端注入其专属字段默认(opencode npm / openclaw api / hermes apiMode)。
 function derivedToPreset(d: DerivedBrandPreset, settings?: Record<string, string>): ProviderPreset {
   return {
     id: d.brandId,
@@ -124,7 +117,7 @@ function presetsFor(clientId: ClientConfigClientId, settings?: Record<string, st
 export const CLIENT_PRESETS: Record<ClientConfigClientId, ProviderPreset[]> = {
   claude: presetsFor('claude'),
   gemini_cli: presetsFor('gemini_cli'),
-  codex: presetsFor('codex', { wireApi: 'chat' }),
+  codex: presetsFor('codex'),
   opencode: presetsFor('opencode', { npm: '@ai-sdk/openai-compatible' }),
   openclaw: presetsFor('openclaw', { api: 'openai-completions' }),
   hermes: presetsFor('hermes', { apiMode: 'chat_completions' }),

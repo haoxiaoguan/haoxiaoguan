@@ -135,4 +135,18 @@ export function registerClientConfigHandlers(svc: ClientConfigService): void {
       throw new Error(toIpcError(e))
     }
   })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setCodexRelayInjection, async (_e, enabled: boolean) => {
+    try {
+      await svc.setCodexRelayInjection(enabled)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setCodexProviderEnabled, async (_e, id: string, enabled: boolean) => {
+    try {
+      await svc.setCodexProviderEnabled(id, enabled)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
 }

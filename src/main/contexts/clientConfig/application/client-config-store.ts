@@ -23,6 +23,8 @@ export interface UpdateProfileInput {
   /** null = 清空 settings。 */
   settings?: Record<string, unknown> | null
   apiKey?: string
+  /** 反代 client key id（Codex 中转注入签发跟踪）；null = 清除引用。 */
+  keyRef?: string | null
   notes?: string | null
 }
 

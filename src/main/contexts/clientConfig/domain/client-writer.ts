@@ -14,7 +14,7 @@ export interface ApplyInput {
   baseUrl: string
   apiKey: string
   model?: string
-  /** 客户端专属配置（per-client 额外字段:codex.wireApi / opencode.npm / openclaw.api / hermes.apiMode）。 */
+  /** 客户端专属配置（per-client 额外字段:opencode.npm / openclaw.api / hermes.apiMode）。 */
   settings?: Record<string, unknown>
   /** 累加式:本次注入是否同时设为默认指针（写客户端顶层默认模型）。切换式写入器忽略。 */
   isDefault?: boolean
@@ -30,10 +30,37 @@ export class ClientConfigCorruptError extends Error {
   }
 }
 
+/** beforeWrite 返回、afterWrite 收回的句柄：记录写盘前是否停掉了进程。 */
+export interface WriteLifecycleToken {
+  /** 写盘前是否真的停掉了进程（afterWrite 据此决定是否重启）。 */
+  restart: boolean
+}
+
+/**
+ * 写盘前后的进程生命周期钩子。仅 Codex 桌面 App 需要：
+ * 运行中的 Codex App 把供应商配置存在内存里、并按内存反向重写 ~/.codex/config.toml，
+ * 会抹掉外部编辑。必须「停 App → 写盘 → 重启 App」才能让改动被 App 在启动时采纳。
+ * 其它客户端（Claude/Gemini/OpenCode…）不读不反写，无需此钩子。
+ */
+export interface WriteLifecycle {
+  /**
+   * 写盘前调用：停掉会反写配置的进程。返回句柄给 afterWrite。
+   * 若进程仍无法安全停掉应抛错，使本次写入中止（避免写了被立刻抹掉造成「没生效」）。
+   */
+  beforeWrite(): Promise<WriteLifecycleToken>
+  /** 写盘后调用（无论写成功或回滚都会执行）：按句柄恢复进程（如重启 App）。 */
+  afterWrite(token: WriteLifecycleToken): Promise<void>
+}
+
 /** 客户端配置写入器：纯渲染。renderApply/renderClear 不读写磁盘，仅基于传入的 current 计算。 */
 export interface ClientConfigWriter {
   readonly clientId: ClientId
   readonly writeMode: WriteMode
+  /**
+   * 可选：写盘前后的进程生命周期钩子（仅 Codex 桌面 App 挂载：停→写→启）。
+   * 由 application 层 applier 在 apply/clear 落盘时包裹调用。
+   */
+  readonly lifecycle?: WriteLifecycle
   /** 本写入器管理的配置文件绝对路径（≥1）。 */
   configFiles(): string[]
   /** 把接入档写入 live → 新内容（只动自己的字段，保留用户其余配置）。损坏抛 ClientConfigCorruptError。 */

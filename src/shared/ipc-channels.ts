@@ -264,4 +264,6 @@ export const CLIENT_CONFIG_CHANNELS = {
   rollback: 'clientConfig:rollback',
   connectLocalProxy: 'clientConfig:connectLocalProxy',
   testConnectivity: 'clientConfig:testConnectivity',
+  setCodexRelayInjection: 'clientConfig:setCodexRelayInjection',
+  setCodexProviderEnabled: 'clientConfig:setCodexProviderEnabled',
 } as const

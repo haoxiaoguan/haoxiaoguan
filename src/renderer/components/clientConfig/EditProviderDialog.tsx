@@ -18,6 +18,7 @@ import { ProviderBrandIcon } from './ProviderBrandIcon';
 import { ConfigPreview } from './ConfigPreview';
 import { ModelCombobox } from './ModelCombobox';
 import { ClaudeModelMapFields, EMPTY_MODEL_MAP, type ModelMap, type ModelTier } from './ClaudeModelMapFields';
+import { CodexModelListFields, type CodexModelItem } from './CodexModelListFields';
 import { CLIENT_EXTRA_FIELD, CLIENT_NATIVE_PROTOCOL_UI, UPSTREAM_PROTOCOL_OPTIONS } from './provider-templates';
 import type { ClientConfigProfileDto, UpdateClientConfigProfileDto } from '@shared/api-types';
 
@@ -44,6 +45,7 @@ export function EditProviderDialog({
   const [upstreamProtocol, setUpstreamProtocol] = useState('');
   const [routeViaProxy, setRouteViaProxy] = useState(false);
   const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
+  const [codexModels, setCodexModels] = useState<CodexModelItem[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,12 +112,10 @@ export function EditProviderDialog({
     if (!prov) return false;
     const prof = text.match(/\[profiles\.hxg_[^\]]*\]([\s\S]*?)(?=\n\[|$)/);
     const bu = grabIn(prov[1], 'base_url');
-    const wire = grabIn(prov[1], 'wire_api');
     const tok = grabIn(prov[1], 'experimental_bearer_token');
     const mdl = prof ? grabIn(prof[1], 'model') : undefined;
     if (bu !== undefined) setBaseUrl(bu);
     if (tok !== undefined && tok.length > 0) setApiKey(tok);
-    if (wire !== undefined) setExtraValue(wire); // codex extra.key === 'wireApi'
     if (mdl !== undefined) setModel(mdl);
     return true;
   };
@@ -130,15 +130,24 @@ export function EditProviderDialog({
     }
   }
 
+  // Codex 模型列表：过滤掉 id 为空的行。
+  const codexModelsClean = clientId === 'codex' ? codexModels.filter((m) => m.id.trim().length > 0) : [];
+
   // 从原 settings 起改,保留 uiMeta 与其它未知键,再覆盖功能键。预览与保存共用。
+  // codex 不写 routeViaProxy（主进程 codex 路径不读该键）。
   const draftSettings: Record<string, unknown> = {
     ...((profile.settings ?? {}) as Record<string, unknown>),
     ...(extra ? { [extra.key]: extraValue } : {}),
-    ...(nativeProtoUi ? { upstreamProtocol, routeViaProxy } : {}),
+    ...(nativeProtoUi && clientId !== 'codex' ? { upstreamProtocol, routeViaProxy } : {}),
+    ...(nativeProtoUi && clientId === 'codex' ? { upstreamProtocol } : {}),
   };
   if (clientId === 'claude') {
     if (Object.keys(modelMapClean).length > 0) draftSettings.modelMap = modelMapClean;
     else delete draftSettings.modelMap;
+  }
+  if (clientId === 'codex') {
+    if (codexModelsClean.length > 0) draftSettings.codexModels = codexModelsClean;
+    else delete draftSettings.codexModels;
   }
 
   // 进入编辑(或切换被编辑档)时,从 profile 预填。
@@ -163,23 +172,51 @@ export function EditProviderDialog({
       return { model: '', name: '' };
     };
     setModelMap({ haiku: readTier(mm.haiku), sonnet: readTier(mm.sonnet), opus: readTier(mm.opus) });
+    // Codex 模型列表：settings.codexModels 有则回填；无则用 profile.model 初始化一行（向后兼容）。
+    if (profile.clientId === 'codex') {
+      const raw = s.codexModels;
+      if (Array.isArray(raw) && raw.length > 0) {
+        const items: CodexModelItem[] = raw.map((item) => {
+          if (typeof item === 'object' && item !== null) {
+            const o = item as Record<string, unknown>;
+            return {
+              id: typeof o.id === 'string' ? o.id : '',
+              name: typeof o.name === 'string' ? o.name : undefined,
+              contextWindow: typeof o.contextWindow === 'number' && o.contextWindow > 0 ? o.contextWindow : undefined,
+            };
+          }
+          return { id: '' };
+        });
+        setCodexModels(items);
+      } else if (profile.model && profile.model.length > 0) {
+        setCodexModels([{ id: profile.model }]);
+      } else {
+        setCodexModels([]);
+      }
+    } else {
+      setCodexModels([]);
+    }
     setModels([]);
   }, [profile]);
 
-  // 协议不匹配时强制开启路由(不可关)。
+  // 协议不匹配时强制开启路由(不可关)。codex 不走此逻辑（无 routeViaProxy 开关）。
   useEffect(() => {
-    if (mismatch) setRouteViaProxy(true);
-  }, [mismatch]);
+    if (mismatch && clientId !== 'codex') setRouteViaProxy(true);
+  }, [mismatch, clientId]);
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
+    // codex：顶层 model 取列表首项 id（向后兼容卡片显示与老逻辑）；无列表则用单一 model 字段。
+    const effectiveModel = clientId === 'codex' && codexModelsClean.length > 0
+      ? codexModelsClean[0].id
+      : model.trim() || null;
     try {
       await onSave(profile.id, {
         name: name.trim(),
         baseUrl: baseUrl.trim(),
-        model: model.trim() ? model.trim() : null,
+        model: effectiveModel,
         settings: draftSettings,
         // key 留空 = 不修改;后端 apiKey 省略时保留原 key_enc。
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
@@ -218,25 +255,49 @@ export function EditProviderDialog({
           {t('clientConfigPage.form.apiKey')}
           <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={t('clientConfigPage.form.apiKeyKeepPlaceholder')} />
         </label>
-        <div className="text-[12px] font-medium text-muted-foreground">
-          <div className="flex items-center justify-between">
-            <span>{t('clientConfigPage.form.model')}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={fetchingModels || baseUrl.trim().length === 0}
-              className="h-6 gap-1 text-[11px]"
-              onClick={() => void doFetchModels()}
-            >
-              <Download className="size-3" aria-hidden />
-              {t('clientConfigPage.form.fetchModels')}
-            </Button>
+
+        {/* 固定协议客户端(claude/codex/gemini_cli):上游协议选择。置于模型区块之前(连接信息聚拢)。 */}
+        {nativeProtoUi && (
+          <label className="text-[12px] font-medium text-muted-foreground">
+            {t('clientConfigPage.form.upstreamProtocol')}
+            <Select value={upstreamProtocol} onValueChange={setUpstreamProtocol}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UPSTREAM_PROTOCOL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.upstreamProtocolHint')}</p>
+          </label>
+        )}
+
+        {/* 单一模型字段：codex 用列表组件替代，其它客户端保留 */}
+        {clientId !== 'codex' && (
+          <div className="text-[12px] font-medium text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <span>{t('clientConfigPage.form.model')}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={fetchingModels || baseUrl.trim().length === 0}
+                className="h-6 gap-1 text-[11px]"
+                onClick={() => void doFetchModels()}
+              >
+                <Download className="size-3" aria-hidden />
+                {t('clientConfigPage.form.fetchModels')}
+              </Button>
+            </div>
+            <div className="mt-1">
+              <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
+            </div>
           </div>
-          <div className="mt-1">
-            <ModelCombobox value={model} options={models} onChange={setModel} placeholder="deepseek-chat" />
-          </div>
-        </div>
+        )}
 
         {clientId === 'claude' && (
           <ClaudeModelMapFields
@@ -244,6 +305,30 @@ export function EditProviderDialog({
             options={models}
             onTierChange={(tier, patch) => setModelMap((prev) => ({ ...prev, [tier]: { ...prev[tier], ...patch } }))}
           />
+        )}
+
+        {/* Codex 模型列表 + 获取按钮 */}
+        {clientId === 'codex' && (
+          <>
+            <div className="flex items-center justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={fetchingModels || baseUrl.trim().length === 0}
+                className="h-6 gap-1 text-[11px]"
+                onClick={() => void doFetchModels()}
+              >
+                <Download className="size-3" aria-hidden />
+                {t('clientConfigPage.form.fetchModels')}
+              </Button>
+            </div>
+            <CodexModelListFields
+              value={codexModels}
+              options={models}
+              onChange={setCodexModels}
+            />
+          </>
         )}
 
         {extra && (
@@ -264,26 +349,8 @@ export function EditProviderDialog({
           </label>
         )}
 
-        {nativeProtoUi && (
-          <label className="text-[12px] font-medium text-muted-foreground">
-            {t('clientConfigPage.form.upstreamProtocol')}
-            <Select value={upstreamProtocol} onValueChange={setUpstreamProtocol}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {UPSTREAM_PROTOCOL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="mt-1 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.upstreamProtocolHint')}</p>
-          </label>
-        )}
-
-        {nativeProtoUi && (
+        {/* 固定协议客户端：经号小管反代路由开关。协议不匹配时强制开启且不可关。codex 不渲染此区块。 */}
+        {nativeProtoUi && clientId !== 'codex' && (
           <div className="rounded-[8px] border border-border/60 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[12px] font-medium text-foreground">{t('clientConfigPage.form.routing')}</span>
@@ -304,7 +371,7 @@ export function EditProviderDialog({
           apiKey={apiKey}
           model={model}
           settings={draftSettings}
-          footNote={nativeProtoUi && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+          footNote={nativeProtoUi && clientId !== 'codex' && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
           onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : clientId === 'codex' ? applyCodexConfigEdit : undefined}
         />
       </div>

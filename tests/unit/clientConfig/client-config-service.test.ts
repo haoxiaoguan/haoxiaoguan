@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import TOML from '@iarna/toml'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +9,8 @@ import { WriterRegistry } from '../../../src/main/contexts/clientConfig/applicat
 import { ClientConfigApplier } from '../../../src/main/contexts/clientConfig/application/client-config-applier'
 import { ConfigSnapshotStore } from '../../../src/main/contexts/clientConfig/infrastructure/config-snapshot'
 import { ClaudeWriter } from '../../../src/main/contexts/clientConfig/infrastructure/writers/claude-writer'
+import { CodexWriter } from '../../../src/main/contexts/clientConfig/infrastructure/writers/codex-writer'
+import { codexProviderId } from '../../../src/main/contexts/clientConfig/infrastructure/codex-toml'
 import type { ClientId, ClientConfigProfile } from '../../../src/main/contexts/clientConfig/domain/client-profile'
 import type {
   ClientConfigWriter,
@@ -64,6 +67,10 @@ class FakeStore implements ClientConfigStore {
     if (patch.name !== undefined) p.name = patch.name
     if (patch.baseUrl !== undefined) p.baseUrl = patch.baseUrl
     if (patch.apiKey !== undefined) this.keys.set(id, patch.apiKey)
+    if (patch.keyRef !== undefined) {
+      if (patch.keyRef === null) this.keyRefs.delete(id)
+      else this.keyRefs.set(id, patch.keyRef)
+    }
   }
   async delete(id: string) {
     this.profiles = this.profiles.filter((p) => p.id !== id)
@@ -133,6 +140,11 @@ class ThrowingWriter implements ClientConfigWriter {
 let root: string
 let settings: string
 let ocPath: string
+let codexCfg: string
+let codexCat: string
+let codexAuth: string
+let catalogModels: Array<{ id: string; displayName?: string; contextLength?: number }>
+let codexRelayOn: boolean
 let store: FakeStore
 let svc: ClientConfigService
 let registry: WriterRegistry
@@ -151,11 +163,19 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'hxg-svc-'))
   settings = join(root, 'claude', 'settings.json')
   ocPath = join(root, 'opencode', 'opencode.json')
+  codexCfg = join(root, 'codex', 'config.toml')
+  codexCat = join(root, 'codex-model-catalog.json')
+  codexAuth = join(root, 'codex', 'auth.json')
+  catalogModels = [
+    { id: 'claude-sonnet-4.5', displayName: 'Claude Sonnet 4.5', contextLength: 200000 },
+    { id: 'deepseek-chat', displayName: 'DeepSeek Chat' },
+  ]
   seq = 0
   store = new FakeStore()
   registry = new WriterRegistry()
   registry.register(new ClaudeWriter(settings))
   registry.register(new FakeAdditiveWriter(ocPath))
+  registry.register(new CodexWriter(codexCfg, codexCat, codexAuth))
   const snapshots = new ConfigSnapshotStore({
     baseDir: join(root, 'history'),
     clock: () => ++seq,
@@ -187,6 +207,8 @@ beforeEach(async () => {
       revokedKeys.push(id)
     },
     listModels: () => proxyModels,
+    listCatalogModels: () => catalogModels,
+    listAccountPoolModels: () => [{ id: 'claude-sonnet-4.5', displayName: 'Claude Sonnet 4.5' }],
   }
   const relayProvisioning: RelayProvisioningPort = {
     ensureRelayUpstream: async (input) => {
@@ -198,7 +220,16 @@ beforeEach(async () => {
       relayRemoveCalls.push(profileId)
     },
   }
-  svc = new ClientConfigService(store, registry, new ClientConfigApplier(snapshots), snapshots, localProxy, relayProvisioning)
+  codexRelayOn = false
+  svc = new ClientConfigService(
+    store,
+    registry,
+    new ClientConfigApplier(snapshots),
+    snapshots,
+    localProxy,
+    relayProvisioning,
+    () => codexRelayOn,
+  )
 })
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
@@ -259,9 +290,171 @@ describe('ClientConfigService', () => {
     expect((await svc.list('claude'))[0].isCurrent).toBe(true)
   })
 
-  it('反代未运行(port null) → connectLocalProxy 抛错', async () => {
+  // ---- Codex 供应商接入（单选 + 中转注入=原生共存开关）----
+
+  it('OFF + 启用号小管账号：catalog 只含账号池(无原生)；requires_openai_auth 恒 true(实证 recipe)', async () => {
+    codexRelayOn = false
+    const acct = await svc.connectLocalProxy('codex') // 建档 + 单选选中
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    const pid = codexProviderId(acct.id)
+    expect(cfg.model_provider).toBe(pid)
+    expect(cfg.model_providers[pid].base_url).toBe('http://127.0.0.1:8788/v1')
+    expect(cfg.model_providers[pid].requires_openai_auth).toBe(true) // 恒 true：登录显示由 auth.json 驱动
+    expect(cfg.model_providers[pid].supports_websockets).toBe(false)
+    expect(cfg.model_catalog_json).toBe(codexCat)
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models.map((m) => m.slug)
+    expect(slugs).toContain('claude-sonnet-4.5') // 账号池
+    expect(slugs.some((s) => s.startsWith('gpt-5'))).toBe(false) // OFF 不含原生
+  })
+
+  it('OFF + 启用 responses 协议第三方：直连其端点，catalog 只含其模型', async () => {
+    codexRelayOn = false
+    const tp = await svc.create({ clientId: 'codex', name: 'DeepSeek', source: 'manual', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-ds', model: 'deepseek-chat', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(tp.id)
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    const pid = codexProviderId(tp.id)
+    expect(cfg.model_provider).toBe(pid)
+    expect(cfg.model_providers[pid].base_url).toBe('https://api.deepseek.com/v1') // 直连
+    expect(cfg.model_providers[pid].requires_openai_auth).toBe(true) // 恒 true
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models.map((m) => m.slug)
+    expect(slugs).toContain('deepseek-chat')
+    expect(slugs.some((s) => s.startsWith('gpt-5'))).toBe(false)
+  })
+
+  it('OFF + 非 responses 上游(或老档无 upstreamProtocol) → 启用报错提示开中转注入，不写盘', async () => {
+    codexRelayOn = false
+    const tp = await svc.create({ clientId: 'codex', name: 'DeepSeek', source: 'manual', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-ds', model: 'deepseek-chat', settings: { upstreamProtocol: 'openai-chat' } })
+    await expect(svc.enable(tp.id)).rejects.toThrow(/中转注入/)
+    const legacy = await svc.create({ clientId: 'codex', name: '老档', source: 'manual', baseUrl: 'https://api.old.com/v1', apiKey: 'k', model: 'm' })
+    await expect(svc.enable(legacy.id)).rejects.toThrow(/中转注入/) // 无 upstreamProtocol 默认按 chat 对待
+  })
+
+  it('ON + responses 协议第三方：经反代（C3），catalog 并原生共存', async () => {
+    codexRelayOn = true
+    const tp = await svc.create({ clientId: 'codex', name: 'Resp', source: 'manual', baseUrl: 'https://api.resp.com/v1', apiKey: 'k', model: 'resp-1', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(tp.id)
+    // C3：ON + responses → 收编进反代，base_url 指向 8788/v1
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    expect(cfg.model_providers[codexProviderId(tp.id)].base_url).toBe('http://127.0.0.1:8788/v1')
+    expect(cfg.model_providers[codexProviderId(tp.id)].requires_openai_auth).toBe(true)
+    // ensureRelayUpstream 被调用，protocol='openai-responses'
+    expect(relayEnsureCalls.some((c) => c.profileId === tp.id && c.protocol === 'openai-responses')).toBe(true)
+    // catalog 并原生（viaProxy=true + relayOn=true）；resp-1 不与原生 slug 撞名，无 -hxg 后缀
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models.map((m) => m.slug)
+    expect(slugs).toContain('resp-1') // 第三方 slug（无别名，不撞名）
+  })
+
+  it('ON + responses 协议第三方（C3）：ensureRelayUpstream 收到 protocol=openai-responses + RelayModelAlias', async () => {
+    codexRelayOn = true
+    const tp = await svc.create({ clientId: 'codex', name: 'MyResp', source: 'manual', baseUrl: 'https://api.myresp.com/v1', apiKey: 'sk-r', model: 'resp-model-x', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(tp.id)
+    // 必须调 ensureRelayUpstream 且 protocol 为 openai-responses
+    const call = relayEnsureCalls.find((c) => c.profileId === tp.id)
+    expect(call).toBeDefined()
+    expect(call!.protocol).toBe('openai-responses')
+    expect(call!.baseUrl).toBe('https://api.myresp.com/v1')
+    // models 是 RelayModelAlias 数组（alias/real）；resp-model-x 不撞原生名，alias===real
+    const mArr = call!.models as Array<{ alias: string; real: string }>
+    expect(mArr).toHaveLength(1)
+    expect(mArr[0].alias).toBe('resp-model-x')
+    expect(mArr[0].real).toBe('resp-model-x')
+  })
+
+  it('ON + responses 协议第三方（C3）：catalog 并原生，slug=alias（不撞名时无 -hxg 后缀）', async () => {
+    codexRelayOn = true
+    const tp = await svc.create({ clientId: 'codex', name: 'MyResp', source: 'manual', baseUrl: 'https://api.myresp.com/v1', apiKey: 'sk-r', model: 'resp-model-x', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(tp.id)
+    // viaProxy=true + relayOn=true → codexCatalogIncludeNative=true → catalog 并原生（来自 models_cache）
+    // 测试环境无 models_cache，故原生条目为 0，只验第三方 slug 存在、无 -hxg 后缀
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models.map((m) => m.slug)
+    expect(slugs).toContain('resp-model-x')
+    expect(slugs).not.toContain('resp-model-x-hxg') // 不撞名，无需别名后缀
+  })
+
+  it('OFF + responses 协议第三方（C3 关闭）：直连，不调 ensureRelayUpstream，catalog 不并原生', async () => {
+    codexRelayOn = false
+    const tp = await svc.create({ clientId: 'codex', name: 'OffResp', source: 'manual', baseUrl: 'https://api.offresp.com/v1', apiKey: 'sk-off', model: 'off-model', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(tp.id)
+    // OFF → 直连，base_url 是第三方原始 URL
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    expect(cfg.model_providers[codexProviderId(tp.id)].base_url).toBe('https://api.offresp.com/v1')
+    // 不调 ensureRelayUpstream
+    expect(relayEnsureCalls.some((c) => c.profileId === tp.id)).toBe(false)
+    // catalog 不并原生（viaProxy=false）
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models.map((m) => m.slug)
+    expect(slugs).toContain('off-model')
+  })
+
+  it('单选：启用 B 自动停用 A', async () => {
+    codexRelayOn = false
+    const a = await svc.connectLocalProxy('codex')
+    const b = await svc.create({ clientId: 'codex', name: 'DeepSeek', source: 'manual', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'k', model: 'deepseek-chat', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(b.id)
+    const list = await svc.list('codex')
+    expect(list.find((p) => p.id === a.id)!.enabled).toBe(false) // A 被自动停用
+    expect(list.find((p) => p.id === b.id)!.enabled).toBe(true)
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    expect(cfg.model_provider).toBe(codexProviderId(b.id)) // 顶层指向 B
+  })
+
+  it('ON + 启用号小管账号：requires_openai_auth=true，catalog 含原生+账号池(真共存)', async () => {
+    codexRelayOn = true
+    const acct = await svc.connectLocalProxy('codex')
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    const pid = codexProviderId(acct.id)
+    expect(cfg.model_providers[pid].requires_openai_auth).toBe(true) // 真共存：保留 ChatGPT 登录
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models.map((m) => m.slug)
+    expect(slugs.some((s) => s.startsWith('gpt-5'))).toBe(true) // 原生共存
+    expect(slugs).toContain('claude-sonnet-4.5') // 账号池
+  })
+
+  it('ON + 启用可中转第三方：供 relay + 经反代路由(base_url=8788) + bearer=真签发 client key', async () => {
+    codexRelayOn = true
+    const tp = await svc.create({ clientId: 'codex', name: 'DeepSeek', source: 'manual', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'k', model: 'deepseek-chat', settings: { upstreamProtocol: 'openai-chat' } })
+    await svc.enable(tp.id)
+    expect(relayEnsureCalls.some((c) => c.profileId === tp.id)).toBe(true) // 已供 relay
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    const pid = codexProviderId(tp.id)
+    expect(cfg.model_providers[pid].base_url).toBe('http://127.0.0.1:8788/v1') // 经反代
+    expect(cfg.model_providers[pid].requires_openai_auth).toBe(true)
+    // 反代鉴权要求有效 client key——bearer 必须是真签发 key，不能是占位符(否则 401)。
+    expect(cfg.model_providers[pid].experimental_bearer_token).toBe(`sk-client-config:codex-relay:${tp.id}`)
+    expect(await store.getKeyRef(tp.id)).toBe(`key-client-config:codex-relay:${tp.id}`) // keyRef 跟踪
+  })
+
+  it('ON 中转 key 生命周期：再启用换新吊旧；停用吊销并清 keyRef；local-proxy 档主 key 不受牵连', async () => {
+    codexRelayOn = true
+    const tp = await svc.create({ clientId: 'codex', name: 'R', source: 'manual', baseUrl: 'https://r/v1', apiKey: 'k', model: 'm-x', settings: { upstreamProtocol: 'openai-responses' } })
+    await svc.enable(tp.id)
+    const keyId = `key-client-config:codex-relay:${tp.id}`
+    await svc.enable(tp.id) // 再启用：签新 + 吊销旧
+    expect(revokedKeys).toContain(keyId)
+    revokedKeys.length = 0
+    await svc.disable(tp.id) // 停用：吊销 + 清 keyRef
+    expect(revokedKeys).toContain(keyId)
+    expect(await store.getKeyRef(tp.id)).toBeNull()
+    // local-proxy 档：disable 不吊销其主 keyRef(再启用还要用)。
+    revokedKeys.length = 0
+    codexRelayOn = false
+    const acct = await svc.connectLocalProxy('codex')
+    await svc.disable(acct.id)
+    expect(revokedKeys).toHaveLength(0)
+    expect(await store.getKeyRef(acct.id)).not.toBeNull()
+  })
+
+  it('停用：清除该供应商注入', async () => {
+    codexRelayOn = false
+    const acct = await svc.connectLocalProxy('codex')
+    await svc.disable(acct.id)
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    expect(cfg.model_providers?.[codexProviderId(acct.id)]).toBeUndefined()
+    expect((await svc.list('codex')).find((p) => p.id === acct.id)!.enabled).toBe(false)
+  })
+
+  it('反代无法启动(port null) → connectLocalProxy 抛错', async () => {
+    // connectLocalProxy 已改为自动启动语义：ensureStarted 起不来（无监听端口）即包装抛错。
     proxyPort = null
-    await expect(svc.connectLocalProxy('claude')).rejects.toThrow(/反代未运行/)
+    await expect(svc.connectLocalProxy('claude')).rejects.toThrow(/无法自动开启 API 服务/)
   })
 
   // ---- 累加式共存 ----
@@ -494,5 +687,155 @@ describe('ClientConfigService', () => {
     })
     await svc.delete(p.id)
     expect(relayRemoveCalls).toContain(p.id)
+  })
+
+  // ---- Codex 多模型列表（codexModels）----
+
+  it('codexModels OFF+responses：多模型列表 → catalog 多条目，默认=首项 id', async () => {
+    codexRelayOn = false
+    const tp = await svc.create({
+      clientId: 'codex',
+      name: 'MultiModel',
+      source: 'manual',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-x',
+      model: 'first-model',
+      settings: {
+        upstreamProtocol: 'openai-responses',
+        codexModels: [
+          { id: 'first-model', name: 'First Model', contextWindow: 128000 },
+          { id: 'second-model', name: 'Second Model' },
+        ],
+      },
+    })
+    await svc.enable(tp.id)
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    const pid = codexProviderId(tp.id)
+    // 默认 model = 首项 id
+    expect(cfg.model).toBe('first-model')
+    // catalog 含两条
+    const catModels = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string; display_name: string }> }).models
+    const slugs = catModels.map((m) => m.slug)
+    expect(slugs).toContain('first-model')
+    expect(slugs).toContain('second-model')
+    // displayName 原样保存（不加「号小管」后缀）
+    const firstEntry = catModels.find((m) => m.slug === 'first-model')!
+    expect(firstEntry.display_name).toBe('First Model')
+    const secondEntry = catModels.find((m) => m.slug === 'second-model')!
+    expect(secondEntry.display_name).toBe('Second Model')
+    void pid
+  })
+
+  it('codexModels ON+responses：列表中撞原生名者加 -hxg 别名，不撞名者保真名', async () => {
+    codexRelayOn = true
+    // 模拟 getNativeSlugs 返回含 gpt-5.5 的集合
+    // localProxy.listNativeModelSlugs 未在 FakeStore 中定义，需在 localProxy 添加
+    // （service 测试的 FakeLocalProxy 未实现 listNativeModelSlugs → getNativeSlugs 返回 Set()）
+    // 为测撞名逻辑，需要 listNativeModelSlugs 支持。此处用 monkey-patch 方式扩展 localProxy。
+    const svcWithNativeSlugs = new (await import('../../../src/main/contexts/clientConfig/application/client-config-service')).ClientConfigService(
+      store,
+      registry,
+      new (await import('../../../src/main/contexts/clientConfig/application/client-config-applier')).ClientConfigApplier(
+        new (await import('../../../src/main/contexts/clientConfig/infrastructure/config-snapshot')).ConfigSnapshotStore({
+          baseDir: join(root, 'history2'),
+          clock: () => ++seq,
+          genId: () => `s${seq}`,
+        })
+      ),
+      new (await import('../../../src/main/contexts/clientConfig/infrastructure/config-snapshot')).ConfigSnapshotStore({
+        baseDir: join(root, 'history2'),
+        clock: () => ++seq,
+        genId: () => `s${seq}`,
+      }),
+      {
+        getPort: () => 8788,
+        ensureStarted: async () => { ensureStartedCalls++; return 8788 },
+        signKey: async (name) => ({ id: `key-${name}`, plaintext: `sk-${name}` }),
+        revokeKey: async (id) => { revokedKeys.push(id) },
+        listModels: () => proxyModels,
+        listCatalogModels: () => catalogModels,
+        listAccountPoolModels: () => [{ id: 'claude-sonnet-4.5', displayName: 'Claude Sonnet 4.5' }],
+        listNativeModelSlugs: () => ['gpt-5.5', 'gpt-5.4'],
+      },
+      {
+        ensureRelayUpstream: async (input) => { relayEnsureCalls.push(input); relayPlatformCounter++; return { platform: `relay-${relayPlatformCounter}` } },
+        removeRelayUpstream: async (profileId) => { relayRemoveCalls.push(profileId) },
+      },
+      () => true, // codexRelayOn = true
+    )
+    const tp = await store.create({
+      clientId: 'codex',
+      name: 'AliasTest',
+      source: 'manual',
+      baseUrl: 'https://api.alias.com/v1',
+      apiKey: 'sk-a',
+      model: 'gpt-5.5',
+      settings: {
+        upstreamProtocol: 'openai-responses',
+        codexModels: [
+          { id: 'gpt-5.5', name: 'GPT 5.5 via HXG' },   // 撞原生名 → alias = gpt-5.5-hxg
+          { id: 'my-model', name: 'My Model' },           // 不撞名 → alias = my-model
+        ],
+      },
+    })
+    store.keys.set(tp.id, 'sk-a')
+    await svcWithNativeSlugs.enable(tp.id)
+    // ensureRelayUpstream 收到 RelayModelAlias 数组
+    const call = relayEnsureCalls.find((c) => c.profileId === tp.id)
+    expect(call).toBeDefined()
+    const mArr = call!.models as Array<{ alias: string; real: string }>
+    expect(mArr).toHaveLength(2)
+    // 撞名者
+    expect(mArr.find((m) => m.real === 'gpt-5.5')?.alias).toBe('gpt-5.5-hxg')
+    // 不撞名者
+    expect(mArr.find((m) => m.real === 'my-model')?.alias).toBe('my-model')
+    // catalog slug 用 alias
+    const slugs = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string; display_name: string }> }).models.map((m) => m.slug)
+    expect(slugs).toContain('gpt-5.5-hxg')
+    expect(slugs).toContain('my-model')
+    // 原生那条（来自 fallbackTemplate/models_cache）gpt-5.5 可能存在，但第三方已别名化为 gpt-5.5-hxg，不再有第二条 gpt-5.5
+    expect(slugs.filter((s) => s === 'gpt-5.5').length).toBeLessThanOrEqual(1)
+    // display_name 原样保存
+    const catModels = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string; display_name: string }> }).models
+    expect(catModels.find((m) => m.slug === 'gpt-5.5-hxg')?.display_name).toBe('GPT 5.5 via HXG')
+    expect(catModels.find((m) => m.slug === 'my-model')?.display_name).toBe('My Model')
+  })
+
+  it('codexModels 回退：settings.codexModels 缺失时用 profile.model 作单条', async () => {
+    codexRelayOn = false
+    const tp = await svc.create({
+      clientId: 'codex',
+      name: 'FallbackModel',
+      source: 'manual',
+      baseUrl: 'https://api.fb.com/v1',
+      apiKey: 'sk-fb',
+      model: 'fallback-model',
+      settings: { upstreamProtocol: 'openai-responses' },
+      // 无 codexModels
+    })
+    await svc.enable(tp.id)
+    const catModels = (JSON.parse(await readFile(codexCat, 'utf8')) as { models: Array<{ slug: string }> }).models
+    expect(catModels.map((m) => m.slug)).toContain('fallback-model')
+  })
+
+  it('previewDraft (codex)：catalog 预览的 display_name = 用户填的菜单显示名（不退回磁盘旧文件/原生名）', async () => {
+    const diff = await svc.previewDraft({
+      clientId: 'codex',
+      name: '本地 5.5 反代',
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      apiKey: 'sk-x',
+      model: 'gpt-5.5',
+      settings: {
+        upstreamProtocol: 'openai-responses',
+        codexModels: [{ id: 'gpt-5.5', name: 'gpt-5.5中转', contextWindow: 200000 }],
+      },
+    })
+    const catFile = diff.find((d) => d.file === codexCat)
+    expect(catFile?.after).toBeTruthy()
+    const after = JSON.parse(catFile!.after!) as { models: Array<{ slug: string; display_name: string; context_window: number }> }
+    const entry = after.models.find((m) => m.slug === 'gpt-5.5')
+    expect(entry).toBeDefined()
+    expect(entry!.display_name).toBe('gpt-5.5中转') // 用户填的，不是原生 GPT-5.5
+    expect(entry!.context_window).toBe(200000)
   })
 })

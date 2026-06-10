@@ -111,6 +111,8 @@ import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/cla
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
 import { OpenCodeWriter } from './contexts/clientConfig/infrastructure/writers/opencode-writer'
 import { CodexWriter } from './contexts/clientConfig/infrastructure/writers/codex-writer'
+import { createCodexProcessControl } from './contexts/clientConfig/infrastructure/codex-process'
+import { CodexAppLifecycle } from './contexts/clientConfig/infrastructure/codex-app-lifecycle'
 import { OpenClawWriter } from './contexts/clientConfig/infrastructure/writers/openclaw-writer'
 import { HermesWriter } from './contexts/clientConfig/infrastructure/writers/hermes-writer'
 import type { LocalProxyPort } from './contexts/clientConfig/application/local-proxy-port'
@@ -178,6 +180,10 @@ import { ActivityQueryService } from './contexts/activity/application/activity-q
 import { RelayUpstreamRepository } from './contexts/apiProxy/infrastructure/relay/relay-upstream.repository'
 import { RelayUpstreamRegistry } from './contexts/apiProxy/infrastructure/relay/relay-upstream-registry'
 import { RelayUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/relay/relay-upstream-client'
+import { CodexNativeUpstream } from './contexts/apiProxy/infrastructure/adapters/codex-native/codex-native-upstream'
+import { CodexNativeTokenManager } from './contexts/apiProxy/infrastructure/adapters/codex-native/codex-native-token-manager'
+import { loadCodexNativeModels } from './contexts/apiProxy/infrastructure/adapters/codex-native/codex-native-models'
+import { ResponsesPassthroughUpstream } from './contexts/apiProxy/infrastructure/adapters/relay/responses-passthrough-upstream'
 
 /**
  * Account capability-registry adapter (quota manifest §5b).
@@ -554,21 +560,48 @@ export async function buildContainer(): Promise<Container> {
   })
   // 记录当前注册的 relay platform 名，供热重载时精确移除。
   let currentRelayPlatforms: string[] = []
+  // responses 第三方透传适配器列表（可变引用，热重载时原地同步；ApiProxyService 直接引用此数组）。
+  const responsesPassthroughs: ResponsesPassthroughUpstream[] = []
   for (const adapter of await relayUpstreamRegistry.buildAdapters()) {
     platformRegistry.register(adapter)
     currentRelayPlatforms.push(adapter.platform)
+    if (adapter instanceof ResponsesPassthroughUpstream) {
+      responsesPassthroughs.push(adapter)
+    }
   }
 
-  /** 移除旧 relay-* 适配器，从仓储重建并注册最新列表。 */
+  /** 移除旧 relay-* 适配器，从仓储重建并注册最新列表；同步更新 responses 透传列表。 */
   async function reloadRelayUpstreams(): Promise<void> {
     for (const platform of currentRelayPlatforms) {
       platformRegistry.unregister(platform)
     }
     currentRelayPlatforms = []
+    responsesPassthroughs.length = 0
     for (const adapter of await relayUpstreamRegistry.buildAdapters()) {
       platformRegistry.register(adapter)
       currentRelayPlatforms.push(adapter.platform)
+      if (adapter instanceof ResponsesPassthroughUpstream) {
+        responsesPassthroughs.push(adapter)
+      }
     }
+  }
+
+  // 原生（ChatGPT 登录账号）上游 codex-native：仅当本机存在 ~/.codex/auth.json 时启用。
+  // 读 auth.json 播种 OAuth token、自管刷新（不写 auth.json），把 /v1/responses 的原生模型
+  // 原样透传到 chatgpt.com/backend-api/codex/responses。注册进 registry 使原生模型进 /v1/models。
+  let codexNative: CodexNativeUpstream | undefined
+  if (CodexNativeTokenManager.authPresent()) {
+    const codexNativeHttp = new RelayUpstreamClient()
+    const codexNativeTokens = new CodexNativeTokenManager({
+      store: new SafeStorageSecretStore(join(appDataDir(), 'secrets', 'codex-native-tokens.enc')),
+      http: codexNativeHttp,
+    })
+    codexNative = new CodexNativeUpstream({
+      tokens: codexNativeTokens,
+      http: codexNativeHttp,
+      models: loadCodexNativeModels(),
+    })
+    platformRegistry.register(codexNative)
   }
 
   // M5 Key 加密存储：复用已有 cryptoService（不建第二个 master key）。
@@ -591,6 +624,8 @@ export async function buildContainer(): Promise<Container> {
     registry: platformRegistry,
     responsesStore,
     observability: apiProxyRequestLog,
+    ...(codexNative ? { codexNative } : {}),
+    responsesPassthroughs,
   })
   // 客户端 Key 令牌桶限流器（后续可接 settings 动态配置 capacity/refillPerMinute）。
   const apiProxyKeyRateLimiter = new KeyRateLimiter({ capacity: 10, refillPerMinute: 10 })
@@ -648,7 +683,17 @@ export async function buildContainer(): Promise<Container> {
     new GeminiWriter(join(dotDir('gemini'), '.env'), join(dotDir('gemini'), 'settings.json')),
   )
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
-  clientConfigRegistry.register(new CodexWriter(join(dotDir('codex'), 'config.toml')))
+  // Codex 桌面 App 停-写-启生命周期：运行中的 Codex App 会按内存反写 config.toml，
+  // 必须停 App→写→重启它，改动才会被采纳（osascript 优雅退出，绝不宽泛 pkill；非 macOS 为 no-op）。
+  const codexAppLifecycle = new CodexAppLifecycle(createCodexProcessControl())
+  clientConfigRegistry.register(
+    new CodexWriter(
+      join(dotDir('codex'), 'config.toml'),
+      join(appDataDir(), 'client-config', 'codex-model-catalog.json'),
+      join(dotDir('codex'), 'auth.json'),
+      codexAppLifecycle,
+    ),
+  )
   clientConfigRegistry.register(new OpenClawWriter(join(dotDir('openclaw'), 'openclaw.json')))
   clientConfigRegistry.register(new HermesWriter(join(dotDir('hermes'), 'config.yaml')))
   const clientConfigSnapshots = new ConfigSnapshotStore({
@@ -678,26 +723,77 @@ export async function buildContainer(): Promise<Container> {
     },
     revokeKey: (id) => apiProxyKeyService.delete(id),
     listModels: () => platformRegistry.listAllModels().map((m) => m.id),
+    listCatalogModels: () => {
+      // 按平台排除占位 echo 与原生 codex-native（原生由 Codex 自带 models_cache 提供），
+      // 只留账号池 Claude + 第三方 relay。按 id 去重。
+      const seen = new Set<string>()
+      const out: Array<{ id: string; displayName?: string; contextLength?: number }> = []
+      for (const platform of platformRegistry.knownPlatforms()) {
+        if (platform === 'echo' || platform === 'codex-native') continue
+        const adapter = platformRegistry.get(platform)
+        if (adapter === undefined) continue
+        for (const m of adapter.listModels()) {
+          if (seen.has(m.id)) continue
+          seen.add(m.id)
+          out.push({
+            id: m.id,
+            ...(m.displayName !== undefined ? { displayName: m.displayName } : {}),
+            ...(m.contextLength !== undefined ? { contextLength: m.contextLength } : {}),
+          })
+        }
+      }
+      return out
+    },
+    listAccountPoolModels: () => {
+      // 仅账号池(kiro/Claude)模型；relay-* 与 codex-native/echo 不算。
+      const kiro = platformRegistry.get('kiro')
+      if (kiro === undefined) return []
+      return kiro.listModels().map((m) => ({
+        id: m.id,
+        ...(m.displayName !== undefined ? { displayName: m.displayName } : {}),
+        ...(m.contextLength !== undefined ? { contextLength: m.contextLength } : {}),
+      }))
+    },
+    listNativeModelSlugs: () => {
+      // 原生（ChatGPT 登录账号）模型 slug 列表；供 ON 撞名别名检测。
+      if (codexNative === undefined) return []
+      return codexNative.listModels().map((m) => m.id)
+    },
   }
   // relay 桥（T8）：按 clientConfig 接入档 id 建/删 relay 上游并热重载。
   const clientConfigRelayProvisioning: RelayProvisioningPort = {
     async ensureRelayUpstream(input) {
       const { profileId, displayName, protocol, baseUrl, apiKey, models } = input
-      // WireProtocol → relay 上游协议映射（openai-chat/anthropic/gemini 已支持;
-      // openai-responses 暂无对应出站 codec，仍直连/换端点）。
+      // WireProtocol → relay 上游协议映射。
+      // openai-responses：HTTP 级透传，存 'openai-responses'；
+      //   models 携带 alias→real 映射（格式 displayName='alias:real'，alias===real 时退 id）。
+      // openai-chat/anthropic/gemini：IR 转换路，存规范协议名。
       let relayProtocol: string
-      if (protocol === 'openai-chat') {
+      let modelInfos: Array<{ id: string; displayName?: string }>
+      if (protocol === 'openai-responses') {
+        relayProtocol = 'openai-responses'
+        // models 字段：每项 RelayModelAlias { alias, real }（alias 可能等于 real）。
+        // ModelInfo.id = alias（catalog slug），displayName = 'alias:real'（供 registry 解析别名）。
+        const aliasList = models as Array<string | { alias: string; real: string }>
+        modelInfos = aliasList.map((m) => {
+          if (typeof m === 'string') return { id: m, displayName: `${m}:${m}` }
+          const { alias, real } = m as { alias: string; real: string }
+          return { id: alias, displayName: alias === real ? alias : `${alias}:${real}` }
+        })
+      } else if (protocol === 'openai-chat') {
         relayProtocol = 'openai'
+        modelInfos = (models as string[]).map((id) => ({ id, displayName: id }))
       } else if (protocol === 'anthropic') {
         relayProtocol = 'anthropic'
+        modelInfos = (models as string[]).map((id) => ({ id, displayName: id }))
       } else if (protocol === 'gemini') {
         relayProtocol = 'gemini'
+        modelInfos = (models as string[]).map((id) => ({ id, displayName: id }))
       } else {
         throw new Error(
-          `该上游协议暂不支持中转，请直连或选 openai/anthropic/gemini 兼容端点（protocol=${protocol}）`,
+          `该上游协议暂不支持中转，请直连或选 openai/anthropic/gemini/responses 兼容端点（protocol=${protocol}）`,
         )
       }
-      const modelInfos = models.map((id) => ({ id, displayName: id }))
       const record = await relayUpstreamRepo.upsertByProfileId(profileId, {
         displayName,
         protocol: relayProtocol,
@@ -721,6 +817,7 @@ export async function buildContainer(): Promise<Container> {
     clientConfigSnapshots,
     clientConfigLocalProxy,
     clientConfigRelayProvisioning,
+    () => settings.getCodexRelayInjectionEnabled(),
   )
 
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。

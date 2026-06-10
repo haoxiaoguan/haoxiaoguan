@@ -45,13 +45,27 @@ export interface CodexProviderInput {
   /** 显示名。 */
   name: string
   baseUrl: string
-  /** 'responses' | 'chat'。 */
-  wireApi: string
   /** 明文 key（写进 experimental_bearer_token；空则不写）。 */
   bearerToken: string
   model?: string
   /** 是否设为顶层默认（model_provider + model）。 */
   isDefault: boolean
+}
+
+/**
+ * Codex provider base_url 规范化：请求 = POST {base_url}/responses，OpenAI 兼容上游惯例须以 /v1
+ * 结尾（用户实证：填 http://127.0.0.1:8080 会打到 :8080/responses 而非 :8080/v1/responses）。
+ * 仅当 URL 无路径（空或 /）时自动补 /v1；带自定义路径（网关）原样尊重；非 URL 原样返回。
+ */
+export function normalizeCodexBaseUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, '')
+  try {
+    const u = new URL(trimmed)
+    if (u.pathname === '' || u.pathname === '/') return `${trimmed}/v1`
+  } catch {
+    /* 非 URL 原样返回，写盘后由 Codex 自身报错定位 */
+  }
+  return trimmed
 }
 
 /** 注入/更新一段号小管 provider + 对应 profile（保留其余键）。 */
@@ -64,8 +78,18 @@ export function upsertCodexProvider(
   const providers = { ...asRecord(next.model_providers) }
   const provider: Record<string, unknown> = {
     name: input.name,
-    base_url: input.baseUrl,
-    wire_api: input.wireApi,
+    base_url: normalizeCodexBaseUrl(input.baseUrl),
+    // Codex 已彻底移除 wire_api="chat"：任何 provider 段带它都会让整个 config.toml 解析失败、
+    // 用户的 Codex 直接起不来（真机证实，见 openai/codex discussions#7782）。唯一合法值恒为
+    // responses，故不提供参数；chat-only 上游必须经号小管反代做协议转换。
+    wire_api: 'responses',
+    // 恒 true（2026-06-10 用户真机实证的 working recipe 取值）：登录状态显示由 auth.json 驱动、
+    // 与本键无关；false 是早期 6 次「App 菜单不显示」失败实验的头号嫌疑变量。请求鉴权由
+    // experimental_bearer_token 决定（provider 私有 key 优先于 auth.json 的 OPENAI_API_KEY 兜底）。
+    requires_openai_auth: true,
+    // 强制 HTTP-only —— Codex 0.135+ 桌面 App 默认走 WebSocket 传输,
+    // 自定义 HTTP provider 不声明此键就连不上 → App 崩(无模型/无登录)。必须显式关闭。
+    supports_websockets: false,
   }
   if (input.bearerToken.length > 0) provider.experimental_bearer_token = input.bearerToken
   providers[input.id] = provider
@@ -84,6 +108,24 @@ export function upsertCodexProvider(
     else delete next.model
   }
   return next
+}
+
+/** 设置顶层 model_catalog_json 指向号小管管理的 catalog 文件（L2 中转注入用）。 */
+export function setCodexModelCatalogPath(obj: Record<string, unknown>, path: string): Record<string, unknown> {
+  return { ...obj, model_catalog_json: path }
+}
+
+/** 仅当 model_catalog_json 指向号小管管理路径时移除它（不动用户自设的 catalog）。 */
+export function clearCodexModelCatalogPath(obj: Record<string, unknown>, ourPath: string): Record<string, unknown> {
+  if (obj.model_catalog_json !== ourPath) return obj
+  const next = { ...obj }
+  delete next.model_catalog_json
+  return next
+}
+
+/** 读当前 model_catalog_json 值（用于判断是否号小管所写）。 */
+export function getCodexModelCatalogPath(obj: Record<string, unknown>): string | undefined {
+  return typeof obj.model_catalog_json === 'string' ? obj.model_catalog_json : undefined
 }
 
 /** 移除一段号小管 provider + profile；若顶层默认指向本档则一并清除（不动他档/用户设定）。 */
