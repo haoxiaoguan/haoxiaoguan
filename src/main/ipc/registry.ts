@@ -57,6 +57,7 @@ import type { ProxyRequestLog } from '../contexts/apiProxy/domain/observability/
 
 import type { SessionsService } from '../contexts/sessions/application/sessions-service'
 import { registerSessionsHandlers } from '../contexts/sessions/ipc/sessions-handlers'
+import type { CodexSessionRepair } from '../contexts/sessions/application/codex-session-repair'
 
 import { registerActivityHandlers } from '../contexts/activity/ipc/activity-handlers'
 import type { ClientConfigService } from '../contexts/clientConfig/application/client-config-service'
@@ -132,6 +133,7 @@ export interface Services {
 
   // sessions context (read-only on-disk AI CLI conversation history browser)
   sessionsService: SessionsService
+  codexSessionRepair: CodexSessionRepair
 
   // activity context (session activity stats — incremental scan + trend query)
   activitySync: ActivitySyncService
@@ -173,7 +175,7 @@ export function registerAllHandlers(services: Services): void {
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
   registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs(), services.apiProxyRequestLog)
-  registerSessionsHandlers(services.sessionsService)
+  registerSessionsHandlers(services.sessionsService, services.codexSessionRepair)
   registerActivityHandlers(services.activitySync, services.activityQuery)
   registerClientConfigHandlers(services.clientConfigService)
 }

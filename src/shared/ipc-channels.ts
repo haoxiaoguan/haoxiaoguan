@@ -202,6 +202,9 @@ export const SESSIONS_CHANNELS = {
   deleteSession: 'sessions:deleteSession',
   deleteSessions: 'sessions:deleteSessions',
   resume: 'sessions:resume',
+  repairPreview: 'sessions:repairPreview',
+  repair: 'sessions:repair',
+  repairRollback: 'sessions:repairRollback',
 } as const
 
 // API 反代服务上下文（apiProxy）—— 本地 HTTP 服务开关 + 状态。新功能，无 Tauri
@@ -223,6 +226,11 @@ export const API_PROXY_CHANNELS = {
 // 主进程 → 渲染层推送：每条反代请求日志（G3 请求级可观测性）。
 export const API_PROXY_EVENTS = {
   requestLog: 'apiProxy:requestLog',
+} as const
+
+// 主进程 → 渲染层推送：修复会话进度（sessions:repairProgress）。
+export const SESSIONS_EVENTS = {
+  repairProgress: 'sessions:repairProgress',
 } as const
 
 // Activity context — 会话活动统计（增量扫描 + 趋势查询）。Channel 值 snake_case

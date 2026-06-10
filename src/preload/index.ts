@@ -19,12 +19,13 @@ import {
   API_PROXY_CHANNELS,
   API_PROXY_EVENTS,
   SESSIONS_CHANNELS,
+  SESSIONS_EVENTS,
   ACTIVITY_CHANNELS,
   UPDATER_CHANNELS,
   UPDATE_EVENTS,
   CLIENT_CONFIG_CHANNELS,
 } from '../shared/ipc-channels'
-import type { HxgApi, UpdateStatus, ProxyRequestRecord } from '../shared/api-types'
+import type { HxgApi, UpdateStatus, ProxyRequestRecord, CodexRepairProgressDto } from '../shared/api-types'
 
 const api: HxgApi = {
   settings: {
@@ -242,6 +243,14 @@ const api: HxgApi = {
       ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSession, { tool, sourcePath, sessionId }),
     deleteSessions: (items) => ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSessions, { items }),
     resume: (command, cwd) => ipcRenderer.invoke(SESSIONS_CHANNELS.resume, { command, cwd }),
+    repairPreview: () => ipcRenderer.invoke(SESSIONS_CHANNELS.repairPreview),
+    repair: (req) => ipcRenderer.invoke(SESSIONS_CHANNELS.repair, req),
+    repairRollback: (backupId) => ipcRenderer.invoke(SESSIONS_CHANNELS.repairRollback, { backupId }),
+    onRepairProgress: (cb: (p: CodexRepairProgressDto) => void) => {
+      const h = (_e: unknown, p: CodexRepairProgressDto) => cb(p)
+      ipcRenderer.on(SESSIONS_EVENTS.repairProgress, h)
+      return () => ipcRenderer.removeListener(SESSIONS_EVENTS.repairProgress, h)
+    },
   },
   activity: {
     syncActivity: () => ipcRenderer.invoke(ACTIVITY_CHANNELS.syncActivity),

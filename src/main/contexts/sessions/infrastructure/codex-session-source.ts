@@ -91,6 +91,7 @@ export class CodexSessionSource implements SessionSource {
     }
     let sessionId: string | undefined
     let cwd: string | undefined
+    let provider: string | undefined
     let createdAt: number | undefined
     let firstUserText: string | undefined
     for (const line of head) {
@@ -102,6 +103,7 @@ export class CodexSessionSource implements SessionSource {
         if (this.skipSubagents && isObject(payload.source) && 'subagent' in payload.source) return undefined
         if (!sessionId && typeof payload.id === 'string') sessionId = payload.id
         if (!cwd && typeof payload.cwd === 'string') cwd = payload.cwd
+        if (!provider && typeof payload.model_provider === 'string') provider = payload.model_provider
       }
       if (!firstUserText && v.type === 'response_item' && payload && payload.type === 'message' && payload.role === 'user') {
         const text = extractText(payload.content).trim()
@@ -124,6 +126,8 @@ export class CodexSessionSource implements SessionSource {
       if (lastActiveAt === undefined && typeof v.timestamp === 'string') lastActiveAt = parseTimestampToMs(v.timestamp)
     }
 
+    const archivedRoot = join(this.rootDir, 'archived_sessions')
+    const isArchived = path.startsWith(archivedRoot + '/')
     return {
       tool: this.tool,
       sessionId,
@@ -134,6 +138,8 @@ export class CodexSessionSource implements SessionSource {
       lastActiveAt: lastActiveAt ?? createdAt ?? (mtime > 0 ? mtime : undefined),
       sourcePath: path,
       resumeCommand: `codex resume ${sessionId}`,
+      ...(provider ? { provider } : {}),
+      ...(isArchived ? { archived: true } : {}),
     }
   }
 

@@ -769,6 +769,12 @@ export function installAccountsMock(): void {
         }
         case 'validate_mcp_command':
           return { valid: true };
+        case 'sessions:repairPreview':
+          return { available: false, counts: [], repairable: 0, codexRunning: false };
+        case 'sessions:repair':
+          return { updatedThreads: 0, userEventRows: 0, cwdRows: 0, globalStateKeys: 0, changedRollouts: 0, skippedRollouts: 0, backupId: 'mock' };
+        case 'sessions:repairRollback':
+          return undefined;
         case 'validate_batch':
           return ((a.accountIds as string[]) ?? []).map((id) => ({
             account_id: id,

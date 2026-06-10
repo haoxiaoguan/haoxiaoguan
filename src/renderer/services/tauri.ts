@@ -569,6 +569,10 @@ import type {
   SessionPageDto,
   SessionDeleteRequestDto,
   SessionDeleteOutcomeDto,
+  CodexRepairPreviewDto,
+  CodexRepairRequestDto,
+  CodexRepairResultDto,
+  CodexRepairProgressDto,
   ActivityTrendPointResponse,
   ActivitySyncSummaryResponse,
 } from '@shared/api-types';
@@ -585,6 +589,10 @@ export const sessionsService = {
     bridge().sessions.deleteSessions(items) as Promise<SessionDeleteOutcomeDto[]>,
   resume: (command: string, cwd?: string) =>
     bridge().sessions.resume(command, cwd),
+  repairPreview: () => bridge().sessions.repairPreview() as Promise<CodexRepairPreviewDto>,
+  repair: (req: CodexRepairRequestDto) => bridge().sessions.repair(req) as Promise<CodexRepairResultDto>,
+  repairRollback: (backupId: string) => bridge().sessions.repairRollback(backupId) as Promise<void>,
+  onRepairProgress: (cb: (p: CodexRepairProgressDto) => void) => bridge().sessions.onRepairProgress(cb),
 };
 
 // ============================================================================

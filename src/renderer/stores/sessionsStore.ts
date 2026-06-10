@@ -1,14 +1,27 @@
 import { create } from 'zustand';
 import { sessionsService } from '../services/tauri';
+import { bridge } from '../services/bridge';
 import type {
   SessionToolDto,
   SessionSummaryDto,
   SessionMessageDto,
   ToolProbeDto,
+  ClientConfigClientId,
+  ClientConfigClientInfo,
+  CodexRepairPreviewDto,
+  CodexRepairRequestDto,
+  CodexRepairResultDto,
 } from '@shared/api-types';
 
 const PAGE_LIMIT = 200;
 const TOOLS: SessionToolDto[] = ['claude', 'codex', 'gemini'];
+
+/** clientId → SessionToolDto 映射；无映射的客户端（opencode/openclaw/hermes）右侧显示「暂不支持」空态。 */
+export const CLIENT_TO_TOOL: Partial<Record<ClientConfigClientId, SessionToolDto>> = {
+  claude: 'claude',
+  codex: 'codex',
+  gemini_cli: 'gemini',
+};
 
 interface ToolState {
   items: SessionSummaryDto[];
@@ -30,14 +43,21 @@ interface SessionsState {
   messages: SessionMessageDto[];
   loading: boolean;
   error: string | null;
+  // 左栏客户端列表（与「客户端接入」一致的 6 个）
+  clients: ClientConfigClientInfo[];
+  activeClient: ClientConfigClientId;
   init: () => Promise<void>;
   selectTool: (tool: SessionToolDto) => Promise<void>;
+  selectClient: (clientId: ClientConfigClientId) => Promise<void>;
   loadMore: () => Promise<void>;
   selectSession: (summary: SessionSummaryDto) => Promise<void>;
   deleteSession: (summary: SessionSummaryDto) => Promise<void>;
   deleteSelected: (summaries: SessionSummaryDto[]) => Promise<void>;
   resume: (summary: SessionSummaryDto) => Promise<void>;
   refresh: () => Promise<void>;
+  repairPreview: () => Promise<CodexRepairPreviewDto>;
+  repair: (req: CodexRepairRequestDto) => Promise<CodexRepairResultDto>;
+  repairRollback: (backupId: string) => Promise<void>;
 }
 
 function pickDefaultTool(probes: ToolProbeDto[]): SessionToolDto {
@@ -55,15 +75,24 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   messages: [],
   loading: false,
   error: null,
+  clients: [],
+  activeClient: 'claude',
 
   init: async () => {
     // 已初始化则直接复用缓存（反复进出会话页不重扫）。需要最新数据用 refresh()。
     if (get().initialized) return;
     set({ initialized: true, loading: true, error: null });
     try {
-      const probes = await sessionsService.probeTools();
+      const [probes, clients] = await Promise.all([
+        sessionsService.probeTools(),
+        bridge().clientConfig.clients(),
+      ]);
       const activeTool = pickDefaultTool(probes);
-      set({ probes, activeTool });
+      // 把 activeTool 映射回对应的 clientId，同步左栏高亮
+      const matchedClient = (Object.entries(CLIENT_TO_TOOL).find(
+        ([, tool]) => tool === activeTool,
+      )?.[0] ?? 'claude') as ClientConfigClientId;
+      set({ probes, clients, activeTool, activeClient: matchedClient });
       await get().selectTool(activeTool);
     } catch (e) {
       // 失败则回退 initialized，允许下次进入重试。
@@ -87,6 +116,15 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     } catch (e) {
       set({ error: String(e), loading: false });
     }
+  },
+
+  selectClient: async (clientId) => {
+    set({ activeClient: clientId, selectedPath: null, messages: [] });
+    const tool = CLIENT_TO_TOOL[clientId];
+    if (tool) {
+      await get().selectTool(tool);
+    }
+    // 无映射的客户端（opencode/openclaw/hermes）：右侧显示「暂不支持」空态，不加载会话
   },
 
   loadMore: async () => {
@@ -197,6 +235,10 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       set({ error: String(e), loading: false });
     }
   },
+
+  repairPreview: () => sessionsService.repairPreview(),
+  repair: (req) => sessionsService.repair(req),
+  repairRollback: (backupId) => sessionsService.repairRollback(backupId),
 }));
 
 export { TOOLS };

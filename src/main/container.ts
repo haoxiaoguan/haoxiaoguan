@@ -167,6 +167,7 @@ import { AccountGroupService } from './contexts/accountGroup/application/account
 
 // Sessions context — read-only on-disk AI CLI conversation history browser.
 import { SessionsService } from './contexts/sessions/application/sessions-service'
+import { CodexSessionRepair } from './contexts/sessions/application/codex-session-repair'
 import { ClaudeSessionSource } from './contexts/sessions/infrastructure/claude-session-source'
 import { CodexSessionSource } from './contexts/sessions/infrastructure/codex-session-source'
 import { GeminiSessionSource } from './contexts/sessions/infrastructure/gemini-session-source'
@@ -685,7 +686,9 @@ export async function buildContainer(): Promise<Container> {
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
   // Codex 桌面 App 停-写-启生命周期：运行中的 Codex App 会按内存反写 config.toml，
   // 必须停 App→写→重启它，改动才会被采纳（osascript 优雅退出，绝不宽泛 pkill；非 macOS 为 no-op）。
-  const codexAppLifecycle = new CodexAppLifecycle(createCodexProcessControl())
+  // codexProcessControl 提出来以便 codexSessionRepair 复用 isRunning()，避免建两个 control。
+  const codexProcessControl = createCodexProcessControl()
+  const codexAppLifecycle = new CodexAppLifecycle(codexProcessControl)
   clientConfigRegistry.register(
     new CodexWriter(
       join(dotDir('codex'), 'config.toml'),
@@ -824,6 +827,13 @@ export async function buildContainer(): Promise<Container> {
   // logSources 同时注入 sessionsService 与 activitySync，接新 agent 只动这一个数组。
   const logSources = [new ClaudeSessionSource(), new CodexSessionSource(), new GeminiSessionSource()]
   const sessionsService = new SessionsService(logSources, () => settings.getTerminalLaunchTemplate())
+  const codexSessionRepair = new CodexSessionRepair(
+    dotDir('codex'),
+    join(dotDir('codex'), 'config.toml'),
+    codexAppLifecycle,
+    () => codexProcessControl.isRunning(),
+    join(appDataDir(), 'session-repair-backups'),
+  )
 
   // Activity context — 复用 logSources，不重建适配器实例。
   const activityRepo = new MikroOrmActivityRepository()
@@ -864,6 +874,7 @@ export async function buildContainer(): Promise<Container> {
     tokenRefreshScheduler,
     platformQuotaScheduler,
     sessionsService,
+    codexSessionRepair,
     activitySync,
     activityQuery,
     relayUpstreamRepo,

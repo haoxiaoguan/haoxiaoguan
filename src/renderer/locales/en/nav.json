@@ -114,7 +114,13 @@
       "empty": "No history",
       "rollback": "Roll back to this",
       "close": "Close"
-    }
+    },
+    "codexSwitchTitle": "Switch Codex provider: {{name}}",
+    "codexSwitchDesc": "After switching to \"{{name}}\", older sessions may become invisible in Codex due to provider filtering. Enable the toggle below to migrate history sessions to the new provider so they remain visible.",
+    "codexSwitchRepairToggle": "Also repair history sessions (migrate to new provider)",
+    "codexSwitchConfirm": "Confirm switch",
+    "codexSwitchMigrating": "Migrating…",
+    "codexSwitchDone": "Switched and migrated {{n}} sessions"
   },
   "copy": "Copy",
   "service": {
@@ -204,7 +210,25 @@
     "confirmDeleteBatchTitle": "Delete sessions",
     "confirmDeleteBatchDesc": "This will permanently delete {{count}} selected sessions.",
     "confirmAction": "Delete",
-    "cancelAction": "Cancel"
+    "cancelAction": "Cancel",
+    "repair": "Repair sessions",
+    "repairRun": "Repair now",
+    "repairExplain": "Codex filters sessions by the current provider. When you switch providers, older sessions become invisible in Codex. Repairing merges sessions to the current provider, making them visible again.",
+    "repairCurrent": "Current provider",
+    "repairCount": "{{n}} sessions can be repaired",
+    "repairRewriteRollout": "Also rewrite session files (more thorough)",
+    "repairCodexRunning": "Codex is running. It will be safely stopped before repair and restarted afterward.",
+    "repairEncryptedNote": "Encrypted sessions remain visible after switching providers, but continuing conversations may be limited by upstream restrictions.",
+    "repairDone": "Repaired {{n}} sessions. Changes take effect after Codex restarts.",
+    "repairUndo": "Undo",
+    "repairUndone": "Repair undone",
+    "repairUnavailable": "No repairable Codex session library detected",
+    "unsupportedTitle": "Session history not yet supported",
+    "unsupportedSub": "Session browsing for this client coming soon",
+    "statusNormal": "Normal",
+    "statusArchived": "Archived",
+    "providerUnknown": "Provider not recorded",
+    "repairProgress": "Repair progress"
   },
   "proxies": "Proxies",
   "groups": "Groups",

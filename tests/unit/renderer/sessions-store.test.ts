@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   probeTools: vi.fn(),
   listSessions: vi.fn(),
   deleteSessions: vi.fn(),
+  clients: vi.fn(),
 }))
 vi.mock('@/services/tauri', () => ({
   sessionsService: {
@@ -13,15 +14,27 @@ vi.mock('@/services/tauri', () => ({
     deleteSession: vi.fn(),
     deleteSessions: mocks.deleteSessions,
     resume: vi.fn(),
+    repairPreview: vi.fn(),
+    repair: vi.fn(),
+    repairRollback: vi.fn(),
   },
+}))
+vi.mock('@/services/bridge', () => ({
+  bridge: () => ({
+    clientConfig: {
+      clients: mocks.clients,
+    },
+  }),
 }))
 
 import { useSessionsStore } from '../../../src/renderer/stores/sessionsStore'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Default: clients() returns empty list so init doesn't throw
+  mocks.clients.mockResolvedValue([])
   useSessionsStore.setState({
-    initialized: false, probes: [], activeTool: 'claude', byTool: {}, selectedPath: null, messages: [], loading: false, error: null,
+    initialized: false, probes: [], activeTool: 'claude', byTool: {}, selectedPath: null, messages: [], loading: false, error: null, clients: [], activeClient: 'claude',
   } as never)
 })
 

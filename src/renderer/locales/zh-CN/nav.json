@@ -114,7 +114,13 @@
       "empty": "暂无历史",
       "rollback": "回滚到此",
       "close": "关闭"
-    }
+    },
+    "codexSwitchTitle": "切换 Codex 供应商：{{name}}",
+    "codexSwitchDesc": "切换到「{{name}}」后，旧会话会因 provider 过滤在 Codex 里看不到。勾选下方开关可把历史会话迁移到新供应商，使其仍可见。",
+    "codexSwitchRepairToggle": "同时修复历史会话（迁移到新供应商）",
+    "codexSwitchConfirm": "确认切换",
+    "codexSwitchMigrating": "迁移中…",
+    "codexSwitchDone": "已切换并迁移 {{n}} 条会话"
   },
   "copy": "复制",
   "service": {
@@ -174,7 +180,7 @@
     "colFailures": "失败次数",
     "colActions": "操作"
   },
-  "sessions": "会话历史",
+  "sessions": "会话管理",
   "sessionsView": {
     "subtitle": "本机 AI 工具的对话记录",
     "search": "搜索标题 / 目录 / ID",
@@ -204,7 +210,25 @@
     "confirmDeleteBatchTitle": "批量删除会话",
     "confirmDeleteBatchDesc": "将删除选中的 {{count}} 条会话，删除后不可恢复。",
     "confirmAction": "确认删除",
-    "cancelAction": "取消"
+    "cancelAction": "取消",
+    "repair": "修复会话",
+    "repairRun": "立即修复",
+    "repairExplain": "Codex 按当前供应商过滤会话,切换供应商后旧会话在 Codex 里看不到。修复会把会话归并到当前供应商,使其重新可见。",
+    "repairCurrent": "当前供应商",
+    "repairCount": "可修复 {{n}} 条会话",
+    "repairRewriteRollout": "同时改写会话文件(更彻底)",
+    "repairCodexRunning": "检测到 Codex 正在运行,修复时会先安全退出再重启。",
+    "repairEncryptedNote": "加密会话跨供应商后可恢复可见,但继续对话可能受上游限制。",
+    "repairDone": "已修复 {{n}} 条,重启 Codex 后生效",
+    "repairUndo": "撤销",
+    "repairUndone": "已撤销修复",
+    "repairUnavailable": "未检测到可修复的 Codex 会话库",
+    "unsupportedTitle": "暂不支持会话历史",
+    "unsupportedSub": "该客户端的会话浏览即将支持",
+    "statusNormal": "正常",
+    "statusArchived": "归档",
+    "providerUnknown": "provider 未记录",
+    "repairProgress": "修复进度"
   },
   "proxies": "代理管理",
   "groups": "分组管理",

@@ -78,6 +78,16 @@ describe('CodexSessionSource', () => {
     expect(msgs).toEqual([{ role: 'tool', content: '{"ok":true}', ts: Date.parse('2026-06-01T00:00:01.000Z') }])
   })
 
+  it('scan：带出 session_meta.payload.model_provider 为 provider', async () => {
+    await writeRollout('rollout-p-019e0000-0000-0000-0000-000000000001.jsonl', [
+      { timestamp: '2026-06-01T00:00:00.000Z', type: 'session_meta', payload: { id: '019e0000-0000-0000-0000-000000000001', cwd: '/work/p', model_provider: 'openai' } },
+      { timestamp: '2026-06-01T00:00:01.000Z', type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'q' }] } },
+    ])
+    const page = await source().scan()
+    const item = page.items.find((s) => s.sessionId === '019e0000-0000-0000-0000-000000000001')
+    expect(item?.provider).toBe('openai')
+  })
+
   it('archived_sessions 也被扫描；delete 删文件无 sidecar', async () => {
     await mkdir(join(dir, 'archived_sessions'), { recursive: true })
     const a = join(dir, 'archived_sessions', 'rollout-9-dddddddd-0000-0000-0000-000000000000.jsonl')
@@ -86,5 +96,23 @@ describe('CodexSessionSource', () => {
     expect(page.items.some((s) => s.sessionId === 'dddddddd-0000-0000-0000-000000000000')).toBe(true)
     await source().delete(a, 'dddddddd-0000-0000-0000-000000000000')
     expect(existsSync(a)).toBe(false)
+  })
+
+  it('archived_sessions 目录下的会话 archived===true；sessions 目录下的 archived 为 undefined', async () => {
+    await mkdir(join(dir, 'archived_sessions'), { recursive: true })
+    // archived 条目
+    const archivedPath = join(dir, 'archived_sessions', 'rollout-arch-aaaaaaaa-1111-1111-1111-111111111111.jsonl')
+    await writeFile(archivedPath, JSON.stringify({ timestamp: '2026-06-02T00:00:00.000Z', type: 'session_meta', payload: { id: 'aaaaaaaa-1111-1111-1111-111111111111', cwd: '/z' } }))
+    // 普通 sessions 条目（已在 beforeEach 的目录里，复用 writeRollout）
+    await writeRollout('rollout-norm-bbbbbbbb-2222-2222-2222-222222222222.jsonl', [
+      { timestamp: '2026-06-01T00:00:00.000Z', type: 'session_meta', payload: { id: 'bbbbbbbb-2222-2222-2222-222222222222', cwd: '/w' } },
+    ])
+    const page = await source().scan()
+    const archivedItem = page.items.find((s) => s.sessionId === 'aaaaaaaa-1111-1111-1111-111111111111')
+    const normalItem = page.items.find((s) => s.sessionId === 'bbbbbbbb-2222-2222-2222-222222222222')
+    expect(archivedItem).toBeDefined()
+    expect(archivedItem?.archived).toBe(true)
+    expect(normalItem).toBeDefined()
+    expect(normalItem?.archived).toBeFalsy()
   })
 })
