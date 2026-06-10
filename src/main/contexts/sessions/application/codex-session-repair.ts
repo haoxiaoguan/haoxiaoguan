@@ -3,7 +3,7 @@ import { findCodexStateDb, CodexStateDb } from '../infrastructure/codex-state-db
 import { rewriteRolloutProvider } from '../infrastructure/codex-rollout-rewrite'
 import { CodexRepairBackup, type RolloutBackupEntry } from '../infrastructure/codex-repair-backup'
 import { parseCodexToml, getCodexDefaultProvider } from '../../clientConfig/infrastructure/codex-toml'
-import type { CodexRepairPreview, CodexRepairRequest, CodexRepairResult } from '../domain/codex-repair'
+import type { CodexRepairPreview, CodexRepairProgress, CodexRepairRequest, CodexRepairResult } from '../domain/codex-repair'
 
 /** 停-写-启生命周期最小契约(复用 clientConfig 的 WriteLifecycle 的子集)。 */
 export interface RepairLifecycle {
@@ -59,13 +59,15 @@ export class CodexSessionRepair {
     }
   }
 
-  async repair(req: CodexRepairRequest): Promise<CodexRepairResult> {
+  async repair(req: CodexRepairRequest, onProgress?: (p: CodexRepairProgress) => void): Promise<CodexRepairResult> {
     const dbPath = findCodexStateDb(this.codexHome)
     if (!dbPath) throw new Error('未找到 Codex 会话库(state_*.sqlite)')
 
     // 停 Codex(运行中会并发写 SQLite,损坏风险)。停不掉会抛错中止。
     const token = await this.lifecycle.beforeWrite()
     try {
+      onProgress?.({ phase: 'backup', percent: 0, message: '备份中…' })
+
       // 先读出将改写的 rollout 引用(用于备份清单 + 改写),再动 SQLite。
       const refs = (() => {
         const ro = new CodexStateDb(dbPath, { readonly: true })
@@ -87,18 +89,25 @@ export class CodexSessionRepair {
       } finally {
         db.close()
       }
+      onProgress?.({ phase: 'sqlite', percent: req.rewriteRollout ? 10 : 90, message: '已更新数据库索引' })
 
       // rollout 改写(逐文件原子写,失败跳过计数,不中断)。
       let rewrittenRollouts = 0
       let skippedRollouts = 0
       if (req.rewriteRollout) {
-        for (const ref of refs) {
+        const total = refs.length
+        for (let i = 0; i < refs.length; i++) {
+          const ref = refs[i]
           const r = await rewriteRolloutProvider(ref.rolloutPath, req.targetProvider)
           if (r.ok) rewrittenRollouts++
           else skippedRollouts++
+          if (onProgress && (i % 20 === 0 || i === total - 1)) {
+            onProgress({ phase: 'rollout', percent: 10 + Math.round((i + 1) / total * 89), message: '改写会话文件', current: i + 1, total })
+          }
         }
       }
 
+      onProgress?.({ phase: 'done', percent: 100, message: '完成' })
       return { updatedThreads, rewrittenRollouts, skippedRollouts, backupId }
     } finally {
       await this.lifecycle.afterWrite(token)

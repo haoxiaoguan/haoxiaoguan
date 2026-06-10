@@ -228,6 +228,11 @@ export const API_PROXY_EVENTS = {
   requestLog: 'apiProxy:requestLog',
 } as const
 
+// 主进程 → 渲染层推送：修复会话进度（sessions:repairProgress）。
+export const SESSIONS_EVENTS = {
+  repairProgress: 'sessions:repairProgress',
+} as const
+
 // Activity context — 会话活动统计（增量扫描 + 趋势查询）。Channel 值 snake_case
 // 与 usage 同口径。
 export const ACTIVITY_CHANNELS = {

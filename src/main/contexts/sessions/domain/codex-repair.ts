@@ -38,6 +38,15 @@ export interface CodexRepairResult {
   backupId: string
 }
 
+/** 修复进度回调载荷(与渲染层 CodexRepairProgressDto 同形)。 */
+export interface CodexRepairProgress {
+  phase: 'backup' | 'sqlite' | 'rollout' | 'done'
+  percent: number
+  message: string
+  current?: number
+  total?: number
+}
+
 /** 修复一条 thread 需要的最小信息(rollout 改写用)。 */
 export interface CodexThreadRef {
   id: string
