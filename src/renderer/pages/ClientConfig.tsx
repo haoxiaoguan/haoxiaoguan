@@ -13,6 +13,7 @@ import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
 import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
 import { EditProviderDialog } from '@/components/clientConfig/EditProviderDialog';
+import { CodexSwitchRepairDialog } from '@/components/clientConfig/CodexSwitchRepairDialog';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -25,7 +26,9 @@ import type {
   ClientConfigProfileDto,
   ClientConfigSnapshotDto,
   UpdateClientConfigProfileDto,
+  CodexRepairProgressDto,
 } from '@shared/api-types';
+import { sessionsService } from '@/services/tauri';
 
 // ─── 图标工具按钮 + tooltip ──────────────────────────────────────────────
 function IconAction({
@@ -258,6 +261,10 @@ export default function ClientConfig() {
     { mode: 'list' } | { mode: 'add' } | { mode: 'edit'; profile: ClientConfigProfileDto }
   >({ mode: 'list' });
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
+  // Codex 切换确认弹窗状态
+  const [codexSwitch, setCodexSwitch] = useState<{ id: string; name: string } | null>(null);
+  const [codexSwitchBusy, setCodexSwitchBusy] = useState(false);
+  const [codexSwitchProgress, setCodexSwitchProgress] = useState<CodexRepairProgressDto | null>(null);
 
   useEffect(() => {
     void store.init();
@@ -300,8 +307,63 @@ export default function ClientConfig() {
       toast.success(v ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
     }
   };
+  // Codex 切换确认后执行：先 enable 再可选 repair
+  const doCodexSwitch = async (repairToo: boolean) => {
+    if (!codexSwitch) return;
+    const { id } = codexSwitch;
+    setCodexSwitchBusy(true);
+    setCodexSwitchProgress(null);
+    let unsub: (() => void) | null = null;
+    try {
+      // Step a: 执行切换/写配置
+      await store.enable(id);
+      if (useClientConfigStore.getState().error) {
+        toast.error(useClientConfigStore.getState().error ?? t('clientConfigPage.connFail', { msg: '' }));
+        return;
+      }
+      // Step b: 可选迁移历史会话
+      if (repairToo) {
+        unsub = sessionsService.onRepairProgress((p) => setCodexSwitchProgress(p));
+        try {
+          const pv = await sessionsService.repairPreview();
+          if (pv.available && pv.currentProvider) {
+            const result = await sessionsService.repair({ targetProvider: pv.currentProvider, rewriteRollout: true });
+            toast.success(t('clientConfigPage.codexSwitchDone', { n: result.updatedThreads }));
+          } else {
+            toast.success(t('clientConfigPage.applied'));
+          }
+        } finally {
+          unsub?.();
+          unsub = null;
+        }
+      } else {
+        toast.success(t('clientConfigPage.applied'));
+      }
+      // Step c: 关闭弹窗（store.enable 内部已 refresh）
+      setCodexSwitch(null);
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      unsub?.();
+      setCodexSwitchBusy(false);
+      setCodexSwitchProgress(null);
+    }
+  };
+
   // 启停供应商。Codex 为单选语义(enable 内部已委托：清掉其它+按中转注入模式注入所选)；其余客户端常规。
+  // Codex additive 模式下，启用前弹确认框；其余直接 enable。
   const onEnable = async (id: string) => {
+    if (activeClient === 'codex' && isAdditive) {
+      // 找到对应 profile 拿名称
+      const profile = profiles.find((p) => p.id === id);
+      const name = profile
+        ? profile.source === 'local-proxy'
+          ? t('clientConfigPage.accountProvider')
+          : profile.name
+        : id;
+      setCodexSwitch({ id, name });
+      return;
+    }
     await store.enable(id);
     toast.success(t('clientConfigPage.applied'));
   };
@@ -501,6 +563,15 @@ export default function ClientConfig() {
       </section>
 
       <HistoryDialog entries={historyData} onRollback={(id) => void onRollback(id)} onClose={() => setHistoryData(null)} />
+
+      <CodexSwitchRepairDialog
+        open={codexSwitch !== null}
+        providerName={codexSwitch?.name ?? ''}
+        busy={codexSwitchBusy}
+        progress={codexSwitchProgress}
+        onConfirm={(repairToo) => void doCodexSwitch(repairToo)}
+        onCancel={() => { if (!codexSwitchBusy) setCodexSwitch(null); }}
+      />
     </div>
   );
 }

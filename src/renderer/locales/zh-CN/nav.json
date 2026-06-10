@@ -114,7 +114,13 @@
       "empty": "暂无历史",
       "rollback": "回滚到此",
       "close": "关闭"
-    }
+    },
+    "codexSwitchTitle": "切换 Codex 供应商：{{name}}",
+    "codexSwitchDesc": "切换到「{{name}}」后，旧会话会因 provider 过滤在 Codex 里看不到。勾选下方开关可把历史会话迁移到新供应商，使其仍可见。",
+    "codexSwitchRepairToggle": "同时修复历史会话（迁移到新供应商）",
+    "codexSwitchConfirm": "确认切换",
+    "codexSwitchMigrating": "迁移中…",
+    "codexSwitchDone": "已切换并迁移 {{n}} 条会话"
   },
   "copy": "复制",
   "service": {

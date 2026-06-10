@@ -114,7 +114,13 @@
       "empty": "No history",
       "rollback": "Roll back to this",
       "close": "Close"
-    }
+    },
+    "codexSwitchTitle": "Switch Codex provider: {{name}}",
+    "codexSwitchDesc": "After switching to \"{{name}}\", older sessions may become invisible in Codex due to provider filtering. Enable the toggle below to migrate history sessions to the new provider so they remain visible.",
+    "codexSwitchRepairToggle": "Also repair history sessions (migrate to new provider)",
+    "codexSwitchConfirm": "Confirm switch",
+    "codexSwitchMigrating": "Migrating…",
+    "codexSwitchDone": "Switched and migrated {{n}} sessions"
   },
   "copy": "Copy",
   "service": {
