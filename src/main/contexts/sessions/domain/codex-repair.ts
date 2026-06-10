@@ -32,7 +32,11 @@ export interface CodexRepairRequest {
 
 export interface CodexRepairResult {
   updatedThreads: number
-  rewrittenRollouts: number
+  /** provider 行更新数(等于 updatedThreads)。 */
+  userEventRows: number
+  cwdRows: number
+  globalStateKeys: number
+  changedRollouts: number
   skippedRollouts: number
   /** 备份 id,用于回滚。 */
   backupId: string
@@ -40,7 +44,7 @@ export interface CodexRepairResult {
 
 /** 修复进度回调载荷(与渲染层 CodexRepairProgressDto 同形)。 */
 export interface CodexRepairProgress {
-  phase: 'backup' | 'sqlite' | 'rollout' | 'done'
+  phase: 'scan' | 'backup' | 'rollout' | 'sqlite' | 'globalstate' | 'done'
   percent: number
   message: string
   current?: number

@@ -452,13 +452,16 @@ export interface CodexRepairRequestDto {
 }
 export interface CodexRepairResultDto {
   updatedThreads: number
-  rewrittenRollouts: number
+  userEventRows: number
+  cwdRows: number
+  globalStateKeys: number
+  changedRollouts: number
   skippedRollouts: number
   backupId: string
 }
 
 export interface CodexRepairProgressDto {
-  phase: 'backup' | 'sqlite' | 'rollout' | 'done'
+  phase: 'scan' | 'backup' | 'rollout' | 'sqlite' | 'globalstate' | 'done'
   percent: number
   message: string
   current?: number
