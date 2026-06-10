@@ -147,3 +147,8 @@ export function removeCodexProvider(obj: Record<string, unknown>, id: string): R
   }
   return next
 }
+
+/** 读 config.toml 顶层默认 provider(Codex resume/Desktop 据此过滤可见性)。 */
+export function getCodexDefaultProvider(obj: Record<string, unknown>): string | undefined {
+  return typeof obj.model_provider === 'string' && obj.model_provider.length > 0 ? obj.model_provider : undefined
+}
