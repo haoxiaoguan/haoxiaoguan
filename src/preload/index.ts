@@ -242,6 +242,9 @@ const api: HxgApi = {
       ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSession, { tool, sourcePath, sessionId }),
     deleteSessions: (items) => ipcRenderer.invoke(SESSIONS_CHANNELS.deleteSessions, { items }),
     resume: (command, cwd) => ipcRenderer.invoke(SESSIONS_CHANNELS.resume, { command, cwd }),
+    repairPreview: () => ipcRenderer.invoke(SESSIONS_CHANNELS.repairPreview),
+    repair: (req) => ipcRenderer.invoke(SESSIONS_CHANNELS.repair, req),
+    repairRollback: (backupId) => ipcRenderer.invoke(SESSIONS_CHANNELS.repairRollback, { backupId }),
   },
   activity: {
     syncActivity: () => ipcRenderer.invoke(ACTIVITY_CHANNELS.syncActivity),

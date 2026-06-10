@@ -202,6 +202,9 @@ export const SESSIONS_CHANNELS = {
   deleteSession: 'sessions:deleteSession',
   deleteSessions: 'sessions:deleteSessions',
   resume: 'sessions:resume',
+  repairPreview: 'sessions:repairPreview',
+  repair: 'sessions:repair',
+  repairRollback: 'sessions:repairRollback',
 } as const
 
 // API 反代服务上下文（apiProxy）—— 本地 HTTP 服务开关 + 状态。新功能，无 Tauri

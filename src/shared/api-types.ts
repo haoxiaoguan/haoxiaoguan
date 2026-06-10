@@ -414,6 +414,7 @@ export interface SessionSummaryDto {
   lastActiveAt?: number
   sourcePath: string
   resumeCommand?: string
+  provider?: string
 }
 export interface SessionMessageDto {
   role: 'user' | 'assistant' | 'tool' | 'system'
@@ -431,6 +432,30 @@ export interface SessionPageDto {
   total: number
   offset: number
 }
+export interface CodexProviderCountDto {
+  provider: string
+  count: number
+}
+export interface CodexRepairPreviewDto {
+  available: boolean
+  dbPath?: string
+  currentProvider?: string
+  counts: CodexProviderCountDto[]
+  repairable: number
+  codexRunning: boolean
+}
+export interface CodexRepairRequestDto {
+  targetProvider: string
+  fromProviders?: string[]
+  rewriteRollout: boolean
+}
+export interface CodexRepairResultDto {
+  updatedThreads: number
+  rewrittenRollouts: number
+  skippedRollouts: number
+  backupId: string
+}
+
 export interface SessionDeleteRequestDto {
   tool: SessionToolDto
   sourcePath: string
@@ -681,6 +706,9 @@ export interface HxgApi {
     deleteSession(tool: SessionToolDto, sourcePath: string, sessionId: string): Promise<void>
     deleteSessions(items: SessionDeleteRequestDto[]): Promise<SessionDeleteOutcomeDto[]>
     resume(command: string, cwd?: string): Promise<void>
+    repairPreview(): Promise<CodexRepairPreviewDto>
+    repair(req: CodexRepairRequestDto): Promise<CodexRepairResultDto>
+    repairRollback(backupId: string): Promise<void>
   }
   updater: {
     /** 手动检查更新（dev 下 no-op）。 */
