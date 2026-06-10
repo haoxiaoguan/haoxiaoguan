@@ -346,8 +346,8 @@ export default function Sessions() {
             /* 无会话源的客户端（opencode/openclaw/hermes） */
             <EmptyState
               icon={MessageSquare}
-              title="暂不支持会话历史"
-              subtitle="该客户端的会话浏览即将支持"
+              title={t('sessionsView.unsupportedTitle')}
+              subtitle={t('sessionsView.unsupportedSub')}
             />
           ) : (
             <>
