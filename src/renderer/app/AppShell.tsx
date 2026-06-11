@@ -7,7 +7,6 @@ import {
   History,
   Info,
   LayoutGrid,
-  Plug,
   Puzzle,
   RefreshCw,
   Server,
@@ -44,6 +43,8 @@ import { SidebarUserCard } from './SidebarUserCard';
 import { detectPlatformShell, type PlatformShell } from './platform-shell';
 import { SupportPopover } from './shell-utility/SupportPopover';
 import { FaqPopover } from './shell-utility/FaqPopover';
+import { systemService } from '../services/tauri';
+import { useQuotaStateStore } from '../stores';
 import { NotificationPopover } from './shell-utility/NotificationPopover';
 import { UpdaterIndicator } from './shell-utility/UpdaterIndicator';
 
@@ -56,13 +57,15 @@ interface NavItem {
   labelKey: string;
   icon: LucideIcon;
   end?: boolean;
+  /** 额外保持高亮的路由前缀（子功能路由不在 to 之下时用，如 API 服务并入客户端接入）。 */
+  alsoMatch?: string;
 }
 
 const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav:dashboard', icon: LayoutGrid, end: true },
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
-  { to: '/client-config', labelKey: 'nav:clientConfig', icon: Cable },
-  { to: '/api-service', labelKey: 'nav:apiService', icon: Plug },
+  // API 服务并入客户端接入的顶部 tabs（路由保持 /api-service/* 不变）
+  { to: '/client-config', labelKey: 'nav:clientConfig', icon: Cable, alsoMatch: '/api-service' },
   { to: '/sessions', labelKey: 'nav:sessions', icon: History },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
@@ -83,7 +86,7 @@ const navButtonClassName =
 
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
-type ApiServiceHeaderTab = 'service' | 'keys' | 'health';
+type ClientAccessHeaderTab = 'client-config' | 'service' | 'keys' | 'health';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
@@ -100,10 +103,12 @@ function getRouteTitleKey(pathname: string) {
   return 'nav:dashboard';
 }
 
-function SidebarNavItem({ to, labelKey, icon: ItemIcon, end }: NavItem) {
+function SidebarNavItem({ to, labelKey, icon: ItemIcon, end, alsoMatch }: NavItem) {
   const { t } = useTranslation();
   const match = useMatch({ path: to, end: end ?? false });
-  const isActive = !!match;
+  // alsoMatch 未配置时用一个永不命中的占位路径，保证 hook 调用次数稳定。
+  const alsoMatched = useMatch({ path: alsoMatch ?? '/__never__', end: false });
+  const isActive = !!match || (alsoMatch !== undefined && !!alsoMatched);
 
   return (
     <SidebarMenuItem>
@@ -179,6 +184,15 @@ export function AppShell({ shell }: AppShellProps) {
     }
   }, [location.pathname]);
 
+  // 调度器每轮额度刷新后主进程推 quota:updated;这里全局重拉对应账号的
+  // quota state(store 的 ensure 有缓存即跳过,不接这条卡片会一直停在旧数据)。
+  useEffect(() => {
+    const unsub = systemService.onQuotaUpdated((accountIds) => {
+      void useQuotaStateStore.getState().pull(accountIds);
+    });
+    return unsub;
+  }, []);
+
   const handleBack = () => {
     const last = sessionStorage.getItem('haoxiaoguan:last-main-route') || '/';
     navigate(last);
@@ -199,12 +213,16 @@ export function AppShell({ shell }: AppShellProps) {
     : location.pathname.startsWith('/accounts/proxies')
       ? 'proxies'
       : 'accounts';
+  // 客户端接入与 API 服务共用一组顶部 tabs（API 服务三个子页并入客户端接入下）。
   const isApiServiceRoute = location.pathname.startsWith('/api-service');
-  const activeApiServiceTab: ApiServiceHeaderTab = location.pathname.startsWith('/api-service/keys')
-    ? 'keys'
-    : location.pathname.startsWith('/api-service/health')
-      ? 'health'
-      : 'service';
+  const isClientAccessRoute = location.pathname.startsWith('/client-config') || isApiServiceRoute;
+  const activeClientAccessTab: ClientAccessHeaderTab = !isApiServiceRoute
+    ? 'client-config'
+    : location.pathname.startsWith('/api-service/keys')
+      ? 'keys'
+      : location.pathname.startsWith('/api-service/health')
+        ? 'health'
+        : 'service';
 
   return (
     <div
@@ -306,11 +324,12 @@ export function AppShell({ shell }: AppShellProps) {
                   { value: 'proxies', label: t('nav:proxies'), to: '/accounts/proxies' },
                 ]}
               />
-            ) : isApiServiceRoute ? (
+            ) : isClientAccessRoute ? (
               <ManagementHeaderTabs
-                ariaLabel={t('nav:apiService')}
-                value={activeApiServiceTab}
+                ariaLabel={t('nav:clientConfig')}
+                value={activeClientAccessTab}
                 tabs={[
+                  { value: 'client-config', label: t('nav:clientConfig'), to: '/client-config' },
                   { value: 'service', label: t('nav:apiService'), to: '/api-service/service' },
                   { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
                   { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },
