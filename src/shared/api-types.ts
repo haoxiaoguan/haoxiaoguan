@@ -515,6 +515,8 @@ export interface HxgApi {
       executableOverride?: string
     }): Promise<void>
     exportAccounts(req: { accountIds: string[]; includeCredentials: boolean }): Promise<string>
+    /** cpa 格式导出:返回脱敏前的完整 token JSON 字符串(1 个账号为对象,多个为数组)。 */
+    exportAccountsCpa(accountIds: string[]): Promise<string>
     importAccounts(req: {
       data: string
       conflictStrategy: 'skip' | 'overwrite' | 'keep_both'

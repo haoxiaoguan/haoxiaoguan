@@ -129,3 +129,85 @@ export function toTokenJson(cred: ParsedCred): string {
   if (cred.provider !== undefined) out.provider = cred.provider
   return JSON.stringify(out)
 }
+
+// ---------------------------------------------------------------------------
+// Unified batch parsing — the merged "Token/卡密" import mode.
+//
+// One textarea accepts, auto-detected:
+//   1. a single token JSON object (e.g. cpa format: id_token/access_token/
+//      refresh_token/account_id/last_refresh/email/type/expired)
+//   2. a JSON array of such objects
+//   3. card-key rows, one per line (same grammar as parseCredentialBatch)
+//
+// Unlike the legacy ParsedCred JSON path (which keeps only refreshToken/
+// clientId/...), JSON objects are passed through VERBATIM to importTokenJson so
+// cpa fields like id_token / account_id survive into raw_metadata.
+// Unparsable entries are returned in `invalid` so the UI can count failures.
+// ---------------------------------------------------------------------------
+
+export interface UnifiedBatchItem {
+  /** JSON string ready for credentialService.importTokenJson. */
+  payload: string
+  /** Human label for per-row error reporting (email or #index). */
+  label: string
+}
+
+export interface UnifiedBatchParse {
+  items: UnifiedBatchItem[]
+  /** Entries that could not be parsed — pre-counted as failures by the UI. */
+  invalid: string[]
+}
+
+/** True if the object carries any access/refresh token spelling (top level or under `tokens`). */
+function hasTokenMaterial(o: Record<string, unknown>): boolean {
+  const direct = [o.access_token, o.accessToken, o.token, o.refresh_token, o.refreshToken]
+  if (direct.some((v) => typeof v === 'string' && v.trim().length > 0)) return true
+  const nested = o.tokens
+  if (typeof nested === 'object' && nested !== null && !Array.isArray(nested)) {
+    const n = nested as Record<string, unknown>
+    return [n.access_token, n.accessToken, n.refresh_token, n.refreshToken].some(
+      (v) => typeof v === 'string' && v.trim().length > 0,
+    )
+  }
+  return false
+}
+
+export function parseUnifiedBatch(text: string): UnifiedBatchParse {
+  const trimmed = text.trim()
+  const out: UnifiedBatchParse = { items: [], invalid: [] }
+  if (trimmed.length === 0) return out
+
+  // JSON path: single object or array of objects, passed through verbatim.
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    const list = Array.isArray(parsed) ? parsed : [parsed]
+    list.forEach((el, i) => {
+      if (el === null || typeof el !== 'object' || Array.isArray(el)) {
+        out.invalid.push(`#${i + 1}: not a JSON object`)
+        return
+      }
+      const obj = el as Record<string, unknown>
+      const label = str(obj.email) ?? `#${i + 1}`
+      if (!hasTokenMaterial(obj)) {
+        out.invalid.push(`${label}: missing access_token/refresh_token`)
+        return
+      }
+      out.items.push({ payload: JSON.stringify(obj), label })
+    })
+    return out
+  } catch {
+    // Not JSON — fall through to card-key rows.
+  }
+
+  trimmed.split('\n').forEach((rawLine, lineNo) => {
+    const line = rawLine.trim()
+    if (line.length === 0 || line.startsWith('#')) return
+    const cred = fromCardKey(line)
+    if (cred === null) {
+      out.invalid.push(`line ${lineNo + 1}: unparsable card-key row (missing RefreshToken)`)
+      return
+    }
+    out.items.push({ payload: toTokenJson(cred), label: cred.email ?? `line ${lineNo + 1}` })
+  })
+  return out
+}

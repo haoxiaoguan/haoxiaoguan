@@ -8,9 +8,10 @@ import {
   KeyRound,
   Mail,
   Monitor,
-  MoreVertical,
   Pencil,
   RefreshCw,
+  Trash2,
+  Upload,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -35,6 +36,8 @@ interface AccountCardProps {
   onDelete: () => void;
   onOpen: () => void;
   onEdit?: () => void;
+  /** 导出单个账号（cpa 格式）。 */
+  onExport?: () => void;
 }
 
 const HEALTH_TONE: Record<string, { labelKey: string; className: string; dot: string }> = {
@@ -203,7 +206,10 @@ export default function AccountCard(props: AccountCardProps) {
             onClick={handleRefresh}
           />
           <IconAction label={t('actions.viewDetail')} icon={Pencil} onClick={props.onEdit ?? props.onOpen} />
-          <IconAction label={t('actions.delete')} icon={MoreVertical} onClick={props.onDelete} />
+          {props.onExport && (
+            <IconAction label={t('actions.export')} icon={Upload} onClick={props.onExport} />
+          )}
+          <IconAction label={t('actions.delete')} icon={Trash2} onClick={props.onDelete} />
         </div>
       </div>
     </article>

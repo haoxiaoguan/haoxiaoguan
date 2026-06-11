@@ -31,7 +31,7 @@ import {
 import { useAccountStore, usePlatformStore, useOnboardingStore, useAccountGroupStore } from '../stores';
 import { useProxyStore } from '../stores/proxyStore';
 import type { OnboardingMethod } from '../stores/onboardingStore';
-import { parseCredentialBatch, toTokenJson } from '../lib/parseCredentialBatch';
+import { parseUnifiedBatch } from '../lib/parseCredentialBatch';
 import type { PlatformId } from '../types';
 
 // Sentinel for "not assigned / not bound" in the group/proxy selects (same value
@@ -82,7 +82,6 @@ export default function AddAccountSheet({
 
   const platform = defaultPlatform || 'kiro';
   const [method, setMethod] = useState<OnboardingMethod>('oauth');
-  const [tokenJson, setTokenJson] = useState('');
   const [batchText, setBatchText] = useState('');
   const [batchResult, setBatchResult] = useState<{
     total: number;
@@ -107,7 +106,6 @@ export default function AddAccountSheet({
   useEffect(() => {
     if (!open) return;
     setMethod('oauth');
-    setTokenJson('');
     setBatchText('');
     setGroupId(NONE);
     setProxyId(NONE);
@@ -121,7 +119,6 @@ export default function AddAccountSheet({
       reset();
       onboarding.reset();
       setMethod('oauth');
-      setTokenJson('');
       setBatchText('');
       setGroupId(NONE);
       setProxyId(NONE);
@@ -160,13 +157,6 @@ export default function AddAccountSheet({
             '',
             proxyId !== NONE ? proxyId : undefined,
           );
-          setMaterial(m);
-          onboarding.setMaterial(m);
-          break;
-        }
-        case 'token_json': {
-          if (!tokenJson.trim()) throw new Error('empty payload');
-          const m = await credentialService.importTokenJson(backendPlatform, tokenJson, proxyId !== NONE ? proxyId : undefined);
           setMaterial(m);
           onboarding.setMaterial(m);
           break;
@@ -214,26 +204,31 @@ export default function AddAccountSheet({
     }
   };
 
-  // Batch import: parse multi-line card-key / JSON, then run each row through the
-  // same single-account path (importTokenJson → importAccount) so every account
-  // gets online identity confirmation. Serial, error-isolated, with a per-row
-  // result summary. Card-key passwords are dropped by the parser (toTokenJson).
+  // Unified import: one textarea auto-detects single token JSON / JSON array /
+  // card-key rows (parseUnifiedBatch), then runs each entry through the same
+  // single-account path (importTokenJson → importAccount) so every account gets
+  // online identity confirmation. Serial, error-isolated, with a result summary.
+  // Unparsable entries count as failures up front.
   const runBatchImport = async () => {
-    const creds = parseCredentialBatch(batchText);
-    if (creds.length === 0) {
+    const { items, invalid } = parseUnifiedBatch(batchText);
+    if (items.length === 0 && invalid.length === 0) {
       setError(t('batch.empty'));
       return;
     }
     setBusy(true);
     setError(null);
     setBatchResult(null);
-    const result = { total: creds.length, success: 0, failed: 0, errors: [] as string[] };
+    const result = {
+      total: items.length + invalid.length,
+      success: 0,
+      failed: invalid.length,
+      errors: [...invalid],
+    };
     const backendPlatform = toBackendPlatform(platform);
-    for (let i = 0; i < creds.length; i += 1) {
-      const cred = creds[i];
-      const label = cred.email || `#${i + 1}`;
+    for (let i = 0; i < items.length; i += 1) {
+      const { payload, label } = items[i];
       try {
-        const m = await credentialService.importTokenJson(backendPlatform, toTokenJson(cred), proxyId !== NONE ? proxyId : undefined);
+        const m = await credentialService.importTokenJson(backendPlatform, payload, proxyId !== NONE ? proxyId : undefined);
         const account = await importAccount({
           platform: m.provider,
           email: m.email,
@@ -259,7 +254,6 @@ export default function AddAccountSheet({
 
   const methodItems: ReadonlyArray<{ value: OnboardingMethod; label: string }> = [
     { value: 'oauth', label: t('method.oauth') },
-    { value: 'token_json', label: t('method.token_json') },
     { value: 'token_batch', label: t('method.token_batch') },
     { value: 'local_scan', label: t('method.local_scan') },
   ];
@@ -327,18 +321,6 @@ export default function AddAccountSheet({
           </div>
 
           {/* 方式特定输入 */}
-          {method === 'token_json' && (
-            <div className="space-y-2">
-              <label className="text-[13px] font-medium text-foreground">Token JSON</label>
-              <Textarea
-                placeholder='{"access_token": "...", "refresh_token": "..."}'
-                value={tokenJson}
-                onChange={(e) => setTokenJson(e.target.value)}
-                disabled={busy}
-                className="min-h-[120px] font-mono text-xs"
-              />
-            </div>
-          )}
           {method === 'token_batch' && (
             <div className="space-y-2">
               <label className="text-[13px] font-medium text-foreground">

@@ -211,6 +211,20 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
     },
   )
 
+  // export_accounts_cpa — args: { accountIds } → string（cpa 格式 pretty JSON：1 个账号为对象，多个为数组）
+  ipcMain.handle(
+    ACCOUNT_CHANNELS.exportAccountsCpa,
+    async (_e, args: { accountIds: string[] }): Promise<string> => {
+      try {
+        const list = await accountService.exportAccountsCpa(args.accountIds)
+        const payload = list.length === 1 ? list[0] : list
+        return JSON.stringify(payload, null, 2)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
   // import_accounts — args: { request: ImportAccountsRequest } → { imported, skipped, errors }
   ipcMain.handle(
     ACCOUNT_CHANNELS.importAccounts,

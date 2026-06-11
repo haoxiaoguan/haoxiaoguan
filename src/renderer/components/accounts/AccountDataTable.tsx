@@ -8,9 +8,10 @@ import {
   Github,
   KeyRound,
   Mail,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
+  Trash2,
+  Upload,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -37,6 +38,8 @@ interface AccountDataTableProps {
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
   onEdit?: (id: string) => void;
+  /** 导出单个账号（cpa 格式）。 */
+  onExport?: (id: string) => void;
 }
 
 const PINNING: ColumnPinningState = {
@@ -56,6 +59,7 @@ export function AccountDataTable({
   onDelete,
   onOpen,
   onEdit,
+  onExport,
 }: AccountDataTableProps) {
   const { t } = useTranslation('accounts');
   const allSelected = accounts.length > 0 && selectedIds.size === accounts.length;
@@ -135,7 +139,7 @@ export function AccountDataTable({
       },
       {
         id: 'actions',
-        size: 106,
+        size: 130,
         header: () => <span className="block text-right">操作</span>,
         cell: ({ row }) => (
           <RowActions
@@ -145,6 +149,7 @@ export function AccountDataTable({
             onSwitch={() => onSwitch(row.original.platform, row.original.id)}
             onOpen={() => onOpen(row.original.id)}
             onEdit={onEdit ? () => onEdit(row.original.id) : undefined}
+            onExport={onExport ? () => onExport(row.original.id) : undefined}
             onDelete={() => onDelete(row.original.id)}
           />
         ),
@@ -154,6 +159,7 @@ export function AccountDataTable({
       allSelected,
       onDelete,
       onEdit,
+      onExport,
       onOpen,
       onSwitch,
       onToggleSelect,
@@ -336,6 +342,7 @@ function RowActions({
   onSwitch,
   onOpen,
   onEdit,
+  onExport,
   onDelete,
 }: {
   account: Account;
@@ -344,6 +351,7 @@ function RowActions({
   onSwitch: () => void;
   onOpen: () => void;
   onEdit?: () => void;
+  onExport?: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation('accounts');
@@ -379,7 +387,8 @@ function RowActions({
         onClick={handleRefresh}
       />
       <IconAction label={t('actions.viewDetail')} icon={Pencil} onClick={onEdit ?? onOpen} />
-      <IconAction label={t('actions.delete')} icon={MoreHorizontal} onClick={onDelete} />
+      {onExport && <IconAction label={t('actions.export')} icon={Upload} onClick={onExport} />}
+      <IconAction label={t('actions.delete')} icon={Trash2} onClick={onDelete} />
     </div>
   );
 }

@@ -84,6 +84,7 @@ export const ACCOUNT_CHANNELS = {
   getAccountsByPlatform: 'account:getAccountsByPlatform',
   switchAccountV2: 'account:switchAccountV2',
   exportAccounts: 'account:exportAccounts',
+  exportAccountsCpa: 'account:exportAccountsCpa',
   importAccounts: 'account:importAccounts',
   updateAccount: 'account:updateAccount',
   reauthenticate: 'account:reauthenticate',

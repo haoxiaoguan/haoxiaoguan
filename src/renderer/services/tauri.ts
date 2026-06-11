@@ -59,6 +59,10 @@ export const accountService = {
   exportAccounts: (request: ExportAccountsRequest) =>
     bridge().account.exportAccounts(request),
 
+  /** cpa 格式导出：返回完整（未脱敏）token JSON 字符串。 */
+  exportAccountsCpa: (accountIds: string[]) =>
+    bridge().account.exportAccountsCpa(accountIds) as Promise<string>,
+
   importAccounts: (request: ImportAccountsRequest) =>
     bridge().account.importAccounts(request) as Promise<ImportResultResponse>,
 

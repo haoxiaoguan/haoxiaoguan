@@ -199,6 +199,19 @@
     "viewTable": "Table view",
     "viewCard": "Card view"
   },
+  "exportDialog": {
+    "title": "Export JSON",
+    "format": "Format",
+    "formatCpa": "cpa format",
+    "count": "{{count}} account(s)",
+    "preview": "Preview",
+    "copy": "Copy",
+    "download": "Download",
+    "copied": "Full content copied to clipboard",
+    "hide": "Hide",
+    "loading": "Loading…",
+    "empty": "No accounts to export on this platform"
+  },
   "platformSettings": {
     "title": "{{platform}} Settings",
     "autoRefresh": {

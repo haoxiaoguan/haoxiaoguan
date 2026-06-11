@@ -199,6 +199,19 @@
     "viewTable": "表格视图",
     "viewCard": "卡片视图"
   },
+  "exportDialog": {
+    "title": "导出 JSON",
+    "format": "导出格式",
+    "formatCpa": "cpa 格式",
+    "count": "共 {{count}} 个账号",
+    "preview": "预览",
+    "copy": "复制",
+    "download": "下载",
+    "copied": "已复制完整内容到剪贴板",
+    "hide": "隐藏",
+    "loading": "加载中…",
+    "empty": "当前平台没有可导出的账号"
+  },
   "platformSettings": {
     "title": "{{platform}} 设置",
     "autoRefresh": {

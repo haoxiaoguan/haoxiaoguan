@@ -303,6 +303,75 @@ export class AccountApplicationService {
   }
 
   /**
+   * cpa 格式导出：每个账号一个扁平 token JSON 对象
+   * (id_token/access_token/refresh_token/account_id/last_refresh/email/type/expired)。
+   * access/refresh token 取解密后的实时凭证；其余字段来自 raw_metadata（兼容顶层
+   * 与 tokens 嵌套两种拼写）。raw_metadata 里的其他原始字段（如 kiro 的
+   * clientId/provider）原样透传，保证导出结果能经 token-JSON 导入回灌。
+   */
+  async exportAccountsCpa(accountIds: string[]): Promise<JsonValue[]> {
+    const out: JsonValue[] = []
+    for (const accountId of accountIds) {
+      const account = await this.accountRepo.findById(accountId)
+      if (account === null) {
+        throw AccountError.notFound('Account', accountId)
+      }
+      const cred = await this.credentialStore.retrieve(accountId)
+
+      const raw: Record<string, unknown> =
+        cred?.rawMetadata !== undefined &&
+        typeof cred.rawMetadata === 'object' &&
+        cred.rawMetadata !== null &&
+        !Array.isArray(cred.rawMetadata)
+          ? (cred.rawMetadata as Record<string, unknown>)
+          : {}
+      const nested: Record<string, unknown> =
+        typeof raw.tokens === 'object' && raw.tokens !== null && !Array.isArray(raw.tokens)
+          ? (raw.tokens as Record<string, unknown>)
+          : {}
+      const pick = (...keys: string[]): string | undefined => {
+        for (const k of keys) {
+          const v = raw[k] ?? nested[k]
+          if (typeof v === 'string' && v.length > 0) return v
+        }
+        return undefined
+      }
+
+      const cpa: Record<string, JsonValue> = {}
+      const idToken = pick('id_token', 'idToken')
+      if (idToken !== undefined) cpa.id_token = idToken
+      const accessToken = cred?.token || pick('access_token', 'accessToken', 'token')
+      if (accessToken !== undefined && accessToken !== '') cpa.access_token = accessToken
+      const refreshToken = cred?.refreshToken ?? pick('refresh_token', 'refreshToken')
+      if (refreshToken !== undefined) cpa.refresh_token = refreshToken
+      const cpaAccountId = pick('account_id', 'accountId')
+      if (cpaAccountId !== undefined) cpa.account_id = cpaAccountId
+      const lastRefresh = pick('last_refresh', 'lastRefresh')
+      if (lastRefresh !== undefined) cpa.last_refresh = lastRefresh
+      cpa.email = account.email
+      cpa.type = platformToFrontendId(parsePlatformAgent(account.agentId))
+      const expired = pick('expired') ?? cred?.expiresAt?.toISOString()
+      if (expired !== undefined) cpa.expired = expired
+
+      // 透传 raw_metadata 中未被上面接管的原始标量字段（跳过各种拼写的重复键）。
+      const handled = new Set([
+        'tokens', 'id_token', 'idToken', 'access_token', 'accessToken', 'token',
+        'refresh_token', 'refreshToken', 'account_id', 'accountId',
+        'last_refresh', 'lastRefresh', 'email', 'type',
+        'expired', 'expires_at', 'expiresAt', 'expiry',
+      ])
+      for (const [k, v] of Object.entries(raw)) {
+        if (handled.has(k) || k in cpa) continue
+        if (v === null || typeof v === 'object') continue
+        cpa[k] = v as JsonValue
+      }
+
+      out.push(cpa)
+    }
+    return out
+  }
+
+  /**
    * Import-from-json: parse → validate required fields (id/platform/email) →
    * apply conflict strategy (skip/overwrite/keep_both) → import each.
    */

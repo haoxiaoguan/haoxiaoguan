@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCredentialBatch, toTokenJson } from '../../../../src/renderer/lib/parseCredentialBatch'
+import { parseCredentialBatch, parseUnifiedBatch, toTokenJson } from '../../../../src/renderer/lib/parseCredentialBatch'
 
 describe('parseCredentialBatch — card-key format', () => {
   it('parses the ---- delimited 6-field card-key', () => {
@@ -122,5 +122,73 @@ describe('toTokenJson', () => {
     expect(parsed.password).toBeUndefined()
     expect(JSON.stringify(parsed)).not.toContain('hunter2')
     expect(JSON.stringify(parsed)).not.toContain('secret@x.com')
+  })
+})
+
+describe('parseUnifiedBatch — merged Token/卡密 mode', () => {
+  it('passes a single cpa-format JSON object through verbatim', () => {
+    const cpa = {
+      id_token: 'IDT',
+      access_token: 'AT',
+      refresh_token: 'RT',
+      account_id: 'ACC',
+      last_refresh: '2026-01-01T00:00:00Z',
+      email: 'a@x.com',
+      type: 'codex',
+      expired: '2026-06-01T00:00:00Z',
+    }
+    const { items, invalid } = parseUnifiedBatch(JSON.stringify(cpa))
+    expect(invalid).toHaveLength(0)
+    expect(items).toHaveLength(1)
+    expect(items[0].label).toBe('a@x.com')
+    // Verbatim: cpa-only fields must survive (the legacy ParsedCred path dropped them).
+    expect(JSON.parse(items[0].payload)).toEqual(cpa)
+  })
+
+  it('splits a JSON array into items, counting token-less entries as invalid', () => {
+    const text = JSON.stringify([
+      { access_token: 'AT1', email: 'one@x.com' },
+      { email: 'two@x.com' },
+      { refresh_token: 'RT3' },
+    ])
+    const { items, invalid } = parseUnifiedBatch(text)
+    expect(items).toHaveLength(2)
+    expect(items[0].label).toBe('one@x.com')
+    expect(items[1].label).toBe('#3')
+    expect(invalid).toHaveLength(1)
+    expect(invalid[0]).toContain('two@x.com')
+  })
+
+  it('accepts tokens nested under "tokens" (codex auth.json shape)', () => {
+    const text = JSON.stringify({ tokens: { access_token: 'AT', refresh_token: 'RT' }, last_refresh: 'L' })
+    const { items, invalid } = parseUnifiedBatch(text)
+    expect(invalid).toHaveLength(0)
+    expect(items).toHaveLength(1)
+  })
+
+  it('flags non-object JSON array entries as invalid', () => {
+    const { items, invalid } = parseUnifiedBatch('["nope", {"access_token": "AT"}]')
+    expect(items).toHaveLength(1)
+    expect(invalid).toHaveLength(1)
+    expect(invalid[0]).toContain('#1')
+  })
+
+  it('parses card-key rows and reports unparsable lines with their line number', () => {
+    const text = [
+      '# comment',
+      'a@x.com----pw----RT----CID----CSEC',
+      'broken-line-without-token',
+      'b@x.com----pw----RT2',
+    ].join('\n')
+    const { items, invalid } = parseUnifiedBatch(text)
+    expect(items).toHaveLength(2)
+    expect(items[0].label).toBe('a@x.com')
+    expect(JSON.parse(items[0].payload).refreshToken).toBe('RT')
+    expect(invalid).toHaveLength(1)
+    expect(invalid[0]).toContain('line 3')
+  })
+
+  it('returns empty results for empty input', () => {
+    expect(parseUnifiedBatch('   ')).toEqual({ items: [], invalid: [] })
   })
 })

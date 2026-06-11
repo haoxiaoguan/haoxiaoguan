@@ -2,8 +2,7 @@
   "title": "Add Account",
   "method": {
     "oauth": "OAuth Sign-In",
-    "token_json": "Token/JSON",
-    "token_batch": "Card-key / Batch",
+    "token_batch": "cpa / Card-key",
     "local_scan": "Local Import"
   },
   "step": {
@@ -27,8 +26,8 @@
     "failed": "Account imported, but group/proxy binding failed"
   },
   "batch": {
-    "placeholder": "One account per line, card-key format:\nemail----password----RefreshToken----ClientId----ClientSecret----provider\nA JSON array is also accepted",
-    "hint": "Delimiters: ---- / Tab / 2+ spaces; lines starting with # are ignored. Only RefreshToken is required.",
+    "placeholder": "Auto-detects any of:\n· a single token JSON (cpa format): {\"access_token\": \"...\", \"refresh_token\": \"...\"}\n· a JSON array of accounts: [{...}, {...}]\n· card-key rows (one per line): email----password----RefreshToken----ClientId----ClientSecret----provider",
+    "hint": "Entries are counted automatically and imported one by one; card-key delimiters: ---- / Tab / 2+ spaces, lines starting with # are ignored.",
     "empty": "No valid credentials parsed — check the format",
     "result": "{{success}} succeeded / {{failed}} failed of {{total}}",
     "importing": "Importing…",

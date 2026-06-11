@@ -67,6 +67,8 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_CHANNELS.getAccountsByPlatform, { platform }),
     switchAccountV2: (args) => ipcRenderer.invoke(ACCOUNT_CHANNELS.switchAccountV2, args),
     exportAccounts: (req) => ipcRenderer.invoke(ACCOUNT_CHANNELS.exportAccounts, { request: req }),
+    exportAccountsCpa: (accountIds) =>
+      ipcRenderer.invoke(ACCOUNT_CHANNELS.exportAccountsCpa, { accountIds }),
     importAccounts: (req) => ipcRenderer.invoke(ACCOUNT_CHANNELS.importAccounts, { request: req }),
     updateAccount: (accountId, patch) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.updateAccount, { accountId, patch }),

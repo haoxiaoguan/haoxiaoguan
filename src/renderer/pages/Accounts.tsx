@@ -40,6 +40,7 @@ import {
   ManagementSearchField,
 } from '@/components/management/ManagementControls';
 import AddAccountSheet from '../components/AddAccountSheet';
+import ExportAccountsDialog from '../components/accounts/ExportAccountsDialog';
 import AccountCard from '../components/accounts/AccountCard';
 import EditAccountDialog from '../components/accounts/EditAccountDialog';
 import { PlatformSettingsDialog } from '../components/accounts/PlatformSettingsDialog';
@@ -129,6 +130,8 @@ export default function Accounts() {
   const [searchText, setSearchText] = useState('');
   const [view, setView] = useState<ViewMode>('card');
   const [showImportSheet, setShowImportSheet] = useState(false);
+  // 导出弹窗：null=关闭；数组=待导出账号 id（单账号导出传 [id]，工具栏全量导出传全部）。
+  const [exportIds, setExportIds] = useState<string[] | null>(null);
   const [showPlatformSettings, setShowPlatformSettings] = useState(false);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -422,7 +425,13 @@ export default function Accounts() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HeaderIconButton label={t('tooltips.export')} icon={Upload} onClick={() => {}} />
+                    <HeaderIconButton
+                      label={t('tooltips.export')}
+                      icon={Upload}
+                      onClick={() =>
+                        setExportIds((accounts.get(selectedPlatform) ?? []).map((a) => a.id))
+                      }
+                    />
                   </TooltipTrigger>
                   <TooltipContent>{t('tooltips.export')}</TooltipContent>
                 </Tooltip>
@@ -570,6 +579,7 @@ export default function Accounts() {
                       onDelete={() => handleDelete(account.id)}
                       onOpen={() => setHighlightedId(account.id)}
                       onEdit={() => setEditTarget(account)}
+                      onExport={() => setExportIds([account.id])}
                     />
                   ))}
                 </div>
@@ -591,6 +601,7 @@ export default function Accounts() {
                     const acc = filteredAccounts.find((a) => a.id === id);
                     if (acc) setEditTarget(acc);
                   }}
+                  onExport={(id) => setExportIds([id])}
                 />
                 {selectedIds.size > 0 ? (
                   <div className="mt-2 flex h-11 items-center justify-between rounded-[8px] border border-border bg-muted/20 px-4">
@@ -621,6 +632,15 @@ export default function Accounts() {
           toast.success(t('importSuccess'));
           fetchAccounts(selectedPlatform);
         }}
+      />
+
+      <ExportAccountsDialog
+        open={exportIds !== null}
+        onOpenChange={(open) => {
+          if (!open) setExportIds(null);
+        }}
+        platform={selectedPlatform}
+        accountIds={exportIds ?? []}
       />
 
       <EditAccountDialog
