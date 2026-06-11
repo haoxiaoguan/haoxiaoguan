@@ -71,6 +71,12 @@ export class QuotaApplicationService {
     private readonly dispatcherResolver?: AccountDispatcherResolver,
   ) {}
 
+  /** 账号 quota_state 的最近抓取时间（PlatformQuotaScheduler 重启播种用）。 */
+  async getQuotaFetchedAt(accountId: string): Promise<Date | null> {
+    const state = await this.quotaStateCache.get(accountId)
+    return state?.fetchedAt ?? null
+  }
+
   /** Refresh quota for a single account (live fetch + cache update). */
   async refreshQuota(accountId: string): Promise<QuotaInfo> {
     const account = await this.accountRepo.findById(accountId)

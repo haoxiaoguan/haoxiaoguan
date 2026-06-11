@@ -341,6 +341,14 @@ export async function buildContainer(): Promise<Container> {
 
   const quotaCacheRepo = new MikroOrmQuotaCacheRepository()
   const quotaStateRepo = new MikroOrmQuotaStateRepository()
+  // 启动孤儿清理：正常删除有 FK cascade 兜底，但本地备份回放在 foreign_keys=OFF
+  // 的事务里执行，可能回灌已删账号的 quota 行。失败不致命。
+  try {
+    const pruned = (await quotaStateRepo.pruneOrphans()) + (await quotaCacheRepo.pruneOrphans())
+    if (pruned > 0) console.info(`[quota] 启动清理孤儿 quota 行 ${pruned} 条`)
+  } catch (e) {
+    console.warn('[quota] 孤儿 quota 行清理失败（忽略）：', e)
+  }
   const quotaFetcher = new HttpLiveQuotaFetcher()
   const quotaService = new QuotaApplicationService(
     accountRepo,

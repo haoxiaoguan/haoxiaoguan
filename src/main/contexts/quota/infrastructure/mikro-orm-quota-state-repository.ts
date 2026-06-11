@@ -93,4 +93,21 @@ export class MikroOrmQuotaStateRepository implements QuotaStateRepository {
       throw repoErr('quota state delete', e)
     }
   }
+
+  /**
+   * 清理孤儿行（account 已删但 quota_state 残留）。正常路径有 FK cascade 兜底，
+   * 但本地备份回放在 foreign_keys=OFF 的事务里执行，可能回灌孤儿——启动时
+   * 清一次。返回删除行数。
+   */
+  async pruneOrphans(): Promise<number> {
+    const em = this.emFactory()
+    try {
+      const result = (await em.getConnection().execute(
+        'DELETE FROM account_quota_state WHERE account_id NOT IN (SELECT id FROM accounts)',
+      )) as { affectedRows?: number }
+      return result.affectedRows ?? 0
+    } catch (e) {
+      throw repoErr('quota state prune', e)
+    }
+  }
 }

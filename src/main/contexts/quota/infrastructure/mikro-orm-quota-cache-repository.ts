@@ -73,4 +73,17 @@ export class MikroOrmQuotaCacheRepository implements QuotaCacheRepository {
       throw repoErr('quota delete', e)
     }
   }
+
+  /** 清理孤儿行（同 quota_state：备份回放 FK=OFF 可能回灌）。返回删除行数。 */
+  async pruneOrphans(): Promise<number> {
+    const em = this.emFactory()
+    try {
+      const result = (await em.getConnection().execute(
+        'DELETE FROM quota_cache WHERE account_id NOT IN (SELECT id FROM accounts)',
+      )) as { affectedRows?: number }
+      return result.affectedRows ?? 0
+    } catch (e) {
+      throw repoErr('quota prune', e)
+    }
+  }
 }

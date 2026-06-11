@@ -16,6 +16,9 @@ const DEFAULT_CONCURRENCY = 3
 /** The slice of QuotaService this scheduler needs (single-account refresh). */
 export interface QuotaRefresher {
   refreshQuota(accountId: string): Promise<unknown>
+  /** 账号 quota_state 的最近抓取时间（无记录返回 null）。供重启后播种计时器，
+   *  让重启不再使所有平台重新等满一个完整间隔。可选：未实现时保持构造播种。 */
+  getQuotaFetchedAt?(accountId: string): Promise<Date | null>
 }
 
 /** The settings reads this scheduler needs, keyed by FRONTEND (kebab) platform id. */
@@ -54,6 +57,7 @@ interface PlatformTimers {
 export class PlatformQuotaScheduler {
   private timer: ReturnType<typeof setInterval> | null = null
   private ticking = false
+  private seeding: Promise<void> | null = null
   private readonly timers = new Map<PlatformId, PlatformTimers>()
 
   constructor(
@@ -85,10 +89,53 @@ export class PlatformQuotaScheduler {
   /** Start the scheduler. No-op if already running. */
   start(): void {
     if (this.timer !== null) return
+    // 异步播种与定时器并行启动；tickOnce 会先等播种完成再决策。
+    this.seeding = this.seedFromStore()
     this.timer = setInterval(() => {
       void this.tickOnce()
     }, this.tickMs)
     if (typeof this.timer.unref === 'function') this.timer.unref()
+  }
+
+  /**
+   * 用持久化的 quota_state.fetched_at 回填各平台计时器，避免每次重启都让所有
+   * 平台重新等满一个完整间隔（dev 模式重启频繁时账号会长时间不被刷新）。
+   *
+   * lastBatchAt 取「非活跃账号」的最近抓取时间——非活跃账号只会被批量 sweep
+   * 刷新，它就是上次 sweep 的近似时刻；平台只有活跃账号时退化用活跃账号的。
+   * 只影响重启后的第一轮：sweep 触发时 lastBatchAt 立即推进到当前时刻，
+   * 所以长期刷新失败的账号不会导致每个 tick 都重扫。
+   */
+  async seedFromStore(): Promise<void> {
+    const read = this.quota.getQuotaFetchedAt?.bind(this.quota)
+    if (read === undefined) return
+    for (const platform of this.platforms) {
+      try {
+        const accounts = await this.accountRepo.findByPlatform(platform)
+        if (accounts.length === 0) continue
+        const active = await this.accountRepo.findActiveByPlatform(platform)
+        let lastBatch: number | null = null
+        let lastActive: number | null = null
+        for (const account of accounts) {
+          const at = await read(account.id)
+          if (at === null) continue
+          const ms = at.getTime()
+          if (account.id === active?.id) {
+            lastActive = Math.max(lastActive ?? 0, ms)
+          } else {
+            lastBatch = Math.max(lastBatch ?? 0, ms)
+          }
+        }
+        if (lastBatch === null) lastBatch = lastActive
+        const timers = this.timersFor(platform)
+        const nowMs = this.now()
+        // 永不向未来播种（时钟回拨/脏数据防御）。
+        if (lastBatch !== null) timers.lastBatchAt = Math.min(lastBatch, nowMs)
+        if (lastActive !== null) timers.lastActiveAt = Math.min(lastActive, nowMs)
+      } catch {
+        // 读取失败：该平台保持构造时的保守播种（等满一个间隔），不阻断其他平台。
+      }
+    }
   }
 
   /** Stop the scheduler. */
@@ -107,6 +154,11 @@ export class PlatformQuotaScheduler {
     if (this.ticking) return
     this.ticking = true
     try {
+      // 首个 tick 前确保播种完成，避免与计时器回填竞争。
+      if (this.seeding !== null) {
+        await this.seeding.catch(() => {})
+        this.seeding = null
+      }
       const activeIntervals = this.settings.getActiveRefreshIntervals()
       const batchIntervals = this.settings.getPlatformRefreshIntervals()
       const concurrency = this.settings.getQuotaRefreshConcurrency()
@@ -170,14 +222,22 @@ export class PlatformQuotaScheduler {
         limit(async () => {
           try {
             await this.quota.refreshQuota(account.id)
-            return account.id
-          } catch {
-            return null
+            return { id: account.id }
+          } catch (e) {
+            return { id: account.id, error: e instanceof Error ? e.message : String(e) }
           }
         }),
       ),
     )
-    return settled.filter((id): id is string => id !== null)
+    // 失败不再静默：汇总告警，否则「持续刷新失败」与「调度器没在跑」无法区分。
+    const failures = settled.filter((r) => r.error !== undefined)
+    if (failures.length > 0) {
+      const head = failures.slice(0, 3).map((f) => `${f.id}: ${f.error}`).join('; ')
+      console.warn(
+        `[quota-scheduler] ${platform} 批量刷新失败 ${failures.length}/${accounts.length} — ${head}${failures.length > 3 ? ' …' : ''}`,
+      )
+    }
+    return settled.filter((r) => r.error === undefined).map((r) => r.id)
   }
 
   private async refreshActiveOfPlatform(platform: PlatformId): Promise<string | null> {
@@ -191,7 +251,10 @@ export class PlatformQuotaScheduler {
     try {
       await this.quota.refreshQuota(active.id)
       return active.id
-    } catch {
+    } catch (e) {
+      console.warn(
+        `[quota-scheduler] ${platform} 活跃账号刷新失败 — ${active.id}: ${e instanceof Error ? e.message : String(e)}`,
+      )
       return null
     }
   }
