@@ -195,6 +195,8 @@
     "add": "添加账号",
     "refresh": "刷新当前平台账号",
     "export": "导出账号",
+    "hideEmail": "隐藏邮箱",
+    "showEmail": "显示邮箱",
     "settings": "平台设置",
     "viewTable": "表格视图",
     "viewCard": "卡片视图"

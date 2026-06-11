@@ -23,6 +23,7 @@ import type { Account } from '../../types';
 import { accountPlanLabel, codexSubscriptionInfo, type CodexSubscriptionInfo } from './account-plan';
 import { PlatformIcon } from './PlatformIcon';
 import { metricLines, type MetricLine, type MetricTone } from './quota-display';
+import { maskEmailText } from './identity-mask';
 
 interface AccountCardProps {
   account: Account;
@@ -38,6 +39,8 @@ interface AccountCardProps {
   onEdit?: () => void;
   /** 导出单个账号（cpa 格式）。 */
   onExport?: () => void;
+  /** 隐私模式：打码邮箱（截图/录屏场景）。 */
+  hideEmail?: boolean;
 }
 
 const HEALTH_TONE: Record<string, { labelKey: string; className: string; dot: string }> = {
@@ -97,11 +100,15 @@ export default function AccountCard(props: AccountCardProps) {
     className: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
     dot: 'bg-zinc-400',
   };
-  const title = props.account.name || props.account.displayIdentifier || props.account.email;
-  const identity = props.account.identityKey || props.account.displayIdentifier || props.account.email;
+  const mask = (v: string) => (props.hideEmail ? maskEmailText(v) : v);
+  const title = mask(props.account.name || props.account.displayIdentifier || props.account.email);
+  const identity = mask(
+    props.account.identityKey || props.account.displayIdentifier || props.account.email,
+  );
   const plan = accountPlanLabel(props.account);
   const login = props.account.loginProvider || loginFallback(props.account);
-  const lines = metricLines(props.account, quotaState).slice(0, 2);
+  // 不截断:cursor 有 Total/Auto/API/按需 四条,codex 两条,全部展示。
+  const lines = metricLines(props.account, quotaState);
   const subscription = codexSubscriptionInfo(props.account);
 
   return (
@@ -306,9 +313,10 @@ function QuotaLine({ line }: { line: MetricLine }) {
         <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
           <span className="min-w-0 truncate tabular-nums">{bottomLeft ?? ''}</span>
           {resetText ? (
+            // resetText 已含「剩余时长 (MM/DD HH:mm)」或「已重置」,不再追加后缀
             <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
               <CalendarDays className="size-3" strokeWidth={1.8} aria-hidden />
-              {resetText} 重置
+              {resetText}
             </span>
           ) : null}
         </div>

@@ -223,6 +223,99 @@ describe('fromAccountProfile — per platform', () => {
     expect(state.metrics[2].percentUsed).toBe(1)
   })
 
+  it('cursor on-demand: 固定上限 → usd 百分比指标(美分换算美元)', () => {
+    const state = fromAccountProfile(
+      'cursor',
+      {
+        cursor_usage_raw: {
+          limitType: 'user',
+          billingCycleEnd: '2026-07-03T17:13:19.000Z',
+          individualUsage: {
+            plan: { totalPercentUsed: 30, autoPercentUsed: 9, apiPercentUsed: 100 },
+            onDemand: { enabled: true, used: 2500, limit: 5000 },
+          },
+        },
+      },
+      undefined,
+    )!
+    const byKey = Object.fromEntries(state.metrics.map((m) => [m.key, m]))
+    expect(byKey.on_demand).toBeDefined()
+    expect(byKey.on_demand.unit).toBe('usd')
+    expect(byKey.on_demand.used).toBe(25)
+    expect(byKey.on_demand.total).toBe(50)
+    expect(byKey.on_demand.percentUsed).toBe(50)
+    // billingCycleEnd 进入 total_usage 的重置时间
+    expect(byKey.total_usage.resetAt?.toISOString()).toBe('2026-07-03T17:13:19.000Z')
+    expect(byKey.api_usage.percentUsed).toBe(100)
+  })
+
+  it('cursor on-demand: 无上限且 enabled → Unlimited(仅展示已花费)', () => {
+    const state = fromAccountProfile(
+      'cursor',
+      {
+        cursor_usage_raw: {
+          limitType: 'user',
+          individualUsage: {
+            plan: { totalPercentUsed: 30 },
+            onDemand: { enabled: true, used: 45302, limit: null },
+          },
+        },
+      },
+      undefined,
+    )!
+    const od = state.metrics.find((m) => m.key === 'on_demand')!
+    expect(od.displayValue).toBe('Unlimited')
+    expect(od.used).toBe(453.02)
+    expect(od.total).toBeUndefined()
+  })
+
+  it('cursor on-demand: 未启用 → 已禁用', () => {
+    const state = fromAccountProfile(
+      'cursor',
+      {
+        cursor_usage_raw: {
+          individualUsage: {
+            plan: { totalPercentUsed: 0 },
+            onDemand: { enabled: false, used: 0, limit: null },
+          },
+        },
+      },
+      undefined,
+    )!
+    const od = state.metrics.find((m) => m.key === 'on_demand')!
+    expect(od.displayValue).toBe('已禁用')
+  })
+
+  it('cursor on-demand: 响应无 onDemand 数据时不显示该行', () => {
+    const state = fromAccountProfile(
+      'cursor',
+      { cursor_usage_raw: { individualUsage: { plan: { totalPercentUsed: 10 } } } },
+      undefined,
+    )!
+    expect(state.metrics.find((m) => m.key === 'on_demand')).toBeUndefined()
+  })
+
+  it('cursor on-demand: limitType=team 优先团队池额度', () => {
+    const state = fromAccountProfile(
+      'cursor',
+      {
+        cursor_usage_raw: {
+          limitType: 'team',
+          individualUsage: {
+            plan: { totalPercentUsed: 10 },
+            onDemand: { enabled: true, used: 100, limit: null },
+          },
+          teamUsage: { onDemand: { used: 3000, limit: 10000 } },
+        },
+      },
+      undefined,
+    )!
+    const od = state.metrics.find((m) => m.key === 'on_demand')!
+    expect(od.used).toBe(30)
+    expect(od.total).toBe(100)
+    expect(od.percentUsed).toBe(30)
+  })
+
   it('gemini builds remaining metrics with exhausted status', () => {
     const state = fromAccountProfile(
       'gemini_cli',

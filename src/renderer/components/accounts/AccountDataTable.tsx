@@ -25,6 +25,7 @@ import type { Account } from '../../types';
 import { accountPlanLabel, codexSubscriptionInfo, type CodexSubscriptionInfo } from './account-plan';
 import { PlatformIcon } from './PlatformIcon';
 import { metricLines, primaryMetric, type MetricTone } from './quota-display';
+import { maskEmailText } from './identity-mask';
 
 interface AccountDataTableProps {
   accounts: Account[];
@@ -40,6 +41,8 @@ interface AccountDataTableProps {
   onEdit?: (id: string) => void;
   /** 导出单个账号（cpa 格式）。 */
   onExport?: (id: string) => void;
+  /** 隐私模式：打码邮箱（截图/录屏场景）。 */
+  hideEmail?: boolean;
 }
 
 const PINNING: ColumnPinningState = {
@@ -60,6 +63,7 @@ export function AccountDataTable({
   onOpen,
   onEdit,
   onExport,
+  hideEmail,
 }: AccountDataTableProps) {
   const { t } = useTranslation('accounts');
   const allSelected = accounts.length > 0 && selectedIds.size === accounts.length;
@@ -89,7 +93,7 @@ export function AccountDataTable({
         id: 'account',
         size: 244,
         header: () => '账号 / 用户 ID',
-        cell: ({ row }) => <AccountIdentity account={row.original} />,
+        cell: ({ row }) => <AccountIdentity account={row.original} hideEmail={hideEmail} />,
       },
       {
         id: 'tags',
@@ -157,6 +161,7 @@ export function AccountDataTable({
     ],
     [
       allSelected,
+      hideEmail,
       onDelete,
       onEdit,
       onExport,
@@ -199,13 +204,16 @@ export function AccountDataTable({
   );
 }
 
-function AccountIdentity({ account }: { account: Account }) {
+function AccountIdentity({ account, hideEmail }: { account: Account; hideEmail?: boolean }) {
   const { t } = useTranslation('accounts');
+  const mask = (v: string) => (hideEmail ? maskEmailText(v) : v);
   // Primary line = email (the human-readable identifier); secondary = the stable
   // account id (userId / identityKey). Both are shown so enterprise accounts,
   // whose email and opaque userId differ, are unambiguous.
-  const primary = account.email || account.name || account.displayIdentifier || account.identityKey;
-  const secondary = account.displayIdentifier || account.identityKey || account.email;
+  const primary = mask(
+    account.email || account.name || account.displayIdentifier || account.identityKey,
+  );
+  const secondary = mask(account.displayIdentifier || account.identityKey || account.email);
   return (
     <div className="flex min-w-0 items-center gap-3">
       <PlatformIcon platform={account.platform} className="size-7 rounded-[7px]" />

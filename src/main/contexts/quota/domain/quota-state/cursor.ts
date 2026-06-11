@@ -5,7 +5,9 @@ import {
   formatPercent,
   genericStateFromProfile,
   percentUsageMetric,
+  pickBoolAny,
   pickNumberAny,
+  pickStringAny,
   pickTimestampAny,
   quotaUnitFromPayload,
   quotaUsageMetric,
@@ -23,6 +25,10 @@ export function stateFromProfile(
     ['usage', 'resetAt'],
     ['resetAt'],
     ['usageResetAt'],
+    // usage-summary 的计费周期结束时间即额度重置时间
+    ['cursor_usage_raw', 'billingCycleEnd'],
+    ['cursor_usage_raw', 'billing_cycle_end'],
+    ['cursorUsageRaw', 'billingCycleEnd'],
   ])
   const unit = quotaUnitFromPayload(
     profilePayload,
@@ -134,8 +140,98 @@ export function stateFromProfile(
     )
   if (apiMetric) metrics.push(apiMetric)
 
+  const onDemand = onDemandMetric(profilePayload, credentialRawMetadata)
+  if (onDemand) metrics.push(onDemand)
+
   return (
     stateFromMetrics(metrics, profilePayload) ??
     genericStateFromProfile(profilePayload, credentialRawMetadata)
   )
+}
+
+/**
+ * 按需使用（超额计费）指标。对齐 cockpit-tools 的口径：
+ *  - limitType=team 时优先 teamUsage.onDemand（团队池）,否则 individualUsage.onDemand
+ *    （兼容 spendLimitUsage 旧形态）；金额为美分,显示换算为美元。
+ *  - 有固定上限(limit>0) → used/limit 百分比进度;
+ *  - 无上限但 enabled=true 且非团队池 → Unlimited(仅展示已花费金额);
+ *  - 其余(onDemand 字段存在但未启用) → 已禁用。
+ *  - 响应里完全没有 onDemand 数据时返回 undefined(不显示该行)。
+ */
+function onDemandMetric(
+  profilePayload: JsonValue,
+  credentialRawMetadata: JsonValue | undefined,
+): QuotaMetric | undefined {
+  const limitType = pickStringAny(profilePayload, credentialRawMetadata, [
+    ['cursor_usage_raw', 'limitType'],
+    ['cursor_usage_raw', 'limit_type'],
+    ['cursorUsageRaw', 'limitType'],
+    ['cursor_usage_raw', 'spendLimitUsage', 'limitType'],
+  ])?.toLowerCase()
+  const isTeamLimit = limitType === 'team'
+
+  const individualPaths = (field: string): string[][] => [
+    ['cursor_usage_raw', 'individualUsage', 'onDemand', field],
+    ['cursor_usage_raw', 'individual_usage', 'onDemand', field],
+    ['cursorUsageRaw', 'individualUsage', 'onDemand', field],
+    ['cursor_usage_raw', 'spendLimitUsage', field],
+    ['cursor_usage_raw', 'spend_limit_usage', field],
+  ]
+  const teamPaths = (field: string): string[][] => [
+    ['cursor_usage_raw', 'teamUsage', 'onDemand', field],
+    ['cursor_usage_raw', 'team_usage', 'onDemand', field],
+    ['cursorUsageRaw', 'teamUsage', 'onDemand', field],
+  ]
+  const pickCents = (fields: string[], team: boolean): number | undefined =>
+    pickNumberAny(
+      profilePayload,
+      credentialRawMetadata,
+      fields.flatMap((f) => (team ? [...teamPaths(f), ...individualPaths(f)] : individualPaths(f))),
+    )
+
+  const usedCents = pickCents(['used', 'totalSpend', 'total_spend', 'individualUsed', 'pooledUsed'], isTeamLimit)
+  const limitCents = pickCents(
+    ['limit', 'individualLimit', 'individual_limit', 'pooledLimit', 'pooled_limit'],
+    isTeamLimit,
+  )
+  const enabled = pickBoolAny(profilePayload, credentialRawMetadata, [
+    ['cursor_usage_raw', 'individualUsage', 'onDemand', 'enabled'],
+    ['cursor_usage_raw', 'individual_usage', 'onDemand', 'enabled'],
+    ['cursorUsageRaw', 'individualUsage', 'onDemand', 'enabled'],
+  ])
+
+  // 没有任何 onDemand 信号(老响应/未知形态):不显示该行。
+  if (usedCents === undefined && limitCents === undefined && enabled === undefined) return undefined
+
+  const toUsd = (cents: number): number => Math.round(cents) / 100
+  const usedUsd = usedCents !== undefined ? toUsd(usedCents) : undefined
+
+  if (limitCents !== undefined && limitCents > 0) {
+    const metric = quotaUsageMetric('on_demand', '按需使用', usedUsd ?? 0, toUsd(limitCents), 'usd', undefined)
+    if (metric) {
+      if (metric.percentUsed !== undefined) metric.displayValue = formatPercent(metric.percentUsed)
+      return metric
+    }
+  }
+
+  if (enabled === true && !isTeamLimit) {
+    return {
+      key: 'on_demand',
+      label: '按需使用',
+      kind: 'usage',
+      unit: 'usd',
+      used: usedUsd,
+      displayValue: 'Unlimited',
+      status: 'ok',
+    }
+  }
+
+  return {
+    key: 'on_demand',
+    label: '按需使用',
+    kind: 'usage',
+    unit: 'usd',
+    displayValue: '已禁用',
+    status: 'ok',
+  }
 }

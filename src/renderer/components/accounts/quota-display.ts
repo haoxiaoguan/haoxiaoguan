@@ -99,9 +99,20 @@ function formatMetricValue(metric: QuotaMetric): string | undefined {
 }
 
 function formatMetricSubLabel(metric: QuotaMetric): string | undefined {
+  if (metric.unit === 'usd') return formatUsdPair(metric);
   if (isFiniteNumber(metric.used) && isFiniteNumber(metric.total)) {
     return `${metric.used} / ${metric.total}`;
   }
+  return undefined;
+}
+
+// usd 指标的金额展示：有上限 → "$x / $y"；仅有已花费(Unlimited 按需) → "$x"。
+function formatUsdPair(metric: QuotaMetric): string | undefined {
+  const fmt = (v: number) => `$${v.toFixed(2)}`;
+  if (isFiniteNumber(metric.used) && isFiniteNumber(metric.total)) {
+    return `${fmt(metric.used)} / ${fmt(metric.total)}`;
+  }
+  if (isFiniteNumber(metric.used)) return fmt(metric.used);
   return undefined;
 }
 
@@ -120,6 +131,7 @@ function formatPercentText(metric: QuotaMetric): string | undefined {
 // Bottom-left used/total with thousands separators (e.g. "288 / 10,000").
 // Only when both used and total are concrete numbers.
 function formatUsageText(metric: QuotaMetric): string | undefined {
+  if (metric.unit === 'usd') return formatUsdPair(metric);
   if (isFiniteNumber(metric.used) && isFiniteNumber(metric.total)) {
     return `${formatThousands(metric.used)} / ${formatThousands(metric.total)}`;
   }
@@ -130,13 +142,29 @@ function formatThousands(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : String(value);
 }
 
-// Bottom-right reset date in YYYY-MM-DD local form (e.g. "2026-07-01").
+// Bottom-right reset time:「剩余时长 (MM/DD HH:mm)」,精确到分(对齐 cockpit-tools
+// 的 formatCodexResetTime),例如 "4h 55m (06/11 20:34)";已过期显示 "已重置"。
 function formatResetDate(resetAt?: string): string | undefined {
   if (!resetAt) return undefined;
   const date = new Date(resetAt);
   if (Number.isNaN(date.getTime())) return undefined;
+
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs <= 0) return '已重置';
+
+  const totalMinutes = Math.floor(diffMs / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  const relative = parts.length > 0 ? parts.join(' ') : '<1m';
+
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const absolute = `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${relative} (${absolute})`;
 }
 
 function isFiniteNumber(value: number | null | undefined): value is number {

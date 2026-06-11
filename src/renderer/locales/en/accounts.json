@@ -195,6 +195,8 @@
     "add": "Add account",
     "refresh": "Refresh this platform's accounts",
     "export": "Export accounts",
+    "hideEmail": "Hide emails",
+    "showEmail": "Show emails",
     "settings": "Platform settings",
     "viewTable": "Table view",
     "viewCard": "Card view"

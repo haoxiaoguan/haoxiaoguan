@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   Bell,
+  Eye,
+  EyeOff,
   LayoutGrid,
   Plus,
   RefreshCw,
@@ -132,6 +134,17 @@ export default function Accounts() {
   const [showImportSheet, setShowImportSheet] = useState(false);
   // 导出弹窗：null=关闭；数组=待导出账号 id（单账号导出传 [id]，工具栏全量导出传全部）。
   const [exportIds, setExportIds] = useState<string[] | null>(null);
+  // 隐私模式：打码卡片/表格上的邮箱（截图/录屏场景），跨会话记住。
+  const [hideEmails, setHideEmails] = useState(
+    () => localStorage.getItem('hxg:accounts:hide-emails') === '1',
+  );
+  const toggleHideEmails = () => {
+    setHideEmails((prev) => {
+      const next = !prev;
+      localStorage.setItem('hxg:accounts:hide-emails', next ? '1' : '0');
+      return next;
+    });
+  };
   const [showPlatformSettings, setShowPlatformSettings] = useState(false);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -438,6 +451,18 @@ export default function Accounts() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <HeaderIconButton
+                      label={hideEmails ? t('tooltips.showEmail') : t('tooltips.hideEmail')}
+                      icon={hideEmails ? Eye : EyeOff}
+                      onClick={toggleHideEmails}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {hideEmails ? t('tooltips.showEmail') : t('tooltips.hideEmail')}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HeaderIconButton
                       label={t('tooltips.settings')}
                       icon={Settings}
                       onClick={() => setShowPlatformSettings(true)}
@@ -580,6 +605,7 @@ export default function Accounts() {
                       onOpen={() => setHighlightedId(account.id)}
                       onEdit={() => setEditTarget(account)}
                       onExport={() => setExportIds([account.id])}
+                      hideEmail={hideEmails}
                     />
                   ))}
                 </div>
@@ -602,6 +628,7 @@ export default function Accounts() {
                     if (acc) setEditTarget(acc);
                   }}
                   onExport={(id) => setExportIds([id])}
+                  hideEmail={hideEmails}
                 />
                 {selectedIds.size > 0 ? (
                   <div className="mt-2 flex h-11 items-center justify-between rounded-[8px] border border-border bg-muted/20 px-4">

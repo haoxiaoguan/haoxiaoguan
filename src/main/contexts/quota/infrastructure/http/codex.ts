@@ -19,8 +19,11 @@ import {
 import { getPathValue } from '../../domain/quota-state'
 
 const USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
+const ACCOUNTS_CHECK_URL = 'https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27'
 const TOKEN_ENDPOINT = 'https://auth.openai.com/oauth/token'
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
+const CHATGPT_WEB_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36'
 
 export async function fetch(
   credential: Credential,
@@ -48,14 +51,28 @@ export async function fetch(
   const usage = await fetchUsage(accessToken, credential.rawMetadata, profilePayload)
   const quota = parseQuota(usage)
   const planType = pickStringHttp(usage, [['plan_type'], ['planType']])
+
+  // 会员有效期:accounts/check 的 entitlement.expires_at。best-effort,
+  // 失败不影响额度刷新(保持上次值/有效期未知)。
+  const accountId = chatgptAccountId(accessToken, credential.rawMetadata, profilePayload)
+  let subscription: { activeUntil?: string; planType?: string } = {}
+  try {
+    subscription = await fetchSubscription(accessToken, accountId)
+  } catch {
+    subscription = {}
+  }
+
   const providerPayload = {
     ...(typeof profilePayload === 'object' && profilePayload !== null && !Array.isArray(profilePayload)
       ? profilePayload
       : {}),
-    plan_type: planType ?? null,
-    planName: planType ?? null,
+    plan_type: planType ?? subscription.planType ?? null,
+    planName: planType ?? subscription.planType ?? null,
     quota,
     codex_usage_raw: usage,
+    ...(subscription.activeUntil !== undefined
+      ? { subscription_active_until: subscription.activeUntil }
+      : {}),
   }
 
   if (
@@ -101,6 +118,73 @@ async function fetchUsage(
   const response = await httpFetch(USAGE_URL, { method: 'GET', headers }, '请求 Codex 配额失败')
   if (!response.ok) throw providerError(`Codex 配额接口返回异常: status=${response.status}`)
   return parseJson(response, '解析 Codex 配额响应失败')
+}
+
+/**
+ * accounts/check/v4 → 该账号的订阅信息(plan + 到期时间)。
+ * 响应形如 { accounts: { <key>: { account: {...}, entitlement:
+ * { subscription_plan, expires_at } } }, account_ordering: [...] }。
+ * 优先匹配 account_id,其次 account_ordering 首位,最后第一个条目。
+ */
+async function fetchSubscription(
+  accessToken: string,
+  accountId: string | undefined,
+): Promise<{ activeUntil?: string; planType?: string }> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/json',
+    Referer: 'https://chatgpt.com/',
+    'User-Agent': CHATGPT_WEB_USER_AGENT,
+    'x-openai-target-path': '/backend-api/accounts/check/v4-2023-04-27',
+    'x-openai-target-route': '/backend-api/accounts/check/v4-2023-04-27',
+  }
+  if (accountId !== undefined) headers['ChatGPT-Account-Id'] = accountId
+  const offsetMin = -new Date().getTimezoneOffset()
+  const response = await httpFetch(
+    `${ACCOUNTS_CHECK_URL}?timezone_offset_min=${offsetMin}`,
+    { method: 'GET', headers },
+    '请求 Codex 订阅信息失败',
+  )
+  if (!response.ok) throw providerError(`Codex 订阅接口返回异常: status=${response.status}`)
+  const payload = await parseJson(response, '解析 Codex 订阅响应失败')
+
+  const accounts = getPathValue(payload, ['accounts'])
+  if (accounts === undefined || typeof accounts !== 'object' || accounts === null || Array.isArray(accounts)) {
+    return {}
+  }
+  const entries = Object.entries(accounts as Record<string, JsonValue>)
+  if (entries.length === 0) return {}
+
+  const recordAccountId = (node: JsonValue): string | undefined =>
+    pickStringHttp(node, [
+      ['account', 'account_id'],
+      ['account', 'id'],
+      ['account_id'],
+      ['id'],
+    ])
+  const orderingFirst = (() => {
+    const ordering = getPathValue(payload, ['account_ordering'])
+    return Array.isArray(ordering) && typeof ordering[0] === 'string' ? ordering[0] : undefined
+  })()
+
+  const selected =
+    (accountId !== undefined ? entries.find(([, node]) => recordAccountId(node) === accountId) : undefined) ??
+    (orderingFirst !== undefined ? entries.find(([key]) => key === orderingFirst) : undefined) ??
+    entries[0]
+
+  const node = selected[1]
+  return {
+    activeUntil: pickStringHttp(node, [
+      ['entitlement', 'expires_at'],
+      ['account', 'expires_at'],
+      ['expires_at'],
+    ]),
+    planType: pickStringHttp(node, [
+      ['entitlement', 'subscription_plan'],
+      ['account', 'plan_type'],
+      ['plan_type'],
+    ]),
+  }
 }
 
 function chatgptAccountId(

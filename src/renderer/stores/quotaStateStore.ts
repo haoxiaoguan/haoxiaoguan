@@ -9,6 +9,8 @@ interface QuotaStateStore {
   ensure: (accountId: string) => Promise<void>;
   ensureMany: (accountIds: string[]) => Promise<void>;
   refresh: (accountId: string) => Promise<void>;
+  /** 主进程 quota:updated 推送后强制重拉缓存态（绕过 ensure 的已有即跳过）。 */
+  pull: (accountIds: string[]) => Promise<void>;
   clear: () => void;
 }
 
@@ -66,6 +68,22 @@ export const useQuotaStateStore = create<QuotaStateStore>((set, get) => ({
       next.delete(accountId);
       set({ loading: next });
     }
+  },
+
+  pull: async (accountIds) => {
+    // 只读已持久化的 quota state(getQuotaState),不触发在线刷新;失败保留旧值。
+    const results = await Promise.allSettled(
+      accountIds.map(async (id) => [id, await quotaService.getQuotaState(id)] as const),
+    );
+    const states = new Map(get().states);
+    let changed = false;
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        states.set(r.value[0], r.value[1]);
+        changed = true;
+      }
+    }
+    if (changed) set({ states });
   },
 
   clear: () => set({ states: new Map(), loading: new Set(), errors: new Map() }),
