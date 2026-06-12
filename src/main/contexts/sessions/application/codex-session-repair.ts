@@ -37,14 +37,18 @@ export class CodexSessionRepair {
     this.backup = new CodexRepairBackup(backupDir)
   }
 
-  private async currentProvider(): Promise<string | undefined> {
+  // Codex 当前生效的默认 provider。config.toml 无 model_provider 键（或文件不存在）=
+  // Codex 用内置 OpenAI（隐式默认，不写盘），其会话在 threads 里 model_provider='openai'，
+  // 故缺省回落 'openai' —— 否则内置 OpenAI 场景下「当前供应商」为空、修复目标无从确定、
+  // 可修复恒 0，那些切到第三方时建的 hxg_* 会话永远归并不回 OpenAI。
+  private async currentProvider(): Promise<string> {
     let raw: string | null = null
     try {
       raw = await readFile(this.configTomlPath, 'utf8')
     } catch {
-      return undefined
+      return 'openai'
     }
-    return getCodexDefaultProvider(parseCodexToml(raw, this.configTomlPath))
+    return getCodexDefaultProvider(parseCodexToml(raw, this.configTomlPath)) ?? 'openai'
   }
 
   async preview(): Promise<CodexRepairPreview> {
@@ -56,14 +60,14 @@ export class CodexSessionRepair {
         return { available: false, dbPath, counts: [], repairable: 0, codexRunning: await this.isCodexRunning() }
       }
       const counts = db.counts()
-      const currentProvider = await this.currentProvider()
-      const repairable = currentProvider
-        ? counts.filter((c) => c.provider !== currentProvider).reduce((a, c) => a + c.count, 0)
-        : 0
+      const currentProvider = await this.currentProvider() // 恒有值（缺省内置 openai）
+      const repairable = counts
+        .filter((c) => c.provider !== currentProvider)
+        .reduce((a, c) => a + c.count, 0)
       return {
         available: true,
         dbPath,
-        ...(currentProvider ? { currentProvider } : {}),
+        currentProvider,
         counts,
         repairable,
         codexRunning: await this.isCodexRunning(),

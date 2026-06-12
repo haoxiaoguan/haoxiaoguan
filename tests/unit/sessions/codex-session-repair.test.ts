@@ -99,6 +99,28 @@ describe('CodexSessionRepair.preview', () => {
     expect(pv.counts.find((c) => c.provider === 'hxg_x')?.count).toBe(1)
   })
 
+  it('config.toml 无 model_provider（内置 OpenAI）→ currentProvider 回落 openai、可修复非 openai', async () => {
+    seedDb([
+      { id: 'a', provider: 'hxg_x' },
+      { id: 'b', provider: 'hxg_x' },
+      { id: 'c', provider: 'openai' },
+    ])
+    await writeFile(join(home, 'config.toml'), 'model = "gpt-5"\n') // 有 config.toml 但无 model_provider 键
+    const pv = await repair().preview()
+    expect(pv.currentProvider).toBe('openai')
+    expect(pv.repairable).toBe(2) // 两条 hxg_x 看不见，可归并回 openai
+  })
+
+  it('config.toml 不存在 → currentProvider 回落 openai', async () => {
+    seedDb([
+      { id: 'a', provider: 'hxg_x' },
+      { id: 'b', provider: 'openai' },
+    ])
+    const pv = await repair().preview()
+    expect(pv.currentProvider).toBe('openai')
+    expect(pv.repairable).toBe(1)
+  })
+
   it('无库 → available:false', async () => {
     expect((await repair().preview()).available).toBe(false)
   })
