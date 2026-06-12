@@ -87,9 +87,10 @@ export class CodexSessionRepair {
       const rolloutFiles = await this.collectRolloutFiles()
       const total = rolloutFiles.length
 
+      // 只存轻量信息（路径 + 备份用的 session_meta 原始行）。改写后的完整文件内容(nextText)
+      // 不在扫描阶段保留——7000+ 大文件的 nextText 同时驻留主进程会 OOM 崩溃（已实证）。
       interface ChangedFile {
         path: string
-        nextText: string
         originalSessionMetaLines: string[]
       }
       const changed: ChangedFile[] = []
@@ -121,7 +122,6 @@ export class CodexSessionRepair {
         if (analysis.rewriteNeeded) {
           changed.push({
             path: filePath,
-            nextText: analysis.nextText,
             originalSessionMetaLines: analysis.originalSessionMetaLines,
           })
         }
@@ -171,8 +171,27 @@ export class CodexSessionRepair {
           const changedTotal = changed.length
           for (let i = 0; i < changedTotal; i++) {
             const c = changed[i]
+            // 内存恒定：改写阶段才逐文件重新读取+解析得到 nextText（Codex 已停，内容与扫描时一致），
+            // 任意时刻内存只驻留一个文件，避免一次性持有数千份改写后文本导致主进程 OOM。
+            let nextText: string
             try {
-              await writeRolloutPreservingMtime(c.path, c.nextText)
+              const current = await readFile(c.path, 'utf8')
+              const reanalysis = analyzeRollout(current, req.targetProvider)
+              if (!reanalysis.rewriteNeeded) {
+                skippedRollouts++ // 已无需改写（极少见：扫描后内容变化）
+                continue
+              }
+              nextText = reanalysis.nextText
+            } catch (err: unknown) {
+              const code = (err as NodeJS.ErrnoException).code
+              if (code === 'ENOENT') {
+                skippedRollouts++ // 扫描后文件被删→跳过
+                continue
+              }
+              throw err // 其它读错误→中止并回滚
+            }
+            try {
+              await writeRolloutPreservingMtime(c.path, nextText)
               changedRollouts++
             } catch (err: unknown) {
               const code = (err as NodeJS.ErrnoException).code
