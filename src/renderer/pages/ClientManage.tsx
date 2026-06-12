@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowUpCircle, Check, Loader2, PackageCheck, Stethoscope, AlertTriangle } from 'lucide-react';
+import { ArrowUpCircle, Check, Loader2, PackageCheck, Stethoscope, AlertTriangle, Download, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ export default function ClientManage() {
     init,
     loadVersions,
     upgrade,
+    install,
     batchUpgrade,
     diagnose,
   } = useClientConfigStore();
@@ -43,6 +44,21 @@ export default function ClientManage() {
     const r = await upgrade(clientId);
     if (r.ok) toast.success(t('clientManage.upgradeSuccess', { client: name }));
     else toast.error(t('clientManage.upgradeFailed', { client: name }), { description: r.detail });
+  };
+
+  const onInstallOne = async (clientId: ClientConfigClientId, name: string) => {
+    const r = await install(clientId);
+    if (r.ok) toast.success(t('clientManage.installSuccess', { client: name }));
+    else toast.error(t('clientManage.installFailed', { client: name }), { description: r.detail });
+  };
+
+  const onCopyCommand = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      toast.success(t('clientManage.copied'));
+    } catch {
+      toast.error(t('clientManage.copyFailed'));
+    }
   };
 
   const onBatch = async () => {
@@ -111,7 +127,8 @@ export default function ClientManage() {
           const installed = v?.installedVersion;
           const upgradable = v?.upgradable === true;
           const broken = v?.installedButBroken === true;
-          const isUpgrading = upgradingClient === c.clientId;
+          const notInstalled = !c.detected && installed === undefined;
+          const isBusy = upgradingClient === c.clientId;
           // 版本未探测完成前用 loading 占位，避免先显示「已安装」再跳变成「可升级/已是最新」。
           const pending = versionsLoading && v === undefined;
 
@@ -163,15 +180,51 @@ export default function ClientManage() {
                     </div>
                   )}
                 </div>
-                {!pending && upgradable && (
+                {/* 未安装：自动安装 + 复制手动安装命令 */}
+                {!pending && notInstalled && (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 text-[12px]"
+                      disabled={isBusy || batching}
+                      onClick={() => void onInstallOne(c.clientId, c.displayName)}
+                    >
+                      {isBusy ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                          {t('clientManage.installing')}
+                        </>
+                      ) : (
+                        <>
+                          <Download className="size-3.5" aria-hidden />
+                          {t('clientManage.install')}
+                        </>
+                      )}
+                    </Button>
+                    {v?.installCommand !== undefined && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8"
+                        disabled={isBusy}
+                        title={t('clientManage.copyInstallHint', { command: v.installCommand })}
+                        aria-label={t('clientManage.copyInstall')}
+                        onClick={() => void onCopyCommand(v.installCommand as string)}
+                      >
+                        <Copy className="size-3.5" aria-hidden />
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {!pending && !notInstalled && upgradable && (
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-8 shrink-0 gap-1.5 border-amber-500/50 text-[12px] text-amber-600 hover:border-amber-500 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-                    disabled={isUpgrading || batching}
+                    disabled={isBusy || batching}
                     onClick={() => void onUpgradeOne(c.clientId, c.displayName)}
                   >
-                    {isUpgrading ? (
+                    {isBusy ? (
                       <>
                         <Loader2 className="size-3.5 animate-spin" aria-hidden />
                         {t('clientManage.upgrading')}
@@ -184,7 +237,7 @@ export default function ClientManage() {
                     )}
                   </Button>
                 )}
-                {!pending && !upgradable && installed !== undefined && v?.latestVersion !== undefined && !broken && (
+                {!pending && !notInstalled && !upgradable && installed !== undefined && v?.latestVersion !== undefined && !broken && (
                   <span className="flex shrink-0 items-center gap-1 text-[11.5px] text-emerald-600 dark:text-emerald-400">
                     <Check className="size-3.5" aria-hidden />
                     {t('clientManage.statusUpToDate')}

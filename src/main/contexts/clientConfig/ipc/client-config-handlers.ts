@@ -34,6 +34,14 @@ export function registerClientConfigHandlers(
       throw new Error(toIpcError(e))
     }
   })
+  // 一键安装（未安装时）：登录 shell 静默跑安装命令 + 完成后重新探测版本。
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.install, async (_e, clientId: ClientId) => {
+    try {
+      return await versionSvc.install(clientId)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
   // 多处安装冲突诊断：枚举各客户端 CLI 的所有安装并判定冲突。
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.diagnose, async (_e, clientIds?: ClientId[]) => {
     try {

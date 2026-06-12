@@ -1,10 +1,10 @@
 import { CLIENT_IDS, type ClientId } from '../domain/client-profile'
 import type { ClientVersionInfo, ClientInstallationReport } from '../domain/client-version'
-import { UPGRADE_COMMAND } from '../domain/client-version'
+import { UPGRADE_COMMAND, INSTALL_COMMAND } from '../domain/client-version'
 import { compareSemver } from '../domain/semver'
 import { probeInstalledVersion } from '../infrastructure/cli-version-probe'
 import { fetchLatestVersion } from '../infrastructure/latest-version-fetcher'
-import { runUpgrade, type UpgradeResult } from '../infrastructure/cli-upgrade-runner'
+import { runUpgrade, runInstall, type UpgradeResult } from '../infrastructure/cli-upgrade-runner'
 import { enumerateInstallations, isConflicting } from '../infrastructure/client-install-scan'
 
 /** 一键升级结果 + 升级后重新探测到的该客户端版本信息（供 UI 即时刷新徽章）。 */
@@ -44,6 +44,13 @@ export class ClientVersionService {
   /** 一键升级某客户端，完成后重新探测其版本并更新缓存对应项，返回结果 + 新版本信息。 */
   async upgrade(clientId: ClientId): Promise<ClientUpgradeOutcome> {
     const result = await runUpgrade(clientId)
+    const version = await this.refreshOne(clientId)
+    return { ...result, version }
+  }
+
+  /** 一键安装某客户端（未安装时），完成后重新探测其版本并更新缓存对应项。 */
+  async install(clientId: ClientId): Promise<ClientUpgradeOutcome> {
+    const result = await runInstall(clientId)
     const version = await this.refreshOne(clientId)
     return { ...result, version }
   }
@@ -91,6 +98,8 @@ export class ClientVersionService {
       latestVersion,
       upgradable,
       upgradeCommand: upgradable ? UPGRADE_COMMAND[clientId] : undefined,
+      // 未安装（探不到版本且非「装了跑不起来」）→ 给手动安装命令。
+      installCommand: installedVersion === undefined && !probe.broken ? INSTALL_COMMAND[clientId] : undefined,
       installedButBroken: probe.broken,
     }
   }

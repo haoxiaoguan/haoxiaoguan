@@ -12,6 +12,8 @@ export interface ClientVersionInfo {
   upgradable: boolean
   /** 升级命令（仅 upgradable 时给出，供 UI tooltip 展示，不自动执行）。 */
   upgradeCommand?: string
+  /** 安装命令（仅未安装时给出，供 UI「复制手动安装命令」）。 */
+  installCommand?: string
   /** 定位到 CLI 但 `--version` 报错退出（装了跑不起来，如 Node 版本不达标）。 */
   installedButBroken: boolean
 }
@@ -74,4 +76,15 @@ export const UPGRADE_COMMAND: Record<ClientId, string> = {
   opencode: 'npm i -g opencode-ai@latest',
   openclaw: 'npm i -g openclaw@latest',
   hermes: 'pip install -U hermes-agent',
+}
+
+/** 安装命令（未安装时用）：纯包管理器，CLI 尚未存在故不带官方自更新子命令。
+ *  同时作为执行命令（runInstall）与「复制手动安装命令」的展示，单一来源避免漂移。 */
+export const INSTALL_COMMAND: Record<ClientId, string> = {
+  claude: 'npm i -g @anthropic-ai/claude-code@latest',
+  codex: 'npm i -g @openai/codex@latest',
+  gemini_cli: 'npm i -g @google/gemini-cli@latest',
+  opencode: 'npm i -g opencode-ai@latest',
+  openclaw: 'npm i -g openclaw@latest',
+  hermes: 'pip install hermes-agent',
 }

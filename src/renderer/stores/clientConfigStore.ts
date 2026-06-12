@@ -39,6 +39,8 @@ interface ClientConfigState {
   loadVersions: () => Promise<void>
   /** 一键升级某客户端（后台静默跑）；返回 {ok, detail} 供页面 toast。 */
   upgrade: (clientId: ClientConfigClientId) => Promise<{ ok: boolean; detail?: string }>
+  /** 一键安装某客户端（未安装时，后台静默跑）；返回 {ok, detail} 供页面 toast。 */
+  install: (clientId: ClientConfigClientId) => Promise<{ ok: boolean; detail?: string }>
   /** 批量升级所有可升级客户端（串行，避免并发全局安装互相覆盖）；返回 {done, failed}。 */
   batchUpgrade: () => Promise<{ done: number; failed: number }>
   /** 诊断全部客户端的多处安装冲突。 */
@@ -135,6 +137,18 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
     set({ upgradingClient: clientId })
     try {
       const r = await bridge().clientConfig.upgrade(clientId)
+      set({ versions: { ...get().versions, [clientId]: r.version }, upgradingClient: null })
+      return { ok: r.ok, detail: r.detail }
+    } catch (e) {
+      set({ upgradingClient: null })
+      return { ok: false, detail: e instanceof Error ? e.message : String(e) }
+    }
+  },
+
+  install: async (clientId) => {
+    set({ upgradingClient: clientId })
+    try {
+      const r = await bridge().clientConfig.install(clientId)
       set({ versions: { ...get().versions, [clientId]: r.version }, upgradingClient: null })
       return { ok: r.ok, detail: r.detail }
     } catch (e) {

@@ -745,6 +745,8 @@ export interface HxgApi {
     versions(): Promise<ClientConfigVersionInfo[]>
     /** 一键升级某客户端 CLI（后台静默跑），返回结果 + 升级后重探的版本信息。 */
     upgrade(clientId: ClientConfigClientId): Promise<ClientConfigUpgradeResult>
+    /** 一键安装某客户端 CLI（未安装时，后台静默跑），返回结果 + 安装后重探的版本信息。 */
+    install(clientId: ClientConfigClientId): Promise<ClientConfigUpgradeResult>
     /** 多处安装冲突诊断（省略 clientIds 诊断全部）。 */
     diagnose(clientIds?: ClientConfigClientId[]): Promise<ClientConfigInstallReport[]>
     /** 列出接入档（省略 clientId 返回全部）。 */
@@ -801,6 +803,8 @@ export interface ClientConfigVersionInfo {
   upgradable: boolean
   /** 升级命令（仅 upgradable 时给出，供 tooltip 展示）。 */
   upgradeCommand?: string
+  /** 安装命令（仅未安装时给出，供「复制手动安装命令」）。 */
+  installCommand?: string
   /** 定位到 CLI 但 `--version` 报错退出（装了跑不起来）。 */
   installedButBroken: boolean
 }
