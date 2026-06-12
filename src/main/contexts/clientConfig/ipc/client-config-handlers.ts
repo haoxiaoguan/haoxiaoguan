@@ -2,14 +2,26 @@ import { ipcMain } from 'electron'
 import { toIpcError } from '../../../ipc/error'
 import { CLIENT_CONFIG_CHANNELS } from '../../../../shared/ipc-channels'
 import type { ClientConfigService } from '../application/client-config-service'
+import type { ClientVersionService } from '../application/client-version-service'
 import type { ClientId } from '../domain/client-profile'
 import type { CreateProfileInput, UpdateProfileInput } from '../application/client-config-store'
 
-// 注册 clientConfig 的 IPC handlers：客户端列表 + 接入档 CRUD + 预览/应用/还原 + 历史/回滚。
-export function registerClientConfigHandlers(svc: ClientConfigService): void {
+// 注册 clientConfig 的 IPC handlers：客户端列表 + 接入档 CRUD + 预览/应用/还原 + 历史/回滚 + 版本/可升级。
+export function registerClientConfigHandlers(
+  svc: ClientConfigService,
+  versionSvc: ClientVersionService,
+): void {
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.clients, async () => {
     try {
       return svc.listClients()
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+  // 版本/可升级探测（慢，带 TTL 缓存）：跑 CLI --version + 查 npm/PyPI/GitHub + semver 比对。
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.versions, async () => {
+    try {
+      return await versionSvc.getVersions()
     } catch (e) {
       throw new Error(toIpcError(e))
     }

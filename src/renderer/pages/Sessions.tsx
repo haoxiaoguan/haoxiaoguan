@@ -38,6 +38,7 @@ import { RepairSessionsDialog } from '@/components/sessions/RepairSessionsDialog
 import { ProviderTag, providerLabel } from '@/components/sessions/ProviderTag';
 import { StatusBadge } from '@/components/sessions/StatusBadge';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
+import { clientStatus } from '@/components/clientConfig/clientStatus';
 
 // ──────────────────────────────────────────────
 // 列表行
@@ -209,6 +210,7 @@ export default function Sessions() {
     refresh,
     clients,
     activeClient,
+    versions,
   } = useSessionsStore();
 
   const [query, setQuery] = useState('');
@@ -351,6 +353,7 @@ export default function Sessions() {
                 const n = tool
                   ? (byTool[tool]?.total ?? probes.find((p) => p.tool === tool)?.count)
                   : undefined;
+                const status = clientStatus(c.detected, versions[c.clientId], t);
                 return (
                   <button
                     key={c.clientId}
@@ -377,17 +380,12 @@ export default function Sessions() {
                       >
                         {c.displayName}
                       </span>
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground" title={status.title}>
                         <span
-                          className={cn(
-                            'size-1.5 rounded-full',
-                            c.detected ? 'bg-emerald-500' : 'bg-zinc-400',
-                          )}
+                          className={cn('size-1.5 rounded-full', status.dotClass)}
                           aria-hidden
                         />
-                        {c.detected
-                          ? t('clientConfigPage.detected')
-                          : t('clientConfigPage.notDetected')}
+                        {status.label}
                       </span>
                     </span>
                     {n != null ? (

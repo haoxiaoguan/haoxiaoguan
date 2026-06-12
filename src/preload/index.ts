@@ -272,6 +272,7 @@ const api: HxgApi = {
   },
   clientConfig: {
     clients: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clients),
+    versions: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.versions),
     list: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.list, clientId),
     create: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.create, input),
     update: (id, patch) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.update, id, patch),

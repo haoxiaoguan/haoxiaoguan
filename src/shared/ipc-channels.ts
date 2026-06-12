@@ -257,6 +257,7 @@ export const UPDATE_EVENTS = {
 // 客户端接入管理上下文（clientConfig）—— 把反代/第三方 provider 写进各 CLI 客户端配置。
 export const CLIENT_CONFIG_CHANNELS = {
   clients: 'clientConfig:clients',
+  versions: 'clientConfig:versions',
   list: 'clientConfig:list',
   create: 'clientConfig:create',
   update: 'clientConfig:update',

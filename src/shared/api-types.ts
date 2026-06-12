@@ -741,6 +741,8 @@ export interface HxgApi {
   clientConfig: {
     /** 已支持客户端 + 检测状态。 */
     clients(): Promise<ClientConfigClientInfo[]>
+    /** 各客户端 CLI 已装版本 + 最新版 + 可升级（慢，主进程 TTL 缓存）。 */
+    versions(): Promise<ClientConfigVersionInfo[]>
     /** 列出接入档（省略 clientId 返回全部）。 */
     list(clientId?: ClientConfigClientId): Promise<ClientConfigProfileDto[]>
     create(input: CreateClientConfigProfileDto): Promise<ClientConfigProfileDto>
@@ -785,6 +787,18 @@ export interface ClientConfigClientInfo {
   displayName: string
   detected: boolean
   writeMode: ClientConfigWriteMode
+}
+export interface ClientConfigVersionInfo {
+  clientId: ClientConfigClientId
+  /** 已装版本（CLI `--version` 解析所得；未探到为 undefined）。 */
+  installedVersion?: string
+  /** 远程最新版（npm/PyPI/GitHub；离线/查不到为 undefined）。 */
+  latestVersion?: string
+  upgradable: boolean
+  /** 升级命令（仅 upgradable 时给出，供 tooltip 展示）。 */
+  upgradeCommand?: string
+  /** 定位到 CLI 但 `--version` 报错退出（装了跑不起来）。 */
+  installedButBroken: boolean
 }
 export interface ClientConfigProfileDto {
   id: string

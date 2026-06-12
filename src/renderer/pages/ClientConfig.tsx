@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
+import { clientStatus } from '@/components/clientConfig/clientStatus';
 import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
 import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
 import { EditProviderDialog } from '@/components/clientConfig/EditProviderDialog';
@@ -252,7 +253,7 @@ function AccountPlaceholderCard({ onConnect, loading }: { onConnect: () => void;
 export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
-  const { clients, activeClient, profiles, counts, error, loading } = store;
+  const { clients, activeClient, profiles, counts, versions, error, loading } = store;
   const codexRelay = useSettingsStore((s) => s.codexRelayInjectionEnabled);
   const setCodexRelay = useSettingsStore((s) => s.setCodexRelayInjectionEnabled);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -419,6 +420,7 @@ export default function ClientConfig() {
             {clients.map((c) => {
               const selected = c.clientId === activeClient;
               const n = counts[c.clientId] ?? 0;
+              const status = clientStatus(c.detected, versions[c.clientId], t);
               return (
                 <button
                   key={c.clientId}
@@ -437,9 +439,9 @@ export default function ClientConfig() {
                     <span className={cn('block truncate text-[12.5px] font-medium', selected ? 'text-primary' : 'text-foreground')}>
                       {c.displayName}
                     </span>
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className={cn('size-1.5 rounded-full', c.detected ? 'bg-emerald-500' : 'bg-zinc-400')} aria-hidden />
-                      {c.detected ? t('clientConfigPage.detected') : t('clientConfigPage.notDetected')}
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground" title={status.title}>
+                      <span className={cn('size-1.5 rounded-full', status.dotClass)} aria-hidden />
+                      {status.label}
                     </span>
                   </span>
                   {n > 0 && (

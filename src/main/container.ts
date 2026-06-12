@@ -108,6 +108,7 @@ import { ClientConfigProfileRepository } from './contexts/clientConfig/infrastru
 import { WriterRegistry } from './contexts/clientConfig/application/writer-registry'
 import { ClientConfigApplier } from './contexts/clientConfig/application/client-config-applier'
 import { ClientConfigService } from './contexts/clientConfig/application/client-config-service'
+import { ClientVersionService } from './contexts/clientConfig/application/client-version-service'
 import { ConfigSnapshotStore } from './contexts/clientConfig/infrastructure/config-snapshot'
 import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/claude-writer'
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
@@ -846,6 +847,8 @@ export async function buildContainer(): Promise<Container> {
     clientConfigRelayProvisioning,
     () => settings.getCodexRelayInjectionEnabled(),
   )
+  // 客户端版本/可升级探测（独立 service，带 TTL 缓存；clients() 列表仍走文件检测保持秒开）。
+  const clientVersionService = new ClientVersionService()
 
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。
   // logSources 同时注入 sessionsService 与 activitySync，接新 agent 只动这一个数组。
@@ -895,6 +898,7 @@ export async function buildContainer(): Promise<Container> {
     apiProxyKeyService,
     apiProxyRequestLog,
     clientConfigService,
+    clientVersionService,
     tokenRefreshScheduler,
     platformQuotaScheduler,
     sessionsService,

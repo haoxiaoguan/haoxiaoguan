@@ -3,6 +3,7 @@ import { bridge } from '../services/bridge'
 import type {
   ClientConfigClientId,
   ClientConfigClientInfo,
+  ClientConfigVersionInfo,
   ClientConfigProfileDto,
   ClientConfigDiffFile,
   ClientConfigSnapshotDto,
@@ -10,6 +11,7 @@ import type {
   UpdateClientConfigProfileDto,
   ClientConfigConnTest,
 } from '@shared/api-types'
+import { indexVersions } from '../components/clientConfig/clientStatus'
 
 interface ClientConfigState {
   clients: ClientConfigClientInfo[]
@@ -17,11 +19,15 @@ interface ClientConfigState {
   profiles: ClientConfigProfileDto[]
   /** 每个客户端的接入档数量（左侧列表 badge）。 */
   counts: Record<string, number>
+  /** 各客户端版本/可升级信息（按 clientId 索引；异步补，不阻塞列表）。 */
+  versions: Record<string, ClientConfigVersionInfo>
   loading: boolean
   error: string | null
 
   /** 首次加载：拉客户端列表 + 当前客户端的接入档。 */
   init: () => Promise<void>
+  /** 异步拉取版本/可升级信息（慢，独立于列表；失败静默）。 */
+  loadVersions: () => Promise<void>
   /** 切换正在查看的客户端 tab。 */
   selectClient: (clientId: ClientConfigClientId) => Promise<void>
   /** 重新拉取当前客户端的接入档。 */
@@ -75,6 +81,7 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   activeClient: 'claude',
   profiles: [],
   counts: {},
+  versions: {},
   loading: false,
   error: null,
 
@@ -89,6 +96,17 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
       ])
       set({ profiles, counts: countByClient(all) })
     })
+    // 版本/可升级慢探测：不阻塞列表渲染，拿到后再补上徽章。
+    void get().loadVersions()
+  },
+
+  loadVersions: async () => {
+    try {
+      const list = await bridge().clientConfig.versions()
+      set({ versions: indexVersions(list) })
+    } catch {
+      // 离线/探测失败：保持「已安装/未安装」，不报错打扰。
+    }
   },
 
   selectClient: async (clientId) => {

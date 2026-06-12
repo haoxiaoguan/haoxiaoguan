@@ -8,10 +8,12 @@ import type {
   ToolProbeDto,
   ClientConfigClientId,
   ClientConfigClientInfo,
+  ClientConfigVersionInfo,
   CodexRepairPreviewDto,
   CodexRepairRequestDto,
   CodexRepairResultDto,
 } from '@shared/api-types';
+import { indexVersions } from '../components/clientConfig/clientStatus';
 
 const PAGE_LIMIT = 200;
 const TOOLS: SessionToolDto[] = ['claude', 'codex', 'gemini'];
@@ -46,7 +48,11 @@ interface SessionsState {
   // 左栏客户端列表（与「客户端接入」一致的 6 个）
   clients: ClientConfigClientInfo[];
   activeClient: ClientConfigClientId;
+  /** 各客户端版本/可升级信息（按 clientId 索引；异步补，不阻塞列表）。 */
+  versions: Record<string, ClientConfigVersionInfo>;
   init: () => Promise<void>;
+  /** 异步拉取版本/可升级信息（慢，独立于列表；失败静默）。 */
+  loadVersions: () => Promise<void>;
   selectTool: (tool: SessionToolDto) => Promise<void>;
   selectClient: (clientId: ClientConfigClientId) => Promise<void>;
   loadMore: () => Promise<void>;
@@ -77,6 +83,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   error: null,
   clients: [],
   activeClient: 'claude',
+  versions: {},
+
+  loadVersions: async () => {
+    try {
+      const list = await bridge().clientConfig.versions();
+      set({ versions: indexVersions(list) });
+    } catch {
+      // 离线/探测失败：保持「已安装/未安装」，不报错打扰。
+    }
+  },
 
   init: async () => {
     // 已初始化则直接复用缓存（反复进出会话页不重扫）。需要最新数据用 refresh()。
@@ -93,6 +109,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         ([, tool]) => tool === activeTool,
       )?.[0] ?? 'claude') as ClientConfigClientId;
       set({ probes, clients, activeTool, activeClient: matchedClient });
+      // 版本/可升级慢探测：不阻塞列表。
+      void get().loadVersions();
       await get().selectTool(activeTool);
     } catch (e) {
       // 失败则回退 initialized，允许下次进入重试。
