@@ -132,6 +132,7 @@
     "subtitle": "探测各 AI 客户端 CLI 的安装版本，一键升级到最新；诊断同一命令的多处安装冲突",
     "diagnose": "诊断安装冲突",
     "diagnosing": "诊断中…",
+    "detecting": "检测版本中…",
     "batchUpgrade": "全部升级（{{count}}）",
     "batchUpgradeNone": "全部已最新",
     "batchDone": "升级完成：{{done}} 成功，{{failed}} 失败",

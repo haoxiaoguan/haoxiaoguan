@@ -132,6 +132,7 @@
     "subtitle": "Detect each AI client CLI's installed version, update to latest in one click, and diagnose multi-install conflicts for the same command",
     "diagnose": "Diagnose conflicts",
     "diagnosing": "Diagnosing…",
+    "detecting": "Checking versions…",
     "batchUpgrade": "Update all ({{count}})",
     "batchUpgradeNone": "All up to date",
     "batchDone": "Done: {{done}} succeeded, {{failed}} failed",

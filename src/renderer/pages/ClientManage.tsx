@@ -17,6 +17,7 @@ export default function ClientManage() {
   const {
     clients,
     versions,
+    versionsLoading,
     upgradingClient,
     reports,
     diagnosing,
@@ -34,6 +35,8 @@ export default function ClientManage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 版本尚未首次探测完成（避免顶部「全部升级」也先显示错计数再跳变）。
+  const versionsPending = versionsLoading && Object.keys(versions).length === 0;
   const upgradableCount = clients.filter((c) => versions[c.clientId]?.upgradable === true).length;
 
   const onUpgradeOne = async (clientId: ClientConfigClientId, name: string) => {
@@ -84,11 +87,19 @@ export default function ClientManage() {
         <Button
           size="sm"
           className="h-8 gap-1.5 text-[12px]"
-          disabled={batching || upgradableCount === 0}
+          disabled={batching || versionsPending || upgradableCount === 0}
           onClick={() => void onBatch()}
         >
-          {batching ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <ArrowUpCircle className="size-3.5" aria-hidden />}
-          {upgradableCount > 0 ? t('clientManage.batchUpgrade', { count: upgradableCount }) : t('clientManage.batchUpgradeNone')}
+          {batching || versionsPending ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <ArrowUpCircle className="size-3.5" aria-hidden />
+          )}
+          {versionsPending
+            ? t('clientManage.detecting')
+            : upgradableCount > 0
+              ? t('clientManage.batchUpgrade', { count: upgradableCount })
+              : t('clientManage.batchUpgradeNone')}
         </Button>
       </div>
 
@@ -101,6 +112,8 @@ export default function ClientManage() {
           const upgradable = v?.upgradable === true;
           const broken = v?.installedButBroken === true;
           const isUpgrading = upgradingClient === c.clientId;
+          // 版本未探测完成前用 loading 占位，避免先显示「已安装」再跳变成「可升级/已是最新」。
+          const pending = versionsLoading && v === undefined;
 
           let statusText: string;
           let statusTone: string;
@@ -128,22 +141,33 @@ export default function ClientManage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[13px] font-medium text-foreground">{c.displayName}</span>
-                    <span className={cn('shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium', statusTone)}>
-                      {statusText}
-                    </span>
+                    {pending ? (
+                      <span className="h-4 w-12 shrink-0 animate-pulse rounded-[6px] bg-muted" aria-hidden />
+                    ) : (
+                      <span className={cn('shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium', statusTone)}>
+                        {statusText}
+                      </span>
+                    )}
                   </div>
-                  <div className="mt-0.5 truncate text-[11.5px] tabular-nums text-muted-foreground">
-                    {installed !== undefined
-                      ? t('clientManage.current', { version: installed })
-                      : t('clientManage.statusNotInstalled')}
-                    {v?.latestVersion !== undefined ? ` · ${t('clientManage.latest', { version: v.latestVersion })}` : ''}
-                  </div>
+                  {pending ? (
+                    <div className="mt-1 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" aria-hidden />
+                      {t('clientManage.detecting')}
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 truncate text-[11.5px] tabular-nums text-muted-foreground">
+                      {installed !== undefined
+                        ? t('clientManage.current', { version: installed })
+                        : t('clientManage.statusNotInstalled')}
+                      {v?.latestVersion !== undefined ? ` · ${t('clientManage.latest', { version: v.latestVersion })}` : ''}
+                    </div>
+                  )}
                 </div>
-                {upgradable && (
+                {!pending && upgradable && (
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 shrink-0 gap-1.5 border-amber-500/50 text-[12px] text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                    className="h-8 shrink-0 gap-1.5 border-amber-500/50 text-[12px] text-amber-600 hover:border-amber-500 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
                     disabled={isUpgrading || batching}
                     onClick={() => void onUpgradeOne(c.clientId, c.displayName)}
                   >
@@ -160,7 +184,7 @@ export default function ClientManage() {
                     )}
                   </Button>
                 )}
-                {!upgradable && installed !== undefined && v?.latestVersion !== undefined && !broken && (
+                {!pending && !upgradable && installed !== undefined && v?.latestVersion !== undefined && !broken && (
                   <span className="flex shrink-0 items-center gap-1 text-[11.5px] text-emerald-600 dark:text-emerald-400">
                     <Check className="size-3.5" aria-hidden />
                     {t('clientManage.statusUpToDate')}

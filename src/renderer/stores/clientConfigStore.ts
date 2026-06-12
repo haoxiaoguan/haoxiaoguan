@@ -22,6 +22,8 @@ interface ClientConfigState {
   counts: Record<string, number>
   /** 各客户端版本/可升级信息（按 clientId 索引；异步补，不阻塞列表）。 */
   versions: Record<string, ClientConfigVersionInfo>
+  /** 版本探测是否进行中（驱动「检测中」loading 占位，避免先显示错状态再跳变）。 */
+  versionsLoading: boolean
   /** 正在升级中的 clientId（驱动按钮 spinner）；null=无。 */
   upgradingClient: string | null
   /** 多处安装冲突诊断结果（按 clientId 索引；空=未诊断）。 */
@@ -95,6 +97,7 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   profiles: [],
   counts: {},
   versions: {},
+  versionsLoading: false,
   upgradingClient: null,
   reports: {},
   diagnosing: false,
@@ -117,11 +120,14 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   },
 
   loadVersions: async () => {
+    set({ versionsLoading: true })
     try {
       const list = await bridge().clientConfig.versions()
       set({ versions: indexVersions(list) })
     } catch {
       // 离线/探测失败：保持「已安装/未安装」，不报错打扰。
+    } finally {
+      set({ versionsLoading: false })
     }
   },
 
