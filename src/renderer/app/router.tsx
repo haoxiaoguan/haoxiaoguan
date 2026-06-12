@@ -43,8 +43,9 @@ export function AppRouter() {
             <Route path="health" element={<ApiProxyHealth />} />
             <Route index element={<Navigate to="service" replace />} />
           </Route>
-          <Route path="client-config" element={<ClientConfig />} />
-          <Route path="client-config/manage" element={<ClientManage />} />
+          {/* /client-config 默认进「客户端管理」（版本/升级/诊断）；接入配置移到 /access。 */}
+          <Route path="client-config" element={<ClientManage />} />
+          <Route path="client-config/access" element={<ClientConfig />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="settings" element={<Settings />}>

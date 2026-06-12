@@ -64,8 +64,8 @@ interface NavItem {
 const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav:dashboard', icon: LayoutGrid, end: true },
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
-  // API 服务并入客户端接入的顶部 tabs（路由保持 /api-service/* 不变）
-  { to: '/client-config', labelKey: 'nav:clientConfig', icon: Cable, alsoMatch: '/api-service' },
+  // 客户端管理（版本/升级/诊断）为主入口，接入配置/API 服务并入其顶部 tabs。
+  { to: '/client-config', labelKey: 'nav:clientManage.title', icon: Cable, alsoMatch: '/api-service' },
   { to: '/sessions', labelKey: 'nav:sessions', icon: History },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
@@ -86,14 +86,14 @@ const navButtonClassName =
 
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
-type ClientAccessHeaderTab = 'client-config' | 'manage' | 'service' | 'keys' | 'health';
+type ClientAccessHeaderTab = 'manage' | 'access' | 'service' | 'keys' | 'health';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
   if (pathname.startsWith('/skills')) return 'nav:skills';
   if (pathname.startsWith('/mcp')) return 'nav:mcp';
   if (pathname.startsWith('/api-service')) return 'nav:apiService';
-  if (pathname.startsWith('/client-config')) return 'nav:clientConfig';
+  if (pathname.startsWith('/client-config')) return 'nav:clientManage.title';
   if (pathname.startsWith('/analytics')) return 'nav:analytics';
   if (pathname.startsWith('/sessions')) return 'nav:sessions';
   if (pathname.startsWith('/settings/sync')) return 'nav:settings.menu.sync';
@@ -216,10 +216,10 @@ export function AppShell({ shell }: AppShellProps) {
   // 客户端接入与 API 服务共用一组顶部 tabs（API 服务三个子页并入客户端接入下）。
   const isApiServiceRoute = location.pathname.startsWith('/api-service');
   const isClientAccessRoute = location.pathname.startsWith('/client-config') || isApiServiceRoute;
-  const activeClientAccessTab: ClientAccessHeaderTab = location.pathname.startsWith('/client-config/manage')
-    ? 'manage'
+  const activeClientAccessTab: ClientAccessHeaderTab = location.pathname.startsWith('/client-config/access')
+    ? 'access'
     : !isApiServiceRoute
-      ? 'client-config'
+      ? 'manage' // /client-config 默认进客户端管理
       : location.pathname.startsWith('/api-service/keys')
         ? 'keys'
         : location.pathname.startsWith('/api-service/health')
@@ -328,11 +328,11 @@ export function AppShell({ shell }: AppShellProps) {
               />
             ) : isClientAccessRoute ? (
               <ManagementHeaderTabs
-                ariaLabel={t('nav:clientConfig')}
+                ariaLabel={t('nav:clientManage.title')}
                 value={activeClientAccessTab}
                 tabs={[
-                  { value: 'client-config', label: t('nav:clientConfig'), to: '/client-config' },
-                  { value: 'manage', label: t('nav:clientManage.title'), to: '/client-config/manage' },
+                  { value: 'manage', label: t('nav:clientManage.title'), to: '/client-config' },
+                  { value: 'access', label: t('nav:clientConfig'), to: '/client-config/access' },
                   { value: 'service', label: t('nav:apiService'), to: '/api-service/service' },
                   { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
                   { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },
