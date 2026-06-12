@@ -41,6 +41,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         allowStaleKiroImport: kv.allow_stale_kiro_import === 'true',
         terminalLaunchTemplate: kv.terminal_launch_template,
         codexRelayInjectionEnabled: kv.codex_relay_injection_enabled === 'true',
+        codexLaunchOnSwitch: kv.codex_launch_on_switch === 'true',
       }
     } catch (e) {
       throw new Error(toIpcError(e))

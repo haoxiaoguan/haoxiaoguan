@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAccountStore, useHealthStore, useQuotaStateStore } from '../../stores';
 import type { Account } from '../../types';
-import { accountPlanLabel, codexSubscriptionInfo, type CodexSubscriptionInfo } from './account-plan';
+import { accountPlanLabel, codexSubscriptionInfo, loginMethodLabel, type CodexSubscriptionInfo } from './account-plan';
 import { PlatformIcon } from './PlatformIcon';
 import { metricLines, type MetricLine, type MetricTone } from './quota-display';
 import { maskEmailText } from './identity-mask';
@@ -106,7 +106,7 @@ export default function AccountCard(props: AccountCardProps) {
     props.account.identityKey || props.account.displayIdentifier || props.account.email,
   );
   const plan = accountPlanLabel(props.account);
-  const login = props.account.loginProvider || loginFallback(props.account);
+  const login = loginMethodLabel(props.account);
   // 不截断:cursor 有 Total/Auto/API/按需 四条,codex 两条,全部展示。
   const lines = metricLines(props.account, quotaState);
   const subscription = codexSubscriptionInfo(props.account);
@@ -353,13 +353,6 @@ function IconAction({
       <Icon className={cn('size-3.5', spin && 'animate-spin')} strokeWidth={1.9} />
     </Button>
   );
-}
-
-function loginFallback(account: Account): string {
-  if (account.platform === 'github-copilot') return 'GitHub 登录';
-  if (account.platform === 'cursor' || account.platform === 'gemini-cli') return 'Google 登录';
-  if (account.platform === 'codex' || account.identityKey.toLowerCase().includes('api')) return 'API Key';
-  return '设备登录';
 }
 
 function loginIcon(login: string) {

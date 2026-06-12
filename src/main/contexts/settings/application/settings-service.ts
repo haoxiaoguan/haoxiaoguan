@@ -39,6 +39,11 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.codexRelayInjectionEnabled
   }
 
+  /** 切换 Codex 账号后是否自动重启/拉起 Codex App（停-写-启；默认 true）。 */
+  getCodexLaunchOnSwitch(): boolean {
+    return this.file.loadSync().runtime.codexLaunchOnSwitch
+  }
+
   /** 反代服务监听端口（默认 8788）。 */
   getApiProxyPort(): number {
     return this.file.loadSync().runtime.apiProxyPort

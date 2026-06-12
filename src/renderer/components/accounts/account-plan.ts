@@ -6,6 +6,35 @@ export interface CodexSubscriptionInfo {
   detailText?: string;
 }
 
+/**
+ * 登录方式标签：实体 loginProvider 优先；为空时按平台/payload 推断。
+ * codex 不再一律标「API Key」——旧导入路径（cpa/卡密）不带 auth_mode，实体列为空，
+ * 但 payload 里的 authMode / OAuth 痕迹（accountId/id_token）足以区分。
+ */
+export function loginMethodLabel(account: Account): string {
+  if (account.loginProvider) return account.loginProvider;
+  if (account.platform === 'github-copilot') return 'GitHub 登录';
+  if (account.platform === 'cursor' || account.platform === 'gemini-cli') return 'Google 登录';
+  if (account.platform === 'codex') return codexLoginFallback(account);
+  if (account.identityKey.toLowerCase().includes('api')) return 'API Key';
+  return '设备登录';
+}
+
+function codexLoginFallback(account: Account): string {
+  const payload = toRecord(account.profilePayload);
+  const authMode = readString(payload, 'authMode') || readString(payload, 'auth_mode');
+  if (authMode) {
+    const m = authMode.toLowerCase();
+    return m === 'api_key' || m === 'apikey' ? 'API Key' : authMode;
+  }
+  const oauthHint =
+    readString(payload, 'accountId') ||
+    readString(payload, 'account_id') ||
+    readString(payload, 'id_token');
+  if (oauthHint) return 'chatgpt_oauth';
+  return 'API Key';
+}
+
 export function accountPlanLabel(account: Account): string {
   if (account.platform === 'codex') return codexPlanLabel(account);
   // Kiro's planTier is an internal AWS code (e.g. Q_DEVELOPER_STANDALONE_PRO_PLUS);

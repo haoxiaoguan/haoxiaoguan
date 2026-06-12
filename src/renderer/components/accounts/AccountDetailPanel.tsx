@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useHealthStore, useQuotaStateStore } from '../../stores';
 import type { Account } from '../../types';
 import { PlatformMetricBlock } from './PlatformMetrics';
+import { loginMethodLabel } from './account-plan';
 import { PLATFORM_TONE, platformInitial } from './platform-tone';
 
 interface AccountDetailPanelProps {
@@ -150,9 +151,7 @@ export default function AccountDetailPanel({
               <DetailRow label={t('detail.field.identity')} value={identity} mono />
               <DetailRow label={t('detail.field.identityKey')} value={account.identityKey} mono />
               {hasEmail && <DetailRow label={t('detail.field.email')} value={account.email} />}
-              {account.loginProvider && (
-                <DetailRow label={t('detail.field.loginProvider')} value={account.loginProvider} />
-              )}
+              <DetailRow label={t('detail.field.loginProvider')} value={loginMethodLabel(account)} />
               {planText && <DetailRow label={t('detail.field.plan')} value={planText} />}
               {statusText && <DetailRow label={t('detail.field.status')} value={statusText} />}
               <DetailRow label={t('detail.field.platform')} value={platformDisplayName} />

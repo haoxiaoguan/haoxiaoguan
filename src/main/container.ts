@@ -18,6 +18,8 @@ import { MikroOrmAccountRepository } from './contexts/account/infrastructure/mik
 import { RepositoryAccountPlatformLookup } from './contexts/account/infrastructure/account-platform-lookup'
 import { AccountApplicationService } from './contexts/account/application/account-service'
 import { SwitchService } from './contexts/account/application/switch-service'
+import { CodexSwitchLifecycle } from './contexts/account/infrastructure/codex-switch-lifecycle'
+import { CodexCredentialRefresher } from './contexts/account/infrastructure/codex-credential-refresher'
 import { SwitchOrchestrator } from './contexts/account/application/switch-orchestrator'
 import { ActiveDetectionService } from './contexts/account/application/active-detection-service'
 import { ValidationService } from './contexts/account/application/validation-service'
@@ -288,7 +290,22 @@ export async function buildContainer(): Promise<Container> {
   const cryptoService = new CryptoService(masterKey)
   const credentialStore = new MikroOrmCredentialRepository(cryptoService)
   const injectorRegistry = new AgentCredentialInjectorRegistry()
-  const switchService = new SwitchService(credentialStore, injectorRegistry)
+  // Codex 切换的刷新 + 「停-写-启」生命周期：切换前换新过期 OAuth token；
+  // 「切换后自动启动」开启时先停运行中的 Codex App、写完按启动路径拉起
+  // （codexProcessControl 同时供 clientConfig 的写盘生命周期复用，见下）。
+  const codexProcessControl = createCodexProcessControl()
+  const codexSwitchLifecycle = new CodexSwitchLifecycle(
+    codexProcessControl,
+    () => settings.getCodexLaunchOnSwitch(),
+    () => settings.getIdePath('codex'),
+  )
+  const codexCredentialRefresher = new CodexCredentialRefresher()
+  const switchService = new SwitchService(
+    credentialStore,
+    injectorRegistry,
+    { refresher: (p) => (p === 'codex' ? codexCredentialRefresher : undefined) },
+    { lifecycle: (p) => (p === 'codex' ? codexSwitchLifecycle : undefined) },
+  )
   const account = new AccountApplicationService(accountRepo, credentialStore, switchService)
   const accountSwitchOrchestrator = new SwitchOrchestrator(
     accountRepo,
@@ -694,8 +711,7 @@ export async function buildContainer(): Promise<Container> {
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
   // Codex 桌面 App 停-写-启生命周期：运行中的 Codex App 会按内存反写 config.toml，
   // 必须停 App→写→重启它，改动才会被采纳（osascript 优雅退出，绝不宽泛 pkill；非 macOS 为 no-op）。
-  // codexProcessControl 提出来以便 codexSessionRepair 复用 isRunning()，避免建两个 control。
-  const codexProcessControl = createCodexProcessControl()
+  // codexProcessControl 在账号上下文（§4）创建，与切号生命周期/codexSessionRepair 共用一个 control。
   const codexAppLifecycle = new CodexAppLifecycle(codexProcessControl)
   clientConfigRegistry.register(
     new CodexWriter(

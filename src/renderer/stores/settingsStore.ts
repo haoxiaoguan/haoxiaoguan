@@ -31,6 +31,8 @@ interface SettingsState {
   terminalLaunchTemplate: string;
   /** Codex「中转注入」(L2 真共存) 开关。 */
   codexRelayInjectionEnabled: boolean;
+  /** 切换 Codex 账号后自动重启/拉起 Codex App（停-写-启，默认开）。 */
+  codexLaunchOnSwitch: boolean;
   /** Loading state */
   loading: boolean;
   /** Error message */
@@ -66,6 +68,8 @@ interface SettingsState {
   setTerminalLaunchTemplate: (template: string) => Promise<void>;
   /** Update Codex 中转注入 (L2) toggle */
   setCodexRelayInjectionEnabled: (enabled: boolean) => Promise<void>;
+  /** Update 切换 Codex 账号后自动启动 App toggle */
+  setCodexLaunchOnSwitch: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -83,6 +87,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   allowStaleKiroImport: false,
   terminalLaunchTemplate: '',
   codexRelayInjectionEnabled: false,
+  codexLaunchOnSwitch: true,
   loading: false,
   error: null,
 
@@ -113,6 +118,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         allowStaleKiroImport: settings.allowStaleKiroImport,
         terminalLaunchTemplate: settings.terminalLaunchTemplate ?? '',
         codexRelayInjectionEnabled: settings.codexRelayInjectionEnabled ?? false,
+        codexLaunchOnSwitch: settings.codexLaunchOnSwitch ?? true,
         loading: false,
       });
     } catch (err) {
@@ -259,6 +265,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       await settingsService.updateSettings({ settings: { codex_relay_injection_enabled: enabled ? 'true' : 'false' } });
       set({ codexRelayInjectionEnabled: enabled });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  setCodexLaunchOnSwitch: async (enabled: boolean) => {
+    try {
+      await settingsService.updateSettings({ settings: { codex_launch_on_switch: enabled ? 'true' : 'false' } });
+      set({ codexLaunchOnSwitch: enabled });
     } catch (err) {
       set({ error: String(err) });
     }

@@ -7,6 +7,7 @@ import type {
 } from '../../contexts/account/domain/ports'
 import { type CredentialInjection, type DecryptedCredential } from './credential-injection'
 import { makeInjectionAdapter } from './file-injection-adapters'
+import { CodexCredentialInjectionPort } from './codex-injection'
 
 // Adapts an agents-layer CredentialInjection adapter to the account context's
 // CredentialInjectionPort. Converts the account Credential aggregate into the
@@ -26,6 +27,10 @@ class InjectionPortAdapter implements CredentialInjectionPort {
   }
 }
 
+function adapterPort(capability: CredentialInjection | undefined): CredentialInjectionPort | undefined {
+  return capability === undefined ? undefined : new InjectionPortAdapter(capability)
+}
+
 /**
  * CredentialInjectorRegistry backed by the agents file-injection adapters.
  * Resolves a per-platform injector keyed by the canonical agent_id string.
@@ -37,8 +42,12 @@ export class AgentCredentialInjectorRegistry implements CredentialInjectorRegist
   injector(platform: PlatformId): CredentialInjectionPort | undefined {
     const agentId = platformToAgentId(platform)
     if (this.cache.has(agentId)) return this.cache.get(agentId)
-    const capability = makeInjectionAdapter(agentId)
-    const port = capability === undefined ? undefined : new InjectionPortAdapter(capability)
+    // Codex 不走通用 {"token": ...} 注入：auth.json 必须按官方结构整写（OAuth 全量
+    // tokens / API Key auth_mode），否则 Codex 直接掉登录。
+    const port =
+      agentId === 'codex'
+        ? new CodexCredentialInjectionPort()
+        : adapterPort(makeInjectionAdapter(agentId))
     this.cache.set(agentId, port)
     return port
   }

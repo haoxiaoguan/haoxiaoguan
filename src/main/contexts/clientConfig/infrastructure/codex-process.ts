@@ -14,8 +14,8 @@ export interface CodexProcessControl {
   isRunning(): Promise<boolean>
   /** 优雅退出 Codex App，轮询直到退出或超时；返回是否已退出。 */
   quit(timeoutMs: number): Promise<boolean>
-  /** 启动 Codex App。 */
-  launch(): Promise<void>
+  /** 启动 Codex App。可传设置中的启动路径覆盖默认 bundle id / /Applications 路径。 */
+  launch(appPath?: string): Promise<void>
 }
 
 /** 判断一行 `ps` 命令是否为 Codex 桌面 App 主进程（排除 Helper 子进程与 codex CLI）。 */
@@ -57,7 +57,17 @@ class MacCodexProcessControl implements CodexProcessControl {
     return !(await this.isRunning())
   }
 
-  async launch(): Promise<void> {
+  async launch(appPath?: string): Promise<void> {
+    // 用户在平台设置里配了启动路径就优先用它（非标准安装位置）；失败回退默认。
+    const configured = appPath?.trim()
+    if (configured !== undefined && configured.length > 0) {
+      try {
+        await execFileAsync('open', ['-a', configured])
+        return
+      } catch {
+        // 配置路径失效（已移动/删除）→ 回退默认启动方式
+      }
+    }
     // 优先按 bundle id 启动（最稳）；失败回退按路径。绝不强杀，只负责拉起。
     try {
       await execFileAsync('open', ['-b', 'com.openai.codex'])

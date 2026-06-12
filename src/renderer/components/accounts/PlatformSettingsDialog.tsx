@@ -53,6 +53,8 @@ export function PlatformSettingsDialog({ platform, open, onOpenChange }: Platfor
     setQuotaRefreshConcurrency,
     allowStaleKiroImport,
     setAllowStaleKiroImport,
+    codexLaunchOnSwitch,
+    setCodexLaunchOnSwitch,
   } = useSettingsStore();
 
   const activeInterval = refreshIntervals.get(platform) ?? 5;
@@ -249,6 +251,20 @@ export function PlatformSettingsDialog({ platform, open, onOpenChange }: Platfor
               </Button>
             </div>
           </div>
+
+          {/* Platform-specific: Codex 切换后自动重启 App（停-写-启） */}
+          {platform === 'codex' ? (
+            <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+              <label className="text-[13px] text-foreground">
+                {t('platformSettings.special.codexLaunchOnSwitch')}
+              </label>
+              <Switch
+                checked={codexLaunchOnSwitch}
+                onCheckedChange={(v) => void setCodexLaunchOnSwitch(v)}
+                aria-label={t('platformSettings.special.codexLaunchOnSwitch')}
+              />
+            </div>
+          ) : null}
 
           {/* Platform-specific: Kiro import toggle */}
           {platform === 'kiro' ? (

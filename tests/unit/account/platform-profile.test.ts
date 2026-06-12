@@ -339,4 +339,30 @@ describe('profileFromImportMaterial', () => {
     expect(p.status).toBe('active')
     expect(payload(p).refreshToken).toBeUndefined()
   })
+
+  it('codex loginProvider: auth_mode 优先', () => {
+    const p = profileFromImportMaterial('codex', 'a@b.com', { auth_mode: 'api_key', api_key: 'sk-x' }, 'token')
+    expect(p.loginProvider).toBe('api_key')
+    expect(payload(p).loginProvider).toBe('api_key')
+  })
+
+  it('codex loginProvider: 无 auth_mode 但有 api_key → 推断 api_key', () => {
+    const p = profileFromImportMaterial('codex', 'a@b.com', { api_key: 'sk-x' }, 'token')
+    expect(p.loginProvider).toBe('api_key')
+  })
+
+  it('codex loginProvider: 无 auth_mode 但有 OAuth 痕迹（refresh/id_token）→ 推断 chatgpt_oauth', () => {
+    const p = profileFromImportMaterial(
+      'codex',
+      'a@b.com',
+      { tokens: { id_token: 'idt', access_token: 'at', refresh_token: 'rt', account_id: 'acc' } },
+      'token',
+    )
+    expect(p.loginProvider).toBe('chatgpt_oauth')
+  })
+
+  it('codex loginProvider: 既无 auth_mode 也无凭据痕迹 → 不下结论（undefined）', () => {
+    const p = profileFromImportMaterial('codex', 'a@b.com', { account_name: 'x' }, 'token')
+    expect(p.loginProvider).toBeUndefined()
+  })
 })

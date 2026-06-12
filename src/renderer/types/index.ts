@@ -231,6 +231,7 @@ export interface Settings {
   allowStaleKiroImport: boolean;
   terminalLaunchTemplate: string;
   codexRelayInjectionEnabled: boolean;
+  codexLaunchOnSwitch: boolean;
 }
 
 export interface UpdateSettingsRequest {

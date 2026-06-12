@@ -631,6 +631,21 @@ function buildCodexApiKeyId(apiKey: string): string {
   return `codex_apikey_${md5Hex(apiKey)}`
 }
 
+/** auth_mode 缺失时按凭据材料形态推断登录方式：api_key 字段 → API Key；
+ *  refresh_token/id_token（顶层或嵌套 tokens）→ ChatGPT OAuth；都没有 → 不下结论。 */
+function inferCodexLoginMode(raw: JsonValue | undefined, apiKey: string | undefined): string | undefined {
+  if (apiKey !== undefined) return 'api_key'
+  const oauthHint = pickString(raw, [
+    ['refresh_token'],
+    ['refreshToken'],
+    ['id_token'],
+    ['idToken'],
+    ['tokens', 'refresh_token'],
+    ['tokens', 'id_token'],
+  ])
+  return oauthHint !== undefined ? 'chatgpt_oauth' : undefined
+}
+
 function codexProfile(email: string, raw: JsonValue | undefined, tokenHint: string): PlatformAccountProfile {
   const referenceEmail =
     pickString(raw, [['email']]) ?? normalizeNonEmpty(email) ?? `codex-${shortHash(tokenHint)}`
@@ -652,7 +667,10 @@ function codexProfile(email: string, raw: JsonValue | undefined, tokenHint: stri
     ]) ??
     normalizeNonEmpty(email) ??
     identity
-  const loginProvider = pickString(raw, [['auth_mode'], ['authMode']])
+  // 登录方式：auth_mode 元数据优先；缺失时按凭据形态推断（cpa/卡密导入不带 auth_mode，
+  // 不推断会落空 → 渲染层兜底把所有 codex 账号都标成 API Key）。
+  const loginProvider =
+    pickString(raw, [['auth_mode'], ['authMode']]) ?? inferCodexLoginMode(raw, apiKey)
   const planName = pickString(raw, [
     ['plan_type'],
     ['planType'],
@@ -668,6 +686,9 @@ function codexProfile(email: string, raw: JsonValue | undefined, tokenHint: stri
     pickString(raw, [['reauth_reason'], ['reauthReason']]) ?? commonStatusReason(raw)
   const payload = cell(sanitizedPayload(raw))
   upsertPayloadFromPath(payload, 'authMode', raw, [['auth_mode'], ['authMode']])
+  // 写进 payload：Account.updateProfilePayload 从 payload.loginProvider 回填实体列，
+  // 让 reauth/重导入时旧账号的空 login_provider 得到修正。
+  upsertPayloadString(payload, 'loginProvider', loginProvider)
   upsertPayloadFromPath(payload, 'apiBaseUrl', raw, [['api_base_url'], ['apiBaseUrl']])
   upsertPayloadFromPath(payload, 'apiProviderMode', raw, [['api_provider_mode'], ['apiProviderMode']])
   upsertPayloadFromPath(payload, 'apiProviderId', raw, [['api_provider_id'], ['apiProviderId']])

@@ -48,3 +48,42 @@ export interface CredentialInjectorRegistry {
   /** Returns the injector for a platform, or undefined if unsupported. */
   injector(platform: PlatformId): CredentialInjectionPort | undefined
 }
+
+// ---------------------------------------------------------------------------
+// CredentialRefresher — per-platform token refresh used by the switch path.
+// 切换前先把过期/将过期的 OAuth token 换新（对照 cockpit-tools 切换前的
+// refresh_managed_account_locked），否则过期账号永远切不动。
+// ---------------------------------------------------------------------------
+export interface CredentialRefresher {
+  /**
+   * Refresh the credential if it needs it. Returns the SAME instance when no
+   * refresh was necessary; returns a NEW Credential (caller persists it) after
+   * a successful refresh. Throws when a needed refresh fails.
+   */
+  refreshIfNeeded(credential: Credential): Promise<Credential>
+}
+
+export interface CredentialRefresherRegistry {
+  refresher(platform: PlatformId): CredentialRefresher | undefined
+}
+
+// ---------------------------------------------------------------------------
+// PlatformSwitchLifecycle — brackets the credential injection with platform
+// process control（Codex 桌面 App 的「停-写-启」：运行中的 App 退出时会反写
+// auth.json，必须先停掉再写，写完按需拉起）。
+// ---------------------------------------------------------------------------
+export interface SwitchLifecycleToken {
+  /** afterInject 是否需要拉起平台 App。 */
+  relaunch: boolean
+}
+
+export interface PlatformSwitchLifecycle {
+  /** 注入前调用；停不掉运行中的 App 时抛错中止切换。 */
+  beforeInject(): Promise<SwitchLifecycleToken>
+  /** 注入后（无论注入成败）调用，按 token 决定是否拉起 App。 */
+  afterInject(token: SwitchLifecycleToken): Promise<void>
+}
+
+export interface SwitchLifecycleRegistry {
+  lifecycle(platform: PlatformId): PlatformSwitchLifecycle | undefined
+}

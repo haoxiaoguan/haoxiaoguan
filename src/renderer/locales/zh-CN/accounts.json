@@ -233,7 +233,8 @@
       "notFound": "未找到该平台的应用，请手动选择"
     },
     "special": {
-      "kiroAllowStale": "允许在无法联网确认身份时导入"
+      "kiroAllowStale": "允许在无法联网确认身份时导入",
+      "codexLaunchOnSwitch": "切换账号后自动重启 Codex App"
     }
   },
   "switchSuccess": "切换成功",

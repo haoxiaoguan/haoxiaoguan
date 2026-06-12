@@ -22,7 +22,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
 import { useAccountStore, useHealthStore, useQuotaStateStore } from '../../stores';
 import type { Account } from '../../types';
-import { accountPlanLabel, codexSubscriptionInfo, type CodexSubscriptionInfo } from './account-plan';
+import { accountPlanLabel, codexSubscriptionInfo, loginMethodLabel, type CodexSubscriptionInfo } from './account-plan';
 import { PlatformIcon } from './PlatformIcon';
 import { metricLines, primaryMetric, type MetricTone } from './quota-display';
 import { maskEmailText } from './identity-mask';
@@ -114,7 +114,7 @@ export function AccountDataTable({
         size: 108,
         header: () => '登录方式',
         cell: ({ row }) => {
-          const login = row.original.loginProvider || loginFallback(row.original);
+          const login = loginMethodLabel(row.original);
           return (
             <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-foreground">
               {loginIcon(login)}
@@ -465,13 +465,6 @@ function subscriptionToneClass(tone: CodexSubscriptionInfo['tone']) {
   if (tone === 'expired') return 'text-rose-600 dark:text-rose-400';
   if (tone === 'warning') return 'text-orange-600 dark:text-orange-400';
   return 'text-muted-foreground';
-}
-
-function loginFallback(account: Account): string {
-  if (account.platform === 'github-copilot') return 'GitHub 登录';
-  if (account.platform === 'cursor' || account.platform === 'gemini-cli') return 'Google 登录';
-  if (account.platform === 'codex' || account.identityKey.toLowerCase().includes('api')) return 'API Key';
-  return '设备登录';
 }
 
 function loginIcon(login: string) {
