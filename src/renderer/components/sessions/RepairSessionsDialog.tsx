@@ -30,6 +30,8 @@ export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; on
       const r = await sessionsService.repair({ targetProvider: preview.currentProvider, rewriteRollout })
       setResult(r)
       toast.success(t('sessionsView.repairDone', { n: r.updatedThreads }))
+      // 修复后刷新预览：counts/可修复数应归零，否则界面停留在修复前的旧数字（用户实测此 bug）。
+      await sessionsService.repairPreview().then(setPreview).catch(() => {})
     } catch (e) { toast.error(String(e)) } finally { unsub(); setBusy(false) }
   }
 
