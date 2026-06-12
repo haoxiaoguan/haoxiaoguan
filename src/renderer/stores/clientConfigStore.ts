@@ -4,6 +4,7 @@ import type {
   ClientConfigClientId,
   ClientConfigClientInfo,
   ClientConfigVersionInfo,
+  ClientConfigInstallReport,
   ClientConfigProfileDto,
   ClientConfigDiffFile,
   ClientConfigSnapshotDto,
@@ -23,6 +24,10 @@ interface ClientConfigState {
   versions: Record<string, ClientConfigVersionInfo>
   /** 正在升级中的 clientId（驱动按钮 spinner）；null=无。 */
   upgradingClient: string | null
+  /** 多处安装冲突诊断结果（按 clientId 索引；空=未诊断）。 */
+  reports: Record<string, ClientConfigInstallReport>
+  /** 是否正在诊断。 */
+  diagnosing: boolean
   loading: boolean
   error: string | null
 
@@ -32,6 +37,10 @@ interface ClientConfigState {
   loadVersions: () => Promise<void>
   /** 一键升级某客户端（后台静默跑）；返回 {ok, detail} 供页面 toast。 */
   upgrade: (clientId: ClientConfigClientId) => Promise<{ ok: boolean; detail?: string }>
+  /** 批量升级所有可升级客户端（串行，避免并发全局安装互相覆盖）；返回 {done, failed}。 */
+  batchUpgrade: () => Promise<{ done: number; failed: number }>
+  /** 诊断全部客户端的多处安装冲突。 */
+  diagnose: () => Promise<void>
   /** 切换正在查看的客户端 tab。 */
   selectClient: (clientId: ClientConfigClientId) => Promise<void>
   /** 重新拉取当前客户端的接入档。 */
@@ -87,6 +96,8 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   counts: {},
   versions: {},
   upgradingClient: null,
+  reports: {},
+  diagnosing: false,
   loading: false,
   error: null,
 
@@ -123,6 +134,33 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
     } catch (e) {
       set({ upgradingClient: null })
       return { ok: false, detail: e instanceof Error ? e.message : String(e) }
+    }
+  },
+
+  batchUpgrade: async () => {
+    const targets = get()
+      .clients.map((c) => c.clientId)
+      .filter((id) => get().versions[id]?.upgradable === true)
+    let done = 0
+    let failed = 0
+    // 串行：并发跑多个 `npm i -g` 可能互相覆盖/抢锁。upgrade 内部会更新单个 upgradingClient 态。
+    for (const id of targets) {
+      const r = await get().upgrade(id)
+      if (r.ok) done += 1
+      else failed += 1
+    }
+    return { done, failed }
+  },
+
+  diagnose: async () => {
+    set({ diagnosing: true })
+    try {
+      const list = await bridge().clientConfig.diagnose()
+      const map: Record<string, ClientConfigInstallReport> = {}
+      for (const r of list) map[r.clientId] = r
+      set({ reports: map, diagnosing: false })
+    } catch {
+      set({ diagnosing: false })
     }
   },
 

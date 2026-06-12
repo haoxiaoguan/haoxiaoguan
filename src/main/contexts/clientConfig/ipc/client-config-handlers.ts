@@ -34,6 +34,14 @@ export function registerClientConfigHandlers(
       throw new Error(toIpcError(e))
     }
   })
+  // 多处安装冲突诊断：枚举各客户端 CLI 的所有安装并判定冲突。
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.diagnose, async (_e, clientIds?: ClientId[]) => {
+    try {
+      return await versionSvc.diagnose(clientIds)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.list, async (_e, clientId?: ClientId) => {
     try {
       return await svc.list(clientId)

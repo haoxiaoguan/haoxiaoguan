@@ -86,7 +86,7 @@ const navButtonClassName =
 
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
-type ClientAccessHeaderTab = 'client-config' | 'service' | 'keys' | 'health';
+type ClientAccessHeaderTab = 'client-config' | 'manage' | 'service' | 'keys' | 'health';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
@@ -216,13 +216,15 @@ export function AppShell({ shell }: AppShellProps) {
   // 客户端接入与 API 服务共用一组顶部 tabs（API 服务三个子页并入客户端接入下）。
   const isApiServiceRoute = location.pathname.startsWith('/api-service');
   const isClientAccessRoute = location.pathname.startsWith('/client-config') || isApiServiceRoute;
-  const activeClientAccessTab: ClientAccessHeaderTab = !isApiServiceRoute
-    ? 'client-config'
-    : location.pathname.startsWith('/api-service/keys')
-      ? 'keys'
-      : location.pathname.startsWith('/api-service/health')
-        ? 'health'
-        : 'service';
+  const activeClientAccessTab: ClientAccessHeaderTab = location.pathname.startsWith('/client-config/manage')
+    ? 'manage'
+    : !isApiServiceRoute
+      ? 'client-config'
+      : location.pathname.startsWith('/api-service/keys')
+        ? 'keys'
+        : location.pathname.startsWith('/api-service/health')
+          ? 'health'
+          : 'service';
 
   return (
     <div
@@ -330,6 +332,7 @@ export function AppShell({ shell }: AppShellProps) {
                 value={activeClientAccessTab}
                 tabs={[
                   { value: 'client-config', label: t('nav:clientConfig'), to: '/client-config' },
+                  { value: 'manage', label: t('nav:clientManage.title'), to: '/client-config/manage' },
                   { value: 'service', label: t('nav:apiService'), to: '/api-service/service' },
                   { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
                   { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },

@@ -16,6 +16,30 @@ export interface ClientVersionInfo {
   installedButBroken: boolean
 }
 
+/** 某客户端 CLI 在系统中的一处安装（用于「多处安装冲突」诊断）。 */
+export interface ClientInstallation {
+  /** 候选入口路径（PATH 里实际看到的那个，未解析软链）。 */
+  path: string
+  /** `--version` 成功解析出的版本号。 */
+  version?: string
+  /** `--version` 是否 exit 0（装了且当前环境能跑）。 */
+  runnable: boolean
+  /** 跑不起来时的诊断末尾若干行。 */
+  error?: string
+  /** 由路径前缀推断的安装来源（nvm/homebrew/volta/pip/...）。 */
+  source: string
+  /** 是否为 PATH 解析到的那处（命令行默认、也是升级作用的目标）。 */
+  isPathDefault: boolean
+}
+
+/** 一次安装分布诊断结果。 */
+export interface ClientInstallationReport {
+  clientId: ClientId
+  installs: ClientInstallation[]
+  /** ≥2 处且（版本分歧或运行态混合）。 */
+  isConflict: boolean
+}
+
 /** clientId → 实际 CLI 命令名（注意 gemini_cli 的命令是 `gemini`）。 */
 export const CLI_COMMAND: Record<ClientId, string> = {
   claude: 'claude',

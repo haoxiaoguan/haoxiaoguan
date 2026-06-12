@@ -745,6 +745,8 @@ export interface HxgApi {
     versions(): Promise<ClientConfigVersionInfo[]>
     /** 一键升级某客户端 CLI（后台静默跑），返回结果 + 升级后重探的版本信息。 */
     upgrade(clientId: ClientConfigClientId): Promise<ClientConfigUpgradeResult>
+    /** 多处安装冲突诊断（省略 clientIds 诊断全部）。 */
+    diagnose(clientIds?: ClientConfigClientId[]): Promise<ClientConfigInstallReport[]>
     /** 列出接入档（省略 clientId 返回全部）。 */
     list(clientId?: ClientConfigClientId): Promise<ClientConfigProfileDto[]>
     create(input: CreateClientConfigProfileDto): Promise<ClientConfigProfileDto>
@@ -808,6 +810,22 @@ export interface ClientConfigUpgradeResult {
   detail?: string
   /** 升级后重新探测到的该客户端版本信息（UI 据此即时刷新徽章）。 */
   version: ClientConfigVersionInfo
+}
+export interface ClientConfigInstallation {
+  path: string
+  version?: string
+  runnable: boolean
+  error?: string
+  /** 安装来源：nvm/homebrew/volta/pip/npm/... */
+  source: string
+  /** 是否为 PATH 默认（命令行实际命中、升级作用目标）。 */
+  isPathDefault: boolean
+}
+export interface ClientConfigInstallReport {
+  clientId: ClientConfigClientId
+  installs: ClientConfigInstallation[]
+  /** ≥2 处且（版本分歧或运行态混合）。 */
+  isConflict: boolean
 }
 export interface ClientConfigProfileDto {
   id: string

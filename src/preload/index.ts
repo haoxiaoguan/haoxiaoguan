@@ -274,6 +274,7 @@ const api: HxgApi = {
     clients: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clients),
     versions: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.versions),
     upgrade: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.upgrade, clientId),
+    diagnose: (clientIds) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.diagnose, clientIds),
     list: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.list, clientId),
     create: (input) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.create, input),
     update: (id, patch) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.update, id, patch),

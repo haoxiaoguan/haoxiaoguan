@@ -7,6 +7,7 @@ import ApiProxyService from '../pages/ApiProxyService';
 import ApiProxyKeys from '../pages/ApiProxyKeys';
 import ApiProxyHealth from '../pages/ApiProxyHealth';
 import ClientConfig from '../pages/ClientConfig';
+import ClientManage from '../pages/ClientManage';
 import Proxies from '../pages/Proxies';
 import Groups from '../pages/Groups';
 import Analytics from '../pages/Analytics';
@@ -43,6 +44,7 @@ export function AppRouter() {
             <Route index element={<Navigate to="service" replace />} />
           </Route>
           <Route path="client-config" element={<ClientConfig />} />
+          <Route path="client-config/manage" element={<ClientManage />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="settings" element={<Settings />}>

@@ -1,10 +1,11 @@
 import { CLIENT_IDS, type ClientId } from '../domain/client-profile'
-import type { ClientVersionInfo } from '../domain/client-version'
+import type { ClientVersionInfo, ClientInstallationReport } from '../domain/client-version'
 import { UPGRADE_COMMAND } from '../domain/client-version'
 import { compareSemver } from '../domain/semver'
 import { probeInstalledVersion } from '../infrastructure/cli-version-probe'
 import { fetchLatestVersion } from '../infrastructure/latest-version-fetcher'
 import { runUpgrade, type UpgradeResult } from '../infrastructure/cli-upgrade-runner'
+import { enumerateInstallations, isConflicting } from '../infrastructure/client-install-scan'
 
 /** 一键升级结果 + 升级后重新探测到的该客户端版本信息（供 UI 即时刷新徽章）。 */
 export interface ClientUpgradeOutcome extends UpgradeResult {
@@ -45,6 +46,17 @@ export class ClientVersionService {
     const result = await runUpgrade(clientId)
     const version = await this.refreshOne(clientId)
     return { ...result, version }
+  }
+
+  /** 多处安装冲突诊断：枚举各客户端 CLI 的所有安装并判定冲突（按需触发，不缓存）。 */
+  async diagnose(clientIds?: ClientId[]): Promise<ClientInstallationReport[]> {
+    const ids = clientIds !== undefined && clientIds.length > 0 ? clientIds : CLIENT_IDS
+    return Promise.all(
+      ids.map(async (clientId) => {
+        const installs = await enumerateInstallations(clientId)
+        return { clientId, installs, isConflict: isConflicting(installs) }
+      }),
+    )
   }
 
   /** 重新探测单个客户端版本，并就地更新缓存（若缓存存在）。 */

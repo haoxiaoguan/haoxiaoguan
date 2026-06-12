@@ -77,7 +77,7 @@ async function probeViaShell(cmd: string): Promise<Probe> {
 }
 
 /** 常见安装目录（macOS/Linux），含 nvm 各 node 版本与 hermes 的 PyPI bin。 */
-function searchDirs(clientId: ClientId): string[] {
+export function searchDirs(clientId: ClientId): string[] {
   const home = homedir()
   const dirs: string[] = []
   const push = (d: string) => { if (d && !dirs.includes(d) && existsSync(d)) dirs.push(d) }

@@ -259,6 +259,7 @@ export const CLIENT_CONFIG_CHANNELS = {
   clients: 'clientConfig:clients',
   versions: 'clientConfig:versions',
   upgrade: 'clientConfig:upgrade',
+  diagnose: 'clientConfig:diagnose',
   list: 'clientConfig:list',
   create: 'clientConfig:create',
   update: 'clientConfig:update',
