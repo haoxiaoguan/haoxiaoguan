@@ -7,6 +7,7 @@ import {
   writeRolloutPreservingMtime,
   rewriteRolloutLines,
 } from '../infrastructure/codex-rollout-rewrite'
+import { streamScanRollout, streamRewriteRollout } from '../infrastructure/codex-rollout-stream'
 import { CodexRepairBackup, type SessionMetaBackupEntry } from '../infrastructure/codex-repair-backup'
 import { applyGlobalStateUpdate } from '../infrastructure/codex-global-state'
 import { parseCodexToml, getCodexDefaultProvider } from '../../clientConfig/infrastructure/codex-toml'
@@ -18,6 +19,10 @@ import type {
 } from '../domain/codex-repair'
 
 const SESSION_DIRS = ['sessions', 'archived_sessions'] as const
+
+// 大 rollout 文件阈值：超过则走流式逐行改写（>512MB 整文件读成字符串会触发 V8 上限/OOM）。
+// 取 128MB 留足余量：小于此走快速的整文件路径，大于此走内存恒定的流式路径。
+const LARGE_ROLLOUT_BYTES = 128 * 1024 * 1024
 
 /** 停-写-启生命周期最小契约(复用 clientConfig 的 WriteLifecycle 的子集)。 */
 export interface RepairLifecycle {
@@ -99,13 +104,23 @@ export class CodexSessionRepair {
 
       for (let i = 0; i < total; i++) {
         const filePath = rolloutFiles[i]
-        let text: string
-        try {
-          text = await readFile(filePath, 'utf8')
-        } catch {
-          continue
+        let analysis: {
+          sessionMetaCount: number
+          rewriteNeeded: boolean
+          originalSessionMetaLines: string[]
+          hasUserEvent: boolean
+          threadId?: string
+          cwd?: string
         }
-        const analysis = analyzeRollout(text, req.targetProvider)
+        try {
+          const size = (await stat(filePath)).size
+          analysis =
+            size > LARGE_ROLLOUT_BYTES
+              ? await streamScanRollout(filePath, req.targetProvider) // 大文件：流式扫描，内存恒定
+              : analyzeRollout(await readFile(filePath, 'utf8'), req.targetProvider)
+        } catch {
+          continue // 读失败（含超大文件 string 上限）→ 跳过该文件
+        }
         if (analysis.sessionMetaCount === 0) {
           // report progress
           if (i % 20 === 0 || i === total - 1) {
@@ -171,31 +186,27 @@ export class CodexSessionRepair {
           const changedTotal = changed.length
           for (let i = 0; i < changedTotal; i++) {
             const c = changed[i]
-            // 内存恒定：改写阶段才逐文件重新读取+解析得到 nextText（Codex 已停，内容与扫描时一致），
-            // 任意时刻内存只驻留一个文件，避免一次性持有数千份改写后文本导致主进程 OOM。
-            let nextText: string
+            // 内存恒定：改写阶段才逐文件处理（Codex 已停，内容与扫描时一致），任意时刻只驻留一个文件，
+            // 避免一次性持有数千份改写后文本导致主进程 OOM。大文件走流式逐行改写。
             try {
-              const current = await readFile(c.path, 'utf8')
-              const reanalysis = analyzeRollout(current, req.targetProvider)
-              if (!reanalysis.rewriteNeeded) {
-                skippedRollouts++ // 已无需改写（极少见：扫描后内容变化）
-                continue
+              const size = (await stat(c.path)).size
+              if (size > LARGE_ROLLOUT_BYTES) {
+                await streamRewriteRollout(c.path, req.targetProvider) // 内部原子替换+还原 mtime
+                changedRollouts++
+              } else {
+                const reanalysis = analyzeRollout(await readFile(c.path, 'utf8'), req.targetProvider)
+                if (!reanalysis.rewriteNeeded) {
+                  skippedRollouts++ // 已无需改写（极少见：扫描后内容变化）
+                } else {
+                  await writeRolloutPreservingMtime(c.path, reanalysis.nextText)
+                  changedRollouts++
+                }
               }
-              nextText = reanalysis.nextText
             } catch (err: unknown) {
               const code = (err as NodeJS.ErrnoException).code
               if (code === 'ENOENT') {
                 skippedRollouts++ // 扫描后文件被删→跳过
-                continue
-              }
-              throw err // 其它读错误→中止并回滚
-            }
-            try {
-              await writeRolloutPreservingMtime(c.path, nextText)
-              changedRollouts++
-            } catch (err: unknown) {
-              const code = (err as NodeJS.ErrnoException).code
-              if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
+              } else if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
                 skippedRollouts++ // 文件被占用→跳过,不中止
               } else {
                 throw err // 其它 IO 错误→中止并回滚

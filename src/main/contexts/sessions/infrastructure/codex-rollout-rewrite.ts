@@ -38,6 +38,61 @@ export interface RolloutAnalysis {
   sessionMetaCount: number
 }
 
+/** session_meta 行处理的可变累积器（RolloutAnalysis 的子集，整文件/流式两条路径共用）。 */
+export interface SessionMetaAccumulator {
+  rewriteNeeded: boolean
+  threadId?: string
+  cwd?: string
+  providers: string[]
+  originalSessionMetaLines: string[]
+  sessionMetaCount: number
+}
+
+/**
+ * 处理单行：若是 session_meta 且 model_provider !== target 则改写其 provider，并把
+ * threadId/cwd/原始行/计数累积到 acc。返回应写出的行内容（非 session_meta / 无需改写则原样）。
+ * analyzeRollout（整文件）与 codex-rollout-stream（大文件流式）共用此函数，避免规则分叉。
+ */
+export function processRolloutLine(line: string, target: string, acc: SessionMetaAccumulator): string {
+  if (line.trim().length === 0) return line
+  let record: unknown
+  try {
+    record = JSON.parse(line)
+  } catch {
+    return line
+  }
+  if (
+    record === null ||
+    typeof record !== 'object' ||
+    (record as Record<string, unknown>)['type'] !== 'session_meta'
+  ) {
+    return line
+  }
+  const rec = record as Record<string, unknown>
+  const payload = rec['payload']
+  if (typeof payload !== 'object' || payload === null) return line
+  const p = payload as Record<string, unknown>
+  acc.sessionMetaCount++
+  acc.originalSessionMetaLines.push(line)
+  if (acc.threadId === undefined) {
+    const id = p['id']
+    if (typeof id === 'string') acc.threadId = id
+  }
+  if (acc.cwd === undefined) {
+    const cwd = p['cwd']
+    if (typeof cwd === 'string') acc.cwd = toDesktopWorkspacePath(cwd)
+  }
+  const providerVal = p['model_provider']
+  const provider = typeof providerVal === 'string' ? providerVal : '(missing)'
+  acc.providers.push(provider)
+  if (provider !== target) {
+    p['model_provider'] = target
+    acc.rewriteNeeded = true
+    return JSON.stringify(rec)
+  }
+  return line
+}
+
 /**
  * 全量分析并改写 rollout 文件文本。
  * 对齐 Rust rewrite_rollout_session_meta_providers:
@@ -63,52 +118,7 @@ export function analyzeRollout(text: string, target: string): RolloutAnalysis {
 
   for (const segment of segments) {
     const { line, ending } = splitLineEnding(segment)
-
-    let nextLine = line
-
-    if (line.trim().length > 0) {
-      let record: unknown
-      try {
-        record = JSON.parse(line)
-      } catch {
-        record = null
-      }
-      if (
-        record !== null &&
-        typeof record === 'object' &&
-        (record as Record<string, unknown>)['type'] === 'session_meta'
-      ) {
-        const rec = record as Record<string, unknown>
-        const payload = rec['payload']
-        if (typeof payload === 'object' && payload !== null) {
-          const p = payload as Record<string, unknown>
-          result.sessionMetaCount++
-          result.originalSessionMetaLines.push(line)
-
-          if (result.threadId === undefined) {
-            const id = p['id']
-            if (typeof id === 'string') result.threadId = id
-          }
-          if (result.cwd === undefined) {
-            const cwd = p['cwd']
-            if (typeof cwd === 'string') {
-              result.cwd = toDesktopWorkspacePath(cwd)
-            }
-          }
-
-          const providerVal = p['model_provider']
-          const provider = typeof providerVal === 'string' ? providerVal : '(missing)'
-          result.providers.push(provider)
-
-          if (provider !== target) {
-            p['model_provider'] = target
-            nextLine = JSON.stringify(rec)
-            result.rewriteNeeded = true
-          }
-        }
-      }
-    }
-
+    const nextLine = processRolloutLine(line, target, result)
     result.nextText += nextLine + ending
   }
 
