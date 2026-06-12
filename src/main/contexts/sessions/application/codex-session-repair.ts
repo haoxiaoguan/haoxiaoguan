@@ -2,11 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { findCodexStateDb, CodexStateDb } from '../infrastructure/codex-state-db'
-import {
-  analyzeRollout,
-  writeRolloutPreservingMtime,
-  rewriteRolloutLines,
-} from '../infrastructure/codex-rollout-rewrite'
+import { rewriteRolloutLines } from '../infrastructure/codex-rollout-rewrite'
 import { streamScanRollout, streamRewriteRollout } from '../infrastructure/codex-rollout-stream'
 import { CodexRepairBackup, type SessionMetaBackupEntry } from '../infrastructure/codex-repair-backup'
 import { applyGlobalStateUpdate } from '../infrastructure/codex-global-state'
@@ -19,10 +15,6 @@ import type {
 } from '../domain/codex-repair'
 
 const SESSION_DIRS = ['sessions', 'archived_sessions'] as const
-
-// 大 rollout 文件阈值：超过则走流式逐行改写（>512MB 整文件读成字符串会触发 V8 上限/OOM）。
-// 取 128MB 留足余量：小于此走快速的整文件路径，大于此走内存恒定的流式路径。
-const LARGE_ROLLOUT_BYTES = 128 * 1024 * 1024
 
 /** 停-写-启生命周期最小契约(复用 clientConfig 的 WriteLifecycle 的子集)。 */
 export interface RepairLifecycle {
@@ -113,13 +105,12 @@ export class CodexSessionRepair {
           cwd?: string
         }
         try {
-          const size = (await stat(filePath)).size
-          analysis =
-            size > LARGE_ROLLOUT_BYTES
-              ? await streamScanRollout(filePath, req.targetProvider) // 大文件：流式扫描，内存恒定
-              : analyzeRollout(await readFile(filePath, 'utf8'), req.targetProvider)
+          // 永远流式扫描：内存恒定（峰值 heap <100MB）。整文件 readFile+analyzeRollout 会为每个
+          // 文件构建随即丢弃的 nextText+全行数组，7521 个文件累计把主进程堆顶到 ~929MB → V8 OOM
+          // 崩溃（已实证；改流式后峰值 76MB）。流式元数据与 analyzeRollout 等价（见 stream 单测）。
+          analysis = await streamScanRollout(filePath, req.targetProvider)
         } catch {
-          continue // 读失败（含超大文件 string 上限）→ 跳过该文件
+          continue // 读失败 → 跳过该文件
         }
         if (analysis.sessionMetaCount === 0) {
           // report progress
@@ -189,19 +180,11 @@ export class CodexSessionRepair {
             // 内存恒定：改写阶段才逐文件处理（Codex 已停，内容与扫描时一致），任意时刻只驻留一个文件，
             // 避免一次性持有数千份改写后文本导致主进程 OOM。大文件走流式逐行改写。
             try {
-              const size = (await stat(c.path)).size
-              if (size > LARGE_ROLLOUT_BYTES) {
-                await streamRewriteRollout(c.path, req.targetProvider) // 内部原子替换+还原 mtime
-                changedRollouts++
-              } else {
-                const reanalysis = analyzeRollout(await readFile(c.path, 'utf8'), req.targetProvider)
-                if (!reanalysis.rewriteNeeded) {
-                  skippedRollouts++ // 已无需改写（极少见：扫描后内容变化）
-                } else {
-                  await writeRolloutPreservingMtime(c.path, reanalysis.nextText)
-                  changedRollouts++
-                }
-              }
+              // 永远流式逐行改写：内部原子替换(临时文件+rename)+还原 mtime，内存恒定（任意时刻只驻留
+              // 一行）。与整文件 analyzeRollout 路径逐字节等价（见 codex-rollout-stream 单测），但不
+              // 构建整文件字符串——避免 124MB 级文件 readFile+nextText 的 ~360MB 瞬时尖峰。
+              await streamRewriteRollout(c.path, req.targetProvider)
+              changedRollouts++
             } catch (err: unknown) {
               const code = (err as NodeJS.ErrnoException).code
               if (code === 'ENOENT') {
