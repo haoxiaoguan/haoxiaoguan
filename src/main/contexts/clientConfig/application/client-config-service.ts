@@ -5,7 +5,7 @@ import { fetch as undiciFetch } from 'undici'
 import type { LocalProxyPort, ConnTestResult, CatalogModel } from './local-proxy-port'
 import type { RelayProvisioningPort, RelayModelAlias } from './relay-provisioning-port'
 import type { ClientId, ClientConfigProfile, ClientInfo } from '../domain/client-profile'
-import { CLIENT_DISPLAY_NAMES, CLIENT_WRITE_MODE } from '../domain/client-profile'
+import { CLIENT_DISPLAY_NAMES, CLIENT_WRITE_MODE, CLIENT_IDS } from '../domain/client-profile'
 import type { ApplyInput, ClientConfigWriter } from '../domain/client-writer'
 import type { ClientConfigStore, CreateProfileInput, UpdateProfileInput } from './client-config-store'
 import type { WriterRegistry } from './writer-registry'
@@ -103,9 +103,11 @@ export class ClientConfigService {
     this.codexRelayOn = codexRelayOn ?? (() => false)
   }
 
-  /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI 左侧客户端列表。 */
+  /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI 左侧客户端列表。
+   *  顺序固定按 CLIENT_IDS（claude→codex→gemini→opencode→openclaw→hermes），
+   *  与 writer 注册顺序解耦，保证三处列表（客户端管理/接入/会话）展示顺序一致。 */
   listClients(): ClientInfo[] {
-    return this.registry.clientIds().map((clientId) => {
+    return CLIENT_IDS.map((clientId) => {
       const writer = this.registry.get(clientId)
       // 检测=客户端配置文件存在 OR 其配置目录存在（如 ~/.codex 仅有 auth.json 也算已接入,
       // 对齐 cc-switch「auth.json 或 config.toml 任一存在即认有效」,避免只登录未配置时漏检）。
