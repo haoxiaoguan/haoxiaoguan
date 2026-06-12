@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Puzzle,
   RefreshCw,
+  Route,
   Server,
   SlidersHorizontal,
   type LucideIcon,
@@ -64,8 +65,10 @@ interface NavItem {
 const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav:dashboard', icon: LayoutGrid, end: true },
   { to: '/accounts', labelKey: 'nav:accounts', icon: Users },
-  // 客户端管理（版本/升级/诊断）为主入口，接入配置/API 服务并入其顶部 tabs。
-  { to: '/client-config', labelKey: 'nav:clientManage.title', icon: Cable, alsoMatch: '/api-service' },
+  // 路由服务（本地反代）：路由服务 / 客户端 Key / 账号池监控三个 tab，排在账号管理后。
+  { to: '/api-service/service', labelKey: 'nav:apiService', icon: Route, alsoMatch: '/api-service' },
+  // 客户端管理（版本/升级/诊断）+ 供应商管理（接入配置）两个 tab。
+  { to: '/client-config', labelKey: 'nav:clientManage.title', icon: Cable },
   { to: '/sessions', labelKey: 'nav:sessions', icon: History },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
@@ -86,7 +89,8 @@ const navButtonClassName =
 
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
-type ClientAccessHeaderTab = 'manage' | 'access' | 'service' | 'keys' | 'health';
+type ClientConfigHeaderTab = 'manage' | 'access';
+type RouteServiceHeaderTab = 'service' | 'keys' | 'health';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
@@ -213,18 +217,18 @@ export function AppShell({ shell }: AppShellProps) {
     : location.pathname.startsWith('/accounts/proxies')
       ? 'proxies'
       : 'accounts';
-  // 客户端接入与 API 服务共用一组顶部 tabs（API 服务三个子页并入客户端接入下）。
-  const isApiServiceRoute = location.pathname.startsWith('/api-service');
-  const isClientAccessRoute = location.pathname.startsWith('/client-config') || isApiServiceRoute;
-  const activeClientAccessTab: ClientAccessHeaderTab = location.pathname.startsWith('/client-config/access')
+  // 路由服务（/api-service：路由服务/客户端 Key/账号池监控）与客户端管理（/client-config：客户端管理/供应商管理）
+  // 各自一组顶部 tabs。
+  const isRouteServiceRoute = location.pathname.startsWith('/api-service');
+  const isClientConfigRoute = location.pathname.startsWith('/client-config');
+  const activeRouteServiceTab: RouteServiceHeaderTab = location.pathname.startsWith('/api-service/keys')
+    ? 'keys'
+    : location.pathname.startsWith('/api-service/health')
+      ? 'health'
+      : 'service';
+  const activeClientConfigTab: ClientConfigHeaderTab = location.pathname.startsWith('/client-config/access')
     ? 'access'
-    : !isApiServiceRoute
-      ? 'manage' // /client-config 默认进客户端管理
-      : location.pathname.startsWith('/api-service/keys')
-        ? 'keys'
-        : location.pathname.startsWith('/api-service/health')
-          ? 'health'
-          : 'service';
+    : 'manage'; // /client-config 默认进客户端管理
 
   return (
     <div
@@ -326,16 +330,23 @@ export function AppShell({ shell }: AppShellProps) {
                   { value: 'proxies', label: t('nav:proxies'), to: '/accounts/proxies' },
                 ]}
               />
-            ) : isClientAccessRoute ? (
+            ) : isRouteServiceRoute ? (
               <ManagementHeaderTabs
-                ariaLabel={t('nav:clientManage.title')}
-                value={activeClientAccessTab}
+                ariaLabel={t('nav:apiService')}
+                value={activeRouteServiceTab}
                 tabs={[
-                  { value: 'manage', label: t('nav:clientManage.title'), to: '/client-config' },
-                  { value: 'access', label: t('nav:clientConfig'), to: '/client-config/access' },
                   { value: 'service', label: t('nav:apiService'), to: '/api-service/service' },
                   { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
                   { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },
+                ]}
+              />
+            ) : isClientConfigRoute ? (
+              <ManagementHeaderTabs
+                ariaLabel={t('nav:clientManage.title')}
+                value={activeClientConfigTab}
+                tabs={[
+                  { value: 'manage', label: t('nav:clientManage.title'), to: '/client-config' },
+                  { value: 'access', label: t('nav:clientConfig'), to: '/client-config/access' },
                 ]}
               />
             ) : (
