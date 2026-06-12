@@ -124,7 +124,10 @@ export default function DataWallPage() {
   }, [])
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    // absolute inset-0 锚定 AppShell 的 ScrollArea(relative + flex-1 确定高)：Outlet 包裹层是
+    // min-h-full(height:auto,供普通页面滚动)，h-full 在其上解析不了——仪表盘要锁一屏，
+    // 必须脱离滚动流直接吃 ScrollArea 的盒子；absolute 不贡献滚动高度，页面级无滚动条。
+    <div className="absolute inset-0 flex flex-col overflow-hidden">
       <div
         data-testid="datawall-grid"
         className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_minmax(150px,205px)] gap-2.5 overflow-hidden px-5 pb-5 pt-4"

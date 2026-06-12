@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import type { DailyPoint } from '../utils/activity-stats'
@@ -31,6 +31,25 @@ export function ActivityHeatmap({ points, now }: ActivityHeatmapProps) {
   const { t } = useTranslation('dashboard')
 
   const monthNames = (t('heatmap.months') as string).split(',')
+
+  // hover 浮层：事件委托到网格容器，单浮层跟随单元格定位（371 格不各自挂层）。
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const onGridOver = (e: React.MouseEvent) => {
+    const cell = (e.target as HTMLElement).closest('[data-date]') as HTMLElement | null
+    const wrap = wrapRef.current
+    if (!cell || !wrap) {
+      setTip(null)
+      return
+    }
+    const wrapRect = wrap.getBoundingClientRect()
+    const r = cell.getBoundingClientRect()
+    setTip({
+      left: r.left - wrapRect.left + r.width / 2,
+      top: r.top - wrapRect.top,
+      text: `${cell.dataset.date} · ${t('heatmap.tooltip', { n: Number(cell.dataset.value ?? 0) })}`,
+    })
+  }
 
   const { cells, monthLabels, max } = useMemo(() => {
     const valueByDate = new Map(points.map((p) => [p.date, p.value]))
@@ -67,7 +86,7 @@ export function ActivityHeatmap({ points, now }: ActivityHeatmapProps) {
   }, [points, now, t])
 
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center">
+    <div ref={wrapRef} className="relative flex h-full min-h-0 flex-col justify-center">
       {/* 月份标签行（与网格同列宽：53 列 grid） */}
       <div className="grid pb-1" style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}>
         {monthLabels.map((m) => (
@@ -91,18 +110,31 @@ export function ActivityHeatmap({ points, now }: ActivityHeatmapProps) {
         }}
         role="img"
         aria-label={t('heatmap.aria')}
+        onMouseOver={onGridOver}
+        onMouseLeave={() => setTip(null)}
       >
         {cells.map((cell) => (
           <div
             key={cell.key}
-            title={cell.future ? undefined : `${cell.key} · ${t('heatmap.tooltip', { n: cell.value })}`}
+            {...(cell.future ? {} : { 'data-date': cell.key, 'data-value': cell.value })}
             className={cn(
               'rounded-[2px]',
-              cell.future ? 'bg-transparent' : LEVEL_CLASS[heatLevel(cell.value, max)],
+              cell.future
+                ? 'bg-transparent'
+                : cn(LEVEL_CLASS[heatLevel(cell.value, max)], 'transition-shadow hover:ring-1 hover:ring-primary/60'),
             )}
           />
         ))}
       </div>
+      {/* hover 浮层：单元格上方居中 */}
+      {tip != null && (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[6px] border border-border bg-card px-2 py-1 text-[11px] tabular-nums text-foreground shadow-md"
+          style={{ left: tip.left, top: tip.top - 5 }}
+        >
+          {tip.text}
+        </div>
+      )}
       {/* 图例 */}
       <div className="flex items-center justify-end gap-1 pt-1.5 text-[10px] text-muted-foreground">
         <span>{t('trend.less')}</span>

@@ -297,7 +297,9 @@ export function TrendChartCard({
       </div>
 
       {/* ── 图区：活跃=热力图，数值=面积图 ─────────────────────────── */}
-      <div className="min-h-0 flex-1 px-4 pb-2 pt-2">
+      {/* min-h 保底：极矮窗口下 recharts ResponsiveContainer 量出 ≤0 高会直接不渲染，
+          保底 160px 让曲线任何情况下可见；正常时 flex-1 吃满剩余（高度链由页面 absolute 锚定保证）。 */}
+      <div className="min-h-[160px] flex-1 px-4 pb-2 pt-2">
         {isActivity ? (
           heatmap.loading ? (
             <LoadingPlaceholder />
