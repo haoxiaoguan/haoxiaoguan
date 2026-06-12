@@ -743,6 +743,8 @@ export interface HxgApi {
     clients(): Promise<ClientConfigClientInfo[]>
     /** 各客户端 CLI 已装版本 + 最新版 + 可升级（慢，主进程 TTL 缓存）。 */
     versions(): Promise<ClientConfigVersionInfo[]>
+    /** 一键升级某客户端 CLI（后台静默跑），返回结果 + 升级后重探的版本信息。 */
+    upgrade(clientId: ClientConfigClientId): Promise<ClientConfigUpgradeResult>
     /** 列出接入档（省略 clientId 返回全部）。 */
     list(clientId?: ClientConfigClientId): Promise<ClientConfigProfileDto[]>
     create(input: CreateClientConfigProfileDto): Promise<ClientConfigProfileDto>
@@ -799,6 +801,13 @@ export interface ClientConfigVersionInfo {
   upgradeCommand?: string
   /** 定位到 CLI 但 `--version` 报错退出（装了跑不起来）。 */
   installedButBroken: boolean
+}
+export interface ClientConfigUpgradeResult {
+  ok: boolean
+  /** 失败时的诊断（命令输出末尾若干行）。 */
+  detail?: string
+  /** 升级后重新探测到的该客户端版本信息（UI 据此即时刷新徽章）。 */
+  version: ClientConfigVersionInfo
 }
 export interface ClientConfigProfileDto {
   id: string

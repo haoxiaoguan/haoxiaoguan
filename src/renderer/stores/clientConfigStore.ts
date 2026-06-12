@@ -21,6 +21,8 @@ interface ClientConfigState {
   counts: Record<string, number>
   /** 各客户端版本/可升级信息（按 clientId 索引；异步补，不阻塞列表）。 */
   versions: Record<string, ClientConfigVersionInfo>
+  /** 正在升级中的 clientId（驱动按钮 spinner）；null=无。 */
+  upgradingClient: string | null
   loading: boolean
   error: string | null
 
@@ -28,6 +30,8 @@ interface ClientConfigState {
   init: () => Promise<void>
   /** 异步拉取版本/可升级信息（慢，独立于列表；失败静默）。 */
   loadVersions: () => Promise<void>
+  /** 一键升级某客户端（后台静默跑）；返回 {ok, detail} 供页面 toast。 */
+  upgrade: (clientId: ClientConfigClientId) => Promise<{ ok: boolean; detail?: string }>
   /** 切换正在查看的客户端 tab。 */
   selectClient: (clientId: ClientConfigClientId) => Promise<void>
   /** 重新拉取当前客户端的接入档。 */
@@ -82,6 +86,7 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
   profiles: [],
   counts: {},
   versions: {},
+  upgradingClient: null,
   loading: false,
   error: null,
 
@@ -106,6 +111,18 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
       set({ versions: indexVersions(list) })
     } catch {
       // 离线/探测失败：保持「已安装/未安装」，不报错打扰。
+    }
+  },
+
+  upgrade: async (clientId) => {
+    set({ upgradingClient: clientId })
+    try {
+      const r = await bridge().clientConfig.upgrade(clientId)
+      set({ versions: { ...get().versions, [clientId]: r.version }, upgradingClient: null })
+      return { ok: r.ok, detail: r.detail }
+    } catch (e) {
+      set({ upgradingClient: null })
+      return { ok: false, detail: e instanceof Error ? e.message : String(e) }
     }
   },
 

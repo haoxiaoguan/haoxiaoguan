@@ -26,6 +26,14 @@ export function registerClientConfigHandlers(
       throw new Error(toIpcError(e))
     }
   })
+  // 一键升级：登录 shell 静默跑升级命令 + 升级后重新探测版本（返回结果 + 新版本信息）。
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.upgrade, async (_e, clientId: ClientId) => {
+    try {
+      return await versionSvc.upgrade(clientId)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.list, async (_e, clientId?: ClientId) => {
     try {
       return await svc.list(clientId)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, History, Trash2, Check, Star, Copy, Pencil, Wifi } from 'lucide-react';
+import { Plus, History, Trash2, Check, Star, Copy, Pencil, Wifi, ArrowUpCircle, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientConfigStore } from '../stores/clientConfigStore';
@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type {
+  ClientConfigClientId,
   ClientConfigProfileDto,
   ClientConfigSnapshotDto,
   UpdateClientConfigProfileDto,
@@ -253,7 +254,7 @@ function AccountPlaceholderCard({ onConnect, loading }: { onConnect: () => void;
 export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
-  const { clients, activeClient, profiles, counts, versions, error, loading } = store;
+  const { clients, activeClient, profiles, counts, versions, upgradingClient, error, loading } = store;
   const codexRelay = useSettingsStore((s) => s.codexRelayInjectionEnabled);
   const setCodexRelay = useSettingsStore((s) => s.setCodexRelayInjectionEnabled);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -307,6 +308,12 @@ export default function ClientConfig() {
     if (!useClientConfigStore.getState().error) {
       toast.success(v ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
     }
+  };
+  const onUpgrade = async (clientId: ClientConfigClientId) => {
+    const name = clients.find((c) => c.clientId === clientId)?.displayName ?? clientId;
+    const r = await store.upgrade(clientId);
+    if (r.ok) toast.success(t('clientConfigPage.upgradeSuccess', { client: name }));
+    else toast.error(t('clientConfigPage.upgradeFailed', { client: name }), { description: r.detail });
   };
   // Codex 切换确认后执行：先 enable 再可选 repair
   const doCodexSwitch = async (repairToo: boolean) => {
@@ -483,6 +490,32 @@ export default function ClientConfig() {
               {isAdditive ? t('clientConfigPage.coexistHint') : t('clientConfigPage.switchHint')}
             </div>
           </div>
+          {/* 可升级：仅当版本探测判定 upgradable 时显示。点击后台静默跑升级命令，转 spinner。 */}
+          {versions[activeClient]?.upgradable === true && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0 gap-1.5 border-amber-500/50 text-[12px] text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+              disabled={upgradingClient === activeClient}
+              onClick={() => void onUpgrade(activeClient)}
+              title={t('clientConfigPage.versionUpgradable', {
+                current: versions[activeClient]?.installedVersion ?? '?',
+                latest: versions[activeClient]?.latestVersion ?? '?',
+              })}
+            >
+              {upgradingClient === activeClient ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  {t('clientConfigPage.upgrading')}
+                </>
+              ) : (
+                <>
+                  <ArrowUpCircle className="size-3.5" aria-hidden />
+                  {t('clientConfigPage.upgradeTo', { latest: versions[activeClient]?.latestVersion ?? '' })}
+                </>
+              )}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={() => void onShowHistory()}>
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}

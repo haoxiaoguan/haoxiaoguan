@@ -4,6 +4,12 @@ import { UPGRADE_COMMAND } from '../domain/client-version'
 import { compareSemver } from '../domain/semver'
 import { probeInstalledVersion } from '../infrastructure/cli-version-probe'
 import { fetchLatestVersion } from '../infrastructure/latest-version-fetcher'
+import { runUpgrade, type UpgradeResult } from '../infrastructure/cli-upgrade-runner'
+
+/** 一键升级结果 + 升级后重新探测到的该客户端版本信息（供 UI 即时刷新徽章）。 */
+export interface ClientUpgradeOutcome extends UpgradeResult {
+  version: ClientVersionInfo
+}
 
 // 客户端版本/可升级编排：跑 CLI `--version` 拿已装版本 + 查远程拿最新版 + semver 比对。
 // 探测较慢（6× spawn shell + 6× HTTP），故带 TTL 缓存 + 单飞，避免每次进页面/两个页面
@@ -32,6 +38,22 @@ export class ClientVersionService {
         this.inflight = null
       })
     return this.inflight
+  }
+
+  /** 一键升级某客户端，完成后重新探测其版本并更新缓存对应项，返回结果 + 新版本信息。 */
+  async upgrade(clientId: ClientId): Promise<ClientUpgradeOutcome> {
+    const result = await runUpgrade(clientId)
+    const version = await this.refreshOne(clientId)
+    return { ...result, version }
+  }
+
+  /** 重新探测单个客户端版本，并就地更新缓存（若缓存存在）。 */
+  private async refreshOne(clientId: ClientId): Promise<ClientVersionInfo> {
+    const version = await this.probeOne(clientId)
+    if (this.cache !== null) {
+      this.cache.data = this.cache.data.map((v) => (v.clientId === clientId ? version : v))
+    }
+    return version
   }
 
   private async probeAll(): Promise<ClientVersionInfo[]> {
