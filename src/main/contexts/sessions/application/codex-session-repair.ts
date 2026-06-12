@@ -75,11 +75,40 @@ export class CodexSessionRepair {
   }
 
   async repair(req: CodexRepairRequest, onProgress?: (p: CodexRepairProgress) => void): Promise<CodexRepairResult> {
-    const dbPath = findCodexStateDb(this.codexHome)
-    if (!dbPath) throw new Error('未找到 Codex 会话库(state_*.sqlite)')
-
     const token = await this.lifecycle.beforeWrite()
     try {
+      return await this.repairCore(req, onProgress)
+    } finally {
+      await this.lifecycle.afterWrite(token)
+    }
+  }
+
+  /**
+   * 启用/停用接入档 + 会话迁移合并为「单次 Codex 重启」：在一个停-启窗口内先跑 configMutation
+   * （写客户端配置，如启用/停用接入档），再把所有会话迁到配置写完后的当前生效 provider。
+   * configMutation 内部若也调本 lifecycle（同一实例），因 Codex 已停而 no-op，故只停一次、启一次。
+   * 返回 repair 结果；库不可用返回 null（配置已写，afterWrite 仍照常重启）。
+   */
+  async applyConfigThenRepair(
+    configMutation: () => Promise<void>,
+    onProgress?: (p: CodexRepairProgress) => void,
+  ): Promise<CodexRepairResult | null> {
+    const token = await this.lifecycle.beforeWrite()
+    try {
+      await configMutation()
+      if (!findCodexStateDb(this.codexHome)) return null
+      const targetProvider = await this.currentProvider()
+      return await this.repairCore({ targetProvider, rewriteRollout: true }, onProgress)
+    } finally {
+      await this.lifecycle.afterWrite(token)
+    }
+  }
+
+  /** repair 核心（不含 Codex 停-启 lifecycle，由调用方统一管理）：扫描→备份→改写→SQLite→global-state。 */
+  private async repairCore(req: CodexRepairRequest, onProgress?: (p: CodexRepairProgress) => void): Promise<CodexRepairResult> {
+    const dbPath = findCodexStateDb(this.codexHome)
+    if (!dbPath) throw new Error('未找到 Codex 会话库(state_*.sqlite)')
+    {
       // ── 1. 扫描 ──────────────────────────────────────────────────────────
       const rolloutFiles = await this.collectRolloutFiles()
       const total = rolloutFiles.length
@@ -245,8 +274,6 @@ export class CodexSessionRepair {
         skippedRollouts,
         backupId,
       }
-    } finally {
-      await this.lifecycle.afterWrite(token)
     }
   }
 

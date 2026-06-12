@@ -177,7 +177,7 @@ export function registerAllHandlers(services: Services): void {
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
   registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs(), services.apiProxyRequestLog)
-  registerSessionsHandlers(services.sessionsService, services.codexSessionRepair)
+  registerSessionsHandlers(services.sessionsService, services.codexSessionRepair, services.clientConfigService)
   registerActivityHandlers(services.activitySync, services.activityQuery)
   registerClientConfigHandlers(services.clientConfigService, services.clientVersionService)
 }

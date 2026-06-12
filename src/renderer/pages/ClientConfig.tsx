@@ -262,8 +262,8 @@ export default function ClientConfig() {
     { mode: 'list' } | { mode: 'add' } | { mode: 'edit'; profile: ClientConfigProfileDto }
   >({ mode: 'list' });
   const [historyData, setHistoryData] = useState<ClientConfigSnapshotDto[] | null>(null);
-  // Codex 切换确认弹窗状态
-  const [codexSwitch, setCodexSwitch] = useState<{ id: string; name: string } | null>(null);
+  // Codex 切换确认弹窗状态。action=enable（启用某档，迁会话到它）/ disable（停用某档，切回 OpenAI、迁会话过去）。
+  const [codexSwitch, setCodexSwitch] = useState<{ id: string; name: string; action: 'enable' | 'disable' } | null>(null);
   const [codexSwitchBusy, setCodexSwitchBusy] = useState(false);
   const [codexSwitchProgress, setCodexSwitchProgress] = useState<CodexRepairProgressDto | null>(null);
 
@@ -308,39 +308,34 @@ export default function ClientConfig() {
       toast.success(v ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
     }
   };
-  // Codex 切换确认后执行：先 enable 再可选 repair
+  // Codex 切换确认后执行：启用/停用接入档 + 可选会话迁移。
+  // 勾选迁移时走 main 编排 codexSwitchRepair——写配置 + 迁会话合并为「单次 Codex 重启」；
+  // 不勾选时仅写配置（enable/disable 各自一次重启）。
   const doCodexSwitch = async (repairToo: boolean) => {
     if (!codexSwitch) return;
-    const { id } = codexSwitch;
+    const { id, action } = codexSwitch;
     setCodexSwitchBusy(true);
     setCodexSwitchProgress(null);
     let unsub: (() => void) | null = null;
     try {
-      // Step a: 执行切换/写配置
-      await store.enable(id);
-      if (useClientConfigStore.getState().error) {
-        toast.error(useClientConfigStore.getState().error ?? t('clientConfigPage.connFail', { msg: '' }));
-        return;
-      }
-      // Step b: 可选迁移历史会话
       if (repairToo) {
+        // 单次停-启：先关 Codex → 写配置(enable/disable) → 迁会话 → 启 Codex（main 内编排）。
         unsub = sessionsService.onRepairProgress((p) => setCodexSwitchProgress(p));
-        try {
-          const pv = await sessionsService.repairPreview();
-          if (pv.available && pv.currentProvider) {
-            const result = await sessionsService.repair({ targetProvider: pv.currentProvider, rewriteRollout: true });
-            toast.success(t('clientConfigPage.codexSwitchDone', { n: result.updatedThreads }));
-          } else {
-            toast.success(t('clientConfigPage.applied'));
-          }
-        } finally {
-          unsub?.();
-          unsub = null;
-        }
+        const result = await sessionsService.codexSwitchRepair({ id, action });
+        await store.init(); // IPC 直接写盘，刷新渲染层接入档启用/默认态
+        toast.success(
+          result ? t('clientConfigPage.codexSwitchDone', { n: result.updatedThreads }) : t('clientConfigPage.applied'),
+        );
       } else {
-        toast.success(t('clientConfigPage.applied'));
+        // 不迁移会话：仅写配置。
+        if (action === 'enable') await store.enable(id);
+        else await store.disable(id);
+        if (useClientConfigStore.getState().error) {
+          toast.error(useClientConfigStore.getState().error ?? t('clientConfigPage.connFail', { msg: '' }));
+          return;
+        }
+        toast.success(action === 'enable' ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
       }
-      // Step c: 关闭弹窗（store.enable 内部已 refresh）
       setCodexSwitch(null);
     } catch (e) {
       toast.error(String(e));
@@ -362,13 +357,22 @@ export default function ClientConfig() {
           ? t('clientConfigPage.accountProvider')
           : profile.name
         : id;
-      setCodexSwitch({ id, name });
+      setCodexSwitch({ id, name, action: 'enable' });
       return;
     }
     await store.enable(id);
     toast.success(t('clientConfigPage.applied'));
   };
   const onDisable = async (id: string) => {
+    // 停用当前默认 codex 接入档：停用后 model_provider 回落内置 openai，该档建的旧会话会被孤立看不见。
+    // 故先弹确认（是否同时把会话迁到 OpenAI），与启用对称、单次重启。非默认/非 codex 直接停用。
+    const profile = profiles.find((p) => p.id === id);
+    const isDefaultCodex = activeClient === 'codex' && isAdditive && profile?.isDefault === true;
+    if (isDefaultCodex) {
+      const name = profile?.source === 'local-proxy' ? t('clientConfigPage.accountProvider') : (profile?.name ?? id);
+      setCodexSwitch({ id, name, action: 'disable' });
+      return;
+    }
     await store.disable(id);
     toast.success(t('clientConfigPage.cleared'));
   };
@@ -568,6 +572,7 @@ export default function ClientConfig() {
 
       <CodexSwitchRepairDialog
         open={codexSwitch !== null}
+        mode={codexSwitch?.action ?? 'enable'}
         providerName={codexSwitch?.name ?? ''}
         busy={codexSwitchBusy}
         progress={codexSwitchProgress}

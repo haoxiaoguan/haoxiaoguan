@@ -206,6 +206,8 @@ export const SESSIONS_CHANNELS = {
   repairPreview: 'sessions:repairPreview',
   repair: 'sessions:repair',
   repairRollback: 'sessions:repairRollback',
+  // 启用/停用 codex 接入档 + 会话迁移合并为单次 Codex 重启（main 编排，进度复用 repairProgress 事件）。
+  codexSwitchRepair: 'sessions:codexSwitchRepair',
 } as const
 
 // API 反代服务上下文（apiProxy）—— 本地 HTTP 服务开关 + 状态。新功能，无 Tauri

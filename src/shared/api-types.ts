@@ -723,6 +723,8 @@ export interface HxgApi {
     resume(command: string, cwd?: string): Promise<void>
     repairPreview(): Promise<CodexRepairPreviewDto>
     repair(req: CodexRepairRequestDto): Promise<CodexRepairResultDto>
+    /** 启用/停用 codex 接入档 + 会话迁移合并为单次 Codex 重启。返回迁移结果或 null（无库/无可迁移）。 */
+    codexSwitchRepair(args: { id: string; action: 'enable' | 'disable' }): Promise<CodexRepairResultDto | null>
     repairRollback(backupId: string): Promise<void>
     onRepairProgress(cb: (p: CodexRepairProgressDto) => void): () => void
   }

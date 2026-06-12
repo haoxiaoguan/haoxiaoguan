@@ -247,6 +247,7 @@ const api: HxgApi = {
     resume: (command, cwd) => ipcRenderer.invoke(SESSIONS_CHANNELS.resume, { command, cwd }),
     repairPreview: () => ipcRenderer.invoke(SESSIONS_CHANNELS.repairPreview),
     repair: (req) => ipcRenderer.invoke(SESSIONS_CHANNELS.repair, req),
+    codexSwitchRepair: (args) => ipcRenderer.invoke(SESSIONS_CHANNELS.codexSwitchRepair, args),
     repairRollback: (backupId) => ipcRenderer.invoke(SESSIONS_CHANNELS.repairRollback, { backupId }),
     onRepairProgress: (cb: (p: CodexRepairProgressDto) => void) => {
       const h = (_e: unknown, p: CodexRepairProgressDto) => cb(p)

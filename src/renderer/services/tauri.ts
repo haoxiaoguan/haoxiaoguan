@@ -595,6 +595,8 @@ export const sessionsService = {
     bridge().sessions.resume(command, cwd),
   repairPreview: () => bridge().sessions.repairPreview() as Promise<CodexRepairPreviewDto>,
   repair: (req: CodexRepairRequestDto) => bridge().sessions.repair(req) as Promise<CodexRepairResultDto>,
+  codexSwitchRepair: (args: { id: string; action: 'enable' | 'disable' }) =>
+    bridge().sessions.codexSwitchRepair(args) as Promise<CodexRepairResultDto | null>,
   repairRollback: (backupId: string) => bridge().sessions.repairRollback(backupId) as Promise<void>,
   onRepairProgress: (cb: (p: CodexRepairProgressDto) => void) => bridge().sessions.onRepairProgress(cb),
 };

@@ -13,7 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { SessionSummaryDto, SessionMessageDto } from '@shared/api-types';
 import { TOOL_CONFIG, toolLabel, MessageBubble, EmptyState } from './shared';
-import { ProviderTag } from './ProviderTag';
+import { ProviderTag, useCodexProviderNames } from './ProviderTag';
 
 export function SessionDetailDialog({
   session,
@@ -37,6 +37,7 @@ export function SessionDetailDialog({
   onDelete: (s: SessionSummaryDto) => void;
 }) {
   const { t } = useTranslation('nav');
+  const nameMap = useCodexProviderNames();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,7 +69,7 @@ export function SessionDetailDialog({
                       {toolLabel(session.tool)}
                     </Badge>
                     {/* provider tag */}
-                    <ProviderTag provider={session.provider} />
+                    <ProviderTag provider={session.provider} nameMap={nameMap} />
                   </div>
 
                   {/* 目录 chip */}

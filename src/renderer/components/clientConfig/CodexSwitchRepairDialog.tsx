@@ -7,6 +7,8 @@ import type { CodexRepairProgressDto } from '@shared/api-types'
 
 interface CodexSwitchRepairDialogProps {
   open: boolean
+  /** enable=启用某档（迁会话到它）；disable=停用某档（切回 OpenAI，迁会话过去）。决定标题/说明文案。 */
+  mode: 'enable' | 'disable'
   providerName: string
   onConfirm: (repairToo: boolean) => Promise<void> | void
   onCancel: () => void
@@ -16,6 +18,7 @@ interface CodexSwitchRepairDialogProps {
 
 export function CodexSwitchRepairDialog({
   open,
+  mode,
   providerName,
   onConfirm,
   onCancel,
@@ -24,6 +27,8 @@ export function CodexSwitchRepairDialog({
 }: CodexSwitchRepairDialogProps) {
   const { t } = useTranslation('nav')
   const [repairToo, setRepairToo] = useState(true)
+  const titleKey = mode === 'disable' ? 'clientConfigPage.codexDisableTitle' : 'clientConfigPage.codexSwitchTitle'
+  const descKey = mode === 'disable' ? 'clientConfigPage.codexDisableDesc' : 'clientConfigPage.codexSwitchDesc'
 
   const handleConfirm = () => {
     void onConfirm(repairToo)
@@ -46,12 +51,12 @@ export function CodexSwitchRepairDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('clientConfigPage.codexSwitchTitle', { name: providerName })}</DialogTitle>
+          <DialogTitle>{t(titleKey, { name: providerName })}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 text-[12.5px]">
           <p className="text-muted-foreground">
-            {t('clientConfigPage.codexSwitchDesc', { name: providerName })}
+            {t(descKey, { name: providerName })}
           </p>
 
           <label className="flex cursor-pointer items-center justify-between gap-3 rounded-[8px] border border-border/60 px-3 py-2.5">

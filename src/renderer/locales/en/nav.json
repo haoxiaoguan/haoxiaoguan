@@ -122,6 +122,8 @@
     },
     "codexSwitchTitle": "Switch Codex provider: {{name}}",
     "codexSwitchDesc": "After switching to \"{{name}}\", older sessions may become invisible in Codex due to provider filtering. Enable the toggle below to migrate history sessions to the new provider so they remain visible.",
+    "codexDisableTitle": "Disable Codex provider: {{name}}",
+    "codexDisableDesc": "After disabling \"{{name}}\", Codex falls back to the built-in OpenAI provider. Sessions created under the disabled provider become hidden by Codex's provider filter. Enable the toggle below to migrate them to OpenAI so they remain visible.",
     "codexSwitchRepairToggle": "Also repair history sessions (migrate to new provider)",
     "codexSwitchConfirm": "Confirm switch",
     "codexSwitchMigrating": "Migrating…",

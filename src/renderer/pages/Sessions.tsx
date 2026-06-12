@@ -35,7 +35,7 @@ import type { SessionSummaryDto } from '@shared/api-types';
 import { TOOL_CONFIG, formatTime, shortDir, SessionListSkeleton, EmptyState } from '@/components/sessions/shared';
 import { SessionDetailDialog } from '@/components/sessions/SessionDetailDialog';
 import { RepairSessionsDialog } from '@/components/sessions/RepairSessionsDialog';
-import { ProviderTag, providerLabel } from '@/components/sessions/ProviderTag';
+import { ProviderTag, providerLabel, useCodexProviderNames } from '@/components/sessions/ProviderTag';
 import { StatusBadge } from '@/components/sessions/StatusBadge';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 import { clientStatus } from '@/components/clientConfig/clientStatus';
@@ -48,6 +48,7 @@ function SessionRow({
   active,
   selectMode,
   checked,
+  nameMap,
   onSelect,
   onCheck,
   onDelete,
@@ -56,6 +57,7 @@ function SessionRow({
   active: boolean;
   selectMode: boolean;
   checked: boolean;
+  nameMap: Record<string, string>;
   onSelect: () => void;
   onCheck: (checked: boolean) => void;
   onDelete: () => void;
@@ -112,7 +114,7 @@ function SessionRow({
               <span className="truncate text-[13px] font-semibold leading-5 text-foreground">
                 {session.title ?? session.sessionId}
               </span>
-              <ProviderTag provider={session.provider} />
+              <ProviderTag provider={session.provider} nameMap={nameMap} />
             </div>
             <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
               {session.projectDir && (
@@ -154,7 +156,7 @@ function SessionRow({
           <StatusBadge archived={session.archived} />
           {/* 第二行：provider */}
           <span className="text-[10px] text-muted-foreground">
-            {session.provider ? providerLabel(session.provider) : t('sessionsView.providerUnknown')}
+            {session.provider ? providerLabel(session.provider, nameMap) : t('sessionsView.providerUnknown')}
           </span>
           {/* 第三行：时间 */}
           {session.lastActiveAt && (
@@ -222,6 +224,8 @@ export default function Sessions() {
   const [detailOpen, setDetailOpen] = useState(false);
   // 修复会话弹窗（Task 12 才实现，本任务保留 state 与按钮 onClick）
   const [repairOpen, setRepairOpen] = useState(false);
+  // hxg_<档id> → 接入档名，让会话供应商显示真名（如「测试第三方」）而非泛称「号小管接入」。
+  const providerNames = useCodexProviderNames();
 
   // AlertDialog 状态
   const [deleteTarget, setDeleteTarget] = useState<SessionSummaryDto | null>(null);
@@ -578,6 +582,7 @@ export default function Sessions() {
                         active={s.sourcePath === selectedPath && !selectMode}
                         selectMode={selectMode}
                         checked={selected.has(s.sourcePath)}
+                        nameMap={providerNames}
                         onSelect={() => {
                           if (!selectMode) {
                             void selectSession(s);

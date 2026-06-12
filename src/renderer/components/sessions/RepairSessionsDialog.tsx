@@ -5,11 +5,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { sessionsService } from '@/services/tauri'
-import { providerLabel } from './ProviderTag'
+import { providerLabel, useCodexProviderNames } from './ProviderTag'
 import type { CodexRepairPreviewDto, CodexRepairProgressDto, CodexRepairResultDto } from '@shared/api-types'
 
 export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { t } = useTranslation('nav')
+  const nameMap = useCodexProviderNames()
   const [preview, setPreview] = useState<CodexRepairPreviewDto | null>(null)
   const [rewriteRollout, setRewriteRollout] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -52,10 +53,10 @@ export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; on
           <div className="space-y-3 text-[12.5px]">
             <p className="text-muted-foreground">{t('sessionsView.repairExplain')}</p>
             <div className="rounded-[8px] border border-border/60 p-3">
-              <div className="mb-1.5">{t('sessionsView.repairCurrent')}: <b>{providerLabel(preview.currentProvider ?? '-')}</b></div>
+              <div className="mb-1.5">{t('sessionsView.repairCurrent')}: <b>{providerLabel(preview.currentProvider ?? '-', nameMap)}</b></div>
               <div className="space-y-1">
                 {preview.counts.map((c) => (
-                  <div key={c.provider} className="flex justify-between"><span>{providerLabel(c.provider)}</span><span className="text-muted-foreground">{c.count}</span></div>
+                  <div key={c.provider} className="flex justify-between"><span>{providerLabel(c.provider, nameMap)}</span><span className="text-muted-foreground">{c.count}</span></div>
                 ))}
               </div>
               <div className="mt-2 text-primary">{t('sessionsView.repairCount', { n: preview.repairable })}</div>
