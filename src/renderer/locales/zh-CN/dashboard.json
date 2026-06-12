@@ -2,11 +2,13 @@
   "title": "仪表盘",
   "subtitle": "多平台账号实时概览",
   "kpis": {
-    "accounts": "已有账号",
-    "mcp": "MCP 服务",
-    "skills": "Skills 技能",
-    "comingSoon": "即将开放",
-    "platformsUnit": "平台"
+    "accounts": "账号数",
+    "mcp": "MCP 数量",
+    "skills": "Skills 数量",
+    "sessions": "会话数",
+    "weekNew": "本周 +{{n}}",
+    "platformsCovered": "覆盖 {{x}}/{{y}} 平台",
+    "enabledDisabled": "{{on}} 启用 · {{off}} 停用"
   },
   "activeAccount": {
     "title": "当前活动账户",
@@ -30,29 +32,30 @@
   "trend": {
     "title": "趋势分析",
     "empty": "暂无数据",
-    "rangeToday": "今日",
-    "rangeWeek": "本周",
-    "rangeMonth": "本月",
-    "dimToken": "Token 消耗",
-    "dimTool": "工具调用",
-    "dimSession": "会话数量",
-    "dimCode": "代码改动",
+    "dimToken": "Token",
+    "dimTool": "工具",
+    "dimSession": "会话",
+    "dimCode": "改动",
     "dimCost": "费用",
     "less": "Less",
     "more": "More",
-    "rangeYear": "年",
     "tipInput": "输入",
     "tipOutput": "输出",
     "tipCacheCreate": "缓存创建",
     "tipCacheRead": "缓存命中",
-    "tipTotal": "合计"
-  },
-  "account": {
-    "title": "账号总览",
-    "total": "账号总数",
-    "platforms": "平台",
-    "todayActive": "今日活跃",
-    "weekNew": "本周新增"
+    "tipTotal": "合计",
+    "dimActivity": "活跃趋势",
+    "stats": {
+      "total": "总计",
+      "cache": "缓存",
+      "requests": "请求",
+      "avgPerDay": "日均",
+      "peak": "峰值",
+      "todaySessions": "今日会话",
+      "weekActiveDays": "本周活跃天数",
+      "monthActiveDays": "本月活跃天数",
+      "days": "{{n}} 天"
+    }
   },
   "platform": {
     "title": "平台分布 · 按账号数",
@@ -60,18 +63,7 @@
     "empty": "暂无账号",
     "unit": "账号"
   },
-  "token": {
-    "title": "{{range}}合计 · Token",
-    "in": "入",
-    "out": "出",
-    "cache": "缓存",
-    "requests": "请求",
-    "cost": "消费",
-    "costApprox": "估算"
-  },
   "session": {
-    "title": "会话活跃 · 本机",
-    "recentActive": "最近活跃 ·",
     "minutesAgo": "{{n}} 分钟前",
     "hoursAgo": "{{n}} 小时前",
     "daysAgo": "{{n}} 天前",
@@ -115,6 +107,33 @@
       "10s": "10s",
       "30s": "30s",
       "60s": "60s"
-    }
+    },
+    "lastSynced": "最后同步"
+  },
+  "range": {
+    "today": "当天",
+    "d1": "1d",
+    "d7": "7d",
+    "d14": "14d",
+    "d30": "30d",
+    "hint": "支持日期与时间",
+    "start": "开始时间",
+    "end": "结束时间",
+    "cancel": "取消",
+    "apply": "确定",
+    "weekdays": "日,一,二,三,四,五,六",
+    "monthTitle": "{{year}}年{{month}}月",
+    "prevMonth": "上个月",
+    "nextMonth": "下个月",
+    "ariaLabel": "选择时间范围"
+  },
+  "heatmap": {
+    "tooltip": "{{n}} 次会话",
+    "aria": "近一年会话活跃热力图",
+    "months": "1月,2月,3月,4月,5月,6月,7月,8月,9月,10月,11月,12月"
+  },
+  "accountHealth": {
+    "title": "账号健康 · 池 + 凭证",
+    "empty": "暂无健康数据"
   }
 }

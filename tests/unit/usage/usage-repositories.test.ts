@@ -194,7 +194,7 @@ describe('MikroOrmUsageRollupRepository', () => {
 
   it('summary returns zeros when rollup table is empty', async () => {
     const repo = new MikroOrmUsageRollupRepository(testGetEm)
-    const s = await repo.summary('7d')
+    const s = await repo.summary({ startSec: 0, endSec: 4102444800 })
     expect(s.inputTokens).toBe(0)
     expect(s.outputTokens).toBe(0)
     expect(s.requests).toBe(0)
@@ -202,12 +202,12 @@ describe('MikroOrmUsageRollupRepository', () => {
 
   it('trend returns empty array when rollup table is empty', async () => {
     const repo = new MikroOrmUsageRollupRepository(testGetEm)
-    expect(await repo.trend('7d', 'tokens')).toEqual([])
+    expect(await repo.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'tokens')).toEqual([])
   })
 
   it('platformBreakdown returns empty array when rollup table is empty', async () => {
     const repo = new MikroOrmUsageRollupRepository(testGetEm)
-    expect(await repo.platformBreakdown('7d')).toEqual([])
+    expect(await repo.platformBreakdown({ startSec: 0, endSec: 4102444800 })).toEqual([])
   })
 
   it('rebuildAll populates rollup from usage_records', async () => {
@@ -217,7 +217,7 @@ describe('MikroOrmUsageRollupRepository', () => {
     const rollupRepo = new MikroOrmUsageRollupRepository(testGetEm)
     await rollupRepo.rebuildAll()
 
-    const s = await rollupRepo.summary('90d')
+    const s = await rollupRepo.summary({ startSec: 0, endSec: 4102444800 })
     expect(s.inputTokens).toBe(100)
     expect(s.outputTokens).toBe(50)
     expect(s.requests).toBe(1)
@@ -231,7 +231,7 @@ describe('MikroOrmUsageRollupRepository', () => {
     await rollupRepo.rebuildAll()
     await rollupRepo.rebuildAll()
 
-    const s = await rollupRepo.summary('90d')
+    const s = await rollupRepo.summary({ startSec: 0, endSec: 4102444800 })
     expect(s.inputTokens).toBe(100)
   })
 
@@ -250,7 +250,7 @@ describe('MikroOrmUsageRollupRepository', () => {
     const rollupRepo = new MikroOrmUsageRollupRepository(testGetEm)
     await rollupRepo.rebuildAll()
 
-    const breakdown = await rollupRepo.platformBreakdown('90d')
+    const breakdown = await rollupRepo.platformBreakdown({ startSec: 0, endSec: 4102444800 })
     expect(breakdown).toHaveLength(2)
     // codex has higher total (300), should be first
     expect(breakdown[0].platform).toBe('codex')

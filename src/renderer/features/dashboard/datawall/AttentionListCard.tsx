@@ -70,7 +70,7 @@ function ItemList({ items }: { items: AttentionItem[] }) {
   const { t } = useTranslation('dashboard')
 
   return (
-    <div className="flex flex-col divide-y divide-border">
+    <div className="flex h-full min-h-0 flex-col divide-y divide-border overflow-y-auto">
       {items.map((item) => {
         const chipColor = platformChipColor(item.platform)
         const abbr = item.platform.slice(0, 2).toUpperCase()

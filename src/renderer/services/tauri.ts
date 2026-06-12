@@ -4,6 +4,7 @@
  * groups now call the Electron `window.api.*` bridge directly.
  */
 import { bridge } from './bridge';
+import type { TimeWindowDto, TrendGranularityDto } from '@shared/api-types';
 
 // ============================================================================
 // Account Commands
@@ -167,14 +168,14 @@ export const usageService = {
   syncUsageSources: () =>
     bridge().usage.syncUsageSources() as Promise<UsageSyncSummaryResponse>,
 
-  getUsageSummary: (range: string) =>
-    bridge().usage.getUsageSummary(range) as Promise<UsageSummaryResponse>,
+  getUsageSummary: (window: TimeWindowDto) =>
+    bridge().usage.getUsageSummary(window) as Promise<UsageSummaryResponse>,
 
-  getUsageTrend: (range: string, metric: string) =>
-    bridge().usage.getUsageTrend(range, metric) as Promise<UsageTrendPointResponse[]>,
+  getUsageTrend: (window: TimeWindowDto, granularity: TrendGranularityDto, metric: string) =>
+    bridge().usage.getUsageTrend(window, granularity, metric) as Promise<UsageTrendPointResponse[]>,
 
-  getUsagePlatformBreakdown: (range: string) =>
-    bridge().usage.getUsagePlatformBreakdown(range) as Promise<PlatformUsageBreakdownResponse[]>,
+  getUsagePlatformBreakdown: (window: TimeWindowDto) =>
+    bridge().usage.getUsagePlatformBreakdown(window) as Promise<PlatformUsageBreakdownResponse[]>,
 
   getUsageSyncStatus: () =>
     bridge().usage.getUsageSyncStatus() as Promise<UsageSyncStatusResponse>,
@@ -608,6 +609,6 @@ export const sessionsService = {
 export const activityService = {
   syncActivity: () =>
     bridge().activity.syncActivity() as Promise<ActivitySyncSummaryResponse>,
-  getActivityTrend: (range: string, metric: string) =>
-    bridge().activity.getActivityTrend(range, metric) as Promise<ActivityTrendPointResponse[]>,
+  getActivityTrend: (window: TimeWindowDto, granularity: TrendGranularityDto, metric: string) =>
+    bridge().activity.getActivityTrend(window, granularity, metric) as Promise<ActivityTrendPointResponse[]>,
 };

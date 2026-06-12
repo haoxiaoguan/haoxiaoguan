@@ -4,8 +4,10 @@
  * for these aggregations (cross-DB portability is not a goal; SQLite-specific
  * functions are required).
  *
- * window_days off-by-one: "7d" → 6, "30d" → 29, "90d" → 89.
- * The window anchors to MAX(date) in the rollup table, not NOW().
+ * 查询窗口为显式 epoch 秒闭区间（UsageWindow），由渲染层时间选择器给出：
+ * - summary/platformBreakdown/usageByModel 走 usage_records 明细（精确秒边界）；
+ * - trend/usageByDateModel 按粒度：hour→明细小时桶；day→usage_daily_rollups 日桶
+ *   （日桶口径：窗口起止所在的 localtime 日期，含首尾全日）。
  *
  * Schema mismatch fix: Rust rollup SQL used "platform" but migration defines
  * the column as "agent_id". We use agent_id throughout.
@@ -13,22 +15,11 @@
  */
 import type { EntityManager } from '@mikro-orm/better-sqlite'
 import { getEm as defaultGetEm } from '../../../platform/persistence/database'
-import type { UsageRollupRepository } from '../domain/usage-repositories'
-
-function windowDays(range: string): number {
-  switch (range) {
-    case '1d':
-      return 0
-    case '7d':
-      return 6
-    case '30d':
-      return 29
-    case '90d':
-      return 89
-    default:
-      return 29
-  }
-}
+import type {
+  UsageGranularity,
+  UsageRollupRepository,
+  UsageWindow,
+} from '../domain/usage-repositories'
 
 export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
   private readonly getEm: () => EntityManager
@@ -69,7 +60,7 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }
   }
 
-  async summary(range: string): Promise<{
+  async summary(window: UsageWindow): Promise<{
     inputTokens: number
     outputTokens: number
     cacheReadTokens: number
@@ -77,19 +68,16 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     requests: number
   }> {
     const conn = this.getEm().getConnection()
-    const days = `-${windowDays(range)} day`
-
     const row = (await conn.execute(
-      `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
-       SELECT
+      `SELECT
          COALESCE(SUM(input_tokens), 0) AS input_tokens,
          COALESCE(SUM(output_tokens), 0) AS output_tokens,
          COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
          COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
-         COALESCE(SUM(records_count), 0) AS requests
-       FROM usage_daily_rollups
-       WHERE date >= date((SELECT value FROM max_day), ?)`,
-      [days],
+         COUNT(*) AS requests
+       FROM usage_records
+       WHERE occurred_at >= ? AND occurred_at <= ?`,
+      [window.startSec, window.endSec],
       'get',
     )) as any ?? {}
 
@@ -103,8 +91,8 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
   }
 
   async trend(
-    range: string,
-    _metric: string,
+    window: UsageWindow,
+    granularity: UsageGranularity,
   ): Promise<
     Array<{
       date: string
@@ -116,48 +104,38 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }>
   > {
     const conn = this.getEm().getConnection()
-    if (range === '1d') {
-      const rows = (await conn.execute(
-        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime')) AS day FROM usage_records)
-         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date,
+    let rows: any[]
+    if (granularity === 'hour') {
+      rows = (await conn.execute(
+        `SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date,
            COALESCE(SUM(input_tokens), 0) AS input_tokens,
            COALESCE(SUM(output_tokens), 0) AS output_tokens,
            COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
            COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
            COUNT(*) AS requests
          FROM usage_records
-         WHERE strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') = (SELECT day FROM d)
+         WHERE occurred_at >= ? AND occurred_at <= ?
          GROUP BY date ORDER BY date ASC`,
-        [],
+        [window.startSec, window.endSec],
         'all',
       )) as any[]
-      return (rows ?? []).map((row: any) => ({
-        date: row.date ?? '',
-        inputTokens: Number(row.input_tokens ?? 0),
-        outputTokens: Number(row.output_tokens ?? 0),
-        cacheReadTokens: Number(row.cache_read_tokens ?? 0),
-        cacheCreationTokens: Number(row.cache_creation_tokens ?? 0),
-        requests: Number(row.requests ?? 0),
-      }))
+    } else {
+      rows = (await conn.execute(
+        `SELECT
+           date,
+           COALESCE(SUM(input_tokens), 0) AS input_tokens,
+           COALESCE(SUM(output_tokens), 0) AS output_tokens,
+           COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+           COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
+           COALESCE(SUM(records_count), 0) AS requests
+         FROM usage_daily_rollups
+         WHERE date >= date(?, 'unixepoch', 'localtime') AND date <= date(?, 'unixepoch', 'localtime')
+         GROUP BY date
+         ORDER BY date ASC`,
+        [window.startSec, window.endSec],
+        'all',
+      )) as any[]
     }
-    const days = `-${windowDays(range)} day`
-
-    const rows = (await conn.execute(
-      `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
-       SELECT
-         date,
-         COALESCE(SUM(input_tokens), 0) AS input_tokens,
-         COALESCE(SUM(output_tokens), 0) AS output_tokens,
-         COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-         COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
-         COALESCE(SUM(records_count), 0) AS requests
-       FROM usage_daily_rollups
-       WHERE date >= date((SELECT value FROM max_day), ?)
-       GROUP BY date
-       ORDER BY date ASC`,
-      [days],
-      'all',
-    )) as any[]
 
     return (rows ?? []).map((row: any) => ({
       date: row.date ?? '',
@@ -170,7 +148,7 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
   }
 
   async platformBreakdown(
-    range: string,
+    window: UsageWindow,
   ): Promise<
     Array<{
       platform: string
@@ -181,21 +159,18 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }>
   > {
     const conn = this.getEm().getConnection()
-    const days = `-${windowDays(range)} day`
-
     const rows = (await conn.execute(
-      `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
-       SELECT
+      `SELECT
          agent_id AS platform,
          COALESCE(SUM(input_tokens), 0) AS input_tokens,
          COALESCE(SUM(output_tokens), 0) AS output_tokens,
          COALESCE(SUM(cache_read_tokens + cache_creation_tokens), 0) AS cache_tokens,
-         COALESCE(SUM(records_count), 0) AS requests
-       FROM usage_daily_rollups
-       WHERE date >= date((SELECT value FROM max_day), ?)
+         COUNT(*) AS requests
+       FROM usage_records
+       WHERE occurred_at >= ? AND occurred_at <= ?
        GROUP BY agent_id
        ORDER BY SUM(input_tokens + output_tokens) DESC, agent_id ASC`,
-      [days],
+      [window.startSec, window.endSec],
       'all',
     )) as any[]
 
@@ -209,8 +184,7 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
   }
 
   // 费用计算需要 model 维度，而 usage_daily_rollups 不含 model，故直接查 usage_records。
-  // 窗口锚定与 summary 一致：MAX(date) of usage_daily_rollups 往前推 windowDays。
-  async usageByModel(range: string): Promise<
+  async usageByModel(window: UsageWindow): Promise<
     Array<{
       model: string
       inputTokens: number
@@ -220,18 +194,16 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }>
   > {
     const conn = this.getEm().getConnection()
-    const days = `-${windowDays(range)} day`
     const rows = (await conn.execute(
-      `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
-       SELECT model AS model,
+      `SELECT model AS model,
          COALESCE(SUM(input_tokens), 0) AS input_tokens,
          COALESCE(SUM(output_tokens), 0) AS output_tokens,
          COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
          COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens
        FROM usage_records
-       WHERE date(occurred_at, 'unixepoch', 'localtime') >= date((SELECT value FROM max_day), ?)
+       WHERE occurred_at >= ? AND occurred_at <= ?
        GROUP BY model`,
-      [days],
+      [window.startSec, window.endSec],
       'all',
     )) as any[]
     return (rows ?? []).map((row: any) => ({
@@ -243,7 +215,10 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }))
   }
 
-  async usageByDateModel(range: string): Promise<
+  async usageByDateModel(
+    window: UsageWindow,
+    granularity: UsageGranularity,
+  ): Promise<
     Array<{
       date: string
       model: string
@@ -254,36 +229,22 @@ export class MikroOrmUsageRollupRepository implements UsageRollupRepository {
     }>
   > {
     const conn = this.getEm().getConnection()
-    const sumCols = `
-      COALESCE(SUM(input_tokens), 0) AS input_tokens,
-      COALESCE(SUM(output_tokens), 0) AS output_tokens,
-      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-      COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens`
-
-    let rows: any[]
-    if (range === '1d') {
-      // 当天小时桶（与 token 趋势 1d 口径一致）。
-      rows = (await conn.execute(
-        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime')) AS day FROM usage_records)
-         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date, model AS model, ${sumCols}
-         FROM usage_records
-         WHERE strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') = (SELECT day FROM d)
-         GROUP BY date, model`,
-        [],
-        'all',
-      )) as any[]
-    } else {
-      const days = `-${windowDays(range)} day`
-      rows = (await conn.execute(
-        `WITH max_day AS (SELECT MAX(date) AS value FROM usage_daily_rollups)
-         SELECT date(occurred_at, 'unixepoch', 'localtime') AS date, model AS model, ${sumCols}
-         FROM usage_records
-         WHERE date(occurred_at, 'unixepoch', 'localtime') >= date((SELECT value FROM max_day), ?)
-         GROUP BY date, model`,
-        [days],
-        'all',
-      )) as any[]
-    }
+    const bucket =
+      granularity === 'hour'
+        ? `strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime')`
+        : `date(occurred_at, 'unixepoch', 'localtime')`
+    const rows = (await conn.execute(
+      `SELECT ${bucket} AS date, model AS model,
+         COALESCE(SUM(input_tokens), 0) AS input_tokens,
+         COALESCE(SUM(output_tokens), 0) AS output_tokens,
+         COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+         COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens
+       FROM usage_records
+       WHERE occurred_at >= ? AND occurred_at <= ?
+       GROUP BY date, model`,
+      [window.startSec, window.endSec],
+      'all',
+    )) as any[]
     return (rows ?? []).map((row: any) => ({
       date: row.date ?? '',
       model: row.model ?? '',

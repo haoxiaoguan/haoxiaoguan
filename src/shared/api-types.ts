@@ -4,6 +4,15 @@
 // version/shell helpers. The only renderer methods still on the throwing
 // tauriInvoke shim are the websocket toggle/status pair (get_ws_status /
 // toggle_ws), which belong to a websocket context not yet built.
+/** 用量/活动查询窗口：epoch 秒，闭区间。渲染层时间选择器产出，main 侧直接喂 SQLite。 */
+export interface TimeWindowDto {
+  startSec: number
+  endSec: number
+}
+
+/** 趋势桶粒度：hour=小时桶，day=日桶。 */
+export type TrendGranularityDto = 'hour' | 'day'
+
 export interface SettingsResponse {
   theme: string
   language: string
@@ -618,14 +627,22 @@ export interface HxgApi {
   }
   usage: {
     syncUsageSources(): Promise<UsageSyncSummaryResponse>
-    getUsageSummary(range: string): Promise<UsageSummaryResponse>
-    getUsageTrend(range: string, metric: string): Promise<UsageTrendPointResponse[]>
-    getUsagePlatformBreakdown(range: string): Promise<PlatformUsageBreakdownResponse[]>
+    getUsageSummary(window: TimeWindowDto): Promise<UsageSummaryResponse>
+    getUsageTrend(
+      window: TimeWindowDto,
+      granularity: TrendGranularityDto,
+      metric: string,
+    ): Promise<UsageTrendPointResponse[]>
+    getUsagePlatformBreakdown(window: TimeWindowDto): Promise<PlatformUsageBreakdownResponse[]>
     getUsageSyncStatus(): Promise<UsageSyncStatusResponse>
   }
   activity: {
     syncActivity(): Promise<ActivitySyncSummaryResponse>
-    getActivityTrend(range: string, metric: string): Promise<ActivityTrendPointResponse[]>
+    getActivityTrend(
+      window: TimeWindowDto,
+      granularity: TrendGranularityDto,
+      metric: string,
+    ): Promise<ActivityTrendPointResponse[]>
   }
   localBackup: {
     create(): Promise<BackupEntryDto>

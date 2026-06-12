@@ -3,10 +3,12 @@
   "subtitle": "Real-time account overview across platforms",
   "kpis": {
     "accounts": "Accounts",
-    "mcp": "MCP Servers",
+    "mcp": "MCP servers",
     "skills": "Skills",
-    "comingSoon": "Coming soon",
-    "platformsUnit": "Platforms"
+    "sessions": "Sessions",
+    "weekNew": "+{{n}} this week",
+    "platformsCovered": "{{x}}/{{y}} platforms",
+    "enabledDisabled": "{{on}} enabled · {{off}} disabled"
   },
   "activeAccount": {
     "title": "Active account",
@@ -30,29 +32,30 @@
   "trend": {
     "title": "Trend Analysis",
     "empty": "No data",
-    "rangeToday": "Today",
-    "rangeWeek": "Week",
-    "rangeMonth": "Month",
-    "dimToken": "Tokens",
-    "dimTool": "Tool calls",
+    "dimToken": "Token",
+    "dimTool": "Tools",
     "dimSession": "Sessions",
-    "dimCode": "Code lines",
+    "dimCode": "Code",
     "dimCost": "Cost",
     "less": "Less",
     "more": "More",
-    "rangeYear": "Year",
     "tipInput": "Input",
     "tipOutput": "Output",
     "tipCacheCreate": "Cache write",
     "tipCacheRead": "Cache hit",
-    "tipTotal": "Total"
-  },
-  "account": {
-    "title": "Account Overview",
-    "total": "Total Accounts",
-    "platforms": "Platforms",
-    "todayActive": "Active Today",
-    "weekNew": "New This Week"
+    "tipTotal": "Total",
+    "dimActivity": "Activity",
+    "stats": {
+      "total": "Total",
+      "cache": "Cache",
+      "requests": "Requests",
+      "avgPerDay": "Daily avg",
+      "peak": "Peak",
+      "todaySessions": "Sessions today",
+      "weekActiveDays": "Active days this week",
+      "monthActiveDays": "Active days this month",
+      "days": "{{n}} days"
+    }
   },
   "platform": {
     "title": "Platform Distribution · By Account",
@@ -60,18 +63,7 @@
     "empty": "No accounts yet",
     "unit": "Accounts"
   },
-  "token": {
-    "title": "{{range}} · Tokens",
-    "in": "In",
-    "out": "Out",
-    "cache": "Cache",
-    "requests": "reqs",
-    "cost": "Cost",
-    "costApprox": "est."
-  },
   "session": {
-    "title": "Session Activity · Local",
-    "recentActive": "Last active ·",
     "minutesAgo": "{{n}}m ago",
     "hoursAgo": "{{n}}h ago",
     "daysAgo": "{{n}}d ago",
@@ -115,6 +107,33 @@
       "10s": "10s",
       "30s": "30s",
       "60s": "60s"
-    }
+    },
+    "lastSynced": "Last synced"
+  },
+  "range": {
+    "today": "Today",
+    "d1": "1d",
+    "d7": "7d",
+    "d14": "14d",
+    "d30": "30d",
+    "hint": "Date and time supported",
+    "start": "Start",
+    "end": "End",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "weekdays": "S,M,T,W,T,F,S",
+    "monthTitle": "{{month}}/{{year}}",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "ariaLabel": "Select time range"
+  },
+  "heatmap": {
+    "tooltip": "{{n}} sessions",
+    "aria": "Session activity heatmap, past year",
+    "months": "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec"
+  },
+  "accountHealth": {
+    "title": "Account health · pool + credentials",
+    "empty": "No health data yet"
   }
 }

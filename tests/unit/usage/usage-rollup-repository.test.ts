@@ -37,7 +37,7 @@ describe('MikroOrmUsageRollupRepository – 1d 小时级', () => {
     const conn = testOrm.em.getConnection()
     await conn.execute(`INSERT INTO usage_records (agent_id, source_kind, occurred_at, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens) VALUES
       ('claude','x',1700000000,10,5,0,0),('claude','x',1700000060,20,5,0,0),('claude','x',1700003600,7,3,0,0)`)
-    const pts = await repo.trend('1d', 'requests')
+    const pts = await repo.trend({ startSec: 0, endSec: 4102444800 }, 'hour')
     expect(pts.map((p) => ({ date: p.date, input: p.inputTokens, req: p.requests }))).toEqual([
       { date: '2023-11-14 22:00', input: 30, req: 2 },
       { date: '2023-11-14 23:00', input: 7, req: 1 },

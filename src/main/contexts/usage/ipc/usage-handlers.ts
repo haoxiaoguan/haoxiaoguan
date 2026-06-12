@@ -12,6 +12,7 @@ import { toIpcError } from '../../../ipc/error'
 import { USAGE_CHANNELS } from '../../../../shared/ipc-channels'
 import type { UsageSyncService } from '../application/usage-sync-service'
 import type { UsageQueryService } from '../application/usage-query-service'
+import type { UsageGranularity, UsageWindow } from '../domain/usage-repositories'
 
 export function registerUsageHandlers(
   syncSvc: UsageSyncService,
@@ -54,10 +55,10 @@ export function registerUsageHandlers(
     }
   })
 
-  // get_usage_summary — arg: range: string
-  ipcMain.handle(USAGE_CHANNELS.getUsageSummary, async (_e, range: string) => {
+  // get_usage_summary — arg: window: { startSec, endSec }（epoch 秒闭区间）
+  ipcMain.handle(USAGE_CHANNELS.getUsageSummary, async (_e, window: UsageWindow) => {
     try {
-      const s = await querySvc.summary(range)
+      const s = await querySvc.summary(window)
       return {
         totalTokens: s.totalTokens,
         inputTokens: s.inputTokens,
@@ -73,12 +74,12 @@ export function registerUsageHandlers(
     }
   })
 
-  // get_usage_trend — args: range: string, metric: string
+  // get_usage_trend — args: window, granularity('hour'|'day'), metric
   ipcMain.handle(
     USAGE_CHANNELS.getUsageTrend,
-    async (_e, range: string, metric: string) => {
+    async (_e, window: UsageWindow, granularity: UsageGranularity, metric: string) => {
       try {
-        const points = await querySvc.trend(range, metric)
+        const points = await querySvc.trend(window, granularity, metric)
         return points.map((p) => ({
           date: p.date,
           totalTokens: p.totalTokens,
@@ -95,10 +96,10 @@ export function registerUsageHandlers(
     },
   )
 
-  // get_usage_platform_breakdown — arg: range: string
-  ipcMain.handle(USAGE_CHANNELS.getUsagePlatformBreakdown, async (_e, range: string) => {
+  // get_usage_platform_breakdown — arg: window
+  ipcMain.handle(USAGE_CHANNELS.getUsagePlatformBreakdown, async (_e, window: UsageWindow) => {
     try {
-      const rows = await querySvc.platformBreakdown(range)
+      const rows = await querySvc.platformBreakdown(window)
       return rows.map((r) => ({
         platform: r.platform,
         totalTokens: r.totalTokens,

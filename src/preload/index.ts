@@ -138,11 +138,11 @@ const api: HxgApi = {
   },
   usage: {
     syncUsageSources: () => ipcRenderer.invoke(USAGE_CHANNELS.syncUsageSources),
-    getUsageSummary: (range) => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSummary, range),
-    getUsageTrend: (range, metric) =>
-      ipcRenderer.invoke(USAGE_CHANNELS.getUsageTrend, range, metric),
-    getUsagePlatformBreakdown: (range) =>
-      ipcRenderer.invoke(USAGE_CHANNELS.getUsagePlatformBreakdown, range),
+    getUsageSummary: (window) => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSummary, window),
+    getUsageTrend: (window, granularity, metric) =>
+      ipcRenderer.invoke(USAGE_CHANNELS.getUsageTrend, window, granularity, metric),
+    getUsagePlatformBreakdown: (window) =>
+      ipcRenderer.invoke(USAGE_CHANNELS.getUsagePlatformBreakdown, window),
     getUsageSyncStatus: () => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSyncStatus),
   },
   localBackup: {
@@ -257,8 +257,8 @@ const api: HxgApi = {
   },
   activity: {
     syncActivity: () => ipcRenderer.invoke(ACTIVITY_CHANNELS.syncActivity),
-    getActivityTrend: (range: string, metric: string) =>
-      ipcRenderer.invoke(ACTIVITY_CHANNELS.getActivityTrend, range, metric),
+    getActivityTrend: (window, granularity, metric) =>
+      ipcRenderer.invoke(ACTIVITY_CHANNELS.getActivityTrend, window, granularity, metric),
   },
   updater: {
     check: () => ipcRenderer.invoke(UPDATER_CHANNELS.check),

@@ -33,7 +33,7 @@ describe('UsageQueryService.summary', () => {
       makeRollupRepo({ summary: async () => ({ inputTokens: 300, outputTokens: 150, cacheReadTokens: 20, cacheCreationTokens: 10, requests: 5 }) }),
       makeSyncStateRepo({ latestSuccessfulSyncAt: async () => 1700000000 }),
     )
-    const s = await svc.summary('7d')
+    const s = await svc.summary({ startSec: 0, endSec: 4102444800 })
     expect(s.totalTokens).toBe(450)
     expect(s.inputTokens).toBe(300)
     expect(s.outputTokens).toBe(150)
@@ -42,7 +42,7 @@ describe('UsageQueryService.summary', () => {
 
   it('lastSyncedAt is null when no sync has run', async () => {
     const svc = new UsageQueryService(makeRollupRepo(), makeSyncStateRepo())
-    const s = await svc.summary('30d')
+    const s = await svc.summary({ startSec: 0, endSec: 4102444800 })
     expect(s.lastSyncedAt).toBeNull()
   })
 })
@@ -55,7 +55,7 @@ describe('UsageQueryService.trend', () => {
       }),
       makeSyncStateRepo(),
     )
-    const points = await svc.trend('7d', 'tokens')
+    const points = await svc.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'tokens')
     expect(points[0].totalTokens).toBe(150)
     expect(points[0].requests).toBe(3)
   })
@@ -67,7 +67,7 @@ describe('UsageQueryService.trend', () => {
       }),
       makeSyncStateRepo(),
     )
-    const points = await svc.trend('7d', 'requests')
+    const points = await svc.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'requests')
     expect(points[0].totalTokens).toBe(7)
   })
 
@@ -82,7 +82,7 @@ describe('UsageQueryService.trend', () => {
       }),
       makeSyncStateRepo(),
     )
-    const pts = await svc.trend('7d', 'cost')
+    const pts = await svc.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'cost')
     expect(pts.map((p) => p.date)).toEqual(['2026-06-01', '2026-06-02'])
     expect(pts[0].costUsd).toBeCloseTo(5, 6) // gpt-5.5 input 1M = $5；relay 计 0
     expect(pts[1].costUsd).toBeCloseTo(30, 6) // gpt-5.5 output 1M = $30
@@ -100,7 +100,7 @@ describe('UsageQueryService.summary — 费用', () => {
       }),
       makeSyncStateRepo(),
     )
-    const s = await svc.summary('7d')
+    const s = await svc.summary({ startSec: 0, endSec: 4102444800 })
     expect(s.totalCostUsd).toBeCloseTo(5, 6)
   })
 })
@@ -116,7 +116,7 @@ describe('UsageQueryService.platformBreakdown', () => {
       }),
       makeSyncStateRepo(),
     )
-    const rows = await svc.platformBreakdown('30d')
+    const rows = await svc.platformBreakdown({ startSec: 0, endSec: 4102444800 })
     // grandTotal = (300+100) + (100+100) = 600
     expect(rows[0].shareRatio).toBeCloseTo(400 / 600)
     expect(rows[1].shareRatio).toBeCloseTo(200 / 600)
@@ -132,7 +132,7 @@ describe('UsageQueryService.platformBreakdown', () => {
       }),
       makeSyncStateRepo(),
     )
-    const rows = await svc.platformBreakdown('7d')
+    const rows = await svc.platformBreakdown({ startSec: 0, endSec: 4102444800 })
     expect(rows[0].shareRatio).toBe(0.0)
   })
 })

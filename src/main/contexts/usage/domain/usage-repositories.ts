@@ -1,5 +1,14 @@
 import type { UsageRecord, UsageSyncResultState } from './usage-record'
 
+/** 查询窗口：epoch 秒，闭区间（start <= occurred_at <= end），由调用方保证 start <= end。 */
+export interface UsageWindow {
+  startSec: number
+  endSec: number
+}
+
+/** 趋势桶粒度：hour=小时桶（查明细表），day=日桶（查日 rollup）。 */
+export type UsageGranularity = 'hour' | 'day'
+
 /** Port: upsert-only write side for usage_records. */
 export interface UsageRecordRepository {
   upsertMany(records: UsageRecord[]): Promise<number>
@@ -8,7 +17,8 @@ export interface UsageRecordRepository {
 /** Port: rollup read/write side for usage_daily_rollups. */
 export interface UsageRollupRepository {
   rebuildAll(): Promise<void>
-  summary(range: string): Promise<{
+  /** 窗口内汇总（查明细表，精确到秒边界）。 */
+  summary(window: UsageWindow): Promise<{
     inputTokens: number
     outputTokens: number
     cacheReadTokens: number
@@ -16,8 +26,8 @@ export interface UsageRollupRepository {
     requests: number
   }>
   trend(
-    range: string,
-    metric: string,
+    window: UsageWindow,
+    granularity: UsageGranularity,
   ): Promise<
     Array<{
       date: string
@@ -29,7 +39,7 @@ export interface UsageRollupRepository {
     }>
   >
   platformBreakdown(
-    range: string,
+    window: UsageWindow,
   ): Promise<
     Array<{
       platform: string
@@ -41,7 +51,7 @@ export interface UsageRollupRepository {
   >
   /** 按 model 聚合窗口内 token（费用计算用；rollup 表无 model 维度，故直接查 usage_records）。 */
   usageByModel(
-    range: string,
+    window: UsageWindow,
   ): Promise<
     Array<{
       model: string
@@ -51,9 +61,10 @@ export interface UsageRollupRepository {
       cacheCreationTokens: number
     }>
   >
-  /** 按 (date, model) 聚合窗口内 token（费用趋势用；1d→小时桶，其余→日桶）。 */
+  /** 按 (date, model) 聚合窗口内 token（费用趋势用；hour→小时桶，day→日桶）。 */
   usageByDateModel(
-    range: string,
+    window: UsageWindow,
+    granularity: UsageGranularity,
   ): Promise<
     Array<{
       date: string

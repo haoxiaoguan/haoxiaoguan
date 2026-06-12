@@ -10,17 +10,26 @@ export interface ActivityEventRow {
 }
 
 export interface ActivityTrendPoint {
-  date: string // YYYY-MM-DD (UTC)
+  date: string // day 桶 YYYY-MM-DD / hour 桶 YYYY-MM-DD HH:00（localtime）
   value: number
 }
+
+/** 查询窗口：epoch 秒，闭区间（start <= occurred_at <= end）。 */
+export interface ActivityWindow {
+  startSec: number
+  endSec: number
+}
+
+/** 趋势桶粒度：hour=小时桶（查 activity_events），day=日桶（查日 rollup）。 */
+export type ActivityGranularity = 'hour' | 'day'
 
 export interface ActivityRepository {
   /** 批量 INSERT OR IGNORE（(source_key, metric) 复合主键 → 幂等）。 */
   upsertEvents(rows: ActivityEventRow[]): Promise<void>
   /** 从 activity_events 全量重算 activity_daily_rollups。 */
   rebuildRollups(): Promise<void>
-  /** 按日趋势：WHERE metric=? 锚 MAX(date) 回溯 windowDays。 */
-  trend(range: string, metric: string): Promise<ActivityTrendPoint[]>
+  /** 窗口内趋势：WHERE metric=?，hour→明细小时桶，day→日 rollup。 */
+  trend(window: ActivityWindow, granularity: ActivityGranularity, metric: string): Promise<ActivityTrendPoint[]>
   /** 增量 watermark（毫秒），无则 0。 */
   readWatermark(): Promise<number>
   writeWatermark(value: number): Promise<void>

@@ -5,7 +5,12 @@
  * Supported platforms (5): claude, codex, gemini-cli, kiro, qoder
  * Pending platforms (7): cursor, windsurf, github-copilot, codebuddy, codebuddy-cn, trae, zed
  */
-import type { UsageRollupRepository, UsageSyncStateRepository } from '../domain/usage-repositories'
+import type {
+  UsageGranularity,
+  UsageRollupRepository,
+  UsageSyncStateRepository,
+  UsageWindow,
+} from '../domain/usage-repositories'
 import { costForModel, totalCostUsd as sumCostUsd } from '../domain/usage-pricing'
 import type {
   UsageSummary,
@@ -31,11 +36,11 @@ export class UsageQueryService {
     private readonly syncStateRepo: UsageSyncStateRepository,
   ) {}
 
-  async summary(range: string): Promise<UsageSummary> {
-    const raw = await this.rollupRepo.summary(range)
+  async summary(window: UsageWindow): Promise<UsageSummary> {
+    const raw = await this.rollupRepo.summary(window)
     const lastSyncedAt = await this.syncStateRepo.latestSuccessfulSyncAt()
     // 费用：按 model 聚合窗口内 token × 单价（未计价模型按 0）。
-    const byModel = await this.rollupRepo.usageByModel(range)
+    const byModel = await this.rollupRepo.usageByModel(window)
     return {
       totalTokens: raw.inputTokens + raw.outputTokens,
       inputTokens: raw.inputTokens,
@@ -48,10 +53,14 @@ export class UsageQueryService {
     }
   }
 
-  async trend(range: string, metric: string): Promise<UsageTrendPoint[]> {
-    // 费用趋势：按 (date, model) 聚合 → 每日按单价求和。
+  async trend(
+    window: UsageWindow,
+    granularity: UsageGranularity,
+    metric: string,
+  ): Promise<UsageTrendPoint[]> {
+    // 费用趋势：按 (date, model) 聚合 → 每桶按单价求和。
     if (metric === 'cost') {
-      const rows = await this.rollupRepo.usageByDateModel(range)
+      const rows = await this.rollupRepo.usageByDateModel(window, granularity)
       const byDate = new Map<string, number>()
       for (const r of rows) {
         byDate.set(r.date, (byDate.get(r.date) ?? 0) + costForModel(r.model, r))
@@ -70,7 +79,7 @@ export class UsageQueryService {
         }))
     }
 
-    const rows = await this.rollupRepo.trend(range, metric)
+    const rows = await this.rollupRepo.trend(window, granularity)
     return rows.map((row) => {
       const totalTokens =
         metric === 'requests' ? row.requests : row.inputTokens + row.outputTokens
@@ -87,8 +96,8 @@ export class UsageQueryService {
     })
   }
 
-  async platformBreakdown(range: string): Promise<PlatformUsageBreakdown[]> {
-    const rows = await this.rollupRepo.platformBreakdown(range)
+  async platformBreakdown(window: UsageWindow): Promise<PlatformUsageBreakdown[]> {
+    const rows = await this.rollupRepo.platformBreakdown(window)
 
     // Compute grand total for share ratio
     const grandTotal = rows.reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0)

@@ -122,7 +122,8 @@ describe('quota-display', () => {
     const [line] = metricLines(baseAccount, state);
     expect(line.percentText).toBe('3%'); // rounded
     expect(line.usageText).toBe('288 / 10,000'); // thousands separator
-    expect(line.resetText).toBe('2026-07-01');
+    // resetText 现为「倒计时 (MM/DD HH:mm)」，倒计时部分依赖当前时间——只断言确定性后缀。
+    expect(line.resetText).toContain('(07/01 20:00)');
     expect(line.progress).toBeCloseTo(2.88);
   });
 

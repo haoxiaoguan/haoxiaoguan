@@ -3,24 +3,11 @@ import type { EntityManager } from '@mikro-orm/better-sqlite'
 import { getEm as defaultGetEm } from '../../../platform/persistence/database'
 import type {
   ActivityEventRow,
+  ActivityGranularity,
   ActivityRepository,
   ActivityTrendPoint,
+  ActivityWindow,
 } from '../domain/activity-repository'
-
-function windowDays(range: string): number {
-  switch (range) {
-    case '1d':
-      return 0
-    case '7d':
-      return 6
-    case '30d':
-      return 29
-    case '90d':
-      return 89
-    default:
-      return 6
-  }
-}
 
 export class MikroOrmActivityRepository implements ActivityRepository {
   private readonly getEm: () => EntityManager
@@ -67,32 +54,32 @@ export class MikroOrmActivityRepository implements ActivityRepository {
     }
   }
 
-  async trend(range: string, metric: string): Promise<ActivityTrendPoint[]> {
+  async trend(
+    window: ActivityWindow,
+    granularity: ActivityGranularity,
+    metric: string,
+  ): Promise<ActivityTrendPoint[]> {
     const conn = this.getEm().getConnection()
-    if (range === '1d') {
+    if (granularity === 'hour') {
       const rows = (await conn.execute(
-        `WITH d AS (SELECT MAX(strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime')) AS day
-                    FROM activity_events WHERE metric = ?)
-         SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date,
+        `SELECT strftime('%Y-%m-%d %H:00', occurred_at, 'unixepoch', 'localtime') AS date,
                 COALESCE(SUM(amount), 0) AS value
          FROM activity_events
-         WHERE metric = ? AND strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') = (SELECT day FROM d)
+         WHERE metric = ? AND occurred_at >= ? AND occurred_at <= ?
          GROUP BY date
          ORDER BY date ASC`,
-        [metric, metric],
+        [metric, window.startSec, window.endSec],
         'all',
       )) as any[]
       return (rows ?? []).map((r: any) => ({ date: r.date ?? '', value: Number(r.value ?? 0) }))
     }
-    const days = `-${windowDays(range)} day`
     const rows = (await conn.execute(
-      `WITH max_day AS (SELECT MAX(date) AS value FROM activity_daily_rollups WHERE metric = ?)
-       SELECT date, COALESCE(SUM(value), 0) AS value
+      `SELECT date, COALESCE(SUM(value), 0) AS value
        FROM activity_daily_rollups
-       WHERE metric = ? AND date >= date((SELECT value FROM max_day), ?)
+       WHERE metric = ? AND date >= date(?, 'unixepoch', 'localtime') AND date <= date(?, 'unixepoch', 'localtime')
        GROUP BY date
        ORDER BY date ASC`,
-      [metric, metric, days],
+      [metric, window.startSec, window.endSec],
       'all',
     )) as any[]
     return (rows ?? []).map((r: any) => ({ date: r.date ?? '', value: Number(r.value ?? 0) }))

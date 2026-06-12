@@ -1,40 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { RefreshCw } from 'lucide-react'
 import { useAccountStore } from '@/stores/accountStore'
-import { usageService, sessionsService, systemService } from '@/services/tauri'
-import type { UsageSummaryResponse } from '@/types'
+import { sessionsService, systemService } from '@/services/tauri'
 import type { ToolProbeDto } from '@shared/api-types'
 import { DASHBOARD_PLATFORMS } from '../platforms'
 import { useAccountStats } from '../hooks/useAccountStats'
 import { useQuotaHealthSummary } from '../hooks/useQuotaHealthSummary'
-import type { TrendRange } from '../hooks/useTrendSeries'
-import { AccountHeroCard } from '../datawall/AccountHeroCard'
-import { PlatformDonutCard } from '../datawall/PlatformDonutCard'
+import type { TimeRange } from '../utils/time-range'
+import { presetRange } from '../utils/time-range'
+import { KpiStrip } from '../datawall/KpiStrip'
 import { TrendChartCard } from '../datawall/TrendChartCard'
-import { PoolHealthCard } from '../datawall/PoolHealthCard'
-import { CredentialHealthCard } from '../datawall/CredentialHealthCard'
-import { TokenSummaryCard } from '../datawall/TokenSummaryCard'
+import { PlatformDonutCard } from '../datawall/PlatformDonutCard'
+import { AccountHealthCard } from '../datawall/AccountHealthCard'
 import { AttentionListCard } from '../datawall/AttentionListCard'
-import { SessionActivityCard } from '../datawall/SessionActivityCard'
-import { cn } from '@/lib/utils'
-
-const RANGE_LABEL_KEYS: Record<TrendRange, string> = {
-  '1d': 'trend.rangeToday',
-  '7d': 'trend.rangeWeek',
-  '30d': 'trend.rangeMonth',
-}
 
 const LS_REFRESH_KEY = 'datawall.refreshInterval'
-
-/** Interval options in seconds; 0 means disabled. */
-const REFRESH_OPTIONS: { labelKey: string; value: number }[] = [
-  { labelKey: 'datawall.interval.off', value: 0 },
-  { labelKey: 'datawall.interval.5s',  value: 5 },
-  { labelKey: 'datawall.interval.10s', value: 10 },
-  { labelKey: 'datawall.interval.30s', value: 30 },
-  { labelKey: 'datawall.interval.60s', value: 60 },
-]
 
 function readStoredInterval(): number {
   try {
@@ -50,25 +29,19 @@ function readStoredInterval(): number {
 }
 
 /**
- * Data wall page — 12-column Bento grid combining 8 metric cards.
- * 三行用分数高度（fr）铺满内容区，避免底部留白；窗口过矮时各行回退到 min 高度并滚动。
+ * 仪表盘（数据墙）—— 一屏三段：
+ * ① KPI 条（账号/会话/MCP/Skills）
+ * ② 趋势分析整行（活跃热力图 + 5 数值维度；时间范围选择器与自动刷新内嵌卡片右上）
+ * ③ 底部三卡（平台分布 / 账号健康 / 需关注）
  */
 export default function DataWallPage() {
-  const { t } = useTranslation('dashboard')
   const fetchAccounts = useAccountStore((s) => s.fetchAccounts)
 
-  const [range, setRange] = useState<TrendRange>('7d')
+  // 全局时间范围（趋势数值维度 + Token/费用统计行跟随），默认近 7 天。
+  const [range, setRange] = useState<TimeRange>(() => presetRange('7d', Date.now()))
 
-  // ── Usage summary for TokenSummaryCard ──────────────────────────────────────
-  const [usageSummary, setUsageSummary] = useState<UsageSummaryResponse | null>(null)
-  const rangeRef = useRef(range)
-  rangeRef.current = range
-
-  // ── Session tools for SessionActivityCard ───────────────────────────────────
+  // ── Session tools（KPI 会话数 + 会话活跃卡）────────────────────────────────
   const [tools, setTools] = useState<ToolProbeDto[]>([])
-
-  // ── Last synced timestamp ────────────────────────────────────────────────────
-  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
 
   // ── Auto-refresh state ───────────────────────────────────────────────────────
   const [refreshInterval, setRefreshIntervalState] = useState<number>(readStoredInterval)
@@ -78,18 +51,9 @@ export default function DataWallPage() {
   // 对齐 cc-switch：同步全部由后端固定 60s 定时（main.ts）负责，这里只重读 DB，不再触发
   // syncUsageSources/syncActivity——避免「选 5s 就每 5s 全量 syncAll+rebuildRollups」的浪费。
   const reloadAll = useCallback(() => {
-    const currentRange = rangeRef.current
     void sessionsService
       .probeTools()
       .then((result) => setTools(result))
-      .catch(() => undefined)
-    void usageService
-      .getUsageSummary(currentRange)
-      .then((data) => {
-        setUsageSummary(data)
-        // lastSyncedAt 后端是 Unix 秒，转毫秒再喂给 new Date()（Date.now() 兜底本就是毫秒）。
-        setLastSyncedAt(data.lastSyncedAt != null ? data.lastSyncedAt * 1000 : Date.now())
-      })
       .catch(() => undefined)
     DASHBOARD_PLATFORMS.forEach((p) => {
       void fetchAccounts(p)
@@ -105,8 +69,8 @@ export default function DataWallPage() {
   }, [refreshInterval, reloadAll])
 
   // ── 主进程后台同步线程完成事件 → 只读刷新 ───────────────────────────────────────
-  // 主进程每 60s 同步 usage+activity（main.ts），完成后推 usage:synced。大屏据此重读，
-  // **与页内「自动刷新」开关无关**——即使开关为关闭，后台线程仍驱动右上时间与数据更新。
+  // 主进程每 60s 同步 usage+activity（main.ts），完成后推 usage:synced。仪表盘据此重读，
+  // **与卡片内「自动刷新」档位无关**——即使档位为关闭，后台线程仍驱动数据更新。
   const reloadAllRef = useRef(reloadAll)
   reloadAllRef.current = reloadAll
   useEffect(() => {
@@ -125,25 +89,11 @@ export default function DataWallPage() {
       .catch(() => undefined)
   }, [fetchAccounts])
 
-  // ── Fetch usage summary whenever range changes ───────────────────────────────
-  useEffect(() => {
-    const thisRange = range
-    void usageService
-      .getUsageSummary(range)
-      .then((data) => {
-        if (rangeRef.current !== thisRange) return
-        setUsageSummary(data)
-        // lastSyncedAt 后端是 Unix 秒，转毫秒再喂给 new Date()（Date.now() 兜底本就是毫秒）。
-        setLastSyncedAt(data.lastSyncedAt != null ? data.lastSyncedAt * 1000 : Date.now())
-      })
-      .catch(() => undefined)
-  }, [range])
-
   // ── Derived stats ────────────────────────────────────────────────────────────
   const stats = useAccountStats()
   const qh = useQuotaHealthSummary()
 
-  // 进入仪表盘后自动加载「账号池健康 / 凭证健康 / 需关注」三卡（此前需手点各自的刷新）。
+  // 进入仪表盘后自动加载「账号健康 / 需关注」（此前需手点各自的刷新）。
   // 等账号就绪后触发一次：配额走缓存(ensureMany→getQuotaState)、凭证校验一次。用 ref 守卫
   // 保证同一会话只自动跑一次（避免每次切到仪表盘都重复校验），空账号则不触发。
   const qhRef = useRef(qh)
@@ -155,40 +105,17 @@ export default function DataWallPage() {
     void qhRef.current.refresh().catch(() => undefined)
   }, [stats.total])
 
-  const sessionTools = useMemo(
-    () =>
-      tools.map((e) => ({
-        tool: e.tool,
-        count: e.count,
-        lastActiveAt: e.lastActiveAt,
-      })),
-    [tools],
-  )
-
-  const tokenProps = usageSummary
-    ? {
-        // Four-way sum: input + output + cacheCreation + cacheRead (cache included)
-        totalTokens:
-          usageSummary.inputTokens +
-          usageSummary.outputTokens +
-          usageSummary.cacheReadTokens +
-          usageSummary.cacheCreationTokens,
-        inputTokens: usageSummary.inputTokens,
-        outputTokens: usageSummary.outputTokens,
-        cacheTokens: usageSummary.cacheReadTokens + usageSummary.cacheCreationTokens,
-        requests: usageSummary.requests,
-        costUsd: usageSummary.totalCostUsd ?? 0,
+  const sessionsTotal = useMemo(() => tools.reduce((sum, e) => sum + e.count, 0), [tools])
+  // 最近活跃：lastActiveAt 最大的工具（KPI 会话卡副文字）。
+  const lastActive = useMemo(() => {
+    let best: { tool: string; at: number } | null = null
+    for (const e of tools) {
+      if (e.lastActiveAt != null && (best === null || e.lastActiveAt > best.at)) {
+        best = { tool: e.tool, at: e.lastActiveAt }
       }
-    : { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, requests: 0, costUsd: 0 }
-
-  const rangeLabel = t(RANGE_LABEL_KEYS[range])
-
-  // ── Last sync display ────────────────────────────────────────────────────────
-  const syncLabel = useMemo(() => {
-    if (!lastSyncedAt) return null
-    const d = new Date(lastSyncedAt)
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-  }, [lastSyncedAt])
+    }
+    return best
+  }, [tools])
 
   // ── Interval selector handler ────────────────────────────────────────────────
   const handleIntervalChange = useCallback((val: number) => {
@@ -198,86 +125,42 @@ export default function DataWallPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header —— 去掉「控制中心」副标题（与顶栏「仪表盘」重复），仅保留「最后同步时间 + 自动刷新」控件并靠右。 */}
-      <div className="flex shrink-0 items-center justify-end gap-2 px-5 pb-2 pt-3">
-        {syncLabel != null && (
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground" title={t('datawall.lastSynced', '最后同步')}>
-            <RefreshCw className="size-3" strokeWidth={1.8} aria-hidden />
-            {syncLabel}
-          </span>
-        )}
-
-        {/* Auto-refresh inline selector */}
-        <div className="flex items-center gap-1 rounded-md bg-muted/50 px-1 py-0.5">
-          <span className="text-[10px] text-muted-foreground">
-            {t('datawall.autoRefresh')}
-          </span>
-          <div className="flex items-center gap-0.5">
-            {REFRESH_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => handleIntervalChange(opt.value)}
-                className={cn(
-                  'rounded px-1.5 py-0.5 text-[10px] font-medium transition-all duration-100',
-                  refreshInterval === opt.value
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                aria-pressed={refreshInterval === opt.value}
-              >
-                {t(opt.labelKey)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bento data wall —— 三行用 fr 分数高度铺满内容区（不再固定 200px / auto 行高，
-          消除底部留白）。每行内部 grid-rows-1 让 3 张卡片等高拉伸；窗口过矮时各行回退到
-          minmax 的最小高度并由容器滚动。 */}
       <div
         data-testid="datawall-grid"
-        className="grid min-h-0 flex-1 grid-rows-[minmax(200px,1.05fr)_minmax(160px,1fr)_minmax(150px,1fr)] gap-2.5 overflow-y-auto px-5 pb-5"
+        className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_minmax(150px,205px)] gap-2.5 overflow-hidden px-5 pb-5 pt-4"
       >
-        {/* Top: account hero | trend chart | platform donut */}
+        {/* ① KPI 条 */}
+        <KpiStrip
+          accountsTotal={stats.total}
+          weekNew={stats.weekNew}
+          platformsCovered={stats.platformsCovered}
+          platformsTotal={stats.platformsTotal}
+          sessionsTotal={sessionsTotal}
+          lastActive={lastActive}
+          refreshNonce={refreshNonce}
+        />
+
+        {/* ② 趋势分析（整行） */}
+        <div className="min-h-0">
+          <TrendChartCard
+            range={range}
+            onRangeChange={setRange}
+            refreshInterval={refreshInterval}
+            onRefreshIntervalChange={handleIntervalChange}
+            refreshNonce={refreshNonce}
+          />
+        </div>
+
+        {/* ③ 底部三卡 */}
         <div className="grid min-h-0 grid-cols-12 grid-rows-1 gap-2.5">
-          <div className="col-span-3 min-h-0">
-            <AccountHeroCard
-              total={stats.total}
-              platformsCovered={stats.platformsCovered}
-              platformsTotal={stats.platformsTotal}
-              todayActive={stats.todayActive}
-              weekNew={stats.weekNew}
-            />
-          </div>
-          <div className="col-span-6 min-h-0">
-            <TrendChartCard range={range} onRangeChange={setRange} refreshNonce={refreshNonce} />
-          </div>
-          <div className="col-span-3 min-h-0">
+          <div className="col-span-4 min-h-0">
             <PlatformDonutCard items={stats.perPlatform} total={stats.total} />
           </div>
-        </div>
-
-        {/* Middle: pool health | credential health | token summary */}
-        <div className="grid min-h-0 grid-cols-12 grid-rows-1 gap-2.5">
           <div className="col-span-4 min-h-0">
-            <PoolHealthCard pool={qh.pool} onRefresh={qh.refresh} />
+            <AccountHealthCard pool={qh.pool} credential={qh.credential} onRefresh={qh.refresh} />
           </div>
           <div className="col-span-4 min-h-0">
-            <CredentialHealthCard credential={qh.credential} onRefresh={qh.refresh} />
-          </div>
-          <div className="col-span-4 min-h-0">
-            <TokenSummaryCard rangeLabel={rangeLabel} {...tokenProps} />
-          </div>
-        </div>
-
-        {/* Bottom: attention list | session activity */}
-        <div className="grid min-h-0 grid-cols-12 grid-rows-1 gap-2.5">
-          <div className="col-span-8 min-h-0">
             <AttentionListCard items={qh.attention} onRefresh={qh.refresh} />
-          </div>
-          <div className="col-span-4 min-h-0">
-            <SessionActivityCard tools={sessionTools} />
           </div>
         </div>
       </div>

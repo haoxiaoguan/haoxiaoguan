@@ -49,9 +49,9 @@ describe('MikroOrmActivityRepository', () => {
       { sourceKey: 'c', tool: 'codex', metric: 'sessions', occurredAt: 1700000200, amount: 1 },
     ])
     await repo.rebuildRollups()
-    const trend = await repo.trend('90d', 'tool_calls')
+    const trend = await repo.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'tool_calls')
     expect(trend).toEqual([{ date: '2023-11-14', value: 2 }])
-    const sessions = await repo.trend('90d', 'sessions')
+    const sessions = await repo.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'sessions')
     expect(sessions).toEqual([{ date: '2023-11-14', value: 1 }])
   })
 
@@ -60,12 +60,12 @@ describe('MikroOrmActivityRepository', () => {
     await repo.upsertEvents([{ sourceKey: 'a', tool: 'claude', metric: 'sessions', occurredAt: 1700000000, amount: 1 }])
     await repo.rebuildRollups()
     await repo.rebuildRollups()
-    expect(await repo.trend('90d', 'sessions')).toEqual([{ date: '2023-11-14', value: 1 }])
+    expect(await repo.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'sessions')).toEqual([{ date: '2023-11-14', value: 1 }])
   })
 
   it('trend：空表返回 []', async () => {
     const repo = new MikroOrmActivityRepository(testGetEm)
-    expect(await repo.trend('7d', 'sessions')).toEqual([])
+    expect(await repo.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'sessions')).toEqual([])
   })
 
   it('rebuildRollups：code_lines 按 amount 求和（非计数）', async () => {
@@ -75,7 +75,7 @@ describe('MikroOrmActivityRepository', () => {
       { sourceKey: 'e2', tool: 'claude', metric: 'code_lines', occurredAt: 1700000100, amount: 5 },
     ])
     await repo.rebuildRollups()
-    expect(await repo.trend('90d', 'code_lines')).toEqual([{ date: '2023-11-14', value: 15 }])
+    expect(await repo.trend({ startSec: 0, endSec: 4102444800 }, 'day', 'code_lines')).toEqual([{ date: '2023-11-14', value: 15 }])
   })
 
   it('同一 source_key 不同 metric 可共存（复合主键）', async () => {
@@ -106,7 +106,7 @@ describe('MikroOrmActivityRepository', () => {
       { sourceKey: 's3', tool: 'claude', metric: 'tool_calls', occurredAt: 1700003600, amount: 1 },
     ])
     await repo.rebuildRollups()
-    const pts = await repo.trend('1d', 'tool_calls')
+    const pts = await repo.trend({ startSec: 0, endSec: 4102444800 }, 'hour', 'tool_calls')
     expect(pts).toEqual([
       { date: '2023-11-14 22:00', value: 2 },
       { date: '2023-11-14 23:00', value: 1 },

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ResponsiveContainer,
@@ -9,32 +9,42 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts'
+import { RefreshCw } from 'lucide-react'
 import { useThemeValue } from '@/hooks/use-theme'
-import { useTrendSeries } from '../hooks/useTrendSeries'
-import type { TrendRange, TrendDimension } from '../hooks/useTrendSeries'
-import { formatMetricValue } from '../utils/trend-fill'
-import { VIZ } from './viz-colors'
 import { cn } from '@/lib/utils'
+import {
+  useTrendSeries,
+  useActivityHeatmapData,
+  useUsageSummaryRange,
+  type TrendDimension,
+} from '../hooks/useTrendSeries'
+import { formatMetricValue } from '../utils/trend-fill'
+import type { TimeRange } from '../utils/time-range'
+import { activityStats } from '../utils/activity-stats'
+import { DateRangePicker } from '../components/DateRangePicker'
+import { ActivityHeatmap } from './ActivityHeatmap'
+import { VIZ } from './viz-colors'
 
 interface TrendChartCardProps {
-  range: TrendRange
-  onRangeChange: (r: TrendRange) => void
+  range: TimeRange
+  onRangeChange: (r: TimeRange) => void
+  /** 自动刷新间隔（秒），0=关。控件在卡片右上，状态由页面持有（驱动定时器）。 */
+  refreshInterval: number
+  onRefreshIntervalChange: (v: number) => void
   refreshNonce?: number
 }
 
-const RANGE_OPTIONS: { value: TrendRange; labelKey: string }[] = [
-  { value: '1d', labelKey: 'trend.rangeToday' },
-  { value: '7d', labelKey: 'trend.rangeWeek' },
-  { value: '30d', labelKey: 'trend.rangeMonth' },
-]
-
 const DIM_OPTIONS: { value: TrendDimension; labelKey: string }[] = [
+  { value: 'activity',   labelKey: 'trend.dimActivity' },
   { value: 'tokens',     labelKey: 'trend.dimToken' },
   { value: 'cost',       labelKey: 'trend.dimCost' },
   { value: 'tool_calls', labelKey: 'trend.dimTool' },
   { value: 'sessions',   labelKey: 'trend.dimSession' },
   { value: 'code_lines', labelKey: 'trend.dimCode' },
 ]
+
+/** 刷新间隔循环档位（秒）：点击按钮在档位间轮转。 */
+const REFRESH_STEPS = [0, 5, 10, 30, 60]
 
 // Themed custom tooltip -------------------------------------------------------
 interface ChartTooltipProps {
@@ -117,17 +127,55 @@ function LoadingPlaceholder() {
   )
 }
 
+// ── 统计行（图表下方，按维度变化）──────────────────────────────────────────────
+
+interface StatItem {
+  label: string
+  value: string
+}
+
+function StatRow({ items }: { items: StatItem[] }) {
+  return (
+    <div className="flex shrink-0 items-stretch border-t border-border/70 px-4 py-2.5">
+      {items.map((item, i) => (
+        <div
+          key={item.label}
+          className={cn('pr-5', i > 0 && 'border-l border-border/70 pl-5')}
+        >
+          <p className="text-[11px] leading-4 text-muted-foreground">{item.label}</p>
+          <p
+            className="mt-0.5 text-[16px] font-semibold leading-5 tracking-tight text-foreground"
+            style={{ fontVariantNumeric: 'tabular-nums' }}
+          >
+            {item.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
- * Central trend chart card for the data wall.
- * Controlled `range` prop; internal `dimension` state.
- * Optional `refreshNonce` — increment externally to force a data re-fetch.
+ * 趋势分析主卡（整行）：6 维度（活跃热力图 + 5 条数值曲线），
+ * 右上内嵌「自动刷新档位」与「时间范围选择器」（活跃维度固定近一年，选择器置灰），
+ * 图表下方为该维度的统计行。
  */
-export function TrendChartCard({ range, onRangeChange, refreshNonce }: TrendChartCardProps) {
+export function TrendChartCard({
+  range,
+  onRangeChange,
+  refreshInterval,
+  onRefreshIntervalChange,
+  refreshNonce,
+}: TrendChartCardProps) {
   const { t } = useTranslation('dashboard')
   const theme = useThemeValue()
 
-  const [dimension, setDimension] = useState<TrendDimension>('tokens')
-  const { points, total, loading } = useTrendSeries(range, dimension, refreshNonce)
+  const [dimension, setDimension] = useState<TrendDimension>('activity')
+  const isActivity = dimension === 'activity'
+
+  const { points, total, loading } = useTrendSeries(range, dimension, !isActivity, refreshNonce)
+  const heatmap = useActivityHeatmapData(isActivity, refreshNonce)
+  const { summary } = useUsageSummaryRange(range, refreshNonce)
 
   // Theme-aware colors
   const brandBlue   = theme === 'dark' ? '#3b82f6' : '#2563eb'
@@ -135,47 +183,112 @@ export function TrendChartCard({ range, onRangeChange, refreshNonce }: TrendChar
   const tickColor   = theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(15,23,42,0.35)'
   const gradId      = `trend-area-grad-${theme}`
 
-  const valueKind = dimension === 'tokens' ? 'tokens' : dimension === 'cost' ? 'cost' : 'count'
-  const totalLabel = formatMetricValue(total, valueKind)
+  // 最后同步时间（HH:mm）——来自范围汇总的 lastSyncedAt（Unix 秒）。
+  const syncLabel = useMemo(() => {
+    if (summary?.lastSyncedAt == null) return null
+    const d = new Date(summary.lastSyncedAt * 1000)
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+  }, [summary?.lastSyncedAt])
+
+  const cycleRefresh = () => {
+    const idx = REFRESH_STEPS.indexOf(refreshInterval)
+    onRefreshIntervalChange(REFRESH_STEPS[(idx + 1) % REFRESH_STEPS.length] ?? 0)
+  }
+
+  // 维度统计行
+  const stats = useMemo<StatItem[]>(() => {
+    if (isActivity) {
+      const s = activityStats(heatmap.points, Date.now())
+      return [
+        { label: t('trend.stats.todaySessions'), value: s.todaySessions.toLocaleString('en-US') },
+        { label: t('trend.stats.weekActiveDays'), value: t('trend.stats.days', { n: s.weekActiveDays }) },
+        { label: t('trend.stats.monthActiveDays'), value: t('trend.stats.days', { n: s.monthActiveDays }) },
+      ]
+    }
+    const days = Math.max(1, Math.round((range.endMs - range.startMs) / 86_400_000))
+    if (dimension === 'tokens') {
+      const input = summary?.inputTokens ?? 0
+      const output = summary?.outputTokens ?? 0
+      const cache = (summary?.cacheReadTokens ?? 0) + (summary?.cacheCreationTokens ?? 0)
+      return [
+        { label: t('trend.stats.total'), value: formatMetricValue(input + output + cache, 'tokens') },
+        { label: t('trend.tipInput'), value: formatMetricValue(input, 'tokens') },
+        { label: t('trend.tipOutput'), value: formatMetricValue(output, 'tokens') },
+        { label: t('trend.stats.cache'), value: formatMetricValue(cache, 'tokens') },
+        { label: t('trend.stats.requests'), value: (summary?.requests ?? 0).toLocaleString('en-US') },
+      ]
+    }
+    if (dimension === 'cost') {
+      const totalCost = summary?.totalCostUsd ?? 0
+      const peak = points.reduce((m, p) => Math.max(m, p.value), 0)
+      return [
+        { label: t('trend.stats.total'), value: formatMetricValue(totalCost, 'cost') },
+        { label: t('trend.stats.avgPerDay'), value: formatMetricValue(totalCost / days, 'cost') },
+        { label: t('trend.stats.peak'), value: formatMetricValue(peak, 'cost') },
+      ]
+    }
+    const peak = points.reduce((m, p) => Math.max(m, p.value), 0)
+    return [
+      { label: t('trend.stats.total'), value: total.toLocaleString('en-US') },
+      { label: t('trend.stats.avgPerDay'), value: Math.round(total / days).toLocaleString('en-US') },
+      { label: t('trend.stats.peak'), value: peak.toLocaleString('en-US') },
+    ]
+  }, [isActivity, heatmap.points, dimension, summary, points, total, range, t])
 
   return (
     <div className="flex h-full flex-col rounded-[14px] border border-border bg-card text-card-foreground shadow-bento-light dark:shadow-bento">
-      {/* ── Header row ────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4">
-        {/* Left: title + big number */}
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t('trend.title')}
-          </span>
-          <span
-            className="text-[28px] font-extrabold leading-none tracking-tight text-foreground"
-            style={{ fontVariantNumeric: 'tabular-nums' }}
-          >
-            {loading ? (
-              <span className="inline-block w-20 animate-pulse rounded bg-muted/60 align-middle">&nbsp;</span>
-            ) : (
-              totalLabel
+      {/* ── Header：标题 | 同步时间 · 刷新档位 · 时间范围 ─────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {t('trend.title')}
+        </span>
+        <div className="flex items-center gap-2">
+          {syncLabel != null && (
+            <span
+              className="flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground"
+              title={t('datawall.lastSynced')}
+            >
+              <RefreshCw className="size-3" strokeWidth={1.8} aria-hidden />
+              {syncLabel}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={cycleRefresh}
+            title={t('datawall.autoRefresh')}
+            className={cn(
+              'flex h-8 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12px] tabular-nums transition-colors',
+              refreshInterval > 0
+                ? 'border-primary/40 text-primary'
+                : 'border-border text-muted-foreground hover:text-foreground',
             )}
-          </span>
+            aria-label={t('datawall.autoRefresh')}
+          >
+            <RefreshCw className="size-3.5" strokeWidth={1.9} aria-hidden />
+            {refreshInterval > 0 ? `${refreshInterval}s` : t('datawall.interval.off')}
+          </button>
+          <DateRangePicker value={range} onChange={onRangeChange} disabled={isActivity} />
         </div>
+      </div>
 
-        {/* Right: range pills */}
+      {/* ── Dimension segmented control ───────────────────────────── */}
+      <div className="px-4 pt-2.5">
         <div
-          className="flex items-center gap-1 rounded-full bg-muted/50 p-[3px]"
+          className="inline-flex items-center gap-0.5 rounded-full bg-muted/60 p-[3px]"
           role="group"
           aria-label={t('trend.title')}
         >
-          {RANGE_OPTIONS.map(({ value, labelKey }) => (
+          {DIM_OPTIONS.map(({ value, labelKey }) => (
             <button
               key={value}
-              onClick={() => onRangeChange(value)}
+              onClick={() => setDimension(value)}
               className={cn(
-                'rounded-full px-3 py-1 text-[11px] font-medium transition-all duration-150',
-                range === value
-                  ? 'bg-card text-foreground shadow-sm'
+                'rounded-full px-3 py-1 text-[11.5px] transition-all duration-150',
+                dimension === value
+                  ? 'bg-card font-medium text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
-              aria-pressed={range === value}
+              aria-pressed={dimension === value}
             >
               {t(labelKey)}
             </button>
@@ -183,28 +296,15 @@ export function TrendChartCard({ range, onRangeChange, refreshNonce }: TrendChar
         </div>
       </div>
 
-      {/* ── Dimension pills row ───────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-2.5">
-        {DIM_OPTIONS.map(({ value, labelKey }) => (
-          <button
-            key={value}
-            onClick={() => setDimension(value)}
-            className={cn(
-              'rounded-md px-2.5 py-1 text-[11px] font-medium transition-all duration-150',
-              dimension === value
-                ? 'bg-[#2563eb] text-white dark:bg-[#3b82f6]'
-                : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-            aria-pressed={dimension === value}
-          >
-            {t(labelKey)}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Chart area ────────────────────────────────────────────── */}
-      <div className="min-h-0 flex-1 px-2 pb-3 pt-2">
-        {loading ? (
+      {/* ── 图区：活跃=热力图，数值=面积图 ─────────────────────────── */}
+      <div className="min-h-0 flex-1 px-4 pb-2 pt-2">
+        {isActivity ? (
+          heatmap.loading ? (
+            <LoadingPlaceholder />
+          ) : (
+            <ActivityHeatmap points={heatmap.points} now={Date.now()} />
+          )
+        ) : loading ? (
           <LoadingPlaceholder />
         ) : points.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
@@ -265,6 +365,9 @@ export function TrendChartCard({ range, onRangeChange, refreshNonce }: TrendChar
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* ── 维度统计行 ─────────────────────────────────────────────── */}
+      <StatRow items={stats} />
     </div>
   )
 }
