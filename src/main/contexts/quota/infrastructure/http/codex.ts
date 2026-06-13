@@ -62,12 +62,18 @@ export async function fetch(
     subscription = {}
   }
 
+  // 实时计划。务必同时覆盖 snake/camel 两套键——导入时写的是 camelCase planType/planTier，
+  // 而旧版刷新只写 snake plan_type/planName，导致降级后 planType/plan_tier 残留旧值（display 侧
+  // account-plan.ts 先读 camelCase planType → 显示陈旧「PRO 20x」+ 旧会员有效期）。
+  const resolvedPlan = planType ?? subscription.planType ?? null
   const providerPayload = {
     ...(typeof profilePayload === 'object' && profilePayload !== null && !Array.isArray(profilePayload)
       ? profilePayload
       : {}),
-    plan_type: planType ?? subscription.planType ?? null,
-    planName: planType ?? subscription.planType ?? null,
+    plan_type: resolvedPlan,
+    planType: resolvedPlan,
+    planName: resolvedPlan,
+    planTier: resolvedPlan,
     quota,
     codex_usage_raw: usage,
     ...(subscription.activeUntil !== undefined
@@ -211,40 +217,42 @@ function chatgptAccountId(
   )
 }
 
-function parseQuota(usage: JsonValue): JsonValue {
+export function parseQuota(usage: JsonValue): JsonValue {
   const primary = getPathValue(usage, ['rate_limit', 'primary_window'])
   const secondary = getPathValue(usage, ['rate_limit', 'secondary_window'])
   return {
     hourly_percentage: remainingPercentage(primary),
     hourly_reset_time: resetTime(primary) ?? null,
     hourly_window_minutes: windowMinutes(primary) ?? null,
-    hourly_window_present: primary !== undefined,
+    // 用 != null：上游对「无该窗口」返回的是显式 null（如 free 账号 secondary_window:null），
+    // 旧判断 `!== undefined` 把 null 误判为「存在」→ free 仍显示空的周额度。
+    hourly_window_present: primary != null,
     weekly_percentage: remainingPercentage(secondary),
     weekly_reset_time: resetTime(secondary) ?? null,
     weekly_window_minutes: windowMinutes(secondary) ?? null,
-    weekly_window_present: secondary !== undefined,
+    weekly_window_present: secondary != null,
     raw_data: usage,
   }
 }
 
 function remainingPercentage(window: JsonValue | undefined): number {
-  const used = window !== undefined ? pickI64Http(window, [['used_percent'], ['usedPercent']]) : undefined
+  const used = window != null ? pickI64Http(window, [['used_percent'], ['usedPercent']]) : undefined
   const clamped = Math.min(Math.max(used ?? 0, 0), 100)
   return 100 - clamped
 }
 
 function windowMinutes(window: JsonValue | undefined): number | undefined {
   const seconds =
-    window !== undefined ? pickI64Http(window, [['limit_window_seconds'], ['limitWindowSeconds']]) : undefined
+    window != null ? pickI64Http(window, [['limit_window_seconds'], ['limitWindowSeconds']]) : undefined
   if (seconds === undefined || seconds <= 0) return undefined
   return Math.trunc((seconds + 59) / 60)
 }
 
 function resetTime(window: JsonValue | undefined): number | undefined {
-  const resetAt = window !== undefined ? pickI64Http(window, [['reset_at'], ['resetAt']]) : undefined
+  const resetAt = window != null ? pickI64Http(window, [['reset_at'], ['resetAt']]) : undefined
   if (resetAt !== undefined) return resetAt
   const seconds =
-    window !== undefined ? pickI64Http(window, [['reset_after_seconds'], ['resetAfterSeconds']]) : undefined
+    window != null ? pickI64Http(window, [['reset_after_seconds'], ['resetAfterSeconds']]) : undefined
   if (seconds === undefined) return undefined
   return Math.trunc(timestampToDate(Math.trunc(Date.now() / 1000) + seconds).getTime() / 1000)
 }
