@@ -468,7 +468,7 @@ export class ClientConfigService {
         baseUrl = `http://127.0.0.1:${port}/v1`
         apiKey = await this.ensureCodexRelayClientKey(id) // 反代鉴权要求有效 client key(无 loopback 匿名)
         viaProxy = true
-        models = codexEntries.map((e) => ({ id: e.id, displayName: e.name ?? profile.name, ...(e.contextWindow !== undefined ? { contextLength: e.contextWindow } : {}) }))
+        models = codexEntries.map((e) => ({ id: e.id, displayName: e.name ?? `${e.id} · 号小管中转`, ...(e.contextWindow !== undefined ? { contextLength: e.contextWindow } : {}) }))
       } else {
         // responses 协议（C3）：ON+可用反代 → 收编进反代（responses 透传适配器），实现与原生真共存；
         // OFF 或反代不可用 → 直连该第三方端点（catalog 不并原生，避免原生条目误路由）。
@@ -495,10 +495,11 @@ export class ClientConfigService {
           baseUrl = `http://127.0.0.1:${port}/v1`
           apiKey = await this.ensureCodexRelayClientKey(id) // 反代鉴权要求有效 client key(无 loopback 匿名)
           viaProxy = true
-          // catalog 用 alias（可能有 -hxg 后缀），displayName 用用户填写的 name
+          // catalog slug 用 alias（可能有 -hxg 后缀避撞名）；display_name 用用户填写的 name，缺省
+          // 用「真实模型名 · 号小管中转」——去掉 -hxg/（号小管），与账号(· 号小管账号)/组合(· 号小管组合)统一。
           models = relayModels.map((rm, i) => ({
             id: rm.alias,
-            displayName: codexEntries[i]?.name,
+            displayName: codexEntries[i]?.name ?? `${rm.real} · 号小管中转`,
             ...(codexEntries[i]?.contextWindow !== undefined ? { contextLength: codexEntries[i].contextWindow } : {}),
           }))
         } else {

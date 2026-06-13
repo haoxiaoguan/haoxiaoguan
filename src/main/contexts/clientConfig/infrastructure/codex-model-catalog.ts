@@ -88,8 +88,9 @@ function thirdPartyEntry(
   const ctx = intOr(m.contextLength, intOr(template.context_window, 200000))
   const entry: Record<string, unknown> = { ...template }
   entry.slug = m.id
-  // 调用方提供 displayName 时原样使用（用户填写的菜单显示名按填写内容保存）；未提供时回退「<id>（号小管）」。
-  entry.display_name = m.displayName !== undefined ? m.displayName : `${m.id}（号小管）`
+  // 调用方提供 displayName 时原样使用（用户填写的菜单显示名按填写内容保存）；未提供时回退「<id> · 号小管中转」
+  // （与账号「· 号小管账号」/组合「· 号小管组合」统一格式；调用方通常已带标记，此为最后兜底）。
+  entry.display_name = m.displayName !== undefined ? m.displayName : `${m.id} · 号小管中转`
   entry.description = m.displayName !== undefined ? m.displayName : `${m.id} · 经号小管反代接入`
   entry.priority = 100 + index // 整数，排在原生(9~50)之后
   entry.context_window = ctx
