@@ -8,6 +8,7 @@ import { PlatformRegistry } from '../../../src/main/contexts/apiProxy/infrastruc
 import { EchoUpstreamAdapter } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 import { ProxyRequestLog } from '../../../src/main/contexts/apiProxy/domain/observability/proxy-request-log'
 import { renderPrometheus } from '../../../src/main/contexts/apiProxy/domain/observability/prometheus'
+import { makePlatformAliasResolver } from '../../../src/main/contexts/apiProxy/domain/platform-alias'
 
 let server: ApiHttpServer | null = null
 afterEach(async () => {
@@ -44,7 +45,7 @@ function buildEchoServer(log: ProxyRequestLog, authKeys: string[] = [], allowAno
   const deps: HonoAppDeps = {
     service,
     auth: { keysProvider: async () => authKeys, allowAnonymousLoopback: allowAnon },
-    knownPlatforms: registry.knownPlatforms(),
+    resolvePlatformAlias: makePlatformAliasResolver((n) => registry.get(n) !== undefined),
     metrics,
   }
   const s = new ApiHttpServer(createApiRequestListener(deps), { port: 0 })
@@ -59,7 +60,7 @@ function buildStubServer(throwErr: () => never): ApiHttpServer {
   const deps: HonoAppDeps = {
     service,
     auth: { keysProvider: async () => [], allowAnonymousLoopback: true },
-    knownPlatforms: new Set<string>(),
+    resolvePlatformAlias: () => undefined,
   }
   const s = new ApiHttpServer(createApiRequestListener(deps), { port: 0 })
   server = s

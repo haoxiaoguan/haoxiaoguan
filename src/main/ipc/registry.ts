@@ -50,6 +50,7 @@ import { registerAccountGroupHandlers } from '../contexts/accountGroup/ipc/accou
 
 import type { ApiProxyService } from '../contexts/apiProxy/application/api-proxy-service'
 import { registerApiProxyHandlers } from '../contexts/apiProxy/ipc/api-proxy-handlers'
+import type { ComboService } from '../contexts/apiProxy/application/combo-service'
 import type { AccountHealthTracker } from '../contexts/apiProxy/domain/account-selection/account-health-tracker'
 import type { KiroAccountPort } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
 import type { ApiProxyKeyService } from '../contexts/apiProxy/application/api-proxy-key-service'
@@ -131,6 +132,8 @@ export interface Services {
   apiProxyKeyService?: ApiProxyKeyService
   /** 请求级可观测性日志（G3）：供 IPC getRequestLog/clearRequestLog + 推送给渲染层。 */
   apiProxyRequestLog: ProxyRequestLog
+  /** 路由组合服务（CRUD + ComboSource）。 */
+  comboService?: ComboService
 
   // sessions context (read-only on-disk AI CLI conversation history browser)
   sessionsService: SessionsService
@@ -176,7 +179,7 @@ export function registerAllHandlers(services: Services): void {
   registerWebSocketHandlers(services.websocket)
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
-  registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs(), services.apiProxyRequestLog)
+  registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs(), services.apiProxyRequestLog, services.comboService)
   registerSessionsHandlers(services.sessionsService, services.codexSessionRepair, services.clientConfigService)
   registerActivityHandlers(services.activitySync, services.activityQuery)
   registerClientConfigHandlers(services.clientConfigService, services.clientVersionService)

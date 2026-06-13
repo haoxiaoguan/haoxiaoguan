@@ -51,6 +51,7 @@ import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infr
 
 import { ApiProxyKeyEntity } from '../../contexts/apiProxy/infrastructure/api-proxy-key.entity'
 import { RelayUpstreamEntity } from '../../contexts/apiProxy/infrastructure/relay/relay-upstream.entity'
+import { RouteComboEntity } from '../../contexts/apiProxy/infrastructure/route-combo.entity'
 
 import { ClientConfigProfileEntity } from '../../contexts/clientConfig/infrastructure/client-config-profile.entity'
 
@@ -91,6 +92,7 @@ export const ALL_ENTITIES: unknown[] = [
   // api-proxy context
   ApiProxyKeyEntity,
   RelayUpstreamEntity,
+  RouteComboEntity,
   // client-config context (1 table: client_config_profiles)
   ClientConfigProfileEntity,
   // activity context

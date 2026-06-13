@@ -30,7 +30,7 @@ export interface ApiHttpServerConfig {
 
 export const API_HTTP_DEFAULTS: ApiHttpServerConfig = {
   host: '127.0.0.1',
-  port: 8788,
+  port: 28788,
   maxPortRetries: 10,
 }
 

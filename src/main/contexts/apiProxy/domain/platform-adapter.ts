@@ -53,7 +53,7 @@ export interface UpstreamCtx {
  * classifyError 供 FailoverAdapter 决策：切号/熔断/配额/永久退役。
  */
 export interface PlatformUpstreamAdapter {
-  /** 平台标识，唯一。用于 /{platform}/v1 锁池与注册表 key。 */
+  /** 平台标识，唯一。用作注册表 key，并可作 model 前缀（`<platform>/<model>`）显式锁池。 */
   readonly platform: string
   /** 该平台是否支持某模型名（用于裸路由模型感知选池）。 */
   supportsModel(model: string): boolean

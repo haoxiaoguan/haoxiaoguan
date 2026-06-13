@@ -44,7 +44,7 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.codexLaunchOnSwitch
   }
 
-  /** 反代服务监听端口（默认 8788）。 */
+  /** 反代服务监听端口（默认 28788）。 */
   getApiProxyPort(): number {
     return this.file.loadSync().runtime.apiProxyPort
   }

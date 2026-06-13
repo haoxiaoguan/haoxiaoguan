@@ -7,14 +7,14 @@ describe('apiProxyPort 上限', () => {
     s.applyFlatKv({ api_proxy_port: '65535' })
     expect(s.runtime.apiProxyPort).toBe(65535)
   })
-  it('拒绝 >65535（回落默认 8788）', () => {
+  it('拒绝 >65535（回落默认 28788）', () => {
     const s = AppSettings.fromJson({})
     s.applyFlatKv({ api_proxy_port: '70000' })
-    expect(s.runtime.apiProxyPort).toBe(8788)
+    expect(s.runtime.apiProxyPort).toBe(28788)
   })
   it('拒绝 <1024', () => {
     const s = AppSettings.fromJson({})
     s.applyFlatKv({ api_proxy_port: '80' })
-    expect(s.runtime.apiProxyPort).toBe(8788)
+    expect(s.runtime.apiProxyPort).toBe(28788)
   })
 })

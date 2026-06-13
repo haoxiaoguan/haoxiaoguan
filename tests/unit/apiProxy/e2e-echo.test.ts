@@ -15,6 +15,7 @@ import { createApiRequestListener, type HonoAppDeps } from '../../../src/main/co
 import { ApiProxyService } from '../../../src/main/contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from '../../../src/main/contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
+import { makePlatformAliasResolver } from '../../../src/main/contexts/apiProxy/domain/platform-alias'
 
 let server: ApiHttpServer | null = null
 
@@ -42,7 +43,7 @@ function buildServer(
   const deps: HonoAppDeps = {
     service,
     auth: { keysProvider: async () => authKeys, allowAnonymousLoopback: allowAnon },
-    knownPlatforms: registry.knownPlatforms(),
+    resolvePlatformAlias: makePlatformAliasResolver((n) => registry.get(n) !== undefined),
   }
   const s = new ApiHttpServer(createApiRequestListener(deps), { port: 0 })
   ref.current = s
@@ -71,13 +72,13 @@ describe('e2e: Echo over real HTTP', () => {
     expect(json.choices[0].message.content).toBe('e2e-openai')
   })
 
-  it('Anthropic non-stream — platform-locked /echo/v1/messages', async () => {
+  it('Anthropic non-stream — 模型前缀 echo/<model> 锁定 echo（裸 /v1/messages）', async () => {
     const { start } = buildServer()
     const port = await start()
-    const res = await fetch(`http://127.0.0.1:${port}/echo/v1/messages`, {
+    const res = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'echo-1', max_tokens: 8, messages: [{ role: 'user', content: 'e2e-anthropic' }] }),
+      body: JSON.stringify({ model: 'echo/echo-1', max_tokens: 8, messages: [{ role: 'user', content: 'e2e-anthropic' }] }),
     })
     expect(res.status).toBe(200)
     const json = (await res.json()) as { content: { type: string; text: string }[] }
@@ -97,7 +98,8 @@ describe('e2e: Echo over real HTTP', () => {
     expect(json.candidates[0].content.parts[0].text).toBe('e2e-gemini')
   })
 
-  it('Gemini non-stream — platform-locked /echo/v1beta/models/echo-1:generateContent', async () => {
+  it('平台前缀 URL 已移除：/echo/v1beta/models/...:generateContent → 404', async () => {
+    // Gemini 模型在 path 段，无法带 `/` 前缀（会多切一段），故 gemini 仅按裸路由 + 模型名路由。
     const { start } = buildServer()
     const port = await start()
     const res = await fetch(`http://127.0.0.1:${port}/echo/v1beta/models/echo-1:generateContent`, {
@@ -105,7 +107,7 @@ describe('e2e: Echo over real HTTP', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'e2e-gem2' }] }] }),
     })
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(404)
   })
 
   it('OpenAI STREAM — /v1/chat/completions with stream:true delivers SSE then [DONE]', async () => {
@@ -152,15 +154,17 @@ describe('e2e: Echo over real HTTP', () => {
     expect(res.status).toBe(200)
   })
 
-  it('OpenAI non-stream — platform-locked /echo/v1/chat/completions (second entry for openai)', async () => {
+  it('OpenAI non-stream — 模型前缀 echo/<model> 锁定 echo（裸 /v1/chat/completions）', async () => {
     const { start } = buildServer()
     const port = await start()
-    const res = await fetch(`http://127.0.0.1:${port}/echo/v1/chat/completions`, {
+    const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'echo-1', messages: [{ role: 'user', content: 'locked-openai' }] }),
+      body: JSON.stringify({ model: 'echo/echo-1', messages: [{ role: 'user', content: 'locked-openai' }] }),
     })
     expect(res.status).toBe(200)
+    const json = (await res.json()) as { choices: { message: { content: string } }[] }
+    expect(json.choices[0].message.content).toBe('locked-openai')
   })
 
   it('health works over HTTP without a key', async () => {

@@ -99,12 +99,19 @@ describe('AppSettings', () => {
     expect(s.runtime.quotaRefreshConcurrency).toBe(100)
   })
 
-  it('defaults apiProxyEnabled to false and apiProxyPort to 8788', () => {
+  it('defaults apiProxyEnabled to false and apiProxyPort to 28788', () => {
     const s = AppSettings.fromJson({})
     expect(s.runtime.apiProxyEnabled).toBe(false)
-    expect(s.runtime.apiProxyPort).toBe(8788)
+    expect(s.runtime.apiProxyPort).toBe(28788)
     expect(s.toFlatKv().api_proxy_enabled).toBe('false')
-    expect(s.toFlatKv().api_proxy_port).toBe('8788')
+    expect(s.toFlatKv().api_proxy_port).toBe('28788')
+  })
+
+  it('migrates legacy default port 8788 → 28788; keeps a custom port', () => {
+    // 存量库恰为旧默认 8788 → 上抬到新默认 28788（未自定义用户随之跟到新默认）。
+    expect(AppSettings.fromJson({ runtime: { apiProxyPort: 8788 } }).runtime.apiProxyPort).toBe(28788)
+    // 自定义了其它端口 → 原样保留。
+    expect(AppSettings.fromJson({ runtime: { apiProxyPort: 9090 } }).runtime.apiProxyPort).toBe(9090)
   })
 
   it('applies api_proxy flat KV and round-trips through toJson/fromJson', () => {
@@ -121,7 +128,7 @@ describe('AppSettings', () => {
   it('drops an out-of-range api_proxy_port (below 1024)', () => {
     const s = AppSettings.fromJson({})
     s.applyFlatKv({ api_proxy_port: '80' }) // below the 1024 floor
-    expect(s.runtime.apiProxyPort).toBe(8788) // unchanged
+    expect(s.runtime.apiProxyPort).toBe(28788) // unchanged（默认）
   })
 })
 

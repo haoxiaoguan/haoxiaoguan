@@ -206,6 +206,7 @@ beforeEach(async () => {
     revokeKey: async (id) => {
       revokedKeys.push(id)
     },
+    getRelayInjectionKey: () => 'sk-hxg-relay-test',
     listModels: () => proxyModels,
     listCatalogModels: () => catalogModels,
     listAccountPoolModels: () => [{ id: 'claude-sonnet-4.5', displayName: 'Claude Sonnet 4.5' }],
@@ -408,7 +409,7 @@ describe('ClientConfigService', () => {
     expect(slugs).toContain('claude-sonnet-4.5') // 账号池
   })
 
-  it('ON + 启用可中转第三方：供 relay + 经反代路由(base_url=8788) + bearer=真签发 client key', async () => {
+  it('ON + 启用可中转第三方：供 relay + 经反代路由(base_url=8788) + bearer=固定注入 key', async () => {
     codexRelayOn = true
     const tp = await svc.create({ clientId: 'codex', name: 'DeepSeek', source: 'manual', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'k', model: 'deepseek-chat', settings: { upstreamProtocol: 'openai-chat' } })
     await svc.enable(tp.id)
@@ -417,23 +418,22 @@ describe('ClientConfigService', () => {
     const pid = codexProviderId(tp.id)
     expect(cfg.model_providers[pid].base_url).toBe('http://127.0.0.1:8788/v1') // 经反代
     expect(cfg.model_providers[pid].requires_openai_auth).toBe(true)
-    // 反代鉴权要求有效 client key——bearer 必须是真签发 key，不能是占位符(否则 401)。
-    expect(cfg.model_providers[pid].experimental_bearer_token).toBe(`sk-client-config:codex-relay:${tp.id}`)
-    expect(await store.getKeyRef(tp.id)).toBe(`key-client-config:codex-relay:${tp.id}`) // keyRef 跟踪
+    // 中转注入用固定隐藏 key（反代识别后直连真实上游、不走组合）；不再 per-档 签发，keyRef 空。
+    expect(cfg.model_providers[pid].experimental_bearer_token).toBe('sk-hxg-relay-test')
+    expect(await store.getKeyRef(tp.id)).toBeNull()
   })
 
-  it('ON 中转 key 生命周期：再启用换新吊旧；停用吊销并清 keyRef；local-proxy 档主 key 不受牵连', async () => {
+  it('ON 中转用固定注入 key：bearer=固定 key、不签发/不吊销 per-档 key、keyRef 空；local-proxy 档主 key 不受牵连', async () => {
     codexRelayOn = true
     const tp = await svc.create({ clientId: 'codex', name: 'R', source: 'manual', baseUrl: 'https://r/v1', apiKey: 'k', model: 'm-x', settings: { upstreamProtocol: 'openai-responses' } })
     await svc.enable(tp.id)
-    const keyId = `key-client-config:codex-relay:${tp.id}`
-    await svc.enable(tp.id) // 再启用：签新 + 吊销旧
-    expect(revokedKeys).toContain(keyId)
-    revokedKeys.length = 0
-    await svc.disable(tp.id) // 停用：吊销 + 清 keyRef
-    expect(revokedKeys).toContain(keyId)
-    expect(await store.getKeyRef(tp.id)).toBeNull()
-    // local-proxy 档：disable 不吊销其主 keyRef(再启用还要用)。
+    const cfg = TOML.parse(await readFile(codexCfg, 'utf8')) as any
+    expect(cfg.model_providers[codexProviderId(tp.id)].experimental_bearer_token).toBe('sk-hxg-relay-test')
+    expect(await store.getKeyRef(tp.id)).toBeNull() // 固定 key，不 per-档 签发/跟踪
+    await svc.enable(tp.id) // 再启用：仍同一固定 key，不签新不吊旧
+    await svc.disable(tp.id)
+    expect(revokedKeys).toHaveLength(0) // 固定 key 不吊销
+    // local-proxy 档：用自己签发的主 key，disable 不吊销(再启用还要用)。
     revokedKeys.length = 0
     codexRelayOn = false
     const acct = await svc.connectLocalProxy('codex')
@@ -572,10 +572,10 @@ describe('ClientConfigService', () => {
     expect(relayEnsureCalls[0].apiKey).toBe('oai-key')
     expect(relayEnsureCalls[0].protocol).toBe('openai-chat')
     expect(relayEnsureCalls[0].profileId).toBe(p.id)
-    // 写盘 baseUrl 指向反代 platform，key 是号小管 client key
+    // 写盘 baseUrl 指向反代裸 /v1（按模型名路由），key 是号小管 client key
     const written = JSON.parse(await readFile(settings, 'utf8'))
-    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/relay-1')
-    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe(`sk-client-config:relay:${p.id}`)
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/v1')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-hxg-relay-test')
   })
 
   it('relay-无 upstreamProtocol：普通 manual 档（无该 settings）→ direct，不调 ensureRelayUpstream（向后兼容）', async () => {
@@ -608,7 +608,7 @@ describe('ClientConfigService', () => {
     expect(proxyStartCalls).toBe(1)
     expect(relayEnsureCalls.length).toBe(1)
     const written = JSON.parse(await readFile(settings, 'utf8'))
-    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/relay-1')
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/v1')
   })
 
   it('relay-ensureStarted 失败（启动后仍无端口）→ apply 抛「无法自动开启 API 服务」', async () => {
@@ -641,8 +641,8 @@ describe('ClientConfigService', () => {
     expect(relayEnsureCalls.length).toBe(1)
     expect(relayEnsureCalls[0].protocol).toBe('anthropic')
     const written = JSON.parse(await readFile(settings, 'utf8'))
-    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/relay-1')
-    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe(`sk-client-config:relay:${p.id}`)
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8788/v1')
+    expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-hxg-relay-test')
   })
 
   it('relay-direct：协议匹配且无 routeViaProxy → direct，不调 ensureStarted/ensureRelayUpstream', async () => {
@@ -752,6 +752,7 @@ describe('ClientConfigService', () => {
         ensureStarted: async () => { ensureStartedCalls++; return 8788 },
         signKey: async (name) => ({ id: `key-${name}`, plaintext: `sk-${name}` }),
         revokeKey: async (id) => { revokedKeys.push(id) },
+        getRelayInjectionKey: () => 'sk-hxg-relay-test',
         listModels: () => proxyModels,
         listCatalogModels: () => catalogModels,
         listAccountPoolModels: () => [{ id: 'claude-sonnet-4.5', displayName: 'Claude Sonnet 4.5' }],

@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { ApiProxyStatus, ApiProxyKeyMeta, AccountPoolHealthRow } from '@shared/api-types';
+import type {
+  ApiProxyStatus,
+  ApiProxyKeyMeta,
+  AccountPoolHealthRow,
+  RouteComboDto,
+  RouteComboInputDto,
+} from '@shared/api-types';
 import { bridge } from '../services/bridge';
 
 interface ApiProxyState {
@@ -9,6 +15,8 @@ interface ApiProxyState {
   keys: ApiProxyKeyMeta[];
   newPlaintext: string | null;
   poolHealth: AccountPoolHealthRow[];
+  combos: RouteComboDto[];
+  routableModels: string[];
 
   fetchStatus: () => Promise<void>;
   start: () => Promise<void>;
@@ -20,6 +28,11 @@ interface ApiProxyState {
   clearNewPlaintext: () => void;
   fetchPoolHealth: () => Promise<void>;
   clearSuspension: (accountId: string) => Promise<void>;
+  fetchCombos: () => Promise<void>;
+  fetchRoutableModels: () => Promise<void>;
+  createCombo: (input: RouteComboInputDto) => Promise<boolean>;
+  updateCombo: (id: string, patch: Partial<RouteComboInputDto>) => Promise<boolean>;
+  deleteCombo: (id: string) => Promise<void>;
 }
 
 export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
@@ -29,6 +42,8 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
   keys: [],
   newPlaintext: null,
   poolHealth: [],
+  combos: [],
+  routableModels: [],
 
   fetchStatus: async () => {
     try {
@@ -109,6 +124,54 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
     try {
       await bridge().apiProxy.clearAccountSuspension(accountId);
       await get().fetchPoolHealth();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  fetchCombos: async () => {
+    try {
+      set({ combos: await bridge().apiProxy.listCombos() });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  fetchRoutableModels: async () => {
+    try {
+      set({ routableModels: await bridge().apiProxy.listRoutableModels() });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  // create/update 返回成功与否，供 UI 决定是否关闭编辑器（失败保留表单 + 弹错）。
+  createCombo: async (input: RouteComboInputDto) => {
+    try {
+      await bridge().apiProxy.createCombo(input);
+      await get().fetchCombos();
+      return true;
+    } catch (e) {
+      set({ error: String(e) });
+      return false;
+    }
+  },
+
+  updateCombo: async (id: string, patch: Partial<RouteComboInputDto>) => {
+    try {
+      await bridge().apiProxy.updateCombo(id, patch);
+      await get().fetchCombos();
+      return true;
+    } catch (e) {
+      set({ error: String(e) });
+      return false;
+    }
+  },
+
+  deleteCombo: async (id: string) => {
+    try {
+      await bridge().apiProxy.deleteCombo(id);
+      await get().fetchCombos();
     } catch (e) {
       set({ error: String(e) });
     }

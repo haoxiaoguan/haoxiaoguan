@@ -7,6 +7,7 @@ import { ApiProxyService } from '../../../src/main/contexts/apiProxy/application
 import { PlatformRegistry } from '../../../src/main/contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 import type { PlatformUpstreamAdapter } from '../../../src/main/contexts/apiProxy/domain/platform-adapter'
+import { makePlatformAliasResolver } from '../../../src/main/contexts/apiProxy/domain/platform-alias'
 
 let server: ApiHttpServer | null = null
 afterEach(async () => {
@@ -41,7 +42,7 @@ function buildServer(opts: BuildOpts = {}): ApiHttpServer {
   const deps: HonoAppDeps = {
     service,
     auth: { keysProvider: async () => [], allowAnonymousLoopback: true },
-    knownPlatforms: registry.knownPlatforms(),
+    resolvePlatformAlias: makePlatformAliasResolver((n) => registry.get(n) !== undefined),
     ...(opts.ipAccess ? { ipAccess: () => opts.ipAccess! } : {}),
     ...(opts.maxBodyBytes !== undefined ? { maxBodyBytes: () => opts.maxBodyBytes! } : {}),
   }

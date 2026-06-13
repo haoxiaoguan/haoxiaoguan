@@ -717,6 +717,16 @@ export interface HxgApi {
     clearRequestLog(): Promise<void>
     /** 订阅请求日志推送（G3）。返回取消订阅函数。 */
     onRequestLog(cb: (record: ProxyRequestRecord) => void): () => void
+    /** 列出所有路由组合。 */
+    listCombos(): Promise<RouteComboDto[]>
+    /** 新建路由组合（名字非法/撞模型或组合/空步骤会 reject）。 */
+    createCombo(input: RouteComboInputDto): Promise<RouteComboDto>
+    /** 更新路由组合。 */
+    updateCombo(id: string, patch: Partial<RouteComboInputDto>): Promise<RouteComboDto>
+    /** 删除路由组合。 */
+    deleteCombo(id: string): Promise<void>
+    /** 可路由模型 id 清单（别名前缀形式，如 kr/claude-sonnet-4.5）；组合步骤选择器用。 */
+    listRoutableModels(): Promise<string[]>
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>
@@ -994,6 +1004,28 @@ export interface ApiProxyKeyMeta {
   keyPrefix: string
   isActive: boolean
   createdAt: string
+}
+
+// ── 路由组合 DTO（命名的跨供应商降级链）─────────────────────────────────────────
+/** 组合的一跳：别名前缀模型串（如 kr/claude-sonnet-4.5）+ 是否启用（缺省启用）。 */
+export interface ComboStepDto {
+  model: string
+  enabled?: boolean
+}
+export interface RouteComboDto {
+  id: string
+  name: string
+  description?: string
+  steps: ComboStepDto[]
+  strategy: 'fallback'
+  enabled: boolean
+}
+/** 新建/更新组合入参（id/时间戳由后端生成）。 */
+export interface RouteComboInputDto {
+  name: string
+  description?: string
+  steps: ComboStepDto[]
+  enabled?: boolean
 }
 
 // ── Proxy DTOs (proxy context — outbound proxy IP management) ─────────────────

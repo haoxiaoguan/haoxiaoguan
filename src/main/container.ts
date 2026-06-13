@@ -122,7 +122,11 @@ import type { LocalProxyPort } from './contexts/clientConfig/application/local-p
 import type { RelayProvisioningPort } from './contexts/clientConfig/application/relay-provisioning-port'
 import { ApiProxyService } from './contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from './contexts/apiProxy/infrastructure/platform-registry'
-import { EchoUpstreamAdapter } from './contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
+import { makePlatformAliasResolver } from './contexts/apiProxy/domain/platform-alias'
+import { RouteComboRepository } from './contexts/apiProxy/infrastructure/route-combo.repository'
+import { ComboService } from './contexts/apiProxy/application/combo-service'
+import { COMBO_MODEL_PREFIX } from './contexts/apiProxy/domain/route-combo'
+import { RelayInjectionKeyService } from './contexts/apiProxy/application/relay-injection-key-service'
 import { ResponsesStore } from './contexts/apiProxy/infrastructure/responses-store/responses-store'
 import { ApiProxyKeyRepository } from './contexts/apiProxy/infrastructure/api-proxy-key.repository'
 import { ApiProxyKeyService } from './contexts/apiProxy/application/api-proxy-key-service'
@@ -469,7 +473,7 @@ export async function buildContainer(): Promise<Container> {
   const wsServer = new WsServer({ port: settings.getWsPort() })
   const websocket = new WebSocketApplicationService(wsServer)
 
-  // 11. apiProxy 上下文。监听器绑定 settings 的 apiProxyPort（默认 8788），
+  // 11. apiProxy 上下文。监听器绑定 settings 的 apiProxyPort（默认 28788），
   //     端口被占时 ApiHttpServer 自动回退 +1。不在此自启——main.ts 依据
   //     apiProxyEnabled 决定 whenReady 后是否 start()。
   //
@@ -477,7 +481,7 @@ export async function buildContainer(): Promise<Container> {
   //     装配顺序固定：建 registry → 建 service（无 server）→ 建 listener（闭包引用 service）→
   //     建 ApiHttpServer(listener) → service.attachServer(server)。
   const platformRegistry = new PlatformRegistry()
-  platformRegistry.register(new EchoUpstreamAdapter()) // 保留 Echo 占位（'echo'）。
+  // 不再注册 Echo 占位上游（'echo'/echo-1/echo-mini 仅测试用 stand-in，生产已有 kiro/relay/codex 真实上游）。
 
   // KiroAdapter（'kiro'）—— 复用已建的 credentialStore / accountRepo / proxyResolver。
   // 4 个窄 port 用现成实例适配（KiroAdapter 不直接依赖任何 repo 类）。
@@ -647,12 +651,37 @@ export async function buildContainer(): Promise<Container> {
   // 请求级可观测性（G3）：环形缓冲 + 累计计数器。注入 service 记录每请求；container 把它接到
   // webContents.send 推前端日志页（main.ts），并作为 /metrics（G10）的计数器源。
   const apiProxyRequestLog = new ProxyRequestLog({ capacity: 500 })
+  // 模型别名解析器（kr→kiro / cx→codex-native / relay-<id> 平台名自身）。闭包到实时注册表，
+  // relay 热重载后即时可用。service（组合每跳解析）与 hono（入站 model 前缀解析）共用一份。
+  const apiProxyAliasResolver = makePlatformAliasResolver((n) => platformRegistry.get(n) !== undefined)
+  // 路由组合（命名的跨供应商降级链）：仓储 + 应用服务（含内存缓存作 ComboSource）。
+  // 组合优先级最高、运行时盖过同名上游模型（9router 式），仅禁止组合间重名。
+  const routeComboRepo = new RouteComboRepository()
+  const comboService = new ComboService(routeComboRepo)
+  await comboService.load()
+  // 中转注入固定 key（隐藏、不进 client key 列表、仅本地、稳定持久）。启动解析一次：
+  // hono 鉴权识别它→标记请求直连真实上游(原生→登录账号)、不走组合；客户端接入做中转注入时注入它。
+  const relayInjectionKeyService = new RelayInjectionKeyService(
+    new SafeStorageSecretStore(join(appDataDir(), 'secrets', 'relay-injection.key.enc')),
+    () => `sk-hxg-relay-${randomUUID().replace(/-/g, '')}`,
+  )
+  const relayInjectionKey = await relayInjectionKeyService.get()
   const apiProxyService = new ApiProxyService(undefined, {
     registry: platformRegistry,
     responsesStore,
     observability: apiProxyRequestLog,
     ...(codexNative ? { codexNative } : {}),
     responsesPassthroughs,
+    combos: comboService,
+    resolvePlatformAlias: apiProxyAliasResolver,
+    // Phase 2 配额感知跳过：仅 kiro 有账号池健康可视；池内无 available 账号即「确凿不可用」。
+    // 账号池健康已反映超额（超额服务中的账号仍 available），故 nEnabled 超额池不会被误跳。
+    isPlatformExhausted: async (platform) => {
+      if (platform !== 'kiro') return false
+      const accts = await kiroAccountPort.listByPlatform()
+      if (accts.length === 0) return false
+      return apiProxyHealth.snapshotAll(accts.map((a) => a.id)).every((s) => s.runtimeState !== 'available')
+    },
   })
   // 客户端 Key 令牌桶限流器（后续可接 settings 动态配置 capacity/refillPerMinute）。
   const apiProxyKeyRateLimiter = new KeyRateLimiter({ capacity: 10, refillPerMinute: 10 })
@@ -688,7 +717,10 @@ export async function buildContainer(): Promise<Container> {
         keysProvider: () => apiProxyKeyRepo.listActivePlaintext(),
         allowAnonymousLoopback: settings.getApiProxyAllowAnonymousLoopback(),
       },
-      knownPlatforms: platformRegistry.knownPlatforms(),
+      // 模型别名解析器（与 service 共用同一份；闭包到实时注册表，relay 热重载即时可用）。
+      resolvePlatformAlias: apiProxyAliasResolver,
+      // 中转注入固定 key（仅本地）：带它的请求直连真实上游、不走组合。
+      relayInjectionKey,
       keyRateLimiter: apiProxyKeyRateLimiter,
       metrics: apiProxyMetrics,
       // G5 IP 白/黑名单 + G6 请求体上限：闭包读 settings 实时值（运行时改设置即生效）。
@@ -750,7 +782,12 @@ export async function buildContainer(): Promise<Container> {
       return { id: meta.id, plaintext }
     },
     revokeKey: (id) => apiProxyKeyService.delete(id),
-    listModels: () => platformRegistry.listAllModels().map((m) => m.id),
+    getRelayInjectionKey: () => relayInjectionKey,
+    // 可路由名清单：账号池/relay 模型 + 启用的路由组合（组合用显式 cb/<name>，可作注入 model）。
+    listModels: () => [
+      ...platformRegistry.listAllModels().map((m) => m.id),
+      ...comboService.list().filter((c) => c.enabled).map((c) => `${COMBO_MODEL_PREFIX}${c.name}`),
+    ],
     listCatalogModels: () => {
       // 按平台排除占位 echo 与原生 codex-native（原生由 Codex 自带 models_cache 提供），
       // 只留账号池 Claude + 第三方 relay。按 id 去重。
@@ -770,6 +807,14 @@ export async function buildContainer(): Promise<Container> {
           })
         }
       }
+      // 启用的路由组合追加为可注入 model：用显式 cb/<name>，与同名上游模型消歧（中转注入下也能寻址）。
+      for (const c of comboService.list()) {
+        if (!c.enabled) continue
+        const id = `${COMBO_MODEL_PREFIX}${c.name}`
+        if (seen.has(id)) continue
+        seen.add(id)
+        out.push({ id, displayName: `${c.name}（组合）` })
+      }
       return out
     },
     listAccountPoolModels: () => {
@@ -777,8 +822,9 @@ export async function buildContainer(): Promise<Container> {
       const kiro = platformRegistry.get('kiro')
       if (kiro === undefined) return []
       return kiro.listModels().map((m) => ({
-        id: m.id,
-        ...(m.displayName !== undefined ? { displayName: m.displayName } : {}),
+        id: m.id, // slug 保持裸名：带固定注入 key 时裸名直连 kiro，路由不变
+        // display_name 强制带「· 号小管账号」标记，让 Codex 等选择器里与原生 GPT/组合一眼可分。
+        displayName: `${m.displayName ?? m.id} · 号小管账号`,
         ...(m.contextLength !== undefined ? { contextLength: m.contextLength } : {}),
       }))
     },
@@ -787,6 +833,11 @@ export async function buildContainer(): Promise<Container> {
       if (codexNative === undefined) return []
       return codexNative.listModels().map((m) => m.id)
     },
+    listCombos: () =>
+      comboService
+        .list()
+        .filter((c) => c.enabled)
+        .map((c) => ({ id: `${COMBO_MODEL_PREFIX}${c.name}`, displayName: `${c.name} · 号小管组合` })),
   }
   // relay 桥（T8）：按 clientConfig 接入档 id 建/删 relay 上游并热重载。
   const clientConfigRelayProvisioning: RelayProvisioningPort = {
@@ -897,6 +948,7 @@ export async function buildContainer(): Promise<Container> {
     kiroAccountPort,
     apiProxyKeyService,
     apiProxyRequestLog,
+    comboService,
     clientConfigService,
     clientVersionService,
     tokenRefreshScheduler,

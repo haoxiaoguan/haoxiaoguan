@@ -224,6 +224,12 @@ export const API_PROXY_CHANNELS = {
   getAccountPoolHealth: 'apiProxy:getAccountPoolHealth',
   getRequestLog: 'apiProxy:getRequestLog',
   clearRequestLog: 'apiProxy:clearRequestLog',
+  // 路由组合（命名的跨供应商降级链）CRUD + 可路由模型清单（组合步骤选择器用）。
+  listCombos: 'apiProxy:listCombos',
+  createCombo: 'apiProxy:createCombo',
+  updateCombo: 'apiProxy:updateCombo',
+  deleteCombo: 'apiProxy:deleteCombo',
+  listRoutableModels: 'apiProxy:listRoutableModels',
 } as const
 
 // 主进程 → 渲染层推送：每条反代请求日志（G3 请求级可观测性）。
