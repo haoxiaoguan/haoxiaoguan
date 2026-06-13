@@ -172,13 +172,34 @@
     "curlTitle": "快速接入示例",
     "curlCopy": "复制示例",
     "disabledHint": "开启服务后可用",
+    "aliasHint": "按模型名路由：在 model 前加平台别名前缀可显式指定供应商，如 kr/claude-sonnet-4.5（kr=号小管账号池）；不加前缀则按模型名自动匹配。可用别名见 /v1/models 返回的模型 id。",
     "endpoints": {
       "chatCompletions": "OpenAI 兼容 · Chat Completions",
       "messages": "Anthropic 兼容 · Messages",
       "responses": "OpenAI Responses API",
-      "models": "模型列表",
-      "platformChat": "平台前缀 · Chat Completions",
-      "platformMessages": "平台前缀 · Messages"
+      "models": "模型列表"
+    },
+    "combos": {
+      "title": "路由组合",
+      "new": "新建组合",
+      "desc": "把多个供应商串成有序降级链，作为单个模型名使用；某跳限流/配额耗尽/出错时自动切换到下一跳。",
+      "namePlaceholder": "组合名（字母数字与 _.-，不含 /，如 my-coding）",
+      "descPlaceholder": "描述（可选）",
+      "steps": "步骤（自上而下为优先级）",
+      "stepPlaceholder": "别名前缀模型，如 kr/claude-sonnet-4.5",
+      "stepEnabled": "启用",
+      "addStep": "添加步骤",
+      "cancel": "取消",
+      "save": "保存",
+      "empty": "暂无组合，点「新建组合」创建第一条降级链。",
+      "disabled": "已停用",
+      "edit": "编辑",
+      "delete": "删除",
+      "createTitle": "新建路由组合",
+      "editTitle": "编辑路由组合",
+      "deleteTitle": "删除组合",
+      "deleteDesc": "确定删除组合「{{name}}」？此操作不可撤销。",
+      "confirmDelete": "确认删除"
     }
   },
   "clientKeys": {

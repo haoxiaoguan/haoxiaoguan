@@ -4,6 +4,7 @@ import { createApiRequestListener, type HonoAppDeps } from '../../../src/main/co
 import { ApiProxyService } from '../../../src/main/contexts/apiProxy/application/api-proxy-service'
 import { PlatformRegistry } from '../../../src/main/contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
+import { makePlatformAliasResolver } from '../../../src/main/contexts/apiProxy/domain/platform-alias'
 
 let svc: ApiProxyService | null = null
 
@@ -23,7 +24,7 @@ function makeService(): ApiProxyService {
   const deps: HonoAppDeps = {
     service,
     auth: { keys: [], allowAnonymousLoopback: true },
-    knownPlatforms: registry.knownPlatforms(),
+    resolvePlatformAlias: makePlatformAliasResolver((n) => registry.get(n) !== undefined),
   }
   // port 0 让 OS 选空闲端口，避免 CI 端口冲突。
   const server = new ApiHttpServer(createApiRequestListener(deps), { port: 0 })

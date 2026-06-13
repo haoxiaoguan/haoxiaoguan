@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { makeRequestIntentParser } from '../../../src/main/contexts/apiProxy/domain/request-intent'
+import { makePlatformAliasResolver } from '../../../src/main/contexts/apiProxy/domain/platform-alias'
 
-const parse = makeRequestIntentParser(new Set(['echo', 'kiro']))
+// resolver：友好别名 kr→kiro（在 alias 表里）+ 平台名自身作前缀（echo/kiro 已“注册”）。
+const resolve = makePlatformAliasResolver((n) => n === 'echo' || n === 'kiro')
+const parse = makeRequestIntentParser(resolve)
 
 describe('parseRequestIntent — bare routes', () => {
   it('GET /health', () => {
@@ -50,37 +53,43 @@ describe('parseRequestIntent — bare routes', () => {
   })
 })
 
-describe('parseRequestIntent — platform-prefixed routes', () => {
-  it('POST /echo/v1/chat/completions sets platform=echo', () => {
-    expect(parse('POST', '/echo/v1/chat/completions', { model: 'echo-1' })).toEqual({
-      platform: 'echo', format: 'openai', action: 'chat', model: 'echo-1', stream: false,
+describe('parseRequestIntent — model 别名前缀路由', () => {
+  it('友好别名 kr/<model> → platform=kiro，剥离前缀', () => {
+    expect(parse('POST', '/v1/chat/completions', { model: 'kr/claude-sonnet-4.5' })).toEqual({
+      platform: 'kiro', format: 'openai', action: 'chat', model: 'claude-sonnet-4.5', stream: false,
     })
   })
-  it('POST /kiro/v1/messages sets platform=kiro', () => {
-    expect(parse('POST', '/kiro/v1/messages', { model: 'claude' })).toEqual({
-      platform: 'kiro', format: 'anthropic', action: 'messages', model: 'claude', stream: false,
+  it('平台名自身作前缀 echo/<model> → platform=echo', () => {
+    expect(parse('POST', '/v1/messages', { model: 'echo/echo-1', stream: true })).toEqual({
+      platform: 'echo', format: 'anthropic', action: 'messages', model: 'echo-1', stream: true,
     })
   })
-  it('POST /kiro/v1/responses → platform-lock', () => {
-    expect(parse('POST', '/kiro/v1/responses', { model: 'x' })).toEqual({
+  it('/v1/responses 同样支持别名前缀', () => {
+    expect(parse('POST', '/v1/responses', { model: 'kr/x' })).toEqual({
       platform: 'kiro', format: 'openai-responses', action: 'responses', model: 'x', stream: false,
     })
   })
-  it('POST /echo/v1beta/models/echo-1:generateContent', () => {
-    expect(parse('POST', '/echo/v1beta/models/echo-1:generateContent', {})).toEqual({
-      platform: 'echo', format: 'gemini', action: 'generateContent', model: 'echo-1', stream: false,
+  it('未知前缀不剥离：第三方含斜杠模型名整串保留、无 platform', () => {
+    expect(parse('POST', '/v1/chat/completions', { model: 'anthropic/claude-3.5-sonnet' })).toEqual({
+      format: 'openai', action: 'chat', model: 'anthropic/claude-3.5-sonnet', stream: false,
     })
   })
-  it('GET /echo/v1/models scopes models to platform', () => {
-    expect(parse('GET', '/echo/v1/models')).toEqual({
-      platform: 'echo', format: 'openai', action: 'models', stream: false,
+  it('无前缀模型名 → 无 platform（按模型名路由）', () => {
+    expect(parse('POST', '/v1/chat/completions', { model: 'claude-sonnet-4.5' })).toEqual({
+      format: 'openai', action: 'chat', model: 'claude-sonnet-4.5', stream: false,
+    })
+  })
+  it('别名对应平台未注册 → 不剥离（整串保留）', () => {
+    const noKiro = makeRequestIntentParser(makePlatformAliasResolver((n) => n === 'echo'))
+    expect(noKiro('POST', '/v1/chat/completions', { model: 'kr/claude' })).toEqual({
+      format: 'openai', action: 'chat', model: 'kr/claude', stream: false,
     })
   })
 })
 
 describe('parseRequestIntent — unknown / invalid', () => {
-  it('unknown platform prefix → null (404 semantics)', () => {
-    expect(parse('POST', '/nope/v1/chat/completions', { model: 'x' })).toBeNull()
+  it('平台前缀 URL 已移除 → /kiro/v1/chat/completions 不再被识别（null）', () => {
+    expect(parse('POST', '/kiro/v1/chat/completions', { model: 'x' })).toBeNull()
   })
   it('unknown bare path → null', () => {
     expect(parse('GET', '/does-not-exist')).toBeNull()

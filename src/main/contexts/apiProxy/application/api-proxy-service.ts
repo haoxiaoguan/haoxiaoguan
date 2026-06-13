@@ -1,7 +1,13 @@
 import type { ApiHttpServer } from '../infrastructure/http/api-http-server'
 import type { PlatformRegistry } from '../infrastructure/platform-registry'
 import { NoUpstreamError } from '../infrastructure/platform-registry'
-import type { RequestIntent, RequestFormat } from '../domain/request-intent'
+import type { RequestIntent, RequestFormat, PlatformAliasResolver } from '../domain/request-intent'
+import { resolveModelAlias } from '../domain/request-intent'
+import { PLATFORM_NAME_TO_ALIAS } from '../domain/platform-alias'
+import type { RouteCombo } from '../domain/route-combo'
+import { enabledStepModels, COMBO_MODEL_PREFIX } from '../domain/route-combo'
+import type { ComboSource } from './combo-service'
+import { runComboChain } from './combo-orchestrator'
 import type { UpstreamCtx } from '../domain/platform-adapter'
 import { extractSessionHint } from '../domain/account-selection/session-hint'
 import type {
@@ -79,6 +85,8 @@ export interface HandleRequestInput {
   /** 原始 HTTP method/path（hono 注入；仅用于 G3 请求日志展示，不参与编排）。 */
   method?: string
   path?: string
+  /** 中转注入固定 key 命中（hono 注入）：该请求直连真实上游、跳过路由组合。 */
+  injectionOrigin?: boolean
 }
 
 // 非流式 / 错误结果：直接作为 JSON 响应体。
@@ -192,6 +200,13 @@ export class ApiProxyService {
   private readonly responsesStore?: ResponsesStore
   // 请求级可观测性（G3）：注入则记录每请求落点 + 累计计数器（喂 G10 /metrics）。
   private readonly observability?: ProxyRequestLog
+  // 路由组合只读源（注入则支持「组合名当 model」的跨供应商降级链）。
+  private readonly combos?: ComboSource
+  // 模型别名解析器（把组合每一跳 `kr/x` 解析为 platform+model）；不注入则组合步骤按裸模型名路由。
+  private readonly resolveAlias: PlatformAliasResolver
+  // Phase 2 配额感知跳过：判定某平台池是否「确凿不可用」（kiro=池内无 available 账号）。
+  // 用账号池健康（已反映超额：超额服务中的账号仍 available），故 nEnabled 超额池不会被误跳。
+  private readonly isPlatformExhausted?: (platform: string) => Promise<boolean>
   private readonly clock: () => number
   // server 可后置注入（解循环依赖：container 先建 service 再建 listener+server，最后 attachServer）。
   // M1 单参构造 new ApiProxyService(server) 仍合法——server 既可构造传入也可 attach。
@@ -207,6 +222,9 @@ export class ApiProxyService {
       clock?: () => number
       codexNative?: CodexNativePassthrough
       responsesPassthroughs?: ResponsesPassthroughUpstream[]
+      combos?: ComboSource
+      resolvePlatformAlias?: PlatformAliasResolver
+      isPlatformExhausted?: (platform: string) => Promise<boolean>
     } = {},
   ) {
     this.server = server
@@ -216,6 +234,10 @@ export class ApiProxyService {
     this.responsesPassthroughs = deps.responsesPassthroughs ?? []
     this.responsesStore = deps.responsesStore
     this.observability = deps.observability
+    this.combos = deps.combos
+    // 默认解析器：无前缀/未知前缀返回 undefined（步骤退化为裸模型名路由）。
+    this.resolveAlias = deps.resolvePlatformAlias ?? (() => undefined)
+    this.isPlatformExhausted = deps.isPlatformExhausted
     this.clock = deps.clock ?? Date.now
   }
 
@@ -241,6 +263,21 @@ export class ApiProxyService {
     this.observability?.markStopped()
   }
 
+  /**
+   * 可路由模型 id 清单（别名前缀形式，如 `kr/claude-sonnet-4.5`）。供组合步骤选择器。
+   * 与 /v1/models 同源（listAllModelsWithPlatform + 平台别名前缀），但只返回 id 串、不含组合本身。
+   */
+  listRoutableModels(): string[] {
+    if (this.registry === undefined) return []
+    return this.registry
+      .listAllModelsWithPlatform()
+      .filter(({ platform }) => platform !== 'echo') // echo 是占位/测试适配器，不暴露给用户
+      .map(({ platform, model }) => {
+        const alias = PLATFORM_NAME_TO_ALIAS.get(platform)
+        return alias !== undefined ? `${alias}/${model.id}` : model.id
+      })
+  }
+
   getStatus(): ApiProxyStatus {
     // server 未 attach 时报 stopped、无端口（安全降级，不抛错）。
     if (!this.server) return { state: 'stopped' }
@@ -259,10 +296,13 @@ export class ApiProxyService {
     if (input.intent.action === 'health' || input.intent.action === 'models') {
       return this.dispatch(input, { attempts: 0 })
     }
+    const combo = this.matchCombo(input)
     const obs: RequestObservation = { attempts: 0 }
     const t0 = this.clock()
     try {
-      const result = await this.dispatch(input, obs)
+      const result = combo
+        ? await this.dispatchCombo(combo, input, obs)
+        : await this.dispatch(input, obs)
       this.observability?.record(
         this.buildRecord(input, obs, result.status, result.kind === 'stream', this.clock() - t0, true),
       )
@@ -275,6 +315,89 @@ export class ApiProxyService {
       )
       throw err
     }
+  }
+
+  /**
+   * 命中路由组合判定：仅当 model 是无别名前缀的裸名（intent.platform 未设）、动作为 chat/messages、
+   * 且组合表里有同名启用组合时返回该组合。MVP 不在 responses/gemini 上启用组合（responses 留 Phase 2）。
+   * 运行时「组合优先」于裸模型名（建组合时已拒绝与模型同名，故正常不冲突）。
+   */
+  private matchCombo(input: HandleRequestInput): RouteCombo | undefined {
+    const { intent } = input
+    if (this.combos === undefined) return undefined
+    // 组合作用于 chat/messages/responses；gemini generateContent 暂不支持组合。
+    if (intent.action !== 'chat' && intent.action !== 'messages' && intent.action !== 'responses') {
+      return undefined
+    }
+    if (intent.model === undefined) return undefined
+    // ① 显式组合前缀 cb/<name>：用户明确要组合 → 永远按组合路由（即使带中转注入固定 key，
+    //    也优先于直连真实上游）。这是「中转注入 + 号小管作供应商」同名碰撞时选组合的唯一入口。
+    if (intent.model.startsWith(COMBO_MODEL_PREFIX)) {
+      const name = intent.model.slice(COMBO_MODEL_PREFIX.length)
+      const combo = this.combos.findByName(name)
+      return combo !== undefined && combo.enabled ? combo : undefined
+    }
+    // ② 裸名：中转注入固定 key 来源 → 一律直连真实上游(native→登录账号)、跳过组合
+    //    （用「来源 key」而非「协议」区分——越来越多 agent 也用 responses，协议不可靠）。
+    if (input.injectionOrigin === true) return undefined
+    // ③ 裸名 + 普通来源：组合优先（盖过同名上游模型）。
+    if (intent.platform !== undefined) return undefined
+    const combo = this.combos.findByName(intent.model)
+    return combo !== undefined && combo.enabled ? combo : undefined
+  }
+
+  /**
+   * 组合编排：按链顺序逐跳 dispatch，复用单跳的账号池故障转移（内层）+ 首字节前 peek 回退语义。
+   * 某跳成功即返回；可回退错误（429/5xx/无可用账号/无上游等）跌落下一跳；客户端错误(400/422)立即抛。
+   * 全链失败抛最后一个错误（由 hono onError 渲染）。同一个 obs 贯穿全链 → 一请求一条 G3 日志。
+   */
+  private async dispatchCombo(
+    combo: RouteCombo,
+    input: HandleRequestInput,
+    obs: RequestObservation,
+  ): Promise<HandleResult> {
+    const allSteps = enabledStepModels(combo)
+    if (allSteps.length === 0) {
+      throw new ApiProxyHttpError(503, `combo "${combo.name}" has no enabled steps`, input.intent.format)
+    }
+    // Phase 2 配额感知跳过：剔除「确凿不可用」的跳（如 kiro 池内无 available 账号，且非超额服务中），
+    // 避免对必失败的上游做无谓往返。但若全部看起来不可用，则保留全链交由反应式回退兜底（健康可能滞后）。
+    let steps = allSteps
+    if (this.isPlatformExhausted !== undefined) {
+      const exhausted = await Promise.all(
+        allSteps.map(async (m) => {
+          const { platform } = resolveModelAlias(m, this.resolveAlias)
+          return platform !== undefined ? this.isPlatformExhausted!(platform) : false
+        }),
+      )
+      const live = allSteps.filter((_, i) => !exhausted[i])
+      if (live.length > 0) steps = live
+    }
+    return runComboChain(steps, (stepModel) =>
+      this.dispatch(this.synthesizeStepInput(input, stepModel), obs),
+    )
+  }
+
+  /**
+   * 把组合的一跳 `<别名>/<模型>` 合成为一次普通请求输入：解析别名 → 锁 platform、净化 model，
+   * 并把 body.model 改写为该跳真实模型（toIR 对 openai/anthropic 直接读 body.model）。
+   * 沿用原请求的 format/action/stream（组合在客户端命中的同一协议入口下逐跳执行）。
+   */
+  private synthesizeStepInput(input: HandleRequestInput, stepModel: string): HandleRequestInput {
+    const { platform, model } = resolveModelAlias(stepModel, this.resolveAlias)
+    const realModel = model ?? stepModel
+    const intent: RequestIntent = {
+      format: input.intent.format,
+      action: input.intent.action,
+      stream: input.intent.stream,
+      ...(platform !== undefined ? { platform } : {}),
+      model: realModel,
+    }
+    const body =
+      input.body !== null && typeof input.body === 'object'
+        ? { ...(input.body as Record<string, unknown>), model: realModel }
+        : input.body
+    return { ...input, intent, body }
   }
 
   /**
@@ -636,7 +759,13 @@ export class ApiProxyService {
 
   // ---- 内部：models 列表体（按 format 形状）----
   private buildModelsBody(intent: RequestIntent): unknown {
-    const models = this.registry ? this.registry.listAllModels(intent.platform) : []
+    // 有别名的平台（kr/cx）给模型 id 加前缀 → 客户端可直接复制「可路由名」`kr/claude-...`；
+    // 无别名平台（relay-<id>/echo）保持裸名（按模型名感知路由）。
+    const entries = this.registry ? this.registry.listAllModelsWithPlatform(intent.platform) : []
+    const models = entries.map(({ platform, model }) => {
+      const alias = PLATFORM_NAME_TO_ALIAS.get(platform)
+      return alias !== undefined ? { ...model, id: `${alias}/${model.id}` } : model
+    })
     if (intent.format === 'gemini') {
       // Gemini: { models: [{ name, displayName, inputTokenLimit?, outputTokenLimit?, supportedGenerationMethods }] }
       return {
@@ -651,20 +780,39 @@ export class ApiProxyService {
     }
     // OpenAI/Anthropic: { object:'list', data:[{ id, object:'model', owned_by, context_length?, capabilities }] }
     // 能力字段（尤其 capabilities.thinking）让客户端据此决定是否发送 thinking 参数（G8）。
+    // 路由组合作为 owned_by:'combo' 的虚拟模型排在最前（仅未按平台限定时；客户端可直接把组合名当 model）。
+    const comboData =
+      intent.platform === undefined && this.combos !== undefined
+        ? this.combos
+            .list()
+            .filter((c) => c.enabled)
+            .map((c) => ({
+              // 用显式可路由名 cb/<name>：任何场景(含中转注入)都能寻址、不与同名上游模型歧义。
+              id: `${COMBO_MODEL_PREFIX}${c.name}`,
+              object: 'model',
+              created: 0,
+              owned_by: 'combo',
+              ...(c.description ? { description: c.description } : {}),
+              capabilities: {},
+            }))
+        : []
     return {
       object: 'list',
-      data: models.map((m) => ({
-        id: m.id,
-        object: 'model',
-        created: 0,
-        owned_by: m.ownedBy ?? 'kiro',
-        ...(m.contextLength !== undefined ? { context_length: m.contextLength } : {}),
-        ...(m.maxOutputTokens !== undefined ? { max_output_tokens: m.maxOutputTokens } : {}),
-        capabilities: {
-          ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}),
-          ...(m.supportsPromptCaching !== undefined ? { prompt_caching: m.supportsPromptCaching } : {}),
-        },
-      })),
+      data: [
+        ...comboData,
+        ...models.map((m) => ({
+          id: m.id,
+          object: 'model',
+          created: 0,
+          owned_by: m.ownedBy ?? 'kiro',
+          ...(m.contextLength !== undefined ? { context_length: m.contextLength } : {}),
+          ...(m.maxOutputTokens !== undefined ? { max_output_tokens: m.maxOutputTokens } : {}),
+          capabilities: {
+            ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}),
+            ...(m.supportsPromptCaching !== undefined ? { prompt_caching: m.supportsPromptCaching } : {}),
+          },
+        })),
+      ],
     }
   }
 }

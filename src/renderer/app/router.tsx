@@ -4,6 +4,7 @@ import Accounts from '../pages/Accounts';
 import Skills from '../pages/Skills';
 import Mcp from '../pages/Mcp';
 import ApiProxyService from '../pages/ApiProxyService';
+import ApiProxyCombos from '../pages/ApiProxyCombos';
 import ApiProxyKeys from '../pages/ApiProxyKeys';
 import ApiProxyHealth from '../pages/ApiProxyHealth';
 import ClientConfig from '../pages/ClientConfig';
@@ -39,6 +40,7 @@ export function AppRouter() {
           <Route path="mcp" element={<Mcp />} />
           <Route path="api-service">
             <Route path="service" element={<ApiProxyService />} />
+            <Route path="combos" element={<ApiProxyCombos />} />
             <Route path="keys" element={<ApiProxyKeys />} />
             <Route path="health" element={<ApiProxyHealth />} />
             <Route index element={<Navigate to="service" replace />} />

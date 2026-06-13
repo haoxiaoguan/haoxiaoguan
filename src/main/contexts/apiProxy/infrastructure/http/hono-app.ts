@@ -10,17 +10,19 @@ import { makeRequestIntentParser } from '../../domain/request-intent'
 import type { RequestFormat } from '../../domain/request-intent'
 import {
   authorizeClientKey,
+  extractClientKey,
   type ClientKeyRequestInfo,
 } from '../../domain/client-key-auth'
 import type { KeyRateLimiter } from '../../domain/key-rate-limiter'
 import { redactString } from '../../../../platform/log/redact'
 import { isIpAllowed } from '../../domain/ip-access-control'
 
-// Hono app 依赖：编排服务 + 鉴权配置 + 已注册平台名（喂路由意图解析的前缀剥离）。
+// Hono app 依赖：编排服务 + 鉴权配置 + 模型别名解析器（把 model 前缀段解析为平台名）。
 export interface HonoAppDeps {
   service: ApiProxyService
   auth: { keysProvider: () => Promise<readonly string[]>; allowAnonymousLoopback: boolean }
-  knownPlatforms: ReadonlySet<string>
+  /** 把 model 前缀段（如 `kr`/`relay-<id>`）解析为已注册平台名；非别名返回 undefined。喂路由意图解析。 */
+  resolvePlatformAlias: (prefix: string) => string | undefined
   /** 可选：客户端 Key 令牌桶限流器；不传则不限流（向后兼容）。匿名回环请求（无 keyId）自动跳过。 */
   keyRateLimiter?: KeyRateLimiter
   /** 可选：Prometheus /metrics 文本渲染（G10）；不传则 /metrics 返回 404。 */
@@ -29,6 +31,11 @@ export interface HonoAppDeps {
   ipAccess?: () => { allowlist: string; denylist: string }
   /** 可选：请求体大小上限字节（G6），闭包读 settings；返回 0 或不传=不限制。 */
   maxBodyBytes?: () => number
+  /**
+   * 可选：中转注入固定 key（隐藏、仅本地）。带此 key 的请求标记为「注入来源」→ 直连真实上游、
+   * 不走路由组合。不在客户端 Key 列表里、不参与限流；仅 loopback 接受（非本地直接 401）。
+   */
+  relayInjectionKey?: string
 }
 
 // 远端地址是否回环。@hono/node-server 把底层 socket 暴露在 c.env.incoming（node IncomingMessage）。
@@ -97,17 +104,19 @@ function formatFromPath(path: string): RequestFormat {
 // Hono 应用级变量（c.set/c.get 的类型安全声明）。
 type HonoVariables = {
   apiProxyClientKeyId?: string
+  /** 中转注入固定 key 命中（loopback）→ 该请求直连真实上游、不走路由组合。 */
+  apiProxyInjectionOrigin?: boolean
 }
 
-/** 仅 /health 与 /{platform}/health 豁免鉴权（收紧 M2b 的 endsWith 过宽）。 */
+/** 仅裸 /health 豁免鉴权（平台前缀路由已移除，不再有 /{platform}/health）。 */
 export function isHealthExempt(path: string): boolean {
-  return path === '/health' || /^\/[^/]+\/health$/.test(path)
+  return path === '/health'
 }
 
 // 组装 Hono app：中间件链 + 路由表 + onError。M1 的 GET /health 行为保持（200 { ok: true }）。
 export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariables }> {
   const app = new Hono<{ Variables: HonoVariables }>()
-  const parseIntent = makeRequestIntentParser(deps.knownPlatforms)
+  const parseIntent = makeRequestIntentParser(deps.resolvePlatformAlias)
 
   // CORS：放行常见 AI 客户端头（含 anthropic-version / x-api-key / x-goog-api-key）。
   app.use(
@@ -156,6 +165,18 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
       ...(queryKey ? { queryKey } : {}),
       isLoopback: isLoopbackRemote(remote),
     }
+    // 中转注入固定 key（不在客户端 Key 列表里、仅本地）：命中即标记注入来源 → 直连真实上游、不走组合。
+    if (deps.relayInjectionKey !== undefined && deps.relayInjectionKey.length > 0) {
+      const presented = extractClientKey(info)
+      if (presented !== undefined && presented === deps.relayInjectionKey) {
+        if (!info.isLoopback) {
+          // 固定注入 key 仅允许本地访问；非 loopback 一律拒。
+          return c.json(errorBodyForFormat(formatFromPath(c.req.path), 401, 'Invalid or missing API key'), 401)
+        }
+        c.set('apiProxyInjectionOrigin', true)
+        return next()
+      }
+    }
     const keys = await deps.auth.keysProvider()
     const decision = authorizeClientKey(info, { keys, allowAnonymousLoopback: deps.auth.allowAnonymousLoopback })
     if (!decision.ok) {
@@ -202,11 +223,23 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
     if (intent === null) {
       return c.json(errorBodyForFormat('openai', 404, `Not Found: ${path}`), 404)
     }
+    // 别名前缀已在 parseIntent 从 intent.model 剥离；openai/anthropic/responses 出站模型取自 body.model
+    // （toIR 直接读 body），故把净化后的真实模型名回写 body，确保上游收到不含别名前缀的模型。
+    // gemini 模型在 path（intent.model）里，body 无 model 字段，此处自然 no-op。
+    if (
+      intent.model !== undefined &&
+      body !== null &&
+      typeof body === 'object' &&
+      typeof (body as Record<string, unknown>).model === 'string'
+    ) {
+      ;(body as Record<string, unknown>).model = intent.model
+    }
     // 稳定 requestId：从已有 header 取，缺省用确定性占位（适配器据此派生出站 id，不读时钟/随机）。
     const requestId = c.req.header('x-request-id') ?? 'apiproxy'
     const headers: Record<string, string> = {}
     for (const [k, v] of Object.entries(c.req.header())) headers[k.toLowerCase()] = v
     const clientKeyId = c.get('apiProxyClientKeyId')
+    const injectionOrigin = c.get('apiProxyInjectionOrigin') === true
     const result = await deps.service.handleRequest({
       intent,
       body,
@@ -215,6 +248,7 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
       method,
       path,
       ...(clientKeyId ? { clientKeyId } : {}),
+      ...(injectionOrigin ? { injectionOrigin: true } : {}),
       // AbortSignal 透传：node 适配层在断连时 abort（M2b 可选，省略亦可）。
     })
     if (result.kind === 'json') {
@@ -238,8 +272,8 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
     return c.body(parts.join(''), result.status as 200, { 'Content-Type': result.contentType })
   }
 
-  // 路由表（裸 + /{platform} 前缀；用 all 收口让 parseIntent 决定合法性）。
-  // /health 保持 M1 行为（200 { ok: true }），不经 handle/service。
+  // 路由表（仅裸 /v1.. /v1beta..；平台前缀路由已移除，平台由模型名前缀区分）。
+  // 用 all 收口让 parseIntent 决定合法性。/health 保持 M1 行为（200 { ok: true }），不经 handle/service。
   app.get('/health', (c) => c.json({ ok: true }))
   // Prometheus /metrics（G10）：免客户端 Key 鉴权（同 /health）。默认仅绑 127.0.0.1，本机可直采；
   // 若绑 0.0.0.0 会暴露账号计数，应配合 G5 CIDR 白名单或上游反代鉴权再开放。
@@ -254,13 +288,6 @@ export function createHonoApp(deps: HonoAppDeps): Hono<{ Variables: HonoVariable
   app.all('/v1/models', handle)
   app.all('/v1beta/models', handle)
   app.all('/v1beta/models/:tail', handle)
-  app.all('/:platform/v1/chat/completions', handle)
-  app.all('/:platform/v1/messages', handle)
-  app.all('/:platform/v1/responses', handle)
-  app.all('/:platform/v1/models', handle)
-  app.all('/:platform/v1beta/models', handle)
-  app.all('/:platform/v1beta/models/:tail', handle)
-  app.all('/:platform/health', handle)
 
   // 统一错误体（G14 脱敏）：5xx 强制通用消息（不泄露上游/内部细节）；<500 的消息过 redactString
   // 剥 Bearer/JWT/凭据后再下发。非 ApiProxyHttpError 一律 500 通用消息。

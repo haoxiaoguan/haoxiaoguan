@@ -51,8 +51,6 @@ const ENDPOINTS: EndpointRow[] = [
   { path: '/v1/messages', descKey: 'messages' },
   { path: '/v1/responses', descKey: 'responses' },
   { path: '/v1/models', descKey: 'models' },
-  { path: '/{platform}/v1/chat/completions', descKey: 'platformChat' },
-  { path: '/{platform}/v1/messages', descKey: 'platformMessages' },
 ];
 
 // ─── main page ────────────────────────────────────────────────────────────────
@@ -97,7 +95,7 @@ export default function ApiProxyService() {
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer <你的Key>" \\
   -d '{
-    "model": "kiro",
+    "model": "kr/claude-sonnet-4.5",
     "messages": [{"role": "user", "content": "Hello"}]
   }'`
         : '',
@@ -198,6 +196,9 @@ export default function ApiProxyService() {
             </TableBody>
           </Table>
         </div>
+        <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+          {t('service.aliasHint')}
+        </p>
       </div>
 
       {/* ── curl example ────────────────────────────────────────────── */}

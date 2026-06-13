@@ -9,6 +9,8 @@ import { makeClearSuspensionHandler } from '../application/clear-suspension-hand
 import { makeAccountPoolHealthHandler } from '../application/account-pool-health-handler'
 import type { ApiProxyKeyService } from '../application/api-proxy-key-service'
 import type { ProxyRequestLog } from '../domain/observability/proxy-request-log'
+import type { ComboService } from '../application/combo-service'
+import type { RouteComboInput } from '../infrastructure/route-combo.repository'
 
 // 注册 apiProxy 的 IPC handlers：start / stop / getStatus / clearAccountSuspension。
 // start/stop 均返回最新状态投影，方便 renderer 一次拿到结果免再查。
@@ -19,6 +21,7 @@ export function registerApiProxyHandlers(
   keyService?: ApiProxyKeyService,
   quotaResetMs?: number,
   requestLog?: ProxyRequestLog,
+  combos?: ComboService,
 ): void {
   ipcMain.handle(API_PROXY_CHANNELS.start, async (): Promise<ApiProxyStatus> => {
     try {
@@ -108,6 +111,46 @@ export function registerApiProxyHandlers(
     ipcMain.handle(API_PROXY_CHANNELS.clearRequestLog, async (): Promise<void> => {
       try {
         requestLog.clear()
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+  }
+
+  // 路由组合 CRUD + 可路由模型清单（步骤选择器）。listRoutableModels 始终注册（不依赖 combos）。
+  ipcMain.handle(API_PROXY_CHANNELS.listRoutableModels, async (): Promise<string[]> => {
+    try {
+      return svc.listRoutableModels()
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
+
+  if (combos) {
+    ipcMain.handle(API_PROXY_CHANNELS.listCombos, async () => {
+      try {
+        return await combos.listAll()
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+    ipcMain.handle(API_PROXY_CHANNELS.createCombo, async (_e, input: RouteComboInput) => {
+      try {
+        return await combos.create(input)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+    ipcMain.handle(API_PROXY_CHANNELS.updateCombo, async (_e, id: string, patch: Partial<RouteComboInput>) => {
+      try {
+        return await combos.update(id, patch)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+    ipcMain.handle(API_PROXY_CHANNELS.deleteCombo, async (_e, id: string): Promise<void> => {
+      try {
+        await combos.remove(id)
       } catch (e) {
         throw new Error(toIpcError(e))
       }

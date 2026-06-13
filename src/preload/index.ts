@@ -212,6 +212,11 @@ const api: HxgApi = {
       ipcRenderer.on(API_PROXY_EVENTS.requestLog, listener)
       return () => ipcRenderer.removeListener(API_PROXY_EVENTS.requestLog, listener)
     },
+    listCombos: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listCombos),
+    createCombo: (input) => ipcRenderer.invoke(API_PROXY_CHANNELS.createCombo, input),
+    updateCombo: (id, patch) => ipcRenderer.invoke(API_PROXY_CHANNELS.updateCombo, id, patch),
+    deleteCombo: (id) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteCombo, id),
+    listRoutableModels: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listRoutableModels),
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),

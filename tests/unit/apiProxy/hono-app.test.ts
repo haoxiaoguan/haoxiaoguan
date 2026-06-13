@@ -5,6 +5,12 @@ import { ApiProxyService } from '../../../src/main/contexts/apiProxy/application
 import { PlatformRegistry } from '../../../src/main/contexts/apiProxy/infrastructure/platform-registry'
 import { EchoUpstreamAdapter } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/echo/echo-adapter'
 import { KeyRateLimiter } from '../../../src/main/contexts/apiProxy/domain/key-rate-limiter'
+import { makePlatformAliasResolver } from '../../../src/main/contexts/apiProxy/domain/platform-alias'
+
+// 测试解析器：平台名自身作 model 前缀（registry 里有就认）。
+function aliasResolverFor(registry: PlatformRegistry) {
+  return makePlatformAliasResolver((n) => registry.get(n) !== undefined)
+}
 
 // M5: 测试环境 Hono app.request() 无真实 TCP socket，remote 为 undefined → isLoopback=false。
 // 为避免每个非鉴权测试都带 Bearer，默认用 'test-key' + 请求带固定头；鉴权专项测试单独配置。
@@ -19,7 +25,7 @@ function makeDeps(authKeys: readonly string[] = [TEST_KEY], keyRateLimiter?: Key
   return {
     service,
     auth: { keysProvider: async () => authKeys, allowAnonymousLoopback: true },
-    knownPlatforms: registry.knownPlatforms(),
+    resolvePlatformAlias: aliasResolverFor(registry),
     keyRateLimiter,
   }
 }
@@ -76,15 +82,23 @@ describe('createHonoApp', () => {
     expect(json.candidates[0].content.parts[0].text).toBe('g')
   })
 
-  it('platform-locked /echo/v1/chat/completions works; unknown platform → 404', async () => {
+  it('模型名前缀 echo/<model> 锁定 echo 平台；前缀剥离后上游收到净化模型名', async () => {
     const app = createHonoApp(makeDeps())
-    const ok = await app.request('/echo/v1/chat/completions', {
+    const ok = await app.request('/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...AUTH_HEADERS },
-      body: JSON.stringify({ model: 'echo-1', messages: [{ role: 'user', content: 'p' }] }),
+      body: JSON.stringify({ model: 'echo/echo-1', messages: [{ role: 'user', content: 'p' }] }),
     })
     expect(ok.status).toBe(200)
-    const miss = await app.request('/nope/v1/chat/completions', {
+    const json = (await ok.json()) as { model?: string; choices: { message: { content: string } }[] }
+    expect(json.choices[0].message.content).toBe('p')
+    // Echo 适配器把收到的 model 回显在响应里 → 应为剥离前缀后的 'echo-1' 而非 'echo/echo-1'。
+    if (json.model !== undefined) expect(json.model).toBe('echo-1')
+  })
+
+  it('平台前缀 URL 已移除：/echo/v1/chat/completions → 404', async () => {
+    const app = createHonoApp(makeDeps())
+    const miss = await app.request('/echo/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...AUTH_HEADERS },
       body: JSON.stringify({ model: 'echo-1', messages: [] }),
@@ -108,12 +122,10 @@ describe('createHonoApp', () => {
     expect(json.models.map((m) => m.name)).toEqual(['models/echo-1', 'models/echo-mini'])
   })
 
-  it('GET /echo/v1/models scopes to the echo platform', async () => {
+  it('平台前缀 URL 已移除：GET /echo/v1/models → 404', async () => {
     const app = createHonoApp(makeDeps())
     const res = await app.request('/echo/v1/models', { headers: AUTH_HEADERS })
-    expect(res.status).toBe(200)
-    const json = (await res.json()) as { data: { id: string }[] }
-    expect(json.data.map((m) => m.id)).toEqual(['echo-1', 'echo-mini'])
+    expect(res.status).toBe(404)
   })
 
   it('no configured keys + loopback (allowAnonymousLoopback=true) → 200 from /health (exempt)', async () => {
@@ -221,7 +233,7 @@ describe('createHonoApp', () => {
     const deps: HonoAppDeps = {
       service,
       auth: { keysProvider: async () => [], allowAnonymousLoopback: true },
-      knownPlatforms: registry.knownPlatforms(),
+      resolvePlatformAlias: aliasResolverFor(registry),
       keyRateLimiter: limiter,
     }
     const app = createHonoApp(deps)
@@ -234,7 +246,7 @@ describe('createHonoApp', () => {
     const deps2: HonoAppDeps = {
       service,
       auth: { keysProvider: async () => ['sk-test'], allowAnonymousLoopback: false },
-      knownPlatforms: registry.knownPlatforms(),
+      resolvePlatformAlias: aliasResolverFor(registry),
       keyRateLimiter: limiter,
     }
     const app2 = createHonoApp(deps2)

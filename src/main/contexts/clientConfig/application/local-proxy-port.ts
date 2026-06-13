@@ -12,6 +12,11 @@ export interface LocalProxyPort {
   signKey(name: string): Promise<{ id: string; plaintext: string }>
   /** 吊销客户端 key（删 profile 联动用；phase6）。 */
   revokeKey(id: string): Promise<void>
+  /**
+   * 中转注入固定 key（隐藏、仅本地、稳定）。中转注入(Codex/relay 聚合)注入此 key 而非签发普通 key：
+   * 反代识别后直连真实上游(native→登录账号)、不走路由组合。不进客户端 Key 列表、无需吊销。
+   */
+  getRelayInjectionKey(): string
   /** 反代暴露的模型 id 列表（预填默认模型用）。 */
   listModels(): string[]
   /**
@@ -30,6 +35,11 @@ export interface LocalProxyPort {
    * 未配置（无 auth.json）时返回空数组。
    */
   listNativeModelSlugs?(): string[]
+  /**
+   * 启用的路由组合，作为可注入 catalog 条目（id 用显式 `cb/<name>`）。
+   * 「中转注入 + 号小管账号作供应商」时并入 codex catalog，与同名原生(裸名)/账号池消歧。
+   */
+  listCombos?(): CatalogModel[]
 }
 
 /** L2 catalog 条目所需的最小模型信息。 */

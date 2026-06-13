@@ -172,13 +172,34 @@
     "curlTitle": "Quick Start Example",
     "curlCopy": "Copy Example",
     "disabledHint": "Enable the service to use these endpoints",
+    "aliasHint": "Routing by model name: prefix the model with a platform alias to target a provider explicitly, e.g. kr/claude-sonnet-4.5 (kr = local account pool); without a prefix it is matched by model name. See the model ids returned by /v1/models for available aliases.",
     "endpoints": {
       "chatCompletions": "OpenAI-compatible · Chat Completions",
       "messages": "Anthropic-compatible · Messages",
       "responses": "OpenAI Responses API",
-      "models": "Model List",
-      "platformChat": "Platform-prefix · Chat Completions",
-      "platformMessages": "Platform-prefix · Messages"
+      "models": "Model List"
+    },
+    "combos": {
+      "title": "Route Combos",
+      "new": "New combo",
+      "desc": "Chain several providers into an ordered fallback list, used as a single model name; on rate-limit/quota-exhaustion/error it auto-switches to the next step.",
+      "namePlaceholder": "Combo name (letters, digits, _.- ; no /, e.g. my-coding)",
+      "descPlaceholder": "Description (optional)",
+      "steps": "Steps (top to bottom = priority)",
+      "stepPlaceholder": "alias-prefixed model, e.g. kr/claude-sonnet-4.5",
+      "stepEnabled": "Enabled",
+      "addStep": "Add step",
+      "cancel": "Cancel",
+      "save": "Save",
+      "empty": "No combos yet — click \"New combo\" to create your first fallback chain.",
+      "disabled": "Disabled",
+      "edit": "Edit",
+      "delete": "Delete",
+      "createTitle": "New route combo",
+      "editTitle": "Edit route combo",
+      "deleteTitle": "Delete combo",
+      "deleteDesc": "Delete combo \"{{name}}\"? This cannot be undone.",
+      "confirmDelete": "Confirm delete"
     }
   },
   "clientKeys": {

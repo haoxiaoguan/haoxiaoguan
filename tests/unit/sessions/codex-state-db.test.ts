@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -49,6 +49,16 @@ describe('findCodexStateDb', () => {
   })
   it('无库返回 undefined', () => {
     expect(findCodexStateDb(home)).toBeUndefined()
+  })
+  it('优先 sqlite/ 子目录（新版 Codex 布局），即使顶层也有库', async () => {
+    seedDb(join(home, 'state_5.sqlite'), []) // 顶层旧库（应被忽略）
+    await mkdir(join(home, 'sqlite'), { recursive: true })
+    seedDb(join(home, 'sqlite', 'state_5.sqlite'), []) // 子目录新库（Codex Desktop 实际用）
+    expect(findCodexStateDb(home)).toBe(join(home, 'sqlite', 'state_5.sqlite'))
+  })
+  it('仅顶层有库时回退顶层（旧版 Codex 布局）', async () => {
+    seedDb(join(home, 'state_4.sqlite'), [])
+    expect(findCodexStateDb(home)).toBe(join(home, 'state_4.sqlite'))
   })
 })
 

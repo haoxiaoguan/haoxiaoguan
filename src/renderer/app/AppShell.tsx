@@ -90,7 +90,7 @@ const navButtonClassName =
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
 type ClientConfigHeaderTab = 'manage' | 'access';
-type RouteServiceHeaderTab = 'service' | 'keys' | 'health';
+type RouteServiceHeaderTab = 'service' | 'combos' | 'keys' | 'health';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
@@ -221,11 +221,13 @@ export function AppShell({ shell }: AppShellProps) {
   // 各自一组顶部 tabs。
   const isRouteServiceRoute = location.pathname.startsWith('/api-service');
   const isClientConfigRoute = location.pathname.startsWith('/client-config');
-  const activeRouteServiceTab: RouteServiceHeaderTab = location.pathname.startsWith('/api-service/keys')
-    ? 'keys'
-    : location.pathname.startsWith('/api-service/health')
-      ? 'health'
-      : 'service';
+  const activeRouteServiceTab: RouteServiceHeaderTab = location.pathname.startsWith('/api-service/combos')
+    ? 'combos'
+    : location.pathname.startsWith('/api-service/keys')
+      ? 'keys'
+      : location.pathname.startsWith('/api-service/health')
+        ? 'health'
+        : 'service';
   const activeClientConfigTab: ClientConfigHeaderTab = location.pathname.startsWith('/client-config/access')
     ? 'access'
     : 'manage'; // /client-config 默认进客户端管理
@@ -336,6 +338,7 @@ export function AppShell({ shell }: AppShellProps) {
                 value={activeRouteServiceTab}
                 tabs={[
                   { value: 'service', label: t('nav:apiService'), to: '/api-service/service' },
+                  { value: 'combos', label: t('nav:service.combos.title'), to: '/api-service/combos' },
                   { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
                   { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },
                 ]}

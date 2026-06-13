@@ -40,9 +40,9 @@ export class PlatformRegistry {
 
   /**
    * 按路由意图选适配器：
-   * - intent.platform 已给（/{platform}/v1 锁池）→ 取该平台；不存在或（chat 类请求且不支持该模型）→ NoUpstreamError。
-   * - 裸路由（无 platform）→ 用 intent.model 做模型感知：findPlatformsForModel 首个匹配；无匹配 → NoUpstreamError。
-   *   （spec §5：v1 多平台支持同模型的仲裁留未来，取首个匹配。）
+   * - intent.platform 已给（model 别名前缀 `<alias>/<model>` 解析出的锁池）→ 取该平台；不存在或（chat 类请求且不支持该模型）→ NoUpstreamError。
+   * - 无 platform（model 无别名前缀）→ 用 intent.model 做模型感知：findPlatformsForModel 首个匹配；无匹配 → NoUpstreamError。
+   *   （多平台支持同模型时取首个匹配，注册顺序；要消歧请用别名前缀。）
    * - models/health 不经此函数选择（由 handleRequest 直接处理）。
    */
   selectAdapter(intent: RequestIntent): PlatformUpstreamAdapter {
@@ -82,6 +82,27 @@ export class PlatformRegistry {
           seen.add(m.id)
           out.push(m)
         }
+      }
+    }
+    return out
+  }
+
+  /**
+   * 同 listAllModels，但每条带来源 platform（供 /v1/models 按平台别名给 id 加前缀）。
+   * 去重按 platform+id（同名模型在不同平台各保留一条，因别名前缀已使其可区分）。
+   */
+  listAllModelsWithPlatform(platform?: string): Array<{ platform: string; model: ModelInfo }> {
+    const seen = new Set<string>()
+    const out: Array<{ platform: string; model: ModelInfo }> = []
+    const sources = platform !== undefined
+      ? (this.adapters.has(platform) ? [this.adapters.get(platform)!] : [])
+      : Array.from(this.adapters.values())
+    for (const a of sources) {
+      for (const m of a.listModels()) {
+        const key = `${a.platform}::${m.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push({ platform: a.platform, model: m })
       }
     }
     return out

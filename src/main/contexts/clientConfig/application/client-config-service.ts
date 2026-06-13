@@ -394,7 +394,7 @@ export class ClientConfigService {
    *           Codex 只会说 Responses(wire_api=chat 已被上游移除)，非 responses 上游直连必坏，
    *           启用时直接报错提示用户开启「中转注入」(用户拍板：提示而非静默转换)；
    *   - ON  → 原生 + 该供应商模型共存(catalog=原生+其模型)。
-   *           号小管账号/可中转第三方经反代 8788 路由(原生 gpt 透传 + 供应商走 relay)；
+   *           号小管账号/可中转第三方经本机反代裸 /v1 按模型名路由(原生 gpt 透传 + 供应商走 relay)；
    *           responses 协议第三方暂退直连(catalog 不并原生，避免原生条目误路由到第三方；
    *           C3 将补 responses 透传把 ON 一律收编进反代实现真共存)。
    */
@@ -433,7 +433,12 @@ export class ClientConfigService {
       const port = await this.ensureProxyPort()
       baseUrl = `http://127.0.0.1:${port}/v1`
       apiKey = await this.store.resolveApiKey(id)
-      models = this.localProxy.listAccountPoolModels()
+      // 账号池(Claude) + 启用组合(cb/<name>)。组合用显式前缀与同名原生(裸名→登录账号)消歧；
+      // ON 时本分支并入原生(codexCatalogIncludeNative)，故三者(原生/组合/账号池)在 catalog 各有其名。
+      models = [
+        ...this.localProxy.listAccountPoolModels(),
+        ...(this.localProxy.listCombos?.() ?? []),
+      ]
       viaProxy = true
     } else {
       const proto = (profile.settings?.upstreamProtocol as WireProtocol | undefined) ?? 'openai-chat'
@@ -447,7 +452,7 @@ export class ClientConfigService {
         if (this.localProxy === undefined || this.relayProvisioning === undefined) {
           throw new Error('中转能力未配置，无法接入非 Responses 协议的供应商')
         }
-        // ON + 可中转：经反代 8788 路由(原生 gpt 透传 + 本供应商走 relay)，共存。
+        // ON + 可中转：经本机反代裸 /v1 按模型名路由(原生 gpt 透传 + 本供应商走 relay)，共存。
         // RelayAdapter 不支持模型映射（alias→real），此分支直接用真名列表传 models：
         // 若第三方模型 id 与原生 slug 撞名，会被 catalog 现有 nativeSlugs filter 跳过（维持现状，不做别名）。
         const port = await this.ensureProxyPort()
@@ -543,16 +548,14 @@ export class ClientConfigService {
    */
   private async ensureCodexRelayClientKey(id: string): Promise<string> {
     if (this.localProxy === undefined) throw new Error('本机反代接入未配置')
+    // 中转注入改用「固定注入 key」（隐藏、不进 client key 列表、仅本地）→ 反代识别后直连真实上游
+    // （原生→登录账号 / 第三方→relay），**不走路由组合**。顺手吊销旧版每档签发的 listed key 并清 keyRef。
     const oldRef = await this.store.getKeyRef(id)
-    const { id: keyId, plaintext } = await this.localProxy.signKey(`client-config:codex-relay:${id}`)
-    try {
-      await this.store.update(id, { keyRef: keyId })
-    } catch (e) {
-      await this.revokeQuietly(keyId) // 记引用失败则补偿吊销，不留无主凭证
-      throw e
+    if (oldRef !== null) {
+      await this.revokeQuietly(oldRef)
+      await this.store.update(id, { keyRef: null })
     }
-    if (oldRef !== null) await this.revokeQuietly(oldRef)
-    return plaintext
+    return this.localProxy.getRelayInjectionKey()
   }
 
   /** 吊销 manual 档的中转 client key 并清 keyRef。local-proxy 档的 keyRef 是其主 key（与档同生命周期），不在此吊销。 */
@@ -697,8 +700,8 @@ export class ClientConfigService {
 
     // upstreamProtocol 已在 shouldRelay 中校验非 undefined，此处断言以满足 ensureRelayUpstream 入参类型。
     const relayProtocol = upstreamProtocol as WireProtocol
-    // 建/更新 relay 上游
-    const { platform } = await this.relayProvisioning.ensureRelayUpstream({
+    // 建/更新 relay 上游（注册 supportsModel(profile.model)，供反代按模型名路由）。
+    await this.relayProvisioning.ensureRelayUpstream({
       profileId: profile.id,
       displayName: profile.name,
       protocol: relayProtocol,
@@ -707,13 +710,15 @@ export class ClientConfigService {
       models: profile.model !== undefined ? [profile.model] : [],
     })
 
-    // 签发号小管 client key
-    const { plaintext: relayKey } = await this.localProxy.signKey(`client-config:relay:${profile.id}`)
+    // 中转改用「固定注入 key」（隐藏、不进 client key 列表、仅本地）→ 反代识别后直连真实上游(本 relay)、
+    // 不走路由组合；无需签发/吊销 per-档 key。
+    const relayKey = this.localProxy.getRelayInjectionKey()
 
-    // 改写 ApplyInput：baseUrl 指向反代/platform，apiKey 换成号小管 client key
+    // 改写 ApplyInput：baseUrl 指向反代裸 /v1（平台前缀路由已移除，反代按模型名 profile.model 分流到本 relay
+    // 上游），apiKey 换成固定注入 key。注：若第三方模型名与账号池/其它 relay 撞名，按注册顺序首个命中。
     const relayInput: ApplyInput = {
       ...input,
-      baseUrl: `http://127.0.0.1:${port}/${platform}`,
+      baseUrl: `http://127.0.0.1:${port}/v1`,
       apiKey: relayKey,
     }
     return { profile, writer, input: relayInput }

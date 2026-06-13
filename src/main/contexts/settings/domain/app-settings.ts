@@ -31,7 +31,7 @@ export interface RuntimeSettings {
   // 本地 AI API 反代服务（apiProxy 上下文）是否随应用就绪自启。默认 false：
   // 尊重用户在「API 服务」页的开关，不强制自启。
   apiProxyEnabled: boolean
-  // 反代服务监听端口（127.0.0.1）。默认 8788；被占用时 ApiHttpServer 自动回退 +1。
+  // 反代服务监听端口（127.0.0.1）。默认 28788；被占用时 ApiHttpServer 自动回退 +1。
   apiProxyPort: number
   // 客户端 API Key（明文，M2b 简单版；加密多 Key 实体留 M5）。默认 []：未配置鉴权。
   // 客户端经 Authorization: Bearer / x-api-key / x-goog-api-key / ?key= 之一携带。
@@ -91,7 +91,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   quotaRefreshConcurrency: 3,
   allowStaleKiroImport: false,
   apiProxyEnabled: false,
-  apiProxyPort: 8788,
+  apiProxyPort: 28788,
   apiProxyClientKeys: [],
   apiProxyAllowAnonymousLoopback: true,
   apiProxySelectionStrategy: 'sticky-lru',
@@ -147,6 +147,9 @@ export class AppSettings {
     }
     if (!Number.isInteger(runtime.apiProxyMaxRetries) || runtime.apiProxyMaxRetries < 1) runtime.apiProxyMaxRetries = 3
     if (!Number.isInteger(runtime.apiProxyPerAccountConcurrency) || runtime.apiProxyPerAccountConcurrency < 1) runtime.apiProxyPerAccountConcurrency = 4
+    // 端口默认从旧 8788 迁到 28788：仅当存量值恰为旧默认 8788 时上抬（8788 历史上只作默认值出现，
+    // 未自定义的用户随之跟到新默认；自定义了其它端口的用户不受影响）。幂等。
+    if (runtime.apiProxyPort === 8788) runtime.apiProxyPort = 28788
     return new AppSettings(ui, runtime, raw.webdav ?? {}, raw.localBackup ?? {})
   }
 
