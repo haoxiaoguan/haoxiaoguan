@@ -5,17 +5,26 @@ import type { CodexProviderCount } from '../domain/codex-repair'
 
 const STATE_RE = /^state_(\d+)\.sqlite$/
 
-/** 发现 Codex home 下版本号最大的 state_N.sqlite。无则 undefined。 */
+/**
+ * 发现 Codex 状态库（版本号最大的 state_N.sqlite）。
+ * **新版 Codex 把状态库放在 `<home>/sqlite/` 子目录**（Codex Desktop 实际读写此处）；旧版在 `<home>/` 顶层。
+ * 故优先子目录，无则回退顶层——否则修复会打在顶层旧库上，而 Codex 读子目录新库导致「修了却看不到」。
+ */
 export function findCodexStateDb(codexHome: string): string | undefined {
-  if (!existsSync(codexHome)) return undefined
+  return findStateDbInDir(join(codexHome, 'sqlite')) ?? findStateDbInDir(codexHome)
+}
+
+/** 在单个目录里找版本号最大的 state_N.sqlite（非递归）。 */
+function findStateDbInDir(dir: string): string | undefined {
+  if (!existsSync(dir)) return undefined
   let best: { n: number; name: string } | undefined
-  for (const name of readdirSync(codexHome)) {
+  for (const name of readdirSync(dir)) {
     const m = STATE_RE.exec(name)
     if (!m) continue
     const n = Number(m[1])
     if (!best || n > best.n) best = { n, name }
   }
-  return best ? join(codexHome, best.name) : undefined
+  return best ? join(dir, best.name) : undefined
 }
 
 export interface ApplyUpdatesResult {
