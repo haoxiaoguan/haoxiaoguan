@@ -69,8 +69,8 @@ interface ClientConfigState {
   connectLocalProxy: () => Promise<void>
   /** 测连通。 */
   testConnectivity: (id: string) => Promise<ClientConfigConnTest | undefined>
-  /** Codex L2「中转注入」开关（开→注入单反代 provider+catalog；关→清除）。 */
-  setCodexRelayInjection: (enabled: boolean) => Promise<void>
+  /** 「路由」开关（按客户端）：开/关后按新形态重注入该客户端当前生效供应商。 */
+  setRouting: (clientId: ClientConfigClientId, enabled: boolean) => Promise<void>
   /** Codex L2 下切换第三方供应商启用态（标记+重聚合，不走 L1 注入）。 */
   setCodexProviderEnabled: (id: string, enabled: boolean) => Promise<void>
 }
@@ -243,8 +243,8 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
     await get().refresh()
   },
   testConnectivity: async (id) => run(set, () => bridge().clientConfig.testConnectivity(id)),
-  setCodexRelayInjection: async (enabled) => {
-    await run(set, () => bridge().clientConfig.setCodexRelayInjection(enabled))
+  setRouting: async (clientId, enabled) => {
+    await run(set, () => bridge().clientConfig.setRouting(clientId, enabled))
     await get().refresh()
   },
   setCodexProviderEnabled: async (id, enabled) => {

@@ -896,7 +896,7 @@ export async function buildContainer(): Promise<Container> {
     clientConfigSnapshots,
     clientConfigLocalProxy,
     clientConfigRelayProvisioning,
-    () => settings.getCodexRelayInjectionEnabled(),
+    (clientId) => settings.getRoutingEnabled(clientId),
   )
   // 客户端版本/可升级探测（独立 service，带 TTL 缓存；clients() 列表仍走文件检测保持秒开）。
   const clientVersionService = new ClientVersionService()

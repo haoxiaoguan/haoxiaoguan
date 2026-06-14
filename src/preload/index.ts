@@ -298,8 +298,8 @@ const api: HxgApi = {
     rollback: (clientId, entryId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.rollback, clientId, entryId),
     connectLocalProxy: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.connectLocalProxy, clientId),
     testConnectivity: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.testConnectivity, id),
-    setCodexRelayInjection: (enabled) =>
-      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setCodexRelayInjection, enabled),
+    setRouting: (clientId, enabled) =>
+      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setRouting, clientId, enabled),
     setCodexProviderEnabled: (id, enabled) =>
       ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setCodexProviderEnabled, id, enabled),
   },

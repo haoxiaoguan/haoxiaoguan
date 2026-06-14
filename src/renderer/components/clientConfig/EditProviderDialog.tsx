@@ -1,7 +1,7 @@
 // 编辑供应商:作为右侧页面(非弹窗)。从 profile 预填,key 留空则不改;回写完整 settings(保留 uiMeta 与功能键)。
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Lightbulb } from 'lucide-react';
 import { toast } from 'sonner';
 import { bridge } from '../../services/bridge';
 import { Button } from '@/components/ui/button';
@@ -39,11 +39,12 @@ export function EditProviderDialog({
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  // 「完整 URL」：开=原样用 baseUrl(不补 /v1);关=按基址自动补 /v1。
+  const [fullUrl, setFullUrl] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [extraValue, setExtraValue] = useState('');
   const [upstreamProtocol, setUpstreamProtocol] = useState('');
-  const [routeViaProxy, setRouteViaProxy] = useState(false);
   const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
   const [codexModels, setCodexModels] = useState<CodexModelItem[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -58,6 +59,7 @@ export function EditProviderDialog({
         clientId,
         baseUrl: baseUrl.trim(),
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+        ...(fullUrl ? { fullUrl: true } : {}),
         profileId: profile.id,
       });
       setModels(list);
@@ -73,6 +75,7 @@ export function EditProviderDialog({
     }
   };
 
+  // 协议不匹配 → 启用时必须开「路由」经反代转换（硬门槛，由列表页处理）。
   const mismatch = nativeProtoUi !== undefined && upstreamProtocol !== nativeProtoUi;
   const uiMeta = (profile.settings?.uiMeta ?? {}) as { icon?: string; iconColor?: string };
 
@@ -138,9 +141,10 @@ export function EditProviderDialog({
   const draftSettings: Record<string, unknown> = {
     ...((profile.settings ?? {}) as Record<string, unknown>),
     ...(extra ? { [extra.key]: extraValue } : {}),
-    ...(nativeProtoUi && clientId !== 'codex' ? { upstreamProtocol, routeViaProxy } : {}),
-    ...(nativeProtoUi && clientId === 'codex' ? { upstreamProtocol } : {}),
+    ...(nativeProtoUi ? { upstreamProtocol } : {}),
   };
+  // 路由(直连/中转)改由页面级「路由」开关决定，清除历史档残留的 routeViaProxy（不再使用）。
+  delete draftSettings.routeViaProxy;
   if (clientId === 'claude') {
     if (Object.keys(modelMapClean).length > 0) draftSettings.modelMap = modelMapClean;
     else delete draftSettings.modelMap;
@@ -149,6 +153,9 @@ export function EditProviderDialog({
     if (codexModelsClean.length > 0) draftSettings.codexModels = codexModelsClean;
     else delete draftSettings.codexModels;
   }
+  // 完整 URL：开则写 true，关则删键（避免残留把老档锁在「开」态）。
+  if (fullUrl) draftSettings.fullUrl = true;
+  else delete draftSettings.fullUrl;
 
   // 进入编辑(或切换被编辑档)时,从 profile 预填。
   useEffect(() => {
@@ -157,11 +164,11 @@ export function EditProviderDialog({
     const proto = CLIENT_NATIVE_PROTOCOL_UI[profile.clientId];
     setName(profile.name);
     setBaseUrl(profile.baseUrl);
+    setFullUrl(s.fullUrl === true);
     setApiKey('');
     setModel(profile.model ?? '');
     setExtraValue((s[ex?.key ?? ''] as string | undefined) ?? ex?.default ?? '');
     setUpstreamProtocol((s.upstreamProtocol as string | undefined) ?? proto ?? '');
-    setRouteViaProxy(s.routeViaProxy === true);
     const mm = (typeof s.modelMap === 'object' && s.modelMap !== null ? s.modelMap : {}) as Record<string, unknown>;
     const readTier = (v: unknown): ModelTier => {
       if (typeof v === 'string') return { model: v, name: '' }; // 旧版:值为模型字符串
@@ -198,11 +205,6 @@ export function EditProviderDialog({
     }
     setModels([]);
   }, [profile]);
-
-  // 协议不匹配时强制开启路由(不可关)。codex 不走此逻辑（无 routeViaProxy 开关）。
-  useEffect(() => {
-    if (mismatch && clientId !== 'codex') setRouteViaProxy(true);
-  }, [mismatch, clientId]);
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0 && !busy;
   const submit = async () => {
@@ -247,10 +249,22 @@ export function EditProviderDialog({
           {t('clientConfigPage.form.name')}
           <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('clientConfigPage.form.namePlaceholder')} />
         </label>
-        <label className="text-[12px] font-medium text-muted-foreground">
-          {t('clientConfigPage.form.baseUrl')}
-          <Input className="mt-1 font-mono" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
-        </label>
+        {/* 请求地址 + 内联「完整 URL」药丸开关（决定是否自动补 /v1；测连通/取模型/relay/Codex 注入同源生效）。 */}
+        <div>
+          <div className="mb-1.5 flex items-center gap-2.5">
+            <span className="text-[12px] font-medium text-muted-foreground">{t('clientConfigPage.form.baseUrl')}</span>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1">
+              <Link2 className="size-3 text-muted-foreground" aria-hidden />
+              <span className="text-[11px] font-medium text-muted-foreground">{t('clientConfigPage.form.fullUrl')}</span>
+              <Switch checked={fullUrl} onCheckedChange={setFullUrl} className="ml-0.5 scale-90" aria-label={t('clientConfigPage.form.fullUrl')} />
+            </div>
+          </div>
+          <Input className="font-mono" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+          <div className="mt-2 flex items-start gap-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-300/90">
+            <Lightbulb className="mt-px size-3.5 shrink-0" aria-hidden />
+            <span className="text-[11px] leading-relaxed">{t(fullUrl ? 'clientConfigPage.form.fullUrlHintOn' : 'clientConfigPage.form.fullUrlHintOff')}</span>
+          </div>
+        </div>
         <label className="text-[12px] font-medium text-muted-foreground">
           {t('clientConfigPage.form.apiKey')}
           <Input className="mt-1 font-mono" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={t('clientConfigPage.form.apiKeyKeepPlaceholder')} />
@@ -349,19 +363,11 @@ export function EditProviderDialog({
           </label>
         )}
 
-        {/* 固定协议客户端：经号小管反代路由开关。协议不匹配时强制开启且不可关。codex 不渲染此区块。 */}
-        {nativeProtoUi && clientId !== 'codex' && (
-          <div className="rounded-[8px] border border-border/60 px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[12px] font-medium text-foreground">{t('clientConfigPage.form.routing')}</span>
-              <Switch checked={routeViaProxy} disabled={mismatch} onCheckedChange={setRouteViaProxy} aria-label={t('clientConfigPage.form.routing')} />
-            </div>
-            {mismatch ? (
-              <p className="mt-1.5 text-[11px] text-destructive">{t('clientConfigPage.form.routingForcedHint')}</p>
-            ) : (
-              <p className="mt-1.5 text-[11px] text-muted-foreground/70">{t('clientConfigPage.form.routingHint')}</p>
-            )}
-          </div>
+        {/* 协议不匹配：启用时需在列表页开启「路由」经号小管反代转换（硬门槛）。 */}
+        {mismatch && (
+          <p className="-mt-1 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
+            {t('clientConfigPage.form.mismatchHint')}
+          </p>
         )}
 
         <ConfigPreview
@@ -371,7 +377,7 @@ export function EditProviderDialog({
           apiKey={apiKey}
           model={model}
           settings={draftSettings}
-          footNote={nativeProtoUi && clientId !== 'codex' && (mismatch || routeViaProxy) ? t('clientConfigPage.form.previewRelayNote') : undefined}
+          footNote={mismatch ? t('clientConfigPage.form.previewRelayNote') : undefined}
           onApplyEdit={clientId === 'claude' ? applyClaudeConfigEdit : clientId === 'codex' ? applyCodexConfigEdit : undefined}
         />
       </div>

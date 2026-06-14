@@ -100,7 +100,7 @@ export function registerClientConfigHandlers(
   )
   ipcMain.handle(
     CLIENT_CONFIG_CHANNELS.fetchModels,
-    async (_e, input: { clientId: ClientId; baseUrl: string; apiKey?: string; profileId?: string }) => {
+    async (_e, input: { clientId: ClientId; baseUrl: string; apiKey?: string; profileId?: string; fullUrl?: boolean }) => {
       try {
         return await svc.fetchModels(input)
       } catch (e) {
@@ -171,9 +171,9 @@ export function registerClientConfigHandlers(
       throw new Error(toIpcError(e))
     }
   })
-  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setCodexRelayInjection, async (_e, enabled: boolean) => {
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.setRouting, async (_e, clientId: ClientId, enabled: boolean) => {
     try {
-      await svc.setCodexRelayInjection(enabled)
+      await svc.setRouting(clientId, enabled)
     } catch (e) {
       throw new Error(toIpcError(e))
     }

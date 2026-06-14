@@ -4,6 +4,7 @@
 // 注意：@iarna/toml 序列化不保留注释（重排数据但不丢键）——MVP 接受此权衡。
 import TOML from '@iarna/toml'
 import { ClientConfigCorruptError } from '../domain/client-writer'
+import { resolveApiBaseUrl } from './api-base-url'
 
 /** Codex 内置 provider id（不可被号小管合成同名表）。 */
 export const CODEX_RESERVED_PROVIDER_IDS = new Set([
@@ -50,22 +51,19 @@ export interface CodexProviderInput {
   model?: string
   /** 是否设为顶层默认（model_provider + model）。 */
   isDefault: boolean
+  /** 「完整 URL」：true=base_url 原样用（不补 /v1）；false/缺省=启发式补 /v1。 */
+  fullUrl?: boolean
 }
 
 /**
  * Codex provider base_url 规范化：请求 = POST {base_url}/responses，OpenAI 兼容上游惯例须以 /v1
  * 结尾（用户实证：填 http://127.0.0.1:8080 会打到 :8080/responses 而非 :8080/v1/responses）。
- * 仅当 URL 无路径（空或 /）时自动补 /v1；带自定义路径（网关）原样尊重；非 URL 原样返回。
+ * 启发式（仅 URL 无路径时补 /v1，带路径原样）。统一委托 resolveApiBaseUrl(url, false) —— 与测连通/
+ * 拉模型/relay 上游同源，避免「测试与真实请求补路径规则不一致」。credential-injection 的账号注入仍调本
+ * 函数（无「完整 URL」开关，恒走启发式）。
  */
 export function normalizeCodexBaseUrl(url: string): string {
-  const trimmed = url.trim().replace(/\/+$/, '')
-  try {
-    const u = new URL(trimmed)
-    if (u.pathname === '' || u.pathname === '/') return `${trimmed}/v1`
-  } catch {
-    /* 非 URL 原样返回，写盘后由 Codex 自身报错定位 */
-  }
-  return trimmed
+  return resolveApiBaseUrl(url, false)
 }
 
 /** 注入/更新一段号小管 provider + 对应 profile（保留其余键）。 */
@@ -78,7 +76,7 @@ export function upsertCodexProvider(
   const providers = { ...asRecord(next.model_providers) }
   const provider: Record<string, unknown> = {
     name: input.name,
-    base_url: normalizeCodexBaseUrl(input.baseUrl),
+    base_url: resolveApiBaseUrl(input.baseUrl, input.fullUrl ?? false),
     // Codex 已彻底移除 wire_api="chat"：任何 provider 段带它都会让整个 config.toml 解析失败、
     // 用户的 Codex 直接起不来（真机证实，见 openai/codex discussions#7782）。唯一合法值恒为
     // responses，故不提供参数；chat-only 上游必须经号小管反代做协议转换。

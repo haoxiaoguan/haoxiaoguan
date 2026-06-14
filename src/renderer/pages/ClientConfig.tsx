@@ -15,6 +15,7 @@ import { ProviderBrandIcon } from '@/components/clientConfig/ProviderBrandIcon';
 import { AddProviderDialog } from '@/components/clientConfig/AddProviderDialog';
 import { EditProviderDialog } from '@/components/clientConfig/EditProviderDialog';
 import { CodexSwitchRepairDialog } from '@/components/clientConfig/CodexSwitchRepairDialog';
+import { CLIENT_NATIVE_PROTOCOL_UI } from '@/components/clientConfig/provider-templates';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -30,6 +31,16 @@ import type {
   CodexRepairProgressDto,
 } from '@shared/api-types';
 import { sessionsService } from '@/services/tauri';
+
+/** 该供应商是否「需要中转」：固定协议客户端 + manual 档 + 上游协议 ≠ 客户端原生协议。
+ *  flexible 客户端(无原生协议表)永远直连，不需要中转。 */
+function providerNeedsRelay(p: ClientConfigProfileDto): boolean {
+  if (p.source !== 'manual') return false;
+  const native = CLIENT_NATIVE_PROTOCOL_UI[p.clientId];
+  if (native === undefined) return false;
+  const proto = p.settings?.upstreamProtocol;
+  return typeof proto === 'string' && proto.length > 0 && proto !== native;
+}
 
 // ─── 图标工具按钮 + tooltip ──────────────────────────────────────────────
 function IconAction({
@@ -115,6 +126,7 @@ function ProviderRow({
   p,
   isAdditive,
   loading,
+  routingOn,
   onTestConn,
   onApply,
   onClear,
@@ -128,6 +140,8 @@ function ProviderRow({
   p: ClientConfigProfileDto;
   isAdditive: boolean;
   loading: boolean;
+  /** 该客户端「路由」开关是否开启（用于匹配档显示「经路由」标识）。 */
+  routingOn: boolean;
   onTestConn: (id: string) => void;
   onApply: (id: string) => void;
   onClear: (id: string) => void;
@@ -179,9 +193,13 @@ function ProviderRow({
             <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
               {t('clientConfigPage.sourceLocal')}
             </span>
-          ) : p.settings?.routeViaProxy === true ? (
+          ) : providerNeedsRelay(p) ? (
+            <span className="rounded-[6px] bg-amber-500/15 px-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+              {t('clientConfigPage.needsRelay')}
+            </span>
+          ) : routingOn ? (
             <span className="rounded-[6px] bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
-              {t('clientConfigPage.sourceRelay')}
+              {t('clientConfigPage.routed')}
             </span>
           ) : (
             <span className="rounded-[6px] bg-muted px-1.5 text-[10px] text-muted-foreground">
@@ -254,8 +272,8 @@ export default function ClientConfig() {
   const { t } = useTranslation('nav');
   const store = useClientConfigStore();
   const { clients, activeClient, profiles, counts, versions, error, loading } = store;
-  const codexRelay = useSettingsStore((s) => s.codexRelayInjectionEnabled);
-  const setCodexRelay = useSettingsStore((s) => s.setCodexRelayInjectionEnabled);
+  const routingEnabled = useSettingsStore((s) => s.routingEnabled);
+  const setRoutingEnabled = useSettingsStore((s) => s.setRoutingEnabled);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   // 右侧视图:列表 / 添加(页面) / 编辑(页面)。添加/编辑作为页面渲染在右侧,带返回。
   const [view, setView] = useState<
@@ -266,6 +284,8 @@ export default function ClientConfig() {
   const [codexSwitch, setCodexSwitch] = useState<{ id: string; name: string; action: 'enable' | 'disable' } | null>(null);
   const [codexSwitchBusy, setCodexSwitchBusy] = useState(false);
   const [codexSwitchProgress, setCodexSwitchProgress] = useState<CodexRepairProgressDto | null>(null);
+  // 「需要中转」确认弹窗：启用协议不匹配的供应商但「路由」未开时弹出（硬门槛：不开就用不了）。
+  const [needRelay, setNeedRelay] = useState<{ id: string; name: string; proto: string; native: string } | null>(null);
 
   useEffect(() => {
     void store.init();
@@ -278,6 +298,9 @@ export default function ClientConfig() {
 
   const activeInfo = clients.find((c) => c.clientId === activeClient);
   const isAdditive = activeInfo?.writeMode === 'additive';
+  // 「路由」开关仅固定协议客户端(claude/codex/gemini_cli)显示；flexible 客户端恒直连无需中转。
+  const showRouting = CLIENT_NATIVE_PROTOCOL_UI[activeClient] !== undefined;
+  const routingOnActive = routingEnabled[activeClient] === true;
 
   const onClear = async (id: string) => {
     await store.clear(id);
@@ -300,13 +323,47 @@ export default function ClientConfig() {
     if (r?.ok) toast.success(t('clientConfigPage.connOk'));
     else toast.error(t('clientConfigPage.connFail', { msg: r?.message ?? String(r?.status ?? '') }));
   };
-  // Codex L2「中转注入」开关：持久化设置 + 注入单反代 provider(/v1)+catalog（开）或清除（关）。
-  const onToggleCodexRelay = async (v: boolean) => {
-    await setCodexRelay(v);
-    await store.setCodexRelayInjection(v);
+  // 「路由」开关（按客户端，仅固定协议客户端显示）：持久化设置 + 按新形态重注入当前生效供应商。
+  const onToggleRouting = async (v: boolean) => {
+    if (!v) {
+      // 关闭守卫：当前生效档若协议不匹配，需保持路由开启，否则用不了（硬门槛）。
+      const active = profiles.find((p) => (isAdditive ? p.enabled : p.isCurrent));
+      if (active && providerNeedsRelay(active)) {
+        toast.error(t('clientConfigPage.routingOffBlocked'));
+        return;
+      }
+    }
+    await setRoutingEnabled(activeClient, v);
+    await store.setRouting(activeClient, v);
     if (!useClientConfigStore.getState().error) {
       toast.success(v ? t('clientConfigPage.applied') : t('clientConfigPage.cleared'));
     }
+  };
+
+  // 「需要中转」硬门槛：启用协议不匹配的供应商但其客户端「路由」未开 → 拦下并弹确认。返回 true=已拦截。
+  const relayGate = (id: string): boolean => {
+    const p = profiles.find((x) => x.id === id);
+    if (!p || !providerNeedsRelay(p)) return false;
+    if (useSettingsStore.getState().routingEnabled[p.clientId] === true) return false;
+    setNeedRelay({
+      id,
+      name: p.source === 'local-proxy' ? t('clientConfigPage.accountProvider') : p.name,
+      proto: (p.settings?.upstreamProtocol as string) ?? '',
+      native: CLIENT_NATIVE_PROTOCOL_UI[p.clientId] ?? '',
+    });
+    return true;
+  };
+
+  // 确认弹窗：开启该客户端「路由」(仅持久化设置，不在此重 apply 以免多余重启) → 随后照常启用本档。
+  const confirmNeedRelay = async () => {
+    if (!needRelay) return;
+    const { id } = needRelay;
+    const p = profiles.find((x) => x.id === id);
+    setNeedRelay(null);
+    if (!p) return;
+    await setRoutingEnabled(p.clientId, true);
+    if (isAdditive) await onEnable(id);
+    else await onApply(id);
   };
   // Codex 切换确认后执行：启用/停用接入档 + 可选会话迁移。
   // 勾选迁移时走 main 编排 codexSwitchRepair——写配置 + 迁会话合并为「单次 Codex 重启」；
@@ -348,7 +405,14 @@ export default function ClientConfig() {
 
   // 启停供应商。Codex 为单选语义(enable 内部已委托：清掉其它+按中转注入模式注入所选)；其余客户端常规。
   // Codex additive 模式下，启用前弹确认框；其余直接 enable。
+  // 应用（switch 客户端：写选中档并设当前生效）。协议不匹配且未开路由 → 先弹「需要中转」确认。
+  const onApply = async (id: string) => {
+    if (relayGate(id)) return;
+    await store.apply(id);
+    if (!useClientConfigStore.getState().error) toast.success(t('clientConfigPage.applied'));
+  };
   const onEnable = async (id: string) => {
+    if (relayGate(id)) return;
     if (activeClient === 'codex' && isAdditive) {
       // 找到对应 profile 拿名称
       const profile = profiles.find((p) => p.id === id);
@@ -491,21 +555,22 @@ export default function ClientConfig() {
             <History className="size-3.5" aria-hidden />
             {t('clientConfigPage.history')}
           </Button>
-          {/* Codex 专属:中转注入(L2 真共存)开关。提示用项目 Tooltip 组件(不用原生 title,样式统一)。 */}
-          {activeClient === 'codex' && (
+          {/* 「路由」开关（固定协议客户端 claude/codex/gemini）：开=第三方供应商经号小管反代转发。
+              协议不匹配的供应商必须开启才能用。提示用项目 Tooltip 组件(样式统一)。 */}
+          {showRouting && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-border/60 px-2.5">
-                  <span className="text-[12px] text-muted-foreground">{t('clientConfigPage.relayInjection')}</span>
+                  <span className="text-[12px] text-muted-foreground">{t('clientConfigPage.routing')}</span>
                   <Switch
-                    checked={codexRelay}
-                    onCheckedChange={(v) => void onToggleCodexRelay(v)}
-                    aria-label={t('clientConfigPage.relayInjection')}
+                    checked={routingOnActive}
+                    onCheckedChange={(v) => void onToggleRouting(v)}
+                    aria-label={t('clientConfigPage.routing')}
                   />
                 </label>
               </TooltipTrigger>
               <TooltipContent className="max-w-[260px] leading-relaxed">
-                {t('clientConfigPage.relayInjectionHint')}
+                {t('clientConfigPage.routingHint')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -524,8 +589,9 @@ export default function ClientConfig() {
                 p={accountProfile}
                 isAdditive={isAdditive}
                 loading={loading}
+                routingOn={routingOnActive}
                 onTestConn={(id) => void onTestConn(id)}
-                onApply={(id) => void store.apply(id)}
+                onApply={(id) => void onApply(id)}
                 onClear={(id) => void onClear(id)}
                 onEnable={(id) => void onEnable(id)}
                 onDisable={(id) => void onDisable(id)}
@@ -550,8 +616,9 @@ export default function ClientConfig() {
                   p={p}
                   isAdditive={isAdditive}
                   loading={loading}
-                    onTestConn={(id) => void onTestConn(id)}
-                  onApply={(id) => void store.apply(id)}
+                  routingOn={routingOnActive}
+                  onTestConn={(id) => void onTestConn(id)}
+                  onApply={(id) => void onApply(id)}
                   onClear={(id) => void onClear(id)}
                   onEnable={(id) => void onEnable(id)}
                   onDisable={(id) => void onDisable(id)}
@@ -579,6 +646,31 @@ export default function ClientConfig() {
         onConfirm={(repairToo) => void doCodexSwitch(repairToo)}
         onCancel={() => { if (!codexSwitchBusy) setCodexSwitch(null); }}
       />
+
+      {/* 「需要中转」硬门槛确认：协议不匹配的供应商必须开启「路由」才能启用。 */}
+      <Dialog open={needRelay !== null} onOpenChange={(o) => (o ? undefined : setNeedRelay(null))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('clientConfigPage.needRelayDialog.title')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            {t('clientConfigPage.needRelayDialog.desc', {
+              name: needRelay?.name ?? '',
+              proto: needRelay?.proto ?? '',
+              client: activeInfo?.displayName ?? '',
+              native: needRelay?.native ?? '',
+            })}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNeedRelay(null)}>
+              {t('clientConfigPage.needRelayDialog.cancel')}
+            </Button>
+            <Button onClick={() => void confirmNeedRelay()}>
+              {t('clientConfigPage.needRelayDialog.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

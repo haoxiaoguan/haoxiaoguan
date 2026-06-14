@@ -56,6 +56,12 @@ export class ClientConfigApplier {
   ): Promise<void> {
     const current = await readBundle(writer.configFiles())
     const next = render(current) // 先算（损坏即抛，发生在任何进程/快照/写盘之前 → 配置损坏时不会白停 App）
+    // 无实际变更短路：next 为空、或所有待写内容与现有完全一致 → 不停 App、不快照、不写、不重启。
+    // 修复「没有任何供应商时切换中转注入也重启 Codex」——空清理(renderClear 返回 {}) 命中此处。
+    const willChange = Object.entries(next).some(
+      ([path, content]) => content !== null && content !== (current[path] ?? null),
+    )
+    if (!willChange) return
     // 进程生命周期（仅 Codex 桌面 App 挂载）：停 App → 写盘 → 重启 App，
     // 否则运行中的 Codex App 会按内存反写 config.toml 抹掉本次写入。beforeWrite 停不掉会抛错中止。
     const lifecycle = writer.lifecycle

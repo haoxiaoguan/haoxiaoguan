@@ -34,9 +34,10 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.apiProxyEnabled
   }
 
-  /** Codex「中转注入」(L2 真共存) 是否开启（默认 false）。供 clientConfig 应用 Codex 档时决定注入形态。 */
-  getCodexRelayInjectionEnabled(): boolean {
-    return this.file.loadSync().runtime.codexRelayInjectionEnabled
+  /** 「路由」开关：该客户端的第三方供应商是否经号小管反代转发（默认 false）。供 clientConfig 应用时
+   *  决定直连/中转。原 Codex「中转注入」泛化到按客户端。 */
+  getRoutingEnabled(clientId: string): boolean {
+    return this.file.loadSync().runtime.routingEnabled[clientId] === true
   }
 
   /** 切换 Codex 账号后是否自动重启/拉起 Codex App（停-写-启；默认 true）。 */

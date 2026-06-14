@@ -11,6 +11,7 @@ import type { ClientConfigStore, CreateProfileInput, UpdateProfileInput } from '
 import type { WriterRegistry } from './writer-registry'
 import type { ClientConfigApplier, DiffFile } from './client-config-applier'
 import type { ConfigSnapshotStore, SnapshotEntry } from '../infrastructure/config-snapshot'
+import { resolveApiBaseUrl } from '../infrastructure/api-base-url'
 import { resolveRelayDecisionForClient } from '../domain/protocol-routing'
 import type { WireProtocol } from '../domain/protocol-routing'
 
@@ -82,8 +83,9 @@ export class ClientConfigService {
   private readonly snapshots: ConfigSnapshotStore
   private readonly localProxy?: LocalProxyPort
   private readonly relayProvisioning?: RelayProvisioningPort
-  /** 读取 Codex「中转注入」开关:true=真共存(原生+所选供应商), false=切换式(纯 API,只用所选供应商)。 */
-  private readonly codexRelayOn: () => boolean
+  /** 读取某客户端「路由」开关:true=经号小管反代转发其第三方供应商(协议转换+账号池/IP),false=直连。
+   *  Codex 语境下 true 亦表示真共存(原生+所选供应商);协议不匹配的供应商必须 true 才能用(硬门槛,UI 拦)。 */
+  private readonly routingOn: (clientId: ClientId) => boolean
 
   constructor(
     store: ClientConfigStore,
@@ -92,7 +94,7 @@ export class ClientConfigService {
     snapshots: ConfigSnapshotStore,
     localProxy?: LocalProxyPort,
     relayProvisioning?: RelayProvisioningPort,
-    codexRelayOn?: () => boolean,
+    routingOn?: (clientId: ClientId) => boolean,
   ) {
     this.store = store
     this.registry = registry
@@ -100,7 +102,7 @@ export class ClientConfigService {
     this.snapshots = snapshots
     this.localProxy = localProxy
     this.relayProvisioning = relayProvisioning
-    this.codexRelayOn = codexRelayOn ?? (() => false)
+    this.routingOn = routingOn ?? (() => false)
   }
 
   /** 已注册客户端 + 检测状态（任一配置文件存在）。供 UI 左侧客户端列表。
@@ -213,6 +215,8 @@ export class ClientConfigService {
     baseUrl: string
     apiKey?: string
     profileId?: string
+    /** 「完整 URL」开关：true=原样用 base_url（不补 /v1）；缺省=启发式。 */
+    fullUrl?: boolean
   }): Promise<string[]> {
     let key = input.apiKey ?? ''
     if (key.length === 0 && input.profileId !== undefined) {
@@ -222,8 +226,7 @@ export class ClientConfigService {
         // 解 key 失败则用空 key 尝试(部分端点 /models 无需鉴权)
       }
     }
-    const base = input.baseUrl.replace(/\/+$/, '')
-    const url = /\/v1$/.test(base) ? `${base}/models` : `${base}/v1/models`
+    const url = `${resolveApiBaseUrl(input.baseUrl, input.fullUrl ?? false)}/models`
     const headers: Record<string, string> =
       input.clientId === 'claude'
         ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
@@ -361,18 +364,26 @@ export class ClientConfigService {
   //   - 中转注入 OFF(切换式)：Codex 纯 API 接入所选供应商，菜单**只含该供应商模型**(原生被替换)。
   //   - 中转注入 ON(真共存)：Codex 原生模型(ChatGPT 账号)与所选供应商模型**共存**。
 
-  /** 「中转注入」开关切换后(渲染端已持久化 setting)，按新模式重注入当前选中的供应商；无选中则清理残留。 */
-  async setCodexRelayInjection(_enabled: boolean): Promise<void> {
-    const current = (await this.store.list('codex')).find((p) => p.enabled)
-    if (current !== undefined) {
-      await this.selectCodexProvider(current.id)
-    } else {
-      try {
-        await this.applier.clear(this.requireWriter('codex'), CODEX_ROUTER_PROFILE_ID)
-      } catch {
-        /* 清理旧版隐藏路由器残留(若有) */
+  /** 「路由」开关切换后(渲染端已持久化 setting)，按新形态重注入该客户端当前生效的供应商。
+   *  _enabled 仅语义占位——实际取值由 routingOn(clientId) 从已持久化设置读取(保证与 apply 同源)。
+   *  Codex：重选当前启用的供应商(单选+catalog);switch 客户端(claude/gemini)：重 apply 当前档。 */
+  async setRouting(clientId: ClientId, _enabled: boolean): Promise<void> {
+    if (clientId === 'codex') {
+      const current = (await this.store.list('codex')).find((p) => p.enabled)
+      if (current !== undefined) {
+        await this.selectCodexProvider(current.id)
+      } else {
+        try {
+          await this.applier.clear(this.requireWriter('codex'), CODEX_ROUTER_PROFILE_ID)
+        } catch {
+          /* 清理旧版隐藏路由器残留(若有) */
+        }
       }
+      return
     }
+    // switch 客户端：重 apply 当前生效档，让 resolveWithRelay 按新「路由」开关重算直连/中转。无生效档则无操作。
+    const current = (await this.store.list(clientId)).find((p) => p.isCurrent)
+    if (current !== undefined) await this.apply(current.id)
   }
 
   /** 启停某 Codex 供应商：启用=单选注入它；停用=清除其注入。 */
@@ -400,7 +411,7 @@ export class ClientConfigService {
    */
   private async selectCodexProvider(id: string): Promise<void> {
     const profile = await this.requireProfile(id)
-    const relayOn = this.codexRelayOn()
+    const relayOn = this.routingOn('codex')
     const writer = this.requireWriter('codex')
 
     // 单选：清掉其它已启用供应商的注入 + 标记停用；并清旧隐藏路由器残留。
@@ -461,7 +472,9 @@ export class ClientConfigService {
           profileId: id,
           displayName: profile.name,
           protocol: proto,
-          baseUrl: profile.baseUrl,
+          // 存规范基地址：relay 适配器只在其后接 /chat/completions 等子路径、不补 /v1，
+          // 必须在此与测连通/Codex 直注同源解析（含「完整 URL」开关），否则真实转发缺 /v1 → 502。
+          baseUrl: resolveApiBaseUrl(profile.baseUrl, profile.settings?.fullUrl === true),
           apiKey: tpKey,
           models: codexEntries.map((e) => e.id),
         })
@@ -488,7 +501,9 @@ export class ClientConfigService {
             profileId: id,
             displayName: profile.name,
             protocol: 'openai-responses',
-            baseUrl: profile.baseUrl,
+            // 存规范基地址：responses 透传只在其后接 /responses、不补 /v1，须与测连通/Codex 直注同源
+            // 解析（含「完整 URL」开关），否则真实转发打到 {base}/responses 缺 /v1 → 上游 404 → 502。
+            baseUrl: resolveApiBaseUrl(profile.baseUrl, profile.settings?.fullUrl === true),
             apiKey: tpKey,
             models: relayModels,
           })
@@ -604,11 +619,13 @@ export class ClientConfigService {
     }
   }
 
-  /** 测连通：用接入档的 baseUrl + key 打 GET /v1/models（绿/红反馈）。 */
+  /** 测连通：用接入档的 baseUrl + key 打 GET {基地址}/models（绿/红反馈）。
+   *  基地址解析与真实请求(relay/Codex 直注)同源(resolveApiBaseUrl + settings.fullUrl)，
+   *  避免「测试过了真实却 502」。 */
   async testConnectivity(id: string): Promise<ConnTestResult> {
     const profile = await this.requireProfile(id)
     const apiKey = await this.store.resolveApiKey(id)
-    const url = `${profile.baseUrl.replace(/\/+$/, '')}/v1/models`
+    const url = `${resolveApiBaseUrl(profile.baseUrl, profile.settings?.fullUrl === true)}/models`
     try {
       const res = await undiciFetch(url, { headers: { Authorization: `Bearer ${apiKey}` } })
       return { ok: res.ok, status: res.status }
@@ -659,8 +676,8 @@ export class ClientConfigService {
 
   /**
    * 在 resolve 基础上，对 manual 档做「relay 改写」：
-   * - 协议不匹配（resolveRelayDecisionForClient==='relay'）→ 强制走反代
-   * - 协议匹配但用户主动开启 settings.routeViaProxy===true → 也走反代
+   * - 协议不匹配（resolveRelayDecisionForClient==='relay'）→ 强制走反代（UI 硬门槛：必须开「路由」才放行启用）
+   * - 协议匹配但该客户端「路由」开关开启 → 也走反代（账号池/IP）
    * - 走反代时联动自动开启 API 服务（反代未运行则启动它），改写 baseUrl/apiKey 指向反代
    * - 否则（direct / 非 manual / 无 upstreamProtocol / 未注入 relayProvisioning）→ 原样返回
    */
@@ -673,17 +690,17 @@ export class ClientConfigService {
 
     // 只对 manual 档且 settings.upstreamProtocol 存在才考虑 relay 分流
     const upstreamProtocol = profile.settings?.upstreamProtocol as WireProtocol | undefined
-    const routeViaProxy = profile.settings?.routeViaProxy === true
+    const routedByToggle = this.routingOn(profile.clientId)
     const mismatch =
       upstreamProtocol !== undefined &&
       resolveRelayDecisionForClient(profile.clientId, upstreamProtocol) === 'relay'
     // openai-responses 暂无出站 relay codec → 无法中转,强制直连(Codex 直接指向其端点)。
-    // 否则:不匹配→强制走反代;匹配但用户主动开关→也走反代。
+    // 否则:不匹配→强制走反代(UI 已拦未开路由的启用);匹配但该客户端「路由」开关开→也走反代。
     const shouldRelay =
       profile.source === 'manual' &&
       upstreamProtocol !== undefined &&
       upstreamProtocol !== 'openai-responses' &&
-      (mismatch || routeViaProxy)
+      (mismatch || routedByToggle)
     if (!shouldRelay) return base
 
     // relay 分支：要求 localProxy + relayProvisioning 都已注入

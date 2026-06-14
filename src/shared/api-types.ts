@@ -27,7 +27,8 @@ export interface SettingsResponse {
   utilityButtons: string
   allowStaleKiroImport: boolean
   terminalLaunchTemplate: string
-  codexRelayInjectionEnabled: boolean
+  /** 「路由」开关（按客户端）：clientId → 是否经号小管反代转发该客户端第三方供应商。 */
+  routingEnabled: Record<string, boolean>
   codexLaunchOnSwitch: boolean
 }
 export interface AppDirs {
@@ -805,8 +806,9 @@ export interface HxgApi {
     connectLocalProxy(clientId: ClientConfigClientId): Promise<ClientConfigProfileDto>
     /** 测连通（GET /v1/models）。 */
     testConnectivity(id: string): Promise<ClientConfigConnTest>
-    /** Codex L2「中转注入」：开→注入单反代 provider(/v1)+写 model_catalog_json；关→清除。idempotent。 */
-    setCodexRelayInjection(enabled: boolean): Promise<void>
+    /** 「路由」开关（按客户端）：开/关后按新路由形态重注入该客户端当前生效的供应商。idempotent。
+     *  Codex：重选当前供应商(注入单反代 provider+catalog 或直连)；switch 客户端：重 apply 当前档。 */
+    setRouting(clientId: ClientConfigClientId, enabled: boolean): Promise<void>
     /** Codex L2 下切换第三方供应商启用态：标记 enabled + 重聚合(供/撤 relay、刷新 catalog)，不做 L1 注入。 */
     setCodexProviderEnabled(id: string, enabled: boolean): Promise<void>
   }
@@ -923,6 +925,8 @@ export interface ClientConfigFetchModelsInput {
   baseUrl: string
   apiKey?: string
   profileId?: string
+  /** 「完整 URL」开关：true=原样用 baseUrl（不补 /v1）；缺省=启发式。与表单一致。 */
+  fullUrl?: boolean
 }
 export interface ClientConfigConnTest {
   ok: boolean

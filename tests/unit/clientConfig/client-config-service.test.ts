@@ -625,18 +625,19 @@ describe('ClientConfigService', () => {
     await expect(svc.apply(p.id)).rejects.toThrow(/无法自动开启 API 服务/)
   })
 
-  it('relay-用户主动开关：claude 档 upstreamProtocol=anthropic（协议匹配）+ routeViaProxy=true → 仍走 relay', async () => {
+  it('relay-页面路由开关：claude 档 upstreamProtocol=anthropic（协议匹配）+ 路由开关 ON → 仍走 relay', async () => {
+    codexRelayOn = true // 页面级「路由」开关 ON（注入的 routingOn 对该客户端返回 true）
     const p = await svc.create({
       clientId: 'claude',
-      name: 'route-via-proxy-on',
+      name: 'routing-on',
       source: 'manual',
       baseUrl: 'http://anthropic-compat',
       apiKey: 'ant-key',
       model: 'claude-3',
-      settings: { upstreamProtocol: 'anthropic', routeViaProxy: true },
+      settings: { upstreamProtocol: 'anthropic' },
     })
     await svc.apply(p.id)
-    // 协议匹配但用户开了开关 → 走反代
+    // 协议匹配但页面「路由」开关 ON → 走反代
     expect(ensureStartedCalls).toBeGreaterThanOrEqual(1)
     expect(relayEnsureCalls.length).toBe(1)
     expect(relayEnsureCalls[0].protocol).toBe('anthropic')
@@ -645,7 +646,7 @@ describe('ClientConfigService', () => {
     expect(written.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-hxg-relay-test')
   })
 
-  it('relay-direct：协议匹配且无 routeViaProxy → direct，不调 ensureStarted/ensureRelayUpstream', async () => {
+  it('relay-direct：协议匹配且路由开关 OFF → direct，不调 ensureStarted/ensureRelayUpstream', async () => {
     const p = await svc.create({
       clientId: 'claude',
       name: 'matched-no-toggle',
@@ -661,14 +662,14 @@ describe('ClientConfigService', () => {
     expect(written.env.ANTHROPIC_BASE_URL).toBe('http://anthropic-compat')
   })
 
-  it('relay-routeViaProxy=true 但无 upstreamProtocol → 仍 direct（无协议无从中转）', async () => {
+  it('relay-路由开关 ON 但无 upstreamProtocol → 仍 direct（无协议无从中转）', async () => {
+    codexRelayOn = true // 页面级「路由」开关 ON，但该档无 upstreamProtocol → 无从判定中转，直连
     const p = await svc.create({
       clientId: 'claude',
       name: 'toggle-without-protocol',
       source: 'manual',
       baseUrl: 'http://legacy2',
       apiKey: 'legacy2-key',
-      settings: { routeViaProxy: true },
     })
     await svc.apply(p.id)
     expect(ensureStartedCalls).toBe(0)

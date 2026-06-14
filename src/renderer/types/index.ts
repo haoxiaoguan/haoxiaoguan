@@ -230,7 +230,8 @@ export interface Settings {
   utilityButtons: string;
   allowStaleKiroImport: boolean;
   terminalLaunchTemplate: string;
-  codexRelayInjectionEnabled: boolean;
+  /** 「路由」开关（按客户端）：clientId → 是否经号小管反代转发该客户端第三方供应商。 */
+  routingEnabled: Record<string, boolean>;
   codexLaunchOnSwitch: boolean;
 }
 

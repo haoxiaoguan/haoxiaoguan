@@ -17,6 +17,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
       const refreshIntervals: Record<string, number> = {}
       const platformRefreshIntervals: Record<string, number> = {}
       const idePaths: Record<string, string> = {}
+      const routingEnabled: Record<string, boolean> = {}
       for (const [k, v] of Object.entries(kv)) {
         if (k.startsWith('platform_refresh_interval_')) {
           platformRefreshIntervals[k.slice('platform_refresh_interval_'.length)] = Number(v)
@@ -24,7 +25,13 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
           refreshIntervals[k.slice('refresh_interval_'.length)] = Number(v)
         } else if (k.startsWith('ide_path_')) {
           idePaths[k.slice('ide_path_'.length)] = v
+        } else if (k.startsWith('routing_enabled_')) {
+          routingEnabled[k.slice('routing_enabled_'.length)] = v === 'true'
         }
+      }
+      // 兼容旧键（升级前持久化的单一 Codex 开关）：映射到 routingEnabled.codex。
+      if (kv.codex_relay_injection_enabled === 'true' && routingEnabled.codex === undefined) {
+        routingEnabled.codex = true
       }
       return {
         theme: kv.theme,
@@ -40,7 +47,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         utilityButtons: kv.utility_buttons,
         allowStaleKiroImport: kv.allow_stale_kiro_import === 'true',
         terminalLaunchTemplate: kv.terminal_launch_template,
-        codexRelayInjectionEnabled: kv.codex_relay_injection_enabled === 'true',
+        routingEnabled,
         codexLaunchOnSwitch: kv.codex_launch_on_switch === 'true',
       }
     } catch (e) {

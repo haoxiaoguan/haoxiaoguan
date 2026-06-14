@@ -117,6 +117,29 @@ class FakeWriter implements ClientConfigWriter {
   }
 }
 
+// 渲染结果可配置的假写入器：用于「无实际变更」场景（返回 {} 或与现有内容一致）。
+class NoChangeWriter implements ClientConfigWriter {
+  readonly clientId = 'codex' as const
+  readonly writeMode = 'additive' as const
+  readonly lifecycle?: WriteLifecycle
+  private readonly file: string
+  private readonly output: FileBundle
+  constructor(file: string, output: FileBundle, lifecycle?: WriteLifecycle) {
+    this.file = file
+    this.output = output
+    this.lifecycle = lifecycle
+  }
+  configFiles(): string[] {
+    return [this.file]
+  }
+  renderApply(): FileBundle {
+    return this.output
+  }
+  renderClear(): FileBundle {
+    return this.output
+  }
+}
+
 describe('ClientConfigApplier 生命周期（Codex 停-写-启）', () => {
   it('apply：beforeWrite → 写盘 → afterWrite，文件写成功', async () => {
     const log: string[] = []
@@ -152,5 +175,25 @@ describe('ClientConfigApplier 生命周期（Codex 停-写-启）', () => {
     const w = new FakeWriter(file) // 无 lifecycle
     await applier.apply(w, input)
     expect(await readFile(file, 'utf8')).toBe('NEW')
+  })
+
+  it('无实际变更：renderClear 返回 {} → 跳过停-写-启、不写不快照（修复无供应商时切换中转注入也重启 Codex）', async () => {
+    const log: string[] = []
+    const file = join(root, 'client', 'config.toml')
+    const w = new NoChangeWriter(file, {}, new OrderLifecycle(log))
+    await applier.clear(w, 'p1')
+    expect(log).toEqual([]) // 没停也没启 Codex
+    expect(existsSync(file)).toBe(false) // 没写盘
+    expect(await store.list('codex')).toHaveLength(0) // 没快照
+  })
+
+  it('待写内容与现有完全一致 → 同样跳过停-写-启', async () => {
+    const log: string[] = []
+    const file = join(root, 'client', 'config.toml')
+    await writeFile(file, 'SAME')
+    const w = new NoChangeWriter(file, { [file]: 'SAME' }, new OrderLifecycle(log))
+    await applier.apply(w, input)
+    expect(log).toEqual([]) // 内容没变 → 不重启
+    expect(await readFile(file, 'utf8')).toBe('SAME')
   })
 })

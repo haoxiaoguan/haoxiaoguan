@@ -96,6 +96,9 @@ export class CodexWriter implements ClientConfigWriter {
       bearerToken: input.apiKey,
       ...(input.model !== undefined ? { model: input.model } : {}),
       isDefault: input.isDefault === true,
+      // 「完整 URL」开关由 settings.fullUrl 透传（ApplyInput.settings 恒含 profile.settings）：
+      // true=base_url 原样写入(不补 /v1)，否则启发式。预览/注入同源，不另设 ApplyInput 字段。
+      fullUrl: input.settings?.fullUrl === true,
     })
 
     const authFill = this.renderAuthFill(current, input.apiKey)
@@ -117,17 +120,21 @@ export class CodexWriter implements ClientConfigWriter {
   renderClear(current: FileBundle, profileId: string): FileBundle {
     const raw = current[this.configPath] ?? null
     if (raw === null) return {}
-    let obj = parseCodexToml(raw, this.configPath)
-    obj = removeCodexProvider(obj, codexProviderId(profileId))
+    const obj = parseCodexToml(raw, this.configPath)
+    const removed = removeCodexProvider(obj, codexProviderId(profileId))
     // 若 model_catalog_json 指向号小管管理路径，一并移除（清空 catalog 文件，避免悬挂引用）。
-    const cleared = getCodexModelCatalogPath(obj) === this.catalogPath
+    const cleared = getCodexModelCatalogPath(removed) === this.catalogPath
+    // 语义无变更检测（不用 TOML 字符串比较——round-trip 会重排格式造成误判）：provider 块本就不存在
+    // (removeCodexProvider 无改动) 且 catalog 未指向号小管 → 真没东西可清，返回 {} 让 applier 跳过
+    // 停-写-启，避免「无任何供应商时切换中转注入也重启 Codex」。
+    if (!cleared && JSON.stringify(removed) === JSON.stringify(obj)) return {}
     if (cleared) {
-      obj = clearCodexModelCatalogPath(obj, this.catalogPath)
+      const next = clearCodexModelCatalogPath(removed, this.catalogPath)
       return {
-        [this.configPath]: stringifyCodexToml(obj),
+        [this.configPath]: stringifyCodexToml(next),
         [this.catalogPath]: buildCodexModelCatalogFile([]),
       }
     }
-    return { [this.configPath]: stringifyCodexToml(obj) }
+    return { [this.configPath]: stringifyCodexToml(removed) }
   }
 }

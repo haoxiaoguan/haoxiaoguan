@@ -96,6 +96,23 @@ describe('CodexWriter (additive 注入)', () => {
     expect(cfg.model_providers.openai).toBeDefined()
   })
 
+  it('renderClear 无号小管块（纯用户配置）→ 返回 {}（无变更，applier 据此跳过停-写-启）', () => {
+    const userCfg = 'model = "gpt-5"\n\n[mcp_servers.foo]\ncommand = "x"\n'
+    expect(w.renderClear({ [P]: userCfg }, 'p1')).toEqual({})
+  })
+
+  it('renderClear config 不存在 → 返回 {}', () => {
+    expect(w.renderClear({ [P]: null }, 'p1')).toEqual({})
+  })
+
+  it('renderClear 确有本档块时仍正常移除（不被无变更短路误伤）', () => {
+    const withHxg = w.renderApply({ [P]: null }, input()) as FileBundle
+    const out = w.renderClear(withHxg, 'p1')
+    expect(out[P]).toBeDefined() // 有东西可清 → 返回配置
+    const cfg = TOML.parse(out[P]!) as any
+    expect(cfg.model_providers?.[pid1]).toBeUndefined()
+  })
+
   it('损坏 TOML → 抛 ClientConfigCorruptError', () => {
     expect(() => w.renderApply({ [P]: 'model_provider = ' }, input())).toThrow(ClientConfigCorruptError)
   })
