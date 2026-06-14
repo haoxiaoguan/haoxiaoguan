@@ -49,13 +49,25 @@ let pendingDeepLink: string | null = null
 const DEEP_LINK_SCHEME = 'haoxiaoguan'
 
 function createWindow(silentStart: boolean): void {
+  // 去掉 Windows/Linux 的原生应用菜单栏(File/Edit/View/Window)。macOS 保留系统菜单不动。
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+  }
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 960,
     minHeight: 640,
     show: false,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // macOS：hiddenInset(红绿灯,保持不变)。Windows：hidden + 下方 titleBarOverlay，
+    // 原生 min/max/close 叠加在右上(渲染层 header 已预留 140px 安全区)。Linux：暂留原生框
+    // (WCO 不支持，自绘按钮下一轮补)，仅去掉菜单。
+    titleBarStyle:
+      process.platform === 'darwin' ? 'hiddenInset' : process.platform === 'win32' ? 'hidden' : 'default',
+    // Windows 窗口控件叠加(WCO)：透明底(透出 app 背景)、中性灰图标、高度对齐 header。
+    ...(process.platform === 'win32'
+      ? { titleBarOverlay: { color: '#00000000', symbolColor: '#888888', height: 48 } }
+      : {}),
     trafficLightPosition: { x: 4, y: 14 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
