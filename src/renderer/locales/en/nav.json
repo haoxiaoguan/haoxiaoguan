@@ -348,15 +348,22 @@
       "qq": "QQ Group"
     },
     "update": {
-      "title": "Update available",
-      "desc": "A new version is available.",
-      "newVersion": "Version {{version}} is available",
-      "preparing": "Preparing download…",
-      "downloading": "Downloading… {{percent}}%",
+      "title": "Software update",
+      "titleChecking": "Checking for updates",
+      "titleAvailable": "Update available",
+      "titleDownloading": "Downloading update",
+      "titleDownloaded": "Update ready",
+      "titleUpToDate": "You're up to date",
+      "titleError": "Update failed",
+      "checkingDesc": "Checking for available updates…",
+      "upToDate": "You already have the latest version.",
+      "preparing": "Downloading in the background…",
+      "releaseNotesTitle": "What's new",
       "ready": "The update is downloaded. Click \"Install now\" to restart and apply it.",
+      "errorHint": "Couldn't complete the update. Please try again later.",
+      "errorDetail": "Error details",
       "later": "Later",
       "installNow": "Install now",
-      "error": "Update failed: {{message}}",
       "retry": "Retry"
     },
     "notify": {

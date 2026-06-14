@@ -5,6 +5,8 @@ import { bridge } from '../services/bridge';
 interface UpdaterState {
   status: UpdateStatus;
   dialogOpen: boolean;
+  /** 当前应用版本（init 时取一次），作 status.currentVersion 缺省时的兜底。 */
+  appVersion: string;
 
   /** 订阅主进程更新状态推送。返回取消订阅函数（在组件 useEffect cleanup 调用）。 */
   init: () => () => void;
@@ -18,6 +20,7 @@ interface UpdaterState {
 export const useUpdaterStore = create<UpdaterState>((set) => ({
   status: { state: 'idle' },
   dialogOpen: false,
+  appVersion: '',
 
   init: () => {
     // 先订阅，确保订阅期间到达的事件不漏；再用主进程快照回填初始 idle，
@@ -27,6 +30,11 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
     void bridge()
       .updater.getStatus()
       .then((s) => set((prev) => (prev.status.state === 'idle' ? { status: s } : prev)))
+      .catch(() => {});
+    // 当前版本仅取一次，作 status.currentVersion 缺省时的兜底（如直接进入 error 态）。
+    void bridge()
+      .getVersion()
+      .then((v) => set({ appVersion: v }))
       .catch(() => {});
     return unsub;
   },

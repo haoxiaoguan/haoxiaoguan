@@ -980,10 +980,22 @@ export type UpdateState =
   | 'error'
 export interface UpdateStatus {
   state: UpdateState
-  /** 可用 / 已下载的版本号。 */
+  /** 可用 / 已下载的目标版本号。 */
   version?: string
+  /** 升级前的当前版本（available 起一并带上，供「a → b」对比展示）。 */
+  currentVersion?: string
+  /** 发布说明（已规整为纯文本；可能多段），供弹窗展示更新内容。 */
+  releaseNotes?: string
+  /** 发布名称/标题（部分上游提供）。 */
+  releaseName?: string
   /** downloading 时的进度百分比（0–100）。 */
   percent?: number
+  /** downloading 时已下载字节数。 */
+  transferred?: number
+  /** downloading 时总字节数。 */
+  total?: number
+  /** downloading 时下载速率（字节/秒）。 */
+  bytesPerSecond?: number
   /** error 时的错误信息。 */
   error?: string
 }

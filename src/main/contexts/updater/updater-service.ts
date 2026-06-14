@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
 import type { UpdateStatus } from '../../../shared/api-types'
@@ -9,6 +10,45 @@ export interface UpdaterOptions {
   isPackaged: boolean
 }
 
+// 版本元信息：在 update-available 时定型，贯穿 downloading / downloaded / error 各阶段
+// 一并回传——否则 download-progress 只带 percent，整条 status 被替换会丢掉版本号/发布说明，
+// 弹窗在下载阶段就无法继续展示「a → b」与更新内容。
+interface UpdateMeta {
+  version?: string
+  currentVersion?: string
+  releaseNotes?: string
+  releaseName?: string
+}
+
+// electron-updater 的 releaseNotes 可能是字符串(GitHub 发布正文，常含简单 HTML)或
+// { version, note } 数组(多版本累积)。统一规整成可直接展示的纯文本：拆 HTML、解转义、压空行。
+function formatReleaseNotes(
+  notes: string | Array<{ version?: string; note?: string | null }> | null | undefined,
+): string | undefined {
+  if (!notes) return undefined
+  const raw = Array.isArray(notes)
+    ? notes
+        .map((n) => (n && typeof n.note === 'string' ? n.note : ''))
+        .filter((s) => s.length > 0)
+        .join('\n\n')
+    : notes
+  const text = raw
+    .replace(/<\s*li[^>]*>/gi, '• ')
+    .replace(/<\s*\/\s*(p|div|li|h[1-6]|ul|ol)\s*>/gi, '\n')
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return text.length > 0 ? text : undefined
+}
+
 // electron-updater 封装：把 autoUpdater 的事件投影成 UpdateStatus，通过 setStatusListener
 // 推给渲染层。autoDownload 开启 → 发现新版即自动下载，下载完成由前端确认后 install。
 export class UpdaterService {
@@ -18,6 +58,8 @@ export class UpdaterService {
   // 的 bytecode 编译失败。改在 constructor 里赋值。
   private listener: (s: UpdateStatus) => void
   private readonly isPackaged: boolean
+  // 当前 update 周期的版本元信息（update-available 时定型；新一轮 checking 时清空）。
+  private meta: UpdateMeta = {}
 
   constructor(opts: UpdaterOptions) {
     this.listener = () => {}
@@ -71,19 +113,40 @@ export class UpdaterService {
   }
 
   private wire(): void {
-    autoUpdater.on('checking-for-update', () => this.emit({ state: 'checking' }))
-    autoUpdater.on('update-available', (info) =>
-      this.emit({ state: 'available', version: info.version }),
-    )
+    autoUpdater.on('checking-for-update', () => {
+      this.meta = {} // 新一轮检查：清空上轮版本元信息
+      this.emit({ state: 'checking' })
+    })
+    autoUpdater.on('update-available', (info) => {
+      this.meta = {
+        version: info.version,
+        currentVersion: app.getVersion(),
+        releaseNotes: formatReleaseNotes(info.releaseNotes),
+        releaseName: info.releaseName ?? undefined,
+      }
+      this.emit({ state: 'available', ...this.meta })
+    })
     autoUpdater.on('update-not-available', () => this.emit({ state: 'not-available' }))
     autoUpdater.on('download-progress', (p) =>
-      this.emit({ state: 'downloading', percent: Math.round(p.percent) }),
+      this.emit({
+        state: 'downloading',
+        ...this.meta,
+        percent: Math.round(p.percent),
+        transferred: p.transferred,
+        total: p.total,
+        bytesPerSecond: Math.round(p.bytesPerSecond),
+      }),
     )
-    autoUpdater.on('update-downloaded', (info) =>
-      this.emit({ state: 'downloaded', version: info.version }),
-    )
+    autoUpdater.on('update-downloaded', (info) => {
+      this.meta = { ...this.meta, version: info.version }
+      this.emit({ state: 'downloaded', ...this.meta })
+    })
     autoUpdater.on('error', (err) =>
-      this.emit({ state: 'error', error: err instanceof Error ? err.message : String(err) }),
+      this.emit({
+        state: 'error',
+        ...this.meta,
+        error: err instanceof Error ? err.message : String(err),
+      }),
     )
   }
 
@@ -93,7 +156,7 @@ export class UpdaterService {
     try {
       await autoUpdater.checkForUpdates()
     } catch (e) {
-      this.emit({ state: 'error', error: e instanceof Error ? e.message : String(e) })
+      this.emit({ state: 'error', ...this.meta, error: e instanceof Error ? e.message : String(e) })
     }
   }
 
@@ -103,7 +166,7 @@ export class UpdaterService {
     try {
       await autoUpdater.downloadUpdate()
     } catch (e) {
-      this.emit({ state: 'error', error: e instanceof Error ? e.message : String(e) })
+      this.emit({ state: 'error', ...this.meta, error: e instanceof Error ? e.message : String(e) })
     }
   }
 

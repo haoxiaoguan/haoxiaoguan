@@ -348,15 +348,22 @@
       "qq": "QQ 群"
     },
     "update": {
-      "title": "发现新版本",
-      "desc": "有新版本可用。",
-      "newVersion": "新版本 {{version}} 可用",
-      "preparing": "正在准备下载…",
-      "downloading": "下载中… {{percent}}%",
+      "title": "软件更新",
+      "titleChecking": "正在检查更新",
+      "titleAvailable": "发现新版本",
+      "titleDownloading": "正在下载更新",
+      "titleDownloaded": "更新已就绪",
+      "titleUpToDate": "已是最新版本",
+      "titleError": "更新失败",
+      "checkingDesc": "正在检查是否有可用更新…",
+      "upToDate": "当前已是最新版本，无需更新。",
+      "preparing": "已开始在后台下载…",
+      "releaseNotesTitle": "更新内容",
       "ready": "新版本已下载完成，点击「立即安装」将重启应用以完成更新。",
+      "errorHint": "无法完成更新，请稍后重试。",
+      "errorDetail": "错误详情",
       "later": "稍后",
       "installNow": "立即安装",
-      "error": "更新失败：{{message}}",
       "retry": "重试"
     },
     "notify": {
