@@ -32,7 +32,7 @@ import {
   irToGeminiResponse,
   serializeGeminiStream,
 } from '../infrastructure/inbound/gemini'
-import { responsesToIR } from '../infrastructure/inbound/responses/responses-input'
+import { responsesToIR, responsesCustomToolNames } from '../infrastructure/inbound/responses/responses-input'
 import { irToResponsesResponse } from '../infrastructure/inbound/responses/responses-response'
 import { serializeResponsesStream } from '../infrastructure/inbound/responses/responses-stream'
 import type { CodexNativePassthrough } from '../domain/codex-native-passthrough'
@@ -162,10 +162,11 @@ async function drainStream(
   return events
 }
 
-// string[] → AsyncIterable<string>（Gemini/Responses drain 路径的包装适配）。
-async function* arrayToAsyncIterable(arr: string[]): AsyncIterable<string> {
-  for (const s of arr) yield s
-}
+// Responses 真流式：首事件 peek 的宽限期 + 静默心跳间隔。
+// 宽限期内上游若快速失败(鉴权/限流/模型不存在)→ 仍返回正常 HTTP 错误码；超过则不阻塞、立即开流。
+const RESPONSES_FIRST_EVENT_GRACE_MS = 1500
+// 上游静默(如 reasoning 思考)超过此间隔即发 SSE 注释心跳保活，需远小于客户端的事件间空闲超时。
+const RESPONSES_STREAM_HEARTBEAT_MS = 5000
 
 // 把 peek 出的首个 IteratorResult 和剩余 iterator 拼回一个完整 AsyncIterable。
 // 用 try/finally 转发 return()，确保客户端断连/取消时上游 reader 锁和 timer 能被回收。
@@ -174,6 +175,29 @@ async function* prependFirst(
   it: AsyncIterator<CanonicalStreamEvent>,
 ): AsyncIterable<CanonicalStreamEvent> {
   try {
+    if (!first.done) yield first.value
+    while (true) {
+      const n = await it.next()
+      if (n.done) break
+      yield n.value
+    }
+  } finally {
+    if (typeof it.return === 'function') {
+      try { await it.return() } catch { /* 忽略回收阶段错误 */ }
+    }
+  }
+}
+
+// 同 prependFirst，但首事件以"已发起的 it.next() promise"形式传入（用于 Responses 真流式：
+// handleResponses 先 peek 首事件做宽限期错误分类，未命中错误时把该在途 promise 接回完整流，
+// 不重复消费、不丢首事件）。首 promise 若稍后 reject（宽限期外才失败）→ 在此 await 抛出，
+// 由上层序列化器以 response.failed 收尾。
+async function* prependFirstFromPromise(
+  firstP: Promise<IteratorResult<CanonicalStreamEvent>>,
+  it: AsyncIterator<CanonicalStreamEvent>,
+): AsyncIterable<CanonicalStreamEvent> {
+  try {
+    const first = await firstP
     if (!first.done) yield first.value
     while (true) {
       const n = await it.next()
@@ -500,6 +524,8 @@ export class ApiProxyService {
       ? expandPreviousResponseHistory(req.previous_response_id, (id) => this.responsesStore!.load(id))
       : undefined
     const ir = responsesToIR(req, { ...(historyMessages ? { historyMessages } : {}) })
+    // custom(freeform)工具名集合：响应序列化据此把 function_call 还原成 custom_tool_call（apply_patch 等）。
+    const customToolNames = responsesCustomToolNames(req)
     obs.inputTokens = estimateRequestInputTokens(ir)
 
     let adapter
@@ -522,24 +548,49 @@ export class ApiProxyService {
     const itemId = (i: number): string => this.responsesStore!.generateItemId(i)
 
     if (intent.stream) {
-      let events
-      try { events = await drainStream(adapter.chatStream(ir, ctx)) }
-      catch (e) { throw classifyToHttp(e, 'openai-responses') }
-      const resp = foldStreamForStore(events, ir.model)
-      if (resp.usage) obs.outputTokens = resp.usage.outputTokens
-      this.persistResponses(req, respId, resp, itemId)
+      // 真流式：短宽限期 peek 首事件 —— 快速失败(鉴权/限流/模型不存在,通常 <Grace)→ 正常 HTTP 错误码；
+      // 慢但正常(reasoning 长 TTFT)→ 不阻塞，立即开流（created 不再等整段，避免客户端首事件超时断连）。
+      const upstream = adapter.chatStream(ir, ctx)[Symbol.asyncIterator]()
+      const firstP = upstream.next()
+      const GRACE = Symbol('grace')
+      let graceTimer: ReturnType<typeof setTimeout> | undefined
+      const graceP = new Promise<typeof GRACE>((resolve) => { graceTimer = setTimeout(() => resolve(GRACE), RESPONSES_FIRST_EVENT_GRACE_MS) })
+      let raced: { ok: IteratorResult<CanonicalStreamEvent> } | { err: unknown } | typeof GRACE
+      try {
+        raced = await Promise.race([firstP.then((r) => ({ ok: r }), (e) => ({ err: e })), graceP])
+      } finally {
+        if (graceTimer !== undefined) clearTimeout(graceTimer)
+      }
+      if (raced !== GRACE && 'err' in raced) {
+        if (typeof upstream.return === 'function') { try { await upstream.return() } catch { /* ignore */ } }
+        throw classifyToHttp(raced.err, 'openai-responses')
+      }
+      const self = this
       return {
         kind: 'stream',
         status: 200,
         contentType: 'text/event-stream',
-        frames: arrayToAsyncIterable(serializeResponsesStream(resp, events, { id: respId, itemId, createdAt: 0 })),
+        frames: serializeResponsesStream(prependFirstFromPromise(firstP, upstream), {
+          id: respId,
+          itemId,
+          createdAt: 0,
+          model: ir.model,
+          heartbeatMs: RESPONSES_STREAM_HEARTBEAT_MS,
+          customToolNames,
+          // 仅成功收尾才折叠落盘（store/历史链）；上游中途出错 → 序列化器以 response.failed 收尾、不回调此处。
+          onComplete: (events) => {
+            const resp = foldStreamForStore(events, ir.model)
+            if (resp.usage) obs.outputTokens = resp.usage.outputTokens
+            self.persistResponses(req, respId, resp, itemId, customToolNames)
+          },
+        }),
       }
     }
     let resp
     try { resp = await adapter.chat(ir, ctx) }
     catch (e) { throw classifyToHttp(e, 'openai-responses') }
     if (resp.usage) obs.outputTokens = resp.usage.outputTokens
-    this.persistResponses(req, respId, resp, itemId)
+    this.persistResponses(req, respId, resp, itemId, customToolNames)
     return {
       kind: 'json',
       status: 200,
@@ -547,6 +598,7 @@ export class ApiProxyService {
         id: respId,
         itemId,
         createdAt: 0,
+        ...(customToolNames.size > 0 ? { customToolNames } : {}),
         ...(req.previous_response_id ? { previousResponseId: req.previous_response_id } : {}),
       }),
     }
@@ -620,12 +672,14 @@ export class ApiProxyService {
     id: string,
     resp: CanonicalResponse,
     itemId: (i: number) => string,
+    customToolNames?: Set<string>,
   ): void {
     if (req.store === false || this.responsesStore === undefined) return
     const obj = irToResponsesResponse(resp, {
       id,
       itemId,
       createdAt: 0,
+      ...(customToolNames && customToolNames.size > 0 ? { customToolNames } : {}),
       ...(req.previous_response_id ? { previousResponseId: req.previous_response_id } : {}),
     })
     const doc: StoredResponseDoc = {

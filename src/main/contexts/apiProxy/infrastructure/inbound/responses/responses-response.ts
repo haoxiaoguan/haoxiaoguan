@@ -1,12 +1,15 @@
 // IR → Responses output items + usage。纯函数，id/createdAt 由 opts 注入。
 import type { CanonicalResponse } from '../../../domain/canonical'
 import type { ResponsesObject, ResponseOutputItem, ResponsesUsage } from './responses-types'
+import { customToolInputFromChatArguments } from './responses-types'
 
 export interface IrToResponsesOpts {
   id: string
   itemId: (index: number) => string
   createdAt: number
   previousResponseId?: string
+  /** custom(freeform)工具名集合：命中者把 tool_use 还原为 custom_tool_call 项(而非 function_call)。 */
+  customToolNames?: Set<string>
 }
 
 function usageToResponses(usage: CanonicalResponse['usage']): ResponsesUsage {
@@ -39,14 +42,27 @@ export function irToResponsesResponse(resp: CanonicalResponse, opts: IrToRespons
   }
   for (const block of resp.content) {
     if (block.type === 'tool_use') {
-      output.push({
-        id: opts.itemId(idx++),
-        type: 'function_call',
-        status: 'completed',
-        call_id: block.id,
-        name: block.name,
-        arguments: JSON.stringify(block.input),
-      })
+      const args = JSON.stringify(block.input)
+      if (opts.customToolNames?.has(block.name)) {
+        // custom(freeform)工具：还原成 custom_tool_call 项，input 取自 arguments 的 input 字段。
+        output.push({
+          id: opts.itemId(idx++),
+          type: 'custom_tool_call',
+          status: 'completed',
+          call_id: block.id,
+          name: block.name,
+          input: customToolInputFromChatArguments(args),
+        })
+      } else {
+        output.push({
+          id: opts.itemId(idx++),
+          type: 'function_call',
+          status: 'completed',
+          call_id: block.id,
+          name: block.name,
+          arguments: args,
+        })
+      }
     }
   }
   return {

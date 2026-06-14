@@ -33,4 +33,20 @@ describe('irToResponsesResponse', () => {
     expect(fc?.arguments).toBe('{"a":1}')
     expect(r.usage.input_tokens_details?.cached_tokens).toBe(80)
   })
+
+  it('custom 工具的 tool_use → custom_tool_call item（input 取自 arguments.input）', () => {
+    const resp: CanonicalResponse = {
+      model: 'm',
+      content: [{ type: 'tool_use', id: 'c9', name: 'apply_patch', input: { input: '*** Begin Patch' } }],
+      stopReason: 'tool_use',
+      usage: { inputTokens: 1, outputTokens: 1 },
+    }
+    const r = irToResponsesResponse(resp, { ...OPTS, customToolNames: new Set(['apply_patch']) })
+    const item = r.output.find((o) => o.type === 'custom_tool_call')
+    expect(item?.call_id).toBe('c9')
+    expect(item?.name).toBe('apply_patch')
+    expect(item?.input).toBe('*** Begin Patch')
+    // 非 custom 工具不受影响仍是 function_call
+    expect(r.output.find((o) => o.type === 'function_call')).toBeUndefined()
+  })
 })

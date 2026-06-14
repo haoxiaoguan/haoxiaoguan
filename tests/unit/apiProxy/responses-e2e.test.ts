@@ -50,6 +50,31 @@ describe('/v1/responses 经 Echo', () => {
     expect(joined).toContain('data: [DONE]')
   })
 
+  it('流式 store:true → 收尾经 onComplete 落盘，可经 previous_response_id 载回（真流式不破坏 store）', async () => {
+    const { svc } = makeService()
+    const r = await svc.handleRequest({
+      intent: { platform: 'echo', format: 'openai-responses', action: 'responses', model: 'echo-1', stream: true },
+      body: { model: 'echo-1', input: 'hi', stream: true, store: true },
+      requestId: 'req-store',
+    })
+    expect(r.kind).toBe('stream')
+    const parts: string[] = []
+    for await (const f of (r as { frames: AsyncIterable<string> }).frames) parts.push(f)
+    const joined = parts.join('')
+    // created 必须出现在 completed 之前（真流式帧序），且能取出 resp id。
+    expect(joined.indexOf('event: response.created')).toBeLessThan(joined.indexOf('event: response.completed'))
+    const m = joined.match(/"id":"(resp_[^"]+)"/)
+    expect(m).not.toBeNull()
+    const id = m![1]
+    // 二轮用 previous_response_id 载回 → 证明流式收尾确已落盘（onComplete→fold→persist）。
+    const r2 = await svc.handleRequest({
+      intent: { platform: 'echo', format: 'openai-responses', action: 'responses', model: 'echo-1', stream: false },
+      body: { model: 'echo-1', input: 'again', previous_response_id: id, store: true },
+      requestId: 'req-store2',
+    })
+    expect((r2 as { body: { previous_response_id?: string } }).body.previous_response_id).toBe(id)
+  })
+
   it('previous_response_id 链：二轮带上一轮历史', async () => {
     // 同一个 svc 实例 → 同一个 ResponsesStore 落盘目录；r1 store:true 落盘后 r2 可载回。
     const { svc } = makeService()
