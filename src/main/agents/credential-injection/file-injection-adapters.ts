@@ -7,6 +7,7 @@ import {
   injectCredentialToJsonFile,
   injectCredentialToStorageJson,
 } from './credential-io'
+import { injectCursorAuthToVscdb } from './cursor-vscdb-inject'
 
 // Per-platform credential-injection adapters. Faithful port of the Rust
 // agents/infrastructure/adapters/<platform>.rs CredentialInjection impls.
@@ -15,11 +16,12 @@ import {
 //   - 'storage_json'  → VSCode family (merge storage.serviceMachineId)
 //   - 'json_file'     → standalone {"token": ...}
 //   - 'hosts_json'    → GitHub Copilot hosts.json
+//   - 'cursor_vscdb'  → Cursor:写 state.vscdb 的 cursorAuth/*（Cursor 真正读这里，storage.json 无效）
 //
 // Paths come straight from the source credential_path() methods. Only the 12
 // importable platforms have an injection adapter (matches source coverage).
 
-type InjectionFormat = 'storage_json' | 'json_file' | 'hosts_json'
+type InjectionFormat = 'storage_json' | 'json_file' | 'hosts_json' | 'cursor_vscdb'
 
 interface AdapterSpec {
   format: InjectionFormat
@@ -28,8 +30,9 @@ interface AdapterSpec {
 
 const ADAPTER_SPECS: Record<string, AdapterSpec> = {
   cursor: {
-    format: 'storage_json',
-    path: () => join(appSupportDir('Cursor'), 'User', 'globalStorage', 'storage.json'),
+    // Cursor 读 state.vscdb 的 cursorAuth/*，不读 storage.json —— 故用专用 vscdb 写入。
+    format: 'cursor_vscdb',
+    path: () => join(appSupportDir('Cursor'), 'User', 'globalStorage', 'state.vscdb'),
   },
   windsurf: {
     format: 'storage_json',
@@ -92,6 +95,9 @@ export class FileCredentialInjectionAdapter implements CredentialInjection {
       case 'hosts_json':
         await injectCredentialToHostsJson(credential.token, path)
         return
+      case 'cursor_vscdb':
+        await injectCursorAuthToVscdb(credential, path)
+        return
     }
   }
 
@@ -101,6 +107,9 @@ export class FileCredentialInjectionAdapter implements CredentialInjection {
   }
 
   async clear(): Promise<void> {
+    // cursor_vscdb 的 path 是 state.vscdb（Cursor 的全部本地状态库），绝不能整库删除；
+    // 此处不支持「清除注入」（如需登出应只删 cursorAuth/* 键，另行实现）。
+    if (this.spec.format === 'cursor_vscdb') return
     await clearCredentialFile(this.credentialPath())
   }
 

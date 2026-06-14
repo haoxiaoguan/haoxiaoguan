@@ -177,7 +177,15 @@ function routeDeepLink(url: string): void {
 function registerShellAndAppHandlers(): void {
   ipcMain.handle('app:getVersion', () => app.getVersion())
   ipcMain.handle('shell:open', async (_e, target: string) => {
-    await shell.openExternal(target)
+    // Web URL(http/https/mailto)用 openExternal；本地路径(目录/文件)用 openPath——
+    // openExternal 只认 URL scheme，传目录路径会失败，正是「打开文件夹」按钮报错的原因。
+    // openPath 不抛错、用返回的非空字符串表示失败，这里转成 throw 让渲染层 catch 提示。
+    if (/^(https?|mailto):/i.test(target)) {
+      await shell.openExternal(target)
+    } else {
+      const err = await shell.openPath(target)
+      if (err) throw new Error(err)
+    }
   })
   // WebDAV sync download returns needsRestart when the master key changed; the
   // sync context (not yet implemented) calls this to relaunch the app. Exposed
