@@ -23,10 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 不指定 version：以 package.json 的 packageManager(pnpm@10.32.1+sha512)为唯一来源，
+      # 否则 action-setup@v4 会因「两处都指定 pnpm 版本」报 ERR_PNPM_BAD_PM_VERSION。
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
 
       - name: Setup Node
         uses: actions/setup-node@v4
