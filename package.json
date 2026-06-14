@@ -106,6 +106,12 @@
   "pnpm": {
     "overrides": {
       "better-sqlite3": "12.10.0"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "better-sqlite3",
+      "electron",
+      "esbuild"
+    ]
   }
 }
