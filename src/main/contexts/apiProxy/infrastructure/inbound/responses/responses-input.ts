@@ -8,6 +8,7 @@ import {
   type ResponsesRequest,
   responsesToolToOpenAI,
   responsesCustomToolToOpenAI,
+  responsesToolChoiceToOpenAI,
   isResponsesCustomTool,
   CUSTOM_TOOL_INPUT_FIELD,
 } from './responses-types'
@@ -170,6 +171,9 @@ export function responsesToIR(req: ResponsesRequest, opts: ResponsesToIROpts): C
     if (name.length === 0) continue
     chatTools.push(isResponsesCustomTool(t) ? responsesCustomToolToOpenAI(t) : responsesToolToOpenAI(t))
   }
+  // tool_choice：含「强制必调某工具」(custom/function 指定 name)→ 映射成 chat 形态透传到上游，
+  // 下游 openaiToIR→ir.toolChoice→relay 出站回写 tool_choice。仅有工具时才发(无工具发 required 会被上游拒)。
+  const toolChoice = chatTools.length > 0 ? responsesToolChoiceToOpenAI(req.tool_choice) : undefined
   const chatReq: OpenAIChatRequest = {
     model: req.model ?? 'gpt-4.1',
     messages,
@@ -177,6 +181,7 @@ export function responsesToIR(req: ResponsesRequest, opts: ResponsesToIROpts): C
     ...(req.max_output_tokens !== undefined ? { max_tokens: req.max_output_tokens } : {}),
     ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
     ...(chatTools.length > 0 ? { tools: chatTools } : {}),
+    ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
   }
   return openaiToIR(chatReq)
 }

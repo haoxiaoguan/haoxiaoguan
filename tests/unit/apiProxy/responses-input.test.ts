@@ -92,4 +92,15 @@ describe('responsesToIR', () => {
     expect(msgs[1].role).toBe('tool')
     expect(msgs[1].tool_call_id).toBe('c1')
   })
+  it('tool_choice 透传：custom/function 强制 → ir.toolChoice {type:tool,name}；auto→auto；无工具不发', () => {
+    const custom = { model: 'm', input: 'x', tools: [{ type: 'custom', name: 'apply_patch' }], tool_choice: { type: 'custom', name: 'apply_patch' } } as unknown as ResponsesRequest
+    expect(responsesToIR(custom, {}).toolChoice).toEqual({ type: 'tool', name: 'apply_patch' })
+    const fn = { model: 'm', input: 'x', tools: [{ type: 'function', name: 'shell' }], tool_choice: { type: 'function', name: 'shell' } } as unknown as ResponsesRequest
+    expect(responsesToIR(fn, {}).toolChoice).toEqual({ type: 'tool', name: 'shell' })
+    const auto = { model: 'm', input: 'x', tools: [{ type: 'function', name: 'shell' }], tool_choice: 'auto' } as unknown as ResponsesRequest
+    expect(responsesToIR(auto, {}).toolChoice).toEqual({ type: 'auto' })
+    // 无工具 → 不发 tool_choice(避免上游对 required/指定工具报错)
+    const noTools = { model: 'm', input: 'x', tool_choice: 'required' } as unknown as ResponsesRequest
+    expect(responsesToIR(noTools, {}).toolChoice).toBeUndefined()
+  })
 })

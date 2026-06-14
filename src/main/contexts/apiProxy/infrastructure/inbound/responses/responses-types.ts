@@ -1,5 +1,5 @@
 // OpenAI Responses API 线协议类型（仅本协议需要的子集）。
-import type { OpenAITool } from '../openai'
+import type { OpenAITool, OpenAIToolChoice } from '../openai'
 
 export interface ResponsesRequest {
   model?: string
@@ -7,6 +7,8 @@ export interface ResponsesRequest {
   instructions?: string
   stream?: boolean
   tools?: ResponsesTool[]
+  /** "auto" | "none" | "required" | { type:"function"|"custom", name } | { type:"tool_search" } 等。 */
+  tool_choice?: unknown
   previous_response_id?: string
   store?: boolean
   temperature?: number
@@ -103,6 +105,23 @@ export function responsesCustomToolToOpenAI(t: ResponsesTool): OpenAITool {
       },
     },
   }
+}
+
+/** Responses tool_choice → Chat Completions tool_choice。
+ *  - "auto"/"none"/"required" 原样；
+ *  - { type:"function"|"custom", name } → { type:"function", function:{ name } }（custom 在 chat 侧也以
+ *    function 形态存在，见 responsesCustomToolToOpenAI）；
+ *  - 其它(tool_search/allowed_tools/未知) → undefined（省略，等价 auto，让模型自由）。
+ *  形态对齐参考实现，保「强制必调某工具」也能透传到上游。 */
+export function responsesToolChoiceToOpenAI(tc: unknown): OpenAIToolChoice | undefined {
+  if (tc === 'auto' || tc === 'none' || tc === 'required') return tc
+  if (tc !== null && typeof tc === 'object') {
+    const o = tc as { type?: unknown; name?: unknown }
+    if ((o.type === 'function' || o.type === 'custom') && typeof o.name === 'string' && o.name.length > 0) {
+      return { type: 'function', function: { name: o.name } }
+    }
+  }
+  return undefined
 }
 
 /** 从 chat function_call 的 arguments(JSON 串)提取 custom 工具的 freeform `input` 文本。
