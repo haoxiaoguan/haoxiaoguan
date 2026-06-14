@@ -66,6 +66,9 @@ export class UpdaterService {
     this.isPackaged = opts.isPackaged
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
+    // 预发布通道:当前运行的就是预发布构建(版本含 `-`，如 0.1.1-beta.1)时允许发现 GitHub 预发布，
+    // 实现「beta 用户留在 beta 通道、稳定用户只见正式版」。github provider 默认跳过 prerelease。
+    autoUpdater.allowPrerelease = app.getVersion().includes('-')
     this.setFeedUrl(opts.feedUrl)
     this.wire()
   }

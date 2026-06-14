@@ -3,16 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { bridge } from '../../../services/bridge';
 import { toast } from 'sonner';
 import {
+  AlertCircle,
   BookOpen,
   CheckCircle2,
   Download,
   FolderOpen,
   Github,
+  Loader2,
   MessageCircle,
   type LucideIcon,
 } from 'lucide-react';
 import brandLogo from '@/assets/brand/logo.png';
 import { Button } from '@/components/ui/button';
+import { useUpdaterStore } from '@/stores/updaterStore';
 import { systemService } from '../../../services/tauri';
 import type { AppDirs } from '../../../types';
 import { SettingsLayout } from '../SettingsLayout';
@@ -25,11 +28,18 @@ const FALLBACK_VERSION = '0.3.0';
 const DOCS_URL = 'https://github.com/haoxiaoguan/haoxiaoguan';
 const ISSUES_URL = 'https://github.com/haoxiaoguan/haoxiaoguan/issues';
 const GITHUB_URL = 'https://github.com/haoxiaoguan/haoxiaoguan';
+const CHANGELOG_URL = 'https://github.com/haoxiaoguan/haoxiaoguan/releases';
 
 export default function AboutSettings() {
   const { t } = useTranslation();
   const [version, setVersion] = useState(FALLBACK_VERSION);
   const [dirs, setDirs] = useState<AppDirs | null>(null);
+
+  const updState = useUpdaterStore((s) => s.status.state);
+  const updVersion = useUpdaterStore((s) => s.status.version);
+  const initUpd = useUpdaterStore((s) => s.init);
+  const checkUpdate = useUpdaterStore((s) => s.check);
+  const openUpdDialog = useUpdaterStore((s) => s.openDialog);
 
   useEffect(() => {
     getVersion()
@@ -40,6 +50,20 @@ export default function AboutSettings() {
       .then(setDirs)
       .catch(() => setDirs(null));
   }, []);
+
+  // 订阅更新状态(顶栏 UpdaterIndicator 通常已订阅；这里再订阅一次确保设置页独立可用)。
+  useEffect(() => initUpd(), [initUpd]);
+
+  const onCheck = async () => {
+    await checkUpdate();
+    // dev 未打包时主进程 check 为 no-op，状态停在 idle，UI 仍显示「已是最新版本」。
+    if (!import.meta.env.PROD) {
+      toast.info(t('settings.about.devNoUpdate', '开发模式不检查更新（仅打包版生效）'));
+    }
+  };
+
+  const hasUpdate =
+    updState === 'available' || updState === 'downloading' || updState === 'downloaded';
 
   const openUrl = async (url: string) => {
     try {
@@ -89,16 +113,48 @@ export default function AboutSettings() {
         </div>
         <div className="ml-2 min-w-0">
           <p className="text-base font-medium">{t('settings.about.version', '版本')} {version}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-500">
-            <CheckCircle2 className="size-4" />
-            {t('settings.about.latest', '已是最新版本')}
-          </p>
+          {updState === 'checking' ? (
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              {t('settings.about.checking', '正在检查更新…')}
+            </p>
+          ) : hasUpdate ? (
+            <button
+              type="button"
+              onClick={openUpdDialog}
+              className="mt-0.5 flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <Download className="size-4" />
+              {t('settings.about.found', '发现新版本')}
+              {updVersion ? ` v${updVersion}` : ''}
+            </button>
+          ) : updState === 'error' ? (
+            <button
+              type="button"
+              onClick={() => void onCheck()}
+              className="mt-0.5 flex items-center gap-1.5 text-sm text-destructive hover:underline"
+            >
+              <AlertCircle className="size-4" />
+              {t('settings.about.checkFailed', '检查失败，点击重试')}
+            </button>
+          ) : (
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-500">
+              <CheckCircle2 className="size-4" />
+              {t('settings.about.latest', '已是最新版本')}
+            </p>
+          )}
         </div>
         <div className="ml-auto flex shrink-0 gap-2.5">
-          <Button onClick={() => toast.info(t('settings.about.comingSoon', '即将推出'))}>
-            {t('settings.about.checkUpdate', '检查更新')}
+          <Button
+            onClick={() => (hasUpdate ? openUpdDialog() : void onCheck())}
+            disabled={updState === 'checking'}
+          >
+            {updState === 'checking' ? <Loader2 className="size-4 animate-spin" /> : null}
+            {hasUpdate
+              ? t('settings.about.viewUpdate', '查看更新')
+              : t('settings.about.checkUpdate', '检查更新')}
           </Button>
-          <Button variant="outline" onClick={() => toast.info(t('settings.about.comingSoon', '即将推出'))}>
+          <Button variant="outline" onClick={() => openUrl(CHANGELOG_URL)}>
             {t('settings.about.changelog', '更新日志')}
           </Button>
         </div>
@@ -153,7 +209,7 @@ export default function AboutSettings() {
 
       {/* 页脚 */}
       <p className="pt-1 text-center text-xs text-muted-foreground">
-        {t('settings.about.footer', '© 2026 Haoxiaoguan · 基于 Tauri / React / Rust 构建')}
+        {t('settings.about.footer', '© 2026 Haoxiaoguan · 基于 Electron / React / TypeScript 构建')}
       </p>
     </SettingsLayout>
   );
