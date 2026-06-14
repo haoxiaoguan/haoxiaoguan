@@ -63,6 +63,9 @@ importers:
         specifier: ^8.18.0
         version: 8.21.0
     devDependencies:
+      '@electron/rebuild':
+        specifier: ^3.6.1
+        version: 3.6.1
       '@lobehub/icons-static-svg':
         specifier: ^1.91.0
         version: 1.91.0

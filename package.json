@@ -43,6 +43,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.6.1",
     "@lobehub/icons-static-svg": "^1.91.0",
     "@monaco-editor/react": "^4.7.0",
     "@playwright/test": "^1.60.0",
