@@ -1,6 +1,6 @@
 {
   "name": "haoxiaoguan",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.1",
   "description": "号小管桌面端",
   "author": "haoxiaoguan <dev@haoxiaoguan.app>",
   "main": "./out/main/main.cjs",
