@@ -1,0 +1,77 @@
+name: Release
+
+# 推送形如 v0.1.0（正式）或 v0.1.1-beta.1（预发布）的 tag 触发：electron-builder 打包 + 发布到
+# GitHub Releases。客户端 electron-updater 据打包进 app-update.yml 的 github provider 直连本仓 Releases
+# 拉更新（仓库已公开 → 免 token）。发布类型按 tag 自动区分（见 publish 步骤）：
+#   · 正式 tag(v0.1.1)  → draft：上传草稿，人工审核后「Publish」才放给所有用户（避免坏包直推）。
+#   · 预发布 tag(-beta) → prerelease：直接发布并标 Pre-release，仅 beta 通道客户端可见，便于灰度测试。
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # 创建 / 上传 Release 资产
+
+jobs:
+  release-mac:
+    # macos-latest = Apple Silicon(arm64)。原生模块(better-sqlite3)按 runner 原生架构编译，
+    # 故只产 arm64（无跨架构编 x64 的坑）。需 x64/win/linux 见文件末尾说明。
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (electron-vite + better-sqlite3 Electron ABI)
+        run: pnpm run build
+
+      - name: Package & publish to GitHub Releases (mac arm64)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 同仓 Release 写权限，免额外密钥
+        # 发布类型按 tag 区分：含 `-` 的预发布 tag(如 v0.1.1-beta.1)→ prerelease（已发布、标 Pre-release，
+        # 不会被稳定通道 latest-mac.yml 选中，仅 beta 通道客户端可见）；正式 tag(v0.1.1)→ draft（上传草稿，
+        # 人工 Publish 后才放给所有用户）。electron-updater 据版本里的 -beta 自动落到 beta 通道(latest-mac-beta.yml)。
+        # yml 里 npmRebuild:false → 不二次 rebuild（已在 build 步用 electron-rebuild 编好 arm64）。
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then RT=prerelease; else RT=draft; fi
+          echo "tag=${GITHUB_REF_NAME} → releaseType=$RT"
+          pnpm exec electron-builder --mac --arm64 --publish always -c.publish.releaseType=$RT
+
+# ── 发布步骤（正式）──────────────────────────────────────────────────────────
+# 1) 改 package.json version（如 0.1.1）→ commit。
+# 2) git tag v0.1.1 && git push origin v0.1.1  → 本工作流自动跑。
+# 3) 跑完去 GitHub Releases，审核 draft（dmg/zip/latest-mac.yml 齐全），点 Publish。
+# 4) 已装客户端启动/检查更新即从 GitHub 发现新版并下载。
+#
+# ── 预发布（beta 灰度）──────────────────────────────────────────────────────
+# 1) 改 version 为预发布号（如 0.1.1-beta.1）→ commit。
+# 2) git tag v0.1.1-beta.1 && git push origin v0.1.1-beta.1 → 自动跑，发布为 Pre-release。
+# 3) 产物含 latest-mac-beta.yml（beta 通道）；仅配置了 beta 通道/allowPrerelease 的客户端会拉到，
+#    稳定用户不受影响。测完可在 GitHub Releases 直接删除该 Pre-release。
+#
+# ── 扩展平台/架构（按需）─────────────────────────────────────────────────────
+# - mac x64：另起一个 job `runs-on: macos-13`（Intel），`electron-builder --mac --x64 --publish always`；
+#   两 job 发到同一 Release，electron-builder 会各自上传并合并 latest-mac.yml。
+# - Windows：job `runs-on: windows-latest`，`pnpm exec electron-builder --win --publish always`。
+# - Linux：job `runs-on: ubuntu-latest`，`--linux --publish always`。
+#
+# ── 签名注意（mac 自动更新的硬限制）──────────────────────────────────────────
+# 当前 electron-builder.yml 为 unsigned(identity:null)。macOS 上 electron-updater/Squirrel.Mac
+# 的「下载后安装」通常要求 app 已签名；unsigned 时「检测到新版+下载」可工作，但 quitAndInstall 可能
+# 因签名校验失败。要 mac 端完整自动更新需配 Apple Developer 证书（CSC_LINK/CSC_KEY_PASSWORD 等密钥
+# + hardenedRuntime+notarize）。Win/Linux 未签名可正常自动更新（仅 SmartScreen/Gatekeeper 警告）。
