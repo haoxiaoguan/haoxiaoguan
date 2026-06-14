@@ -24,6 +24,13 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,.gitignore,.prettierrc,.prettierrc.*,eslint.config.*}'
   - '!**/*.{test,spec}.{js,ts,jsx,tsx}'
   - '!**/*.map'
+  # tiktoken 瘦身:@anthropic-ai/tokenizer 只用 `tiktoken/lite`(自带 1MB wasm、全 ./ 自包含)。
+  # 顶层 encoders/(OpenAI 各模型 BPE,16M)与顶层 full tiktoken_bg.wasm(5.3M)我们从不加载，剔除省 ~21M。
+  - '!**/node_modules/tiktoken/encoders/**'
+  - '!**/node_modules/tiktoken/tiktoken_bg.wasm'
+
+# 最终 dmg/zip 用最大压缩(换更慢的打包时间,显著缩小下载体积；自动更新差量也更小)。
+compression: maximum
 
 # 原生模块不能进 asar —— better-sqlite3 的 .node 必须留在文件系统由 require 加载。
 asarUnpack:
@@ -35,14 +42,14 @@ asarUnpack:
 # 避免在 pnpm 的 symlink 结构上重编出错。
 npmRebuild: false
 
-# 自动更新发布源：electron-updater generic provider → 自建 single-server 更新代理
-# （服务端持 GitHub token 代理 Releases，客户端不接触 token）。
-# 实际部署把 url 改为 single-server 的公网地址。
-# 本地联调用 18080（8080 常被本机其他服务占用）。
+# 自动更新发布源：GitHub Releases（仓库公开 → 客户端 electron-updater 免 token 直连）。
+# 打包时本配置写进产物 app-update.yml；客户端 UpdaterService 在 updateFeedUrl 为空时默认据此从
+# GitHub 拉更新（非空 HTTPS 才覆盖成 generic，作高级自定义源）。CI（electron-builder --publish）
+# 用 GH_TOKEN 上传 dmg/zip + latest-mac.yml 到 Release。
 publish:
-  provider: generic
-  url: http://127.0.0.1:18080/update/${os}
-  channel: latest
+  provider: github
+  owner: haoxiaoguan
+  repo: haoxiaoguan
 
 # 深链接协议(main.ts: setAsDefaultProtocolClient('haoxiaoguan'))
 protocols:

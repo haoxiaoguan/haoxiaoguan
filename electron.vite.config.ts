@@ -62,10 +62,19 @@ export default defineConfig({
     root: 'src/renderer',
     plugins: [react()],
     resolve: {
-      alias: {
-        '@': resolve(__dirname, 'src/renderer'),
-        '@shared': resolve(__dirname, 'src/shared'),
-      },
+      // 数组形式以便用「精确正则」alias monaco——`import * as monaco from 'monaco-editor'`
+      // 默认解析到完整 editor.main，会把 ts/css/html 语言及其 worker(~13.7M)全打进包。
+      // 本应用只编辑 JSON：把裸 `monaco-editor` 精确指向核心 editor.api（不挂任何语言），
+      // JSON 语言由 json-editor.tsx 具名导入 contribution 单独注册。子路径导入
+      //（esm/vs/...、?worker）不匹配 `^monaco-editor$`，照常解析。
+      alias: [
+        { find: '@shared', replacement: resolve(__dirname, 'src/shared') },
+        { find: '@', replacement: resolve(__dirname, 'src/renderer') },
+        {
+          find: /^monaco-editor$/,
+          replacement: resolve(__dirname, 'node_modules/monaco-editor/esm/vs/editor/editor.api.js'),
+        },
+      ],
     },
     build: {
       rollupOptions: {
