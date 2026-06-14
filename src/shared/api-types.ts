@@ -814,6 +814,15 @@ export interface HxgApi {
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
+  /** 自绘窗口控制（Windows/Linux 无原生标题栏时由 header 的 min/max/close 调用）。 */
+  windowControls: {
+    minimize(): Promise<void>
+    maximizeToggle(): Promise<void>
+    close(): Promise<void>
+    isMaximized(): Promise<boolean>
+    /** 订阅最大化态变化（切 max/restore 图标）。返回取消订阅。 */
+    onMaximizeChanged(cb: (maximized: boolean) => void): () => void
+  }
 }
 
 // ─── clientConfig DTO（与 main domain 同形）─────────────────────────────────

@@ -48,6 +48,7 @@ import { systemService } from '../services/tauri';
 import { useQuotaStateStore } from '../stores';
 import { NotificationPopover } from './shell-utility/NotificationPopover';
 import { UpdaterIndicator } from './shell-utility/UpdaterIndicator';
+import { WindowControls } from './shell-utility/WindowControls';
 
 interface AppShellProps {
   shell?: PlatformShell;
@@ -389,14 +390,7 @@ export function AppShell({ shell }: AppShellProps) {
                 <NotificationPopover />
               </ShellUtilityHoverItem>
             </div>
-            {resolvedShell === 'windows_like' ? (
-              <div
-                data-testid="shell-safe-area-right"
-                className="h-full w-[140px] shrink-0"
-                aria-hidden="true"
-                data-tauri-drag-region
-              />
-            ) : null}
+            {resolvedShell === 'windows_like' ? <WindowControls /> : null}
           </header>
 
           <ScrollArea

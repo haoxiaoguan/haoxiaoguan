@@ -24,6 +24,8 @@ import {
   UPDATER_CHANNELS,
   UPDATE_EVENTS,
   CLIENT_CONFIG_CHANNELS,
+  WINDOW_CHANNELS,
+  WINDOW_EVENTS,
 } from '../shared/ipc-channels'
 import type { HxgApi, UpdateStatus, ProxyRequestRecord, CodexRepairProgressDto } from '../shared/api-types'
 
@@ -305,6 +307,17 @@ const api: HxgApi = {
   },
   shellOpen: (target) => ipcRenderer.invoke('shell:open', target),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  windowControls: {
+    minimize: () => ipcRenderer.invoke(WINDOW_CHANNELS.minimize),
+    maximizeToggle: () => ipcRenderer.invoke(WINDOW_CHANNELS.maximizeToggle),
+    close: () => ipcRenderer.invoke(WINDOW_CHANNELS.close),
+    isMaximized: () => ipcRenderer.invoke(WINDOW_CHANNELS.isMaximized),
+    onMaximizeChanged: (cb) => {
+      const listener = (_e: unknown, maximized: boolean) => cb(maximized)
+      ipcRenderer.on(WINDOW_EVENTS.maximizeChanged, listener)
+      return () => ipcRenderer.removeListener(WINDOW_EVENTS.maximizeChanged, listener)
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

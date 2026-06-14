@@ -4,7 +4,14 @@ import { join } from 'node:path'
 import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
 import { appDataDir } from './platform/persistence/paths'
-import { QUOTA_EVENTS, USAGE_EVENTS, UPDATE_EVENTS, API_PROXY_EVENTS } from '../shared/ipc-channels'
+import {
+  QUOTA_EVENTS,
+  USAGE_EVENTS,
+  UPDATE_EVENTS,
+  API_PROXY_EVENTS,
+  WINDOW_CHANNELS,
+  WINDOW_EVENTS,
+} from '../shared/ipc-channels'
 import { isOfficialTokenizerAvailable } from './contexts/apiProxy/domain/usage/token-estimator'
 import { UpdaterService } from './contexts/updater/updater-service'
 import { registerUpdaterHandlers } from './contexts/updater/ipc/updater-handlers'
@@ -59,15 +66,9 @@ function createWindow(silentStart: boolean): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    // macOS：hiddenInset(红绿灯,保持不变)。Windows：hidden + 下方 titleBarOverlay，
-    // 原生 min/max/close 叠加在右上(渲染层 header 已预留 140px 安全区)。Linux：暂留原生框
-    // (WCO 不支持，自绘按钮下一轮补)，仅去掉菜单。
-    titleBarStyle:
-      process.platform === 'darwin' ? 'hiddenInset' : process.platform === 'win32' ? 'hidden' : 'default',
-    // Windows 窗口控件叠加(WCO)：透明底(透出 app 背景)、中性灰图标、高度对齐 header。
-    ...(process.platform === 'win32'
-      ? { titleBarOverlay: { color: '#00000000', symbolColor: '#888888', height: 48 } }
-      : {}),
+    // macOS：hiddenInset(红绿灯,保持不变)。Windows/Linux：hidden(无原生标题栏/按钮)，
+    // 由渲染层在 header 右侧自绘 min/max/close(协调一致、两平台一套，见 WindowControls)。
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     trafficLightPosition: { x: 4, y: 14 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -94,6 +95,12 @@ function createWindow(silentStart: boolean): void {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  // 自绘窗口控制：把最大化态变化推给渲染层，切换 max/restore 图标。
+  mainWindow.on('maximize', () => mainWindow?.webContents.send(WINDOW_EVENTS.maximizeChanged, true))
+  mainWindow.on('unmaximize', () =>
+    mainWindow?.webContents.send(WINDOW_EVENTS.maximizeChanged, false),
+  )
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -212,6 +219,16 @@ function registerShellAndAppHandlers(): void {
   ipcMain.handle('app:setAutostart', (_e, enabled: boolean) => {
     applyAutostart(enabled)
   })
+
+  // 自绘窗口控制（Windows/Linux 无原生标题栏，渲染层 header 的 min/max/close 调这些）。
+  ipcMain.handle(WINDOW_CHANNELS.minimize, () => mainWindow?.minimize())
+  ipcMain.handle(WINDOW_CHANNELS.maximizeToggle, () => {
+    if (!mainWindow) return
+    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    else mainWindow.maximize()
+  })
+  ipcMain.handle(WINDOW_CHANNELS.close, () => mainWindow?.close())
+  ipcMain.handle(WINDOW_CHANNELS.isMaximized, () => mainWindow?.isMaximized() ?? false)
 }
 
 // ── Single-instance lock (Windows/Linux deep-link + focus-existing) ──────────

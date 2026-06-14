@@ -19,18 +19,26 @@ interface SidebarBrandProps {
  */
 export function SidebarBrand({ shell }: SidebarBrandProps) {
   const { t } = useTranslation();
-  const macSafeArea = shell === 'macos';
 
   return (
     <div data-testid="app-shell-brand" className="!p-0">
-      {macSafeArea ? (
+      {shell === 'macos' ? (
         <div
           data-testid="shell-sidebar-safe-area"
           className="h-7 shrink-0"
           data-tauri-drag-region
           aria-hidden="true"
         />
-      ) : null}
+      ) : (
+        // Windows/Linux：无红绿灯，但留一段顶部留白把 logo 下移，与右侧 header 行对齐;
+        // 同时作为标题栏拖拽区。
+        <div
+          data-testid="shell-sidebar-safe-area"
+          className="h-7 shrink-0"
+          data-tauri-drag-region
+          aria-hidden="true"
+        />
+      )}
 
       {/* Collapsed state: just the avatar centered. The wrapper is a drag
           region so empty space around the avatar still drags the window;
