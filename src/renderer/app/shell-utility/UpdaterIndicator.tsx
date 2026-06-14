@@ -189,7 +189,11 @@ export function UpdaterIndicator() {
               {releaseNotesBlock}
               <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
-                <p className="text-sm text-foreground/90">{t('nav:shell.update.ready')}</p>
+                <p className="text-sm text-foreground/90">
+                  {status.manualInstall
+                    ? t('nav:shell.update.readyManual')
+                    : t('nav:shell.update.ready')}
+                </p>
               </div>
             </div>
           ) : isError ? (
@@ -215,7 +219,11 @@ export function UpdaterIndicator() {
             {isError ? (
               <Button onClick={() => void check()}>{t('nav:shell.update.retry')}</Button>
             ) : state === 'downloaded' ? (
-              <Button onClick={() => void install()}>{t('nav:shell.update.installNow')}</Button>
+              <Button onClick={() => void install()}>
+                {status.manualInstall
+                  ? t('nav:shell.update.openInstaller')
+                  : t('nav:shell.update.installNow')}
+              </Button>
             ) : null}
           </DialogFooter>
         </DialogContent>

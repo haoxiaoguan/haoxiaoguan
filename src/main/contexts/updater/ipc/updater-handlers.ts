@@ -26,7 +26,7 @@ export function registerUpdaterHandlers(svc: UpdaterService): void {
 
   ipcMain.handle(UPDATER_CHANNELS.install, async (): Promise<void> => {
     try {
-      svc.install()
+      await svc.install()
     } catch (e) {
       throw new Error(toIpcError(e))
     }

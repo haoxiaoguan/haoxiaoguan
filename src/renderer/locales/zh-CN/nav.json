@@ -360,10 +360,12 @@
       "preparing": "已开始在后台下载…",
       "releaseNotesTitle": "更新内容",
       "ready": "新版本已下载完成，点击「立即安装」将重启应用以完成更新。",
+      "readyManual": "安装包已下载，点击「打开安装包」后，将 号小管 拖入 Applications 文件夹覆盖安装（macOS 未签名需手动安装）。",
       "errorHint": "无法完成更新，请稍后重试。",
       "errorDetail": "错误详情",
       "later": "稍后",
       "installNow": "立即安装",
+      "openInstaller": "打开安装包",
       "retry": "重试"
     },
     "notify": {

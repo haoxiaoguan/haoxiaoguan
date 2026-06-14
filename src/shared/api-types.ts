@@ -996,6 +996,8 @@ export interface UpdateStatus {
   total?: number
   /** downloading 时下载速率（字节/秒）。 */
   bytesPerSecond?: number
+  /** downloaded 且需手动安装（mac 未签名:已下载 dmg，提示用户拖入 Applications，而非自动重启安装）。 */
+  manualInstall?: boolean
   /** error 时的错误信息。 */
   error?: string
 }

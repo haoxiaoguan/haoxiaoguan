@@ -1,7 +1,16 @@
-import { app } from 'electron'
+import { app, net, shell } from 'electron'
+import { createWriteStream } from 'node:fs'
+import { join } from 'node:path'
 import { autoUpdater } from 'electron-updater'
 
 import type { UpdateStatus } from '../../../shared/api-types'
+
+// 自身仓库（dmg 手动安装下载源；与 electron-builder.yml publish 一致）。
+const GITHUB_OWNER = 'haoxiaoguan'
+const GITHUB_REPO = 'haoxiaoguan'
+const RELEASES_PAGE = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`
+
+const IS_MAC = process.platform === 'darwin'
 
 export interface UpdaterOptions {
   /** 更新源地址（generic provider）；空则用打包的 app-update.yml 默认。 */
@@ -60,12 +69,17 @@ export class UpdaterService {
   private readonly isPackaged: boolean
   // 当前 update 周期的版本元信息（update-available 时定型；新一轮 checking 时清空）。
   private meta: UpdateMeta = {}
+  // mac 手动安装:已下载的 dmg 路径（install 时 openPath 打开让用户拖入 Applications）。
+  private dmgPath: string | null = null
 
   constructor(opts: UpdaterOptions) {
     this.listener = () => {}
     this.isPackaged = opts.isPackaged
-    autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = true
+    // mac 未签名:Squirrel.Mac「下载后安装」会因签名校验失败。改走「我方下载 dmg + 用户手动拖入」，
+    // 故关掉 autoDownload/autoInstallOnAppQuit 避免 electron-updater 触发 Squirrel 暂存。
+    // win/linux 未签名仍可正常自动更新，保留自动下载 + quitAndInstall。
+    autoUpdater.autoDownload = !IS_MAC
+    autoUpdater.autoInstallOnAppQuit = !IS_MAC
     // 预发布通道:当前运行的就是预发布构建(版本含 `-`，如 0.1.1-beta.1)时允许发现 GitHub 预发布，
     // 实现「beta 用户留在 beta 通道、稳定用户只见正式版」。github provider 默认跳过 prerelease。
     autoUpdater.allowPrerelease = app.getVersion().includes('-')
@@ -128,6 +142,10 @@ export class UpdaterService {
         releaseName: info.releaseName ?? undefined,
       }
       this.emit({ state: 'available', ...this.meta })
+      // mac:autoDownload 已关，由我方下载 dmg（带进度），完成后 install 时打开供拖入安装。
+      if (IS_MAC && info.version) {
+        void this.downloadDmg(info.version)
+      }
     })
     autoUpdater.on('update-not-available', () => this.emit({ state: 'not-available' }))
     autoUpdater.on('download-progress', (p) =>
@@ -173,8 +191,82 @@ export class UpdaterService {
     }
   }
 
-  /** 退出并安装已下载的更新。 */
-  install(): void {
+  /**
+   * 安装已下载的更新。
+   * - win/linux：electron-updater quitAndInstall（退出并安装）。
+   * - mac：打开已下载的 dmg（用户把 号小管 拖入 Applications 覆盖安装）；无 dmg 时兜底打开 Releases 页。
+   */
+  async install(): Promise<void> {
+    if (IS_MAC) {
+      if (this.dmgPath) {
+        const err = await shell.openPath(this.dmgPath)
+        if (err) {
+          // openPath 失败（如文件被删）→ 兜底打开 Releases 页让用户手动下载。
+          await shell.openExternal(RELEASES_PAGE)
+        }
+      } else {
+        await shell.openExternal(RELEASES_PAGE)
+      }
+      return
+    }
     autoUpdater.quitAndInstall()
+  }
+
+  // mac:从 GitHub Release 下载对应架构的 dmg（带进度），存到临时目录。完成 → state=downloaded
+  // 且 manualInstall=true（弹窗提示拖入 Applications）；失败 → state=error。
+  private async downloadDmg(version: string): Promise<void> {
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+    const fileName = `${GITHUB_REPO}-${version}-${arch}.dmg`
+    const url = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/${fileName}`
+    const dest = join(app.getPath('temp'), fileName)
+    try {
+      await this.downloadFile(url, dest)
+      this.dmgPath = dest
+      this.emit({ state: 'downloaded', ...this.meta, version, manualInstall: true })
+    } catch (e) {
+      this.emit({
+        state: 'error',
+        ...this.meta,
+        error: `下载安装包失败：${e instanceof Error ? e.message : String(e)}`,
+      })
+    }
+  }
+
+  // 用 Electron net（自动跟随 GitHub 资源 302 跳转到 CDN）流式下载到 dest，按 content-length 报进度。
+  private downloadFile(url: string, dest: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const request = net.request(url)
+      request.on('response', (response) => {
+        const status = response.statusCode
+        if (status < 200 || status >= 300) {
+          reject(new Error(`HTTP ${status}`))
+          return
+        }
+        const clHeader = response.headers['content-length']
+        const total = Number(Array.isArray(clHeader) ? clHeader[0] : clHeader) || 0
+        let transferred = 0
+        const file = createWriteStream(dest)
+        response.on('data', (chunk: Buffer) => {
+          transferred += chunk.length
+          file.write(chunk)
+          this.emit({
+            state: 'downloading',
+            ...this.meta,
+            percent: total > 0 ? Math.round((transferred / total) * 100) : 0,
+            transferred,
+            total,
+          })
+        })
+        response.on('end', () => {
+          file.end(() => resolve())
+        })
+        response.on('error', (err: Error) => {
+          file.destroy()
+          reject(err)
+        })
+      })
+      request.on('error', reject)
+      request.end()
+    })
   }
 }

@@ -360,10 +360,12 @@
       "preparing": "Downloading in the background…",
       "releaseNotesTitle": "What's new",
       "ready": "The update is downloaded. Click \"Install now\" to restart and apply it.",
+      "readyManual": "The installer is downloaded. Click \"Open installer\", then drag 号小管 into the Applications folder to install (manual install required on unsigned macOS).",
       "errorHint": "Couldn't complete the update. Please try again later.",
       "errorDetail": "Error details",
       "later": "Later",
       "installNow": "Install now",
+      "openInstaller": "Open installer",
       "retry": "Retry"
     },
     "notify": {
