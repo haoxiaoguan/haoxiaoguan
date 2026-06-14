@@ -1,8 +1,9 @@
 {
   "name": "haoxiaoguan",
-  "version": "0.1.2-beta.5",
+  "version": "0.1.0",
   "description": "号小管桌面端",
   "author": "haoxiaoguan <dev@haoxiaoguan.app>",
+  "license": "GPL-3.0-or-later",
   "main": "./out/main/main.cjs",
   "type": "module",
   "scripts": {
