@@ -204,7 +204,7 @@ describe('ModelListCache', () => {
   })
 
   it('invalidate 使缓存失效，下次重新 fetch', async () => {
-    let now = 0
+    const now = 0
     const cache = new ModelListCache({ ttlMs: 300_000, clock: () => now })
     const fetcher = vi
       .fn()

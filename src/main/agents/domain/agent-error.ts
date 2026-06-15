@@ -16,8 +16,8 @@ export type AgentErrorKind =
 
 export class AgentError extends Error {
   readonly kind: AgentErrorKind
-  readonly path?: string
-  readonly cause?: unknown
+  readonly path?: string | undefined
+  override readonly cause?: unknown
 
   private constructor(kind: AgentErrorKind, message: string, path?: string, cause?: unknown) {
     super(message)

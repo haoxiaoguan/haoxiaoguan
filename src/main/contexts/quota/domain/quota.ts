@@ -9,7 +9,7 @@ export class ModelQuota {
   readonly modelName: string
   readonly used: number
   readonly total: number
-  readonly resetAt?: Date
+  readonly resetAt?: Date | undefined
 
   constructor(modelName: string, used: number, total: number, resetAt?: Date) {
     this.modelName = modelName

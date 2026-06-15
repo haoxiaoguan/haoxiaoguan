@@ -1,494 +1,112 @@
-// The typed surface exposed on window.api. Covers every IPC service namespace
-// whose backing context is implemented (settings, system, agent, account,
-// credential, quota, skill, usage, localBackup, mcp, sync) plus the
-// version/shell helpers. The only renderer methods still on the throwing
-// tauriInvoke shim are the websocket toggle/status pair (get_ws_status /
-// toggle_ws), which belong to a websocket context not yet built.
-/** 用量/活动查询窗口：epoch 秒，闭区间。渲染层时间选择器产出，main 侧直接喂 SQLite。 */
-export interface TimeWindowDto {
-  startSec: number
-  endSec: number
-}
+// 渲染层 window.api 的类型入口。DTO 按域拆分到 ./api/*（见各文件），此处统一
+// re-export 以保持 `@shared/api-types` / `../shared/api-types` 导入路径不变，并定义
+// 覆盖所有 IPC 服务命名空间的契约接口 HxgApi（settings/system/agent/account/
+// credential/quota/skill/usage/activity/localBackup/mcp/sync/ws/proxy/apiProxy/
+// accountGroup/sessions/updater/clientConfig + version/shell/window 助手）。
 
-/** 趋势桶粒度：hour=小时桶，day=日桶。 */
-export type TrendGranularityDto = 'hour' | 'day'
+export * from './api/common'
+export * from './api/account'
+export * from './api/skill'
+export * from './api/usage'
+export * from './api/integrations'
+export * from './api/routing'
 
-export interface SettingsResponse {
-  theme: string
-  language: string
-  closeBehavior: string
-  wsPort: number
-  refreshIntervals: Record<string, number>
-  platformRefreshIntervals: Record<string, number>
-  idePaths: Record<string, string>
-  quotaRefreshConcurrency: number
-  silentStart: boolean
-  autostart: boolean
-  utilityButtons: string
-  allowStaleKiroImport: boolean
-  terminalLaunchTemplate: string
-  /** 「路由」开关（按客户端）：clientId → 是否经号小管反代转发该客户端第三方供应商。 */
-  routingEnabled: Record<string, boolean>
-  codexLaunchOnSwitch: boolean
-}
-export interface AppDirs {
-  dataDir: string
-  configDir: string
-  logDir: string
-}
-// Result of system.detectAppPath — auto-detected app/IDE path for a platform.
-export interface AppPathInfo {
-  /** First existing candidate on the current OS, or null if none found. */
-  detected: string | null
-  /** Representative placeholder path for the current platform+OS. */
-  suggestion: string
-}
-
-// Per-platform outcome of account.detectActiveAccounts — which stored account
-// each IDE is actually logged into (reverse-detected from local login state).
-export interface ActiveDetectionResult {
-  /** Frontend (kebab) platform id. */
-  platform: string
-  /** The account id now marked active for this platform, or null. */
-  activeAccountId: string | null
-  /** True when the detected local identity matched a stored account. */
-  matched: boolean
-}
-
-// ── Agent DTO (agents manifest §6) ───────────────────────────────────────────
-export interface AgentInfo {
-  id: string
-  displayName: string
-  family: string
-  capabilities: string[]
-}
-
-// ── Account DTOs (account manifest §6) ───────────────────────────────────────
-export interface AccountResponse {
-  id: string
-  platform: string
-  email: string
-  identityKey: string
-  displayIdentifier: string
-  name?: string
-  loginProvider?: string
-  planName?: string
-  planTier?: string
-  status?: string
-  statusReason?: string
-  profilePayload: unknown
-  tags: string[]
-  notes?: string
-  isActive: boolean
-  createdAt: string
-  lastUsedAt?: string
-}
-
-export interface ImportAccountRequest {
-  platform: string
-  email: string
-  token: string
-  refreshToken?: string
-  expiresAt?: string
-  rawMetadata?: unknown
-  name?: string
-  tags: string[]
-  notes?: string
-}
-
-export interface ImportResultResponse {
-  imported: number
-  skipped: number
-  errors: string[]
-}
-
-export type CredentialValidationState =
-  | 'valid'
-  | 'expired'
-  | 'revoked'
-  | 'rate_limited'
-  | 'network_error'
-  | 'unknown_error'
-  | 'unsupported'
-  | 'pending'
-
-export interface CredentialValidationResult {
-  state: CredentialValidationState
-  checked_at: string
-  details?: string
-  expires_at?: string
-}
-
-export interface QuotaFetchResult {
-  outcome: 'success' | 'unsupported' | 'stale' | 'failed'
-  source: 'live' | 'cache' | 'none'
-  freshness: 'fresh' | 'stale' | 'unknown'
-  fetched_at: string
-  models: Array<{ model_name: string; used: number; total: number; reset_at?: string }>
-  error?: string
-}
-
-export interface HealthSnapshot {
-  account_id: string
-  validation: CredentialValidationResult
-  quota?: QuotaFetchResult
-  checked_at: string
-}
-
-// ── Skill DTOs (skill manifest §7) ───────────────────────────────────────────
-export interface InstalledSkillDto {
-  id: string
-  name: string
-  description?: string
-  directory: string
-  repo_owner?: string
-  repo_name?: string
-  repo_branch?: string
-  readme_url?: string
-  apps: Record<string, boolean>
-  installed_at: number
-  updated_at: number
-  content_hash?: string
-  ssot_path: string
-  storage_location: string
-}
-
-export interface DiscoverableSkillDto {
-  name: string
-  description?: string
-  directory: string
-  repo_owner: string
-  repo_name: string
-  repo_branch: string
-  readme_url?: string
-  metadata?: { author?: string; version?: string; tags: string[] }
-}
-
-export interface SkillBackupEntryDto {
-  backup_id: string
-  skill_id: string
-  snapshot_json: string
-  archive_path: string
-  created_at: number
-}
-
-export interface SkillRepoDto {
-  owner: string
-  name: string
-  branch: string
-  enabled: boolean
-  sort_order: number
-  added_at: number
-}
-
-export interface UnmanagedSkillEntryDto {
-  dir_name: string
-  path: string
-  description?: string
-}
-
-// ── Activity DTOs (activity context — 会话活动统计) ────────────────────────────
-export interface ActivityTrendPointResponse {
-  date: string
-  value: number
-}
-// 仅返回本次入库的事件数；原设计的 scanned 字段已由单一 watermark 增量机制取代，故省略。
-export interface ActivitySyncSummaryResponse {
-  events: number
-}
-
-// ── Usage DTOs (usage manifest §6) ───────────────────────────────────────────
-export interface UsageSyncSummaryResponse {
-  imported: number
-  failed: number
-  platforms: string[]
-}
-export interface UsageSummaryResponse {
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
-  requests: number
-  totalCostUsd: number
-  lastSyncedAt: number | null
-}
-export interface UsageTrendPointResponse {
-  date: string
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
-  requests: number
-  costUsd: number
-}
-export interface PlatformUsageBreakdownResponse {
-  platform: string
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheTokens: number
-  requests: number
-  shareRatio: number
-}
-export interface UsageSyncStatusResponse {
-  supportedPlatforms: string[]
-  pendingPlatforms: string[]
-  failedPlatforms: string[]
-  lastSyncedAt: number | null
-  healthStatus: string
-}
-
-// ── LocalBackup DTOs (localBackup manifest §6) ───────────────────────────────
-export interface BackupEntryDto {
-  filename: string
-  sizeBytes: number
-  createdAt: number
-}
-export interface LocalBackupConfigDto {
-  intervalHours: number
-  retainCount: number
-}
-
-// ── Credential DTOs (credential manifest §6) ─────────────────────────────────
-export interface OAuthPending {
-  pending_id: string
-  authorize_url: string
-  redirect_path: string
-  bound_port?: number
-}
-export interface ImportedCredentialMaterial {
-  provider: string
-  email: string
-  access_token: string
-  refresh_token?: string
-  expires_at?: string
-  source: 'oauth' | 'local_scan' | 'token_json_file' | 'deep_link'
-  raw_metadata?: unknown
-}
-
-// ── Quota DTOs (quota manifest §6) ───────────────────────────────────────────
-export interface ModelQuotaResponse {
-  modelName: string
-  used: number
-  total: number
-  usagePercentage: number
-  isWarning: boolean
-  resetAt?: string
-}
-export interface QuotaResponse {
-  accountId: string
-  models: ModelQuotaResponse[]
-  fetchedAt: string
-}
-export interface QuotaRefreshResultResponse {
-  accountId: string
-  success: boolean
-  quota?: QuotaResponse
-  error?: string
-}
-export type QuotaStatus = 'ok' | 'warning' | 'exhausted' | 'unknown' | 'unsupported' | 'error'
-export type QuotaUnit = 'credits' | 'requests' | 'tokens' | 'usd' | 'percent' | 'none'
-export type QuotaMetricKind =
-  | 'usage'
-  | 'remaining'
-  | 'balance'
-  | 'rate_limit'
-  | 'entitlement'
-  | 'credential'
-export type QuotaWindow = 'minute' | 'hour' | 'day' | 'month' | 'billing_cycle'
-export interface QuotaMetricResponse {
-  key: string
-  label: string
-  kind: QuotaMetricKind
-  unit: QuotaUnit
-  used?: number
-  total?: number
-  remaining?: number
-  percentUsed?: number
-  percentRemaining?: number
-  displayValue?: string
-  window?: QuotaWindow
-  resetAt?: string
-  status: QuotaStatus
-}
-export interface AccountQuotaStateResponse {
-  version: number
-  status: QuotaStatus
-  primaryMetricKey?: string
-  metrics: QuotaMetricResponse[]
-  fetchedAt?: string
-  error?: string
-  providerPayload: unknown
-}
-
-// ── MCP DTOs (mcp manifest §7) ───────────────────────────────────────────────
-export interface McpServerSpec {
-  transport: 'stdio' | 'http' | 'sse'
-  command: string | null
-  args: string[] | null
-  env: Record<string, string> | null
-  url: string | null
-}
-export interface McpServerDto {
-  id: string
-  name: string
-  description: string | null
-  spec: McpServerSpec
-  apps: Record<string, boolean>
-  homepage: string | null
-  docs: string | null
-  tags: string[]
-  created_at: number
-  updated_at: number
-  sort_order: number
-}
-export interface UnmanagedMcpEntryDto {
-  id: string
-  name: string
-  spec: McpServerSpec
-  found_in: string[]
-}
-export interface UpsertMcpServerRequest {
-  id?: string
-  name: string
-  description?: string | null
-  transport: 'stdio' | 'http' | 'sse'
-  command?: string | null
-  args?: string[] | null
-  env?: Record<string, string> | null
-  url?: string | null
-  apps?: Record<string, boolean>
-  homepage?: string | null
-  docs?: string | null
-  tags?: string[]
-}
-export interface ToggleMcpAppRequest {
-  server_id: string
-  agent_id: string
-  enabled: boolean
-}
-export interface ImportSelectedMcpRequest {
-  selections: Array<{ server_id: string; agent_ids: string[] }>
-}
-
-// ── Sync DTOs (sync manifest §7) ─────────────────────────────────────────────
-export interface WebdavStatus {
-  lastSyncAt?: number | null
-  lastError?: string | null
-  lastErrorSource?: string | null
-  lastRemoteEtag?: string | null
-}
-export interface WebdavConfig {
-  enabled: boolean
-  baseUrl: string
-  username: string
-  remoteRoot: string
-  profile: string
-  autoSync: boolean
-  status: WebdavStatus
-}
-export interface RemoteInfo {
-  empty: boolean
-  deviceName?: string
-  createdAt?: number
-  version?: number
-  compatible: boolean
-}
-export interface DownloadResult {
-  status: string
-  needsRestart: boolean
-}
-export interface TestConnectionArgs {
-  config: WebdavConfig
-  password?: string
-  passwordTouched: boolean
-}
-export interface SaveConfigArgs {
-  config: WebdavConfig
-  password?: string
-  passwordTouched: boolean
-  syncPassword?: string
-  syncPasswordTouched: boolean
-}
-
-// ── Sessions DTOs (sessions context — read-only on-disk AI CLI history) ──────
-export type SessionToolDto = 'claude' | 'codex' | 'gemini'
-export interface SessionSummaryDto {
-  tool: SessionToolDto
-  sessionId: string
-  title?: string
-  summary?: string
-  projectDir?: string
-  createdAt?: number
-  lastActiveAt?: number
-  sourcePath: string
-  resumeCommand?: string
-  provider?: string
-  archived?: boolean
-}
-export interface SessionMessageDto {
-  role: 'user' | 'assistant' | 'tool' | 'system'
-  content: string
-  ts?: number
-}
-export interface ToolProbeDto {
-  tool: SessionToolDto
-  hasSessions: boolean
-  count: number
-  lastActiveAt?: number
-}
-export interface SessionPageDto {
-  items: SessionSummaryDto[]
-  total: number
-  offset: number
-}
-export interface CodexProviderCountDto {
-  provider: string
-  count: number
-}
-export interface CodexRepairPreviewDto {
-  available: boolean
-  dbPath?: string
-  currentProvider?: string
-  counts: CodexProviderCountDto[]
-  repairable: number
-  codexRunning: boolean
-}
-export interface CodexRepairRequestDto {
-  targetProvider: string
-  fromProviders?: string[]
-  rewriteRollout: boolean
-}
-export interface CodexRepairResultDto {
-  updatedThreads: number
-  userEventRows: number
-  cwdRows: number
-  globalStateKeys: number
-  changedRollouts: number
-  skippedRollouts: number
-  backupId: string
-}
-
-export interface CodexRepairProgressDto {
-  phase: 'scan' | 'backup' | 'rollout' | 'sqlite' | 'globalstate' | 'done'
-  percent: number
-  message: string
-  current?: number
-  total?: number
-}
-
-export interface SessionDeleteRequestDto {
-  tool: SessionToolDto
-  sourcePath: string
-  sessionId: string
-}
-export interface SessionDeleteOutcomeDto {
-  sourcePath: string
-  ok: boolean
-  error?: string
-}
+import type {
+  SettingsResponse,
+  AppDirs,
+  AppPathInfo,
+  AgentInfo,
+  ActiveDetectionResult,
+  TimeWindowDto,
+  TrendGranularityDto,
+} from './api/common'
+import type {
+  AccountResponse,
+  ImportAccountRequest,
+  ImportResultResponse,
+  CredentialValidationResult,
+  HealthSnapshot,
+  OAuthPending,
+  ImportedCredentialMaterial,
+  QuotaResponse,
+  QuotaRefreshResultResponse,
+  AccountQuotaStateResponse,
+} from './api/account'
+import type {
+  InstalledSkillDto,
+  SkillBackupEntryDto,
+  DiscoverableSkillDto,
+  SkillRepoDto,
+  UnmanagedSkillEntryDto,
+} from './api/skill'
+import type {
+  UsageSyncSummaryResponse,
+  UsageSummaryResponse,
+  UsageTrendPointResponse,
+  PlatformUsageBreakdownResponse,
+  UsageSyncStatusResponse,
+  ActivitySyncSummaryResponse,
+  ActivityTrendPointResponse,
+  BackupEntryDto,
+  LocalBackupConfigDto,
+} from './api/usage'
+import type {
+  McpServerDto,
+  McpServerSpec,
+  UnmanagedMcpEntryDto,
+  UpsertMcpServerRequest,
+  ToggleMcpAppRequest,
+  ImportSelectedMcpRequest,
+  WebdavConfig,
+  TestConnectionArgs,
+  SaveConfigArgs,
+  DownloadResult,
+  RemoteInfo,
+  ToolProbeDto,
+  SessionToolDto,
+  SessionPageDto,
+  SessionMessageDto,
+  SessionDeleteRequestDto,
+  SessionDeleteOutcomeDto,
+  CodexRepairPreviewDto,
+  CodexRepairRequestDto,
+  CodexRepairResultDto,
+  CodexRepairProgressDto,
+} from './api/integrations'
+import type {
+  WsStatus,
+  ProxyDto,
+  CreateProxyRequest,
+  UpdateProxyRequest,
+  ProxyImportSummary,
+  ProxyTestResultDto,
+  AccountBindingDto,
+  ApiProxyStatus,
+  ApiProxyKeyMeta,
+  AccountPoolHealthRow,
+  ProxyRequestRecord,
+  RouteComboDto,
+  RouteComboInputDto,
+  AccountGroupDto,
+  CreateAccountGroupRequest,
+  UpdateAccountGroupRequest,
+  AccountGroupMembershipDto,
+  AccountGroupBindingDto,
+  UpdateStatus,
+  ClientConfigClientInfo,
+  ClientConfigVersionInfo,
+  ClientConfigUpgradeResult,
+  ClientConfigClientId,
+  ClientConfigInstallReport,
+  ClientConfigProfileDto,
+  CreateClientConfigProfileDto,
+  UpdateClientConfigProfileDto,
+  ClientConfigDiffFile,
+  ClientConfigDraftInput,
+  ClientConfigFetchModelsInput,
+  ClientConfigSnapshotDto,
+  ClientConfigConnTest,
+} from './api/routing'
 
 export interface HxgApi {
   settings: {
@@ -823,326 +441,6 @@ export interface HxgApi {
     /** 订阅最大化态变化（切 max/restore 图标）。返回取消订阅。 */
     onMaximizeChanged(cb: (maximized: boolean) => void): () => void
   }
-}
-
-// ─── clientConfig DTO（与 main domain 同形）─────────────────────────────────
-export type ClientConfigClientId = 'claude' | 'codex' | 'gemini_cli' | 'opencode' | 'openclaw' | 'hermes'
-export type ClientConfigWriteMode = 'switch' | 'additive'
-export interface ClientConfigClientInfo {
-  clientId: ClientConfigClientId
-  displayName: string
-  detected: boolean
-  writeMode: ClientConfigWriteMode
-}
-export interface ClientConfigVersionInfo {
-  clientId: ClientConfigClientId
-  /** 已装版本（CLI `--version` 解析所得；未探到为 undefined）。 */
-  installedVersion?: string
-  /** 远程最新版（npm/PyPI/GitHub；离线/查不到为 undefined）。 */
-  latestVersion?: string
-  upgradable: boolean
-  /** 升级命令（仅 upgradable 时给出，供 tooltip 展示）。 */
-  upgradeCommand?: string
-  /** 安装命令（仅未安装时给出，供「复制手动安装命令」）。 */
-  installCommand?: string
-  /** 定位到 CLI 但 `--version` 报错退出（装了跑不起来）。 */
-  installedButBroken: boolean
-}
-export interface ClientConfigUpgradeResult {
-  ok: boolean
-  /** 失败时的诊断（命令输出末尾若干行）。 */
-  detail?: string
-  /** 升级后重新探测到的该客户端版本信息（UI 据此即时刷新徽章）。 */
-  version: ClientConfigVersionInfo
-}
-export interface ClientConfigInstallation {
-  path: string
-  version?: string
-  runnable: boolean
-  error?: string
-  /** 安装来源：nvm/homebrew/volta/pip/npm/... */
-  source: string
-  /** 是否为 PATH 默认（命令行实际命中、升级作用目标）。 */
-  isPathDefault: boolean
-}
-export interface ClientConfigInstallReport {
-  clientId: ClientConfigClientId
-  installs: ClientConfigInstallation[]
-  /** ≥2 处且（版本分歧或运行态混合）。 */
-  isConflict: boolean
-}
-export interface ClientConfigProfileDto {
-  id: string
-  clientId: ClientConfigClientId
-  name: string
-  source: 'local-proxy' | 'manual'
-  baseUrl: string
-  model?: string
-  settings?: Record<string, unknown>
-  isCurrent: boolean
-  enabled: boolean
-  isDefault: boolean
-  sortIndex: number
-  createdAt: number
-  updatedAt: number
-  notes?: string
-}
-export interface ClientConfigDiffFile {
-  file: string
-  before: string | null
-  after: string | null
-}
-export interface ClientConfigSnapshotDto {
-  id: string
-  clientId: ClientConfigClientId
-  action: string
-  tsMs: number
-  profileId?: string
-  files: Record<string, string | null>
-}
-export interface CreateClientConfigProfileDto {
-  clientId: ClientConfigClientId
-  name: string
-  source: 'local-proxy' | 'manual'
-  baseUrl: string
-  model?: string
-  settings?: Record<string, unknown>
-  apiKey?: string
-  keyRef?: string
-  notes?: string
-}
-export interface UpdateClientConfigProfileDto {
-  name?: string
-  baseUrl?: string
-  model?: string | null
-  settings?: Record<string, unknown> | null
-  apiKey?: string
-  notes?: string | null
-}
-/** 配置预览草稿入参（表单值,不存档）。 */
-export interface ClientConfigDraftInput {
-  clientId: ClientConfigClientId
-  name: string
-  baseUrl: string
-  apiKey?: string
-  model?: string
-  settings?: Record<string, unknown>
-}
-/** 拉取模型列表入参:apiKey 为空且给 profileId 时由后端解出已存档的 key。 */
-export interface ClientConfigFetchModelsInput {
-  clientId: ClientConfigClientId
-  baseUrl: string
-  apiKey?: string
-  profileId?: string
-  /** 「完整 URL」开关：true=原样用 baseUrl（不补 /v1）；缺省=启发式。与表单一致。 */
-  fullUrl?: boolean
-}
-export interface ClientConfigConnTest {
-  ok: boolean
-  status?: number
-  message?: string
-}
-
-export interface WsStatus {
-  running: boolean
-  port?: number
-  connectionCount: number
-}
-
-// 单条反代请求日志记录（G3）——与 main 的 ProxyRequestRecord 保持同形。
-export interface ProxyRequestRecord {
-  seq: number
-  tsMs: number
-  method: string
-  path: string
-  format: string
-  platform?: string
-  action: string
-  stream: boolean
-  status: number
-  ok: boolean
-  durationMs: number
-  attempts: number
-  accountId?: string
-  clientKeyId?: string
-  inputTokens?: number
-  outputTokens?: number
-  errorMessage?: string
-}
-
-// apiProxy 服务状态（与 main/contexts/apiProxy/application/api-proxy-service.ts
-// 的 ApiProxyStatus 保持同形：state + 可选 port）。
-export type ApiProxyState = 'stopped' | 'running' | 'failed'
-export interface ApiProxyStatus {
-  state: ApiProxyState
-  port?: number
-}
-
-// 自动更新状态（G9）：主进程 autoUpdater 事件投影。
-export type UpdateState =
-  | 'idle'
-  | 'checking'
-  | 'available'
-  | 'not-available'
-  | 'downloading'
-  | 'downloaded'
-  | 'error'
-export interface UpdateStatus {
-  state: UpdateState
-  /** 可用 / 已下载的目标版本号。 */
-  version?: string
-  /** 升级前的当前版本（available 起一并带上，供「a → b」对比展示）。 */
-  currentVersion?: string
-  /** 发布说明（已规整为纯文本；可能多段），供弹窗展示更新内容。 */
-  releaseNotes?: string
-  /** 发布名称/标题（部分上游提供）。 */
-  releaseName?: string
-  /** downloading 时的进度百分比（0–100）。 */
-  percent?: number
-  /** downloading 时已下载字节数。 */
-  transferred?: number
-  /** downloading 时总字节数。 */
-  total?: number
-  /** downloading 时下载速率（字节/秒）。 */
-  bytesPerSecond?: number
-  /** downloaded 且需手动安装（mac 未签名:已下载 dmg，提示用户拖入 Applications，而非自动重启安装）。 */
-  manualInstall?: boolean
-  /** error 时的错误信息。 */
-  error?: string
-}
-
-// 账号池健康行（IPC 返回）：合并账号 meta + 运行态快照。
-export interface AccountPoolHealthRow {
-  accountId: string
-  email: string
-  status?: string
-  runtimeState: 'available' | 'cooldown' | 'quota_exhausted' | 'suspended'
-  failureCount: number
-  cooldownUntilMs?: number
-  quotaExhaustedAtMs?: number
-  /** quota_exhausted 恢复时间戳（ms）：由服务端按配置值计算，前端直接展示。 */
-  quotaResetsAtMs?: number
-}
-
-// 客户端 Key 元信息（不含明文/密文）。
-export interface ApiProxyKeyMeta {
-  id: string
-  name: string
-  keyPrefix: string
-  isActive: boolean
-  createdAt: string
-}
-
-// ── 路由组合 DTO（命名的跨供应商降级链）─────────────────────────────────────────
-/** 组合的一跳：别名前缀模型串（如 kr/claude-sonnet-4.5）+ 是否启用（缺省启用）。 */
-export interface ComboStepDto {
-  model: string
-  enabled?: boolean
-}
-export interface RouteComboDto {
-  id: string
-  name: string
-  description?: string
-  steps: ComboStepDto[]
-  strategy: 'fallback'
-  enabled: boolean
-}
-/** 新建/更新组合入参（id/时间戳由后端生成）。 */
-export interface RouteComboInputDto {
-  name: string
-  description?: string
-  steps: ComboStepDto[]
-  enabled?: boolean
-}
-
-// ── Proxy DTOs (proxy context — outbound proxy IP management) ─────────────────
-export type ProxyProtocolDto = 'http' | 'https' | 'socks5'
-export type ProxyStatusDto = 'unknown' | 'ok' | 'failed'
-
-/** A proxy as seen by the renderer — never carries the plaintext password. */
-export interface ProxyDto {
-  id: string
-  label?: string
-  protocol: ProxyProtocolDto
-  host: string
-  port: number
-  username?: string
-  passwordSet: boolean
-  status: ProxyStatusDto
-  lastEgressIp?: string
-  lastLatencyMs?: number
-  lastCheckedAt?: string
-  lastError?: string
-  tags: string[]
-  displayUrl: string
-  boundAccountCount: number
-  createdAt: string
-}
-export interface AccountBindingDto {
-  accountId: string
-  proxyId?: string
-}
-export interface ProxyImportSummary {
-  imported: number
-  skipped: number
-  failed: Array<{ lineNumber: number; raw: string; error: string }>
-}
-export interface ProxyTestResultDto {
-  proxyId: string
-  status: 'ok' | 'failed'
-  egressIp?: string
-  latencyMs?: number
-  error?: string
-  checkedAt: string
-}
-export interface CreateProxyRequest {
-  label?: string
-  protocol: ProxyProtocolDto
-  host: string
-  port: number
-  username?: string
-  password?: string
-  tags?: string[]
-}
-export interface UpdateProxyRequest {
-  label?: string
-  protocol?: ProxyProtocolDto
-  host?: string
-  port?: number
-  username?: string
-  password?: string | null
-  tags?: string[]
-}
-
-// ── AccountGroup DTOs (account-group context) ────────────────────────────────
-export interface AccountGroupBindingDto {
-  groupId: string
-  proxyId?: string
-}
-export interface AccountGroupDto {
-  id: string
-  name: string
-  color?: string
-  description?: string
-  memberCount: number
-  proxyBinding?: AccountGroupBindingDto
-  createdAt: string
-  updatedAt: string
-}
-export interface AccountGroupMembershipDto {
-  groupId: string
-  accountId: string
-  createdAt: string
-}
-export interface CreateAccountGroupRequest {
-  name: string
-  color?: string
-  description?: string
-}
-export interface UpdateAccountGroupRequest {
-  name?: string
-  color?: string | null
-  description?: string | null
 }
 
 declare global {

@@ -19,25 +19,25 @@ export type ProxyStatus = 'unknown' | 'ok' | 'failed'
 /** Connectivity probe result written back after a test. */
 export interface ProxyCheckResult {
   status: Exclude<ProxyStatus, 'unknown'>
-  egressIp?: string
-  latencyMs?: number
-  error?: string
+  egressIp?: string | undefined
+  latencyMs?: number | undefined
+  error?: string | undefined
   checkedAt: Date
 }
 
 /** A parsed/persisted proxy. `password` is plaintext and present only in memory. */
 export interface Proxy {
   id: string
-  label?: string
+  label?: string | undefined
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
-  password?: string
+  username?: string | undefined
+  password?: string | undefined
   status: ProxyStatus
-  lastEgressIp?: string
-  lastLatencyMs?: number
-  lastCheckedAt?: Date
+  lastEgressIp?: string | undefined
+  lastLatencyMs?: number | undefined
+  lastCheckedAt?: Date | undefined
   tags: string[]
   createdAt: Date
 }
@@ -45,7 +45,7 @@ export interface Proxy {
 /** account → proxy. A bound account routes outbound traffic through proxyId. */
 export interface AccountProxyBinding {
   accountId: string
-  proxyId?: string
+  proxyId?: string | undefined
   createdAt: Date
 }
 
@@ -54,7 +54,7 @@ export function proxyDedupeKey(p: {
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
+  username?: string | undefined
 }): string {
   return `${p.protocol}://${p.username ?? ''}@${p.host}:${p.port}`
 }
@@ -68,8 +68,8 @@ export function proxyUrl(p: {
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
-  password?: string
+  username?: string | undefined
+  password?: string | undefined
 }): string {
   const auth =
     p.username !== undefined && p.username !== ''
@@ -83,7 +83,7 @@ export function redactProxyUrl(p: {
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
+  username?: string | undefined
 }): string {
   const auth = p.username !== undefined && p.username !== '' ? `${p.username}:***@` : ''
   return `${p.protocol}://${auth}${p.host}:${p.port}`

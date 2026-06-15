@@ -35,9 +35,9 @@ export type FetchImpl = (url: string, init: RequestInit) => Promise<Response>
 
 export interface KiroTokenResponse {
   accessToken: string
-  refreshToken?: string
-  expiresAt?: Date
-  profileArn?: string
+  refreshToken?: string | undefined
+  expiresAt?: Date | undefined
+  profileArn?: string | undefined
 }
 
 export type KiroRefreshInput =
@@ -48,7 +48,7 @@ export interface KiroUsageLimitsInput {
   accessToken: string
   authMethod: KiroAuthMethod
   region: string
-  profileArn?: string
+  profileArn?: string | undefined
 }
 
 /**
@@ -230,7 +230,7 @@ function usageLimitsHeaders(input: KiroUsageLimitsInput): Record<string, string>
  */
 export async function refreshKiroToken(
   input: KiroRefreshInput,
-  opts: { fetchImpl?: FetchImpl } = {},
+  opts: { fetchImpl?: FetchImpl | undefined } = {},
 ): Promise<KiroTokenResponse> {
   const region = normalizeRegion(input.region)
   const doFetch = opts.fetchImpl ?? defaultFetch
@@ -282,7 +282,7 @@ export async function refreshKiroToken(
 /** GET getUsageLimits. Returns the parsed JSON body (raw usage payload). */
 export async function fetchKiroUsageLimits(
   input: KiroUsageLimitsInput,
-  opts: { fetchImpl?: FetchImpl } = {},
+  opts: { fetchImpl?: FetchImpl | undefined } = {},
 ): Promise<unknown> {
   const region = normalizeRegion(input.region)
   const doFetch = opts.fetchImpl ?? defaultFetch
@@ -350,7 +350,7 @@ export interface FetchAvailableModelsInput {
  */
 export async function fetchAvailableModels(
   input: FetchAvailableModelsInput,
-  opts: { fetchImpl?: FetchImpl } = {},
+  opts: { fetchImpl?: FetchImpl | undefined } = {},
 ): Promise<KiroModelInfo[]> {
   const region = normalizeRegion(input.region)
   const doFetch = opts.fetchImpl ?? defaultFetch

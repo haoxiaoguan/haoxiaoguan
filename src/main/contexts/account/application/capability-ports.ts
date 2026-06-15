@@ -39,14 +39,14 @@ export interface QuotaFetchResult {
   freshness: 'fresh' | 'stale' | 'unknown'
   fetched_at: string
   models: QuotaFetchModel[]
-  error?: string
+  error?: string | undefined
 }
 
 // HealthSnapshot — wire shape snake_case.
 export interface HealthSnapshot {
   account_id: string
   validation: CredentialValidationResult
-  quota?: QuotaFetchResult
+  quota?: QuotaFetchResult | undefined
   checked_at: string
 }
 

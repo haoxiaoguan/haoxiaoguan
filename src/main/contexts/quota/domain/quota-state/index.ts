@@ -84,7 +84,7 @@ export function fromFetchResultForPlatform(
     !isJsonNull(result.providerPayload) &&
     !isEmptyObject(result.providerPayload)
 
-  let state = usePayload
+  const state = usePayload
     ? fromAccountProfile(platform, result.providerPayload, credentialRawMetadata) ??
       AccountQuotaState.fromFetchResult(result)
     : AccountQuotaState.fromFetchResult(result)

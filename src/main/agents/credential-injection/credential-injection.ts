@@ -6,8 +6,8 @@
 
 export interface DecryptedCredential {
   token: string
-  refreshToken?: string
-  metadata?: string
+  refreshToken?: string | undefined
+  metadata?: string | undefined
 }
 
 export interface CredentialInjection {

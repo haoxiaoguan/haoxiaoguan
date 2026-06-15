@@ -22,19 +22,19 @@ export interface SkillMetadata {
 
 export interface DiscoverableSkill {
   name: string
-  description?: string
+  description?: string | undefined
   directory: string
   repo_owner: string
   repo_name: string
   repo_branch: string
-  readme_url?: string
-  metadata?: SkillMetadata
+  readme_url?: string | undefined
+  metadata?: SkillMetadata | undefined
 }
 
 export interface UnmanagedSkillEntry {
   dir_name: string
   path: string
-  description?: string
+  description?: string | undefined
 }
 
 export class InstalledSkill {
@@ -64,18 +64,18 @@ export class InstalledSkill {
   static create(params: {
     id: string
     name: string
-    description?: string
+    description?: string | undefined
     directory: string
-    repo_owner?: string
-    repo_name?: string
-    repo_branch?: string
-    readme_url?: string
+    repo_owner?: string | undefined
+    repo_name?: string | undefined
+    repo_branch?: string | undefined
+    readme_url?: string | undefined
     apps: Record<string, boolean>
     installed_at: number
     updated_at: number
-    content_hash?: string
+    content_hash?: string | undefined
     ssot_path: string
-    storage_location?: StorageLocation
+    storage_location?: StorageLocation | undefined
   }): InstalledSkill {
     return new InstalledSkill(
       params.id,

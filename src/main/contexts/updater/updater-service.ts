@@ -138,8 +138,8 @@ export class UpdaterService {
       this.meta = {
         version: info.version,
         currentVersion: app.getVersion(),
-        releaseNotes: formatReleaseNotes(info.releaseNotes),
-        releaseName: info.releaseName ?? undefined,
+        releaseNotes: formatReleaseNotes(info.releaseNotes) as string,
+        releaseName: (info.releaseName ?? undefined) as string,
       }
       this.emit({ state: 'available', ...this.meta })
       // mac:autoDownload 已关，由我方下载 dmg（带进度），完成后 install 时打开供拖入安装。

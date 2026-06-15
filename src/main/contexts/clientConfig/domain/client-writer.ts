@@ -60,7 +60,7 @@ export interface ClientConfigWriter {
    * 可选：写盘前后的进程生命周期钩子（仅 Codex 桌面 App 挂载：停→写→启）。
    * 由 application 层 applier 在 apply/clear 落盘时包裹调用。
    */
-  readonly lifecycle?: WriteLifecycle
+  readonly lifecycle?: WriteLifecycle | undefined
   /** 本写入器管理的配置文件绝对路径（≥1）。 */
   configFiles(): string[]
   /** 把接入档写入 live → 新内容（只动自己的字段，保留用户其余配置）。损坏抛 ClientConfigCorruptError。 */

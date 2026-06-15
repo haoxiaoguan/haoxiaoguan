@@ -41,9 +41,9 @@ export interface QuotaFetchResult {
   /** provider raw quota response; per-platform parsers extract metrics from it. */
   providerPayload: JsonValue
   /** new token captured during refresh; persisted by the app service, not sent to UI. */
-  updatedCredential?: Credential
+  updatedCredential?: Credential | undefined
   /** human-readable error when outcome is non-success. */
-  error?: string
+  error?: string | undefined
 }
 
 /** Build a QuotaFetchResult representing an Unsupported platform. */
@@ -66,7 +66,7 @@ export interface OAuthPending {
   pendingId: string
   authorizeUrl: string
   redirectPath: string
-  boundPort?: number
+  boundPort?: number | undefined
   state: string
   codeVerifier: string
 }
@@ -76,10 +76,10 @@ export interface ImportedCredentialMaterial {
   provider: PlatformId
   email: string
   accessToken: string
-  refreshToken?: string
-  expiresAt?: Date
+  refreshToken?: string | undefined
+  expiresAt?: Date | undefined
   source: ImportSource
-  rawMetadata?: JsonValue
+  rawMetadata?: JsonValue | undefined
 }
 
 // Credential validation result. checkedAt is always populated.
@@ -93,7 +93,7 @@ export interface CredentialValidationResult {
 // IDE launch hint passed to a credential injector.
 export interface LaunchOptions {
   launchOnSwitch: boolean
-  executableOverride?: string
+  executableOverride?: string | undefined
 }
 
 export const DEFAULT_LAUNCH_OPTIONS: LaunchOptions = {

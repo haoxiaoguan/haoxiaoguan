@@ -35,9 +35,13 @@ test-results/
 playwright-report/
 tmp
 
+# Test coverage
+coverage/
+
 # Brainstorm visual companion scratch
 .superpowers/
 # npm lock — project uses pnpm; npm install corrupts node_modules
 package-lock.json
 # superpowers 本地开发产物(brainstorm/plan/spec),不入库
 docs/superpowers/
+.cursor/

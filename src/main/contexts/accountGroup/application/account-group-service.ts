@@ -20,17 +20,17 @@ import type { MikroOrmAccountGroupRepository } from '../infrastructure/mikro-orm
 export interface AccountGroupDto {
   id: string
   name: string
-  color?: string
-  description?: string
+  color?: string | undefined
+  description?: string | undefined
   memberCount: number
-  proxyBinding?: AccountGroupBindingDto
+  proxyBinding?: AccountGroupBindingDto | undefined
   createdAt: string
   updatedAt: string
 }
 
 export interface AccountGroupBindingDto {
   groupId: string
-  proxyId?: string
+  proxyId?: string | undefined
 }
 
 export interface AccountGroupMembershipDto {
@@ -182,7 +182,7 @@ export class AccountGroupService {
   // --- mapping ---
 
   private toDto(
-    group: { id: string; name: string; color?: string; description?: string; createdAt: Date; updatedAt: Date },
+    group: { id: string; name: string; color?: string | undefined; description?: string | undefined; createdAt: Date; updatedAt: Date },
     memberCount: number,
     binding: AccountGroupBindingDto | undefined,
   ): AccountGroupDto {

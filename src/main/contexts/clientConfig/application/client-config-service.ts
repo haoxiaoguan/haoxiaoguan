@@ -81,8 +81,8 @@ export class ClientConfigService {
   private readonly registry: WriterRegistry
   private readonly applier: ClientConfigApplier
   private readonly snapshots: ConfigSnapshotStore
-  private readonly localProxy?: LocalProxyPort
-  private readonly relayProvisioning?: RelayProvisioningPort
+  private readonly localProxy?: LocalProxyPort | undefined
+  private readonly relayProvisioning?: RelayProvisioningPort | undefined
   /** 读取某客户端「路由」开关:true=经号小管反代转发其第三方供应商(协议转换+账号池/IP),false=直连。
    *  Codex 语境下 true 亦表示真共存(原生+所选供应商);协议不匹配的供应商必须 true 才能用(硬门槛,UI 拦)。 */
   private readonly routingOn: (clientId: ClientId) => boolean

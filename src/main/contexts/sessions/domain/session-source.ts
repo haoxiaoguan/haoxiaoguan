@@ -2,8 +2,8 @@ import type { SessionMessage, SessionPage, SessionTool, ToolProbe } from './sess
 import type { ActivityCollectResult } from './log-event'
 
 export interface ScanOpts {
-  limit?: number
-  offset?: number
+  limit?: number | undefined
+  offset?: number | undefined
 }
 
 /** 单工具来源适配器。probe 廉价（仅 mtime）；scan 按 mtime 倒序分页解析。 */

@@ -215,7 +215,7 @@ export class GitHubCopilotOAuthCapability implements OAuthCapability {
 
   private async fetchCopilotDetails(
     token: string,
-  ): Promise<{ token?: string; plan?: string; chatEnabled?: boolean; expiresAt?: number }> {
+  ): Promise<{ token?: string | undefined; plan?: string | undefined; chatEnabled?: boolean | undefined; expiresAt?: number | undefined }> {
     try {
       const tokenResp = await fetch(this.copilotTokenEndpoint, {
         headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', Authorization: `Bearer ${token}` },

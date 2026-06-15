@@ -52,7 +52,7 @@ export interface KiroUserInputMessage {
   modelId?: string
   origin?: string
   images?: KiroImage[]
-  userInputMessageContext?: KiroUserInputMessageContext
+  userInputMessageContext?: KiroUserInputMessageContext | undefined
 }
 
 export interface KiroAssistantResponseMessage {

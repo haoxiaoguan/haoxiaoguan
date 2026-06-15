@@ -28,24 +28,24 @@ import { AccountProxyBindingEntity } from './account-proxy-binding.entity'
 const PROXY_AAD_PROVIDER = '__proxy__'
 
 export interface CreateProxyInput {
-  label?: string
+  label?: string | undefined
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
-  password?: string
+  username?: string | undefined
+  password?: string | undefined
   tags: string[]
 }
 
 export interface UpdateProxyInput {
-  label?: string
-  protocol?: ProxyProtocol
-  host?: string
-  port?: number
-  username?: string
+  label?: string | undefined
+  protocol?: ProxyProtocol | undefined
+  host?: string | undefined
+  port?: number | undefined
+  username?: string | undefined
   /** undefined = leave unchanged; '' or a string = set/replace; null = clear. */
-  password?: string | null
-  tags?: string[]
+  password?: string | null | undefined
+  tags?: string[] | undefined
 }
 
 export class MikroOrmProxyRepository {

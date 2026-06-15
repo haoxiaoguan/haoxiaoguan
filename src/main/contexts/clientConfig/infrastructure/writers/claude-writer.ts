@@ -25,8 +25,8 @@ const KEYS = [
 ] as const
 
 interface TierModel {
-  model?: string
-  name?: string
+  model?: string | undefined
+  name?: string | undefined
 }
 
 /** 从 settings.modelMap 读分级模型(各 tier 的 model/name 可空)。兼容旧版字符串值(仅 model)。 */

@@ -66,7 +66,7 @@ export interface KiroEndpoint {
  */
 export interface EndpointsForRegionOpts {
   /** 是否在端点列表中追加 CodeWhisperer 端点（首选，大写 ID）。默认 false。 */
-  enableCodeWhisperer?: boolean
+  enableCodeWhisperer?: boolean | undefined
 }
 
 /**

@@ -49,7 +49,7 @@ export class CodexWriter implements ClientConfigWriter {
   readonly writeMode = 'additive' as const
   // 桌面 App 停-写-启生命周期（container 注入）。运行中的 Codex App 会反写 config.toml，
   // 必须停 App→写→重启它才会采纳；其它客户端无此钩子。
-  readonly lifecycle?: WriteLifecycle
+  readonly lifecycle?: WriteLifecycle | undefined
   private readonly configPath: string
   private readonly catalogPath: string
   private readonly authPath: string

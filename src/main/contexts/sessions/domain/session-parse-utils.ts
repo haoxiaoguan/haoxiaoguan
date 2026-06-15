@@ -79,9 +79,9 @@ export function sanitizeSessionId(raw: string): string {
 
 /** 统一 title 派生：自定义标题 > 首条真实 user 消息 > 目录名 > sessionId（前两者截断 80）。 */
 export function deriveTitle(opts: {
-  customTitle?: string
-  firstUserText?: string
-  projectDir?: string
+  customTitle?: string | undefined
+  firstUserText?: string | undefined
+  projectDir?: string | undefined
   sessionId: string
 }): string {
   const custom = opts.customTitle?.trim()

@@ -4,13 +4,13 @@ import { KeyRateLimiter } from '../../../src/main/contexts/apiProxy/domain/key-r
 describe('KeyRateLimiter', () => {
   // ---- 基础：耗尽与 ok:false + retryAfterSec ----
   it('首次 tryAcquire 消耗 1 token，返回 ok:true', () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 3, refillPerMinute: 3, clock: () => now })
     expect(limiter.tryAcquire('k1')).toEqual({ ok: true })
   })
 
   it('连续 capacity 次 tryAcquire 均 ok:true，第 capacity+1 次返回 ok:false', () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 3, refillPerMinute: 60, clock: () => now })
     for (let i = 0; i < 3; i++) {
       expect(limiter.tryAcquire('k1').ok).toBe(true)
@@ -21,7 +21,7 @@ describe('KeyRateLimiter', () => {
   })
 
   it('耗尽后 retryAfterSec 大于 0', () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 1, refillPerMinute: 1, clock: () => now })
     limiter.tryAcquire('k1') // 消耗唯一 token
     const result = limiter.tryAcquire('k1')
@@ -58,7 +58,7 @@ describe('KeyRateLimiter', () => {
 
   // ---- 不同 key 独立桶 ----
   it('不同 keyId 各自独立桶，互不影响', () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 1, refillPerMinute: 1, clock: () => now })
     limiter.tryAcquire('keyA') // 消耗 keyA 的 token
     // keyB 独立，仍有 token
@@ -83,7 +83,7 @@ describe('KeyRateLimiter', () => {
   })
 
   it('capacity=1 refillPerMinute=60 → retryAfterSec 约为 1', () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 1, refillPerMinute: 60, clock: () => now })
     limiter.tryAcquire('k1')
     const result = limiter.tryAcquire('k1')

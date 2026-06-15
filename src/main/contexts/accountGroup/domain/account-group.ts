@@ -23,8 +23,8 @@ function byteLen(value: string): number {
 export interface AccountGroup {
   id: string
   name: string
-  color?: string
-  description?: string
+  color?: string | undefined
+  description?: string | undefined
   createdAt: Date
   updatedAt: Date
 }
@@ -43,7 +43,7 @@ export interface AccountGroupMembership {
  */
 export interface AccountGroupProxyBinding {
   groupId: string
-  proxyId?: string
+  proxyId?: string | undefined
   createdAt: Date
 }
 

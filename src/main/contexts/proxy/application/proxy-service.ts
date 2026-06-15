@@ -26,17 +26,17 @@ import type {
 /** A proxy as seen by the renderer — no plaintext password, ever. */
 export interface ProxyDto {
   id: string
-  label?: string
+  label?: string | undefined
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
+  username?: string | undefined
   passwordSet: boolean
   status: Proxy['status']
-  lastEgressIp?: string
-  lastLatencyMs?: number
-  lastCheckedAt?: string
-  lastError?: string
+  lastEgressIp?: string | undefined
+  lastLatencyMs?: number | undefined
+  lastCheckedAt?: string | undefined
+  lastError?: string | undefined
   tags: string[]
   displayUrl: string
   boundAccountCount: number
@@ -45,7 +45,7 @@ export interface ProxyDto {
 
 export interface AccountBindingDto {
   accountId: string
-  proxyId?: string
+  proxyId?: string | undefined
 }
 
 export interface ImportSummary {
@@ -57,9 +57,9 @@ export interface ImportSummary {
 export interface ProxyTestResultDto {
   proxyId: string
   status: 'ok' | 'failed'
-  egressIp?: string
-  latencyMs?: number
-  error?: string
+  egressIp?: string | undefined
+  latencyMs?: number | undefined
+  error?: string | undefined
   checkedAt: string
 }
 

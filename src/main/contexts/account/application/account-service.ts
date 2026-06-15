@@ -23,12 +23,12 @@ export interface ImportAccountInput {
   platform: PlatformId
   email: string
   token: string
-  refreshToken?: string
-  expiresAt?: Date
-  rawMetadata?: JsonValue
-  name?: string
+  refreshToken?: string | undefined
+  expiresAt?: Date | undefined
+  rawMetadata?: JsonValue | undefined
+  name?: string | undefined
   tags: string[]
-  notes?: string
+  notes?: string | undefined
 }
 
 /**
@@ -130,9 +130,9 @@ export class AccountApplicationService {
     accountId: string,
     input: {
       token: string
-      refreshToken?: string
-      expiresAt?: Date
-      rawMetadata?: JsonValue
+      refreshToken?: string | undefined
+      expiresAt?: Date | undefined
+      rawMetadata?: JsonValue | undefined
       /** New identifier the credential reports (email or platform identity). */
       identifier: string
     },

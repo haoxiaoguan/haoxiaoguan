@@ -38,16 +38,16 @@ import {
 /** Request shape for testConnection (camelCase top-level args from the frontend). */
 export interface TestConnectionArgs {
   config: WebdavConfig
-  password?: string
+  password?: string | undefined
   passwordTouched: boolean
 }
 
 /** Request shape for saveConfig (camelCase top-level args from the frontend). */
 export interface SaveConfigArgs {
   config: WebdavConfig
-  password?: string
+  password?: string | undefined
   passwordTouched: boolean
-  syncPassword?: string
+  syncPassword?: string | undefined
   syncPasswordTouched: boolean
 }
 

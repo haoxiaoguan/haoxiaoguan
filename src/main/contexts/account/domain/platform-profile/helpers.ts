@@ -404,11 +404,11 @@ export type PayloadCell = { value: JsonValue }
 export function makeProfile(fields: {
   identityKey: string
   displayIdentifier: string
-  loginProvider?: string
-  planName?: string
-  planTier?: string
-  status?: string
-  statusReason?: string
+  loginProvider?: string | undefined
+  planName?: string | undefined
+  planTier?: string | undefined
+  status?: string | undefined
+  statusReason?: string | undefined
   profilePayload: JsonValue
 }): PlatformAccountProfile {
   return new PlatformAccountProfile(fields)

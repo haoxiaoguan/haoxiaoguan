@@ -70,7 +70,7 @@ export class ProxyDispatcherFactory {
         type: 5,
         host: proxy.host,
         port: proxy.port,
-        ...(hasAuth ? { userId: proxy.username, password: proxy.password ?? '' } : {}),
+        ...(hasAuth ? { userId: proxy.username as string, password: proxy.password ?? '' } : {}),
       },
       { connections: 16, connect: { timeout: KEEPALIVE_TIMEOUT_MS } },
     ) as unknown as Dispatcher

@@ -21,8 +21,8 @@ import { AccountGroupProxyBindingEntity } from './account-group-proxy-binding.en
 
 export interface CreateAccountGroupInput {
   name: string
-  color?: string
-  description?: string
+  color?: string | undefined
+  description?: string | undefined
 }
 
 export interface UpdateAccountGroupInput {

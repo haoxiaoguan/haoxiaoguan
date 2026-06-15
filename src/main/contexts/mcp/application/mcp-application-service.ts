@@ -27,18 +27,18 @@ import type { McpSync } from '../../../agents/domain/mcp-sync'
 import type { UnmanagedMcpEntryDto } from '../domain/mcp-server'
 
 export interface UpsertMcpServerRequest {
-  id?: string
+  id?: string | undefined
   name: string
-  description?: string | null
+  description?: string | null | undefined
   transport: 'stdio' | 'http' | 'sse'
-  command?: string | null
-  args?: string[] | null
-  env?: Record<string, string> | null
-  url?: string | null
-  apps?: Record<string, boolean>
-  homepage?: string | null
-  docs?: string | null
-  tags?: string[]
+  command?: string | null | undefined
+  args?: string[] | null | undefined
+  env?: Record<string, string> | null | undefined
+  url?: string | null | undefined
+  apps?: Record<string, boolean> | undefined
+  homepage?: string | null | undefined
+  docs?: string | null | undefined
+  tags?: string[] | undefined
 }
 
 export interface ToggleMcpAppRequest {

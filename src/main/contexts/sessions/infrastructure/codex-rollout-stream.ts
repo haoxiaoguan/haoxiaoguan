@@ -16,8 +16,8 @@ const USER_EVENT_RE = /"user_message"|"user_input"/
 
 export interface StreamRolloutResult {
   rewriteNeeded: boolean
-  threadId?: string
-  cwd?: string
+  threadId?: string | undefined
+  cwd?: string | undefined
   hasUserEvent: boolean
   originalSessionMetaLines: string[]
   sessionMetaCount: number

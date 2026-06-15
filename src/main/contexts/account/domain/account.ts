@@ -17,18 +17,18 @@ export interface AccountReconstructFields {
   email: string
   identityKey: string
   displayIdentifier: string
-  name?: AccountName
-  loginProvider?: string
-  planName?: string
-  planTier?: string
-  status?: string
-  statusReason?: string
+  name?: AccountName | undefined
+  loginProvider?: string | undefined
+  planName?: string | undefined
+  planTier?: string | undefined
+  status?: string | undefined
+  statusReason?: string | undefined
   profilePayload: JsonValue
   tags: Tags
-  notes?: Notes
+  notes?: Notes | undefined
   isActive: boolean
   createdAt: Date
-  lastUsedAt?: Date
+  lastUsedAt?: Date | undefined
 }
 
 function isPlainObject(value: JsonValue): value is { [key: string]: JsonValue } {
@@ -65,18 +65,18 @@ export class Account {
   private _email: string
   private _identityKey: string
   private _displayIdentifier: string
-  private _name?: AccountName
-  private _loginProvider?: string
-  private _planName?: string
-  private _planTier?: string
-  private _status?: string
-  private _statusReason?: string
+  private _name?: AccountName | undefined
+  private _loginProvider?: string | undefined
+  private _planName?: string | undefined
+  private _planTier?: string | undefined
+  private _status?: string | undefined
+  private _statusReason?: string | undefined
   private _profilePayload: JsonValue
   private readonly _tags: Tags
-  private _notes?: Notes
+  private _notes?: Notes | undefined
   private _isActive: boolean
   private readonly _createdAt: Date
-  private _lastUsedAt?: Date
+  private _lastUsedAt?: Date | undefined
 
   private constructor(fields: {
     id: string
@@ -84,18 +84,18 @@ export class Account {
     email: string
     identityKey: string
     displayIdentifier: string
-    name?: AccountName
-    loginProvider?: string
-    planName?: string
-    planTier?: string
-    status?: string
-    statusReason?: string
+    name?: AccountName | undefined
+    loginProvider?: string | undefined
+    planName?: string | undefined
+    planTier?: string | undefined
+    status?: string | undefined
+    statusReason?: string | undefined
     profilePayload: JsonValue
     tags: Tags
-    notes?: Notes
+    notes?: Notes | undefined
     isActive: boolean
     createdAt: Date
-    lastUsedAt?: Date
+    lastUsedAt?: Date | undefined
   }) {
     this._id = fields.id
     this._agentId = fields.agentId

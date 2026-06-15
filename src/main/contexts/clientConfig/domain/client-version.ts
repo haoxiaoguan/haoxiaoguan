@@ -5,15 +5,15 @@ import type { ClientId } from './client-profile'
 export interface ClientVersionInfo {
   clientId: ClientId
   /** 已装版本（CLI `--version` 解析所得；未安装/未探到则 undefined）。 */
-  installedVersion?: string
+  installedVersion?: string | undefined
   /** 远程最新版（npm/PyPI/GitHub；离线或查不到则 undefined）。 */
-  latestVersion?: string
+  latestVersion?: string | undefined
   /** installedVersion < latestVersion。 */
   upgradable: boolean
   /** 升级命令（仅 upgradable 时给出，供 UI tooltip 展示，不自动执行）。 */
-  upgradeCommand?: string
+  upgradeCommand?: string | undefined
   /** 安装命令（仅未安装时给出，供 UI「复制手动安装命令」）。 */
-  installCommand?: string
+  installCommand?: string | undefined
   /** 定位到 CLI 但 `--version` 报错退出（装了跑不起来，如 Node 版本不达标）。 */
   installedButBroken: boolean
 }
@@ -23,11 +23,11 @@ export interface ClientInstallation {
   /** 候选入口路径（PATH 里实际看到的那个，未解析软链）。 */
   path: string
   /** `--version` 成功解析出的版本号。 */
-  version?: string
+  version?: string | undefined
   /** `--version` 是否 exit 0（装了且当前环境能跑）。 */
   runnable: boolean
   /** 跑不起来时的诊断末尾若干行。 */
-  error?: string
+  error?: string | undefined
   /** 由路径前缀推断的安装来源（nvm/homebrew/volta/pip/...）。 */
   source: string
   /** 是否为 PATH 解析到的那处（命令行默认、也是升级作用的目标）。 */

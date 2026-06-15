@@ -30,7 +30,7 @@ export interface OAuthPending {
   pendingId: string
   authorizeUrl: string
   redirectPath: string
-  boundPort?: number
+  boundPort?: number | undefined
   /** internal — persisted, never sent to the frontend */
   state: string
   /** internal — persisted, never sent to the frontend */
@@ -66,10 +66,10 @@ export interface ImportedCredentialMaterial {
   provider: PlatformId
   email: string
   accessToken: string
-  refreshToken?: string
-  expiresAt?: Date
+  refreshToken?: string | undefined
+  expiresAt?: Date | undefined
   source: ImportSource
-  rawMetadata?: JsonValue
+  rawMetadata?: JsonValue | undefined
 }
 
 /** Wire shape (snake_case; optional fields omitted when undefined). */
@@ -116,8 +116,8 @@ export type ValidationState =
 export interface CredentialValidationResult {
   state: ValidationState
   checkedAt: Date
-  details?: string
-  expiresAt?: Date
+  details?: string | undefined
+  expiresAt?: Date | undefined
 }
 
 /** Wire shape (snake_case; optional fields omitted when undefined). */

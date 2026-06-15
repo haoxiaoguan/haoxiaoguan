@@ -37,8 +37,8 @@ import {
 export interface QuotaRefreshResult {
   accountId: string
   success: boolean
-  quota?: QuotaInfo
-  error?: string
+  quota?: QuotaInfo | undefined
+  error?: string | undefined
 }
 
 /** The 12 platforms HttpLiveQuotaFetcher can fetch (the supported list when all

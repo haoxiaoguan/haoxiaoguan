@@ -1,0 +1,11 @@
+node_modules
+out
+dist
+release
+build
+tmp
+test-results
+coverage
+pnpm-lock.yaml
+LICENSE
+*.jsc

@@ -10,6 +10,6 @@ export interface SwitchHistoryEntry {
   agentId: PlatformId
   triggerType: TriggerType
   success: boolean
-  errorMessage?: string
+  errorMessage?: string | undefined
   switchedAt: Date
 }

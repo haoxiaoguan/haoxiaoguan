@@ -78,11 +78,11 @@ function extractAuthIdFromAccessToken(accessToken: string): string | undefined {
 interface CursorMetaInput {
   email: string
   accessToken: string
-  refreshToken?: string
-  authId?: string
-  membershipType?: string
-  subscriptionStatus?: string
-  signUpType?: string
+  refreshToken?: string | undefined
+  authId?: string | undefined
+  membershipType?: string | undefined
+  subscriptionStatus?: string | undefined
+  signUpType?: string | undefined
 }
 
 function buildCursorRawMetadata(input: CursorMetaInput): JsonValue {

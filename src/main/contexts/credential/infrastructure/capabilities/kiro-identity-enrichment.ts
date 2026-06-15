@@ -32,9 +32,9 @@ interface RawMeta {
 
 export interface EnrichOptions {
   /** When false (default), a failed live identity fetch aborts the import. */
-  allowStale?: boolean
+  allowStale?: boolean | undefined
   /** Injectable transport for tests. */
-  fetchImpl?: FetchImpl
+  fetchImpl?: FetchImpl | undefined
 }
 
 /**
@@ -87,9 +87,9 @@ export async function enrichKiroMaterial(
 interface LiveIdentity {
   usage: JsonValue
   accessToken: string
-  refreshToken?: string
-  expiresAt?: Date
-  profileArn?: string
+  refreshToken?: string | undefined
+  expiresAt?: Date | undefined
+  profileArn?: string | undefined
 }
 
 async function fetchLiveIdentity(

@@ -818,7 +818,6 @@ export function installAccountsMock(): void {
     },
   };
 
-  // eslint-disable-next-line no-console
   console.info('[mock-invoke] dev mock installed');
 }
 

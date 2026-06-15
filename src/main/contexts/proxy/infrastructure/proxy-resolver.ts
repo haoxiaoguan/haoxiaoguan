@@ -32,7 +32,7 @@ export interface AccountGroupResolverStore {
   /** Groups whose membership contains the account (a single group in practice). */
   listGroupsForAccount(accountId: string): Promise<Array<{ id: string }>>
   /** Per-account-group → proxy binding (or null). */
-  getProxyBinding(groupId: string): Promise<{ proxyId?: string } | null>
+  getProxyBinding(groupId: string): Promise<{ proxyId?: string | undefined } | null>
 }
 
 export class ProxyResolver {

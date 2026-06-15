@@ -223,7 +223,6 @@ describe('chatStream retryDelayMs jitter', () => {
 
   async function drainStream(iterable: AsyncIterable<CanonicalStreamEvent>) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of iterable) { /* drain */ }
     } catch { /* expected */ }
   }

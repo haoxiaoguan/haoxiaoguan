@@ -11,9 +11,9 @@ export interface RawLogEvent {
   /** 全局稳定去重键：session=文件路径；tool_call=记录 uuid/call_id 派生 */
   sourceKey: string
   /** tool_call 的工具名（统计用，可空） */
-  name?: string
+  name?: string | undefined
   /** 求和量（缺省视为 1）：code_edit 携带改动行数 churn；session/tool_call 不带 */
-  amount?: number
+  amount?: number | undefined
 }
 
 export interface ActivityCollectResult {

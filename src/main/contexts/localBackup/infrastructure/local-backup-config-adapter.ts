@@ -16,7 +16,7 @@ export class LocalBackupConfigAdapter {
         typeof raw.intervalHours === 'number' ? raw.intervalHours : undefined,
       retainCount:
         typeof raw.retainCount === 'number' ? raw.retainCount : undefined,
-    })
+    } as unknown as Parameters<typeof LocalBackupConfig.fromJson>[0])
   }
 
   async saveConfig(config: LocalBackupConfig): Promise<void> {

@@ -77,7 +77,7 @@ export interface SystemProxyOpts {
 
 export class SystemProxyResolver {
   private readonly env: NodeJS.ProcessEnv
-  private readonly resolveOsProxy?: (targetUrl: string) => Promise<string | undefined>
+  private readonly resolveOsProxy?: ((targetUrl: string) => Promise<string | undefined>) | undefined
   private readonly clock: () => number
   private readonly ttl: number
   private cached: { url: string | undefined; at: number } | null = null

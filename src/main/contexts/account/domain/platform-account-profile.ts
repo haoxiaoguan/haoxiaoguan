@@ -15,11 +15,11 @@ export type JsonValue =
 export interface PlatformProfileFields {
   identityKey: string
   displayIdentifier: string
-  loginProvider?: string
-  planName?: string
-  planTier?: string
-  status?: string
-  statusReason?: string
+  loginProvider?: string | undefined
+  planName?: string | undefined
+  planTier?: string | undefined
+  status?: string | undefined
+  statusReason?: string | undefined
   profilePayload: JsonValue
 }
 
@@ -41,11 +41,11 @@ function isPlainObject(value: JsonValue): value is { [key: string]: JsonValue } 
 export class PlatformAccountProfile {
   identityKey: string
   displayIdentifier: string
-  loginProvider?: string
-  planName?: string
-  planTier?: string
-  status?: string
-  statusReason?: string
+  loginProvider?: string | undefined
+  planName?: string | undefined
+  planTier?: string | undefined
+  status?: string | undefined
+  statusReason?: string | undefined
   profilePayload: JsonValue
 
   constructor(fields: PlatformProfileFields) {

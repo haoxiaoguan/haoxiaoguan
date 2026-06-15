@@ -11,7 +11,7 @@ export interface PendingOAuth {
   state: string
   codeVerifier: string
   redirectPath: string
-  boundPort?: number
+  boundPort?: number | undefined
   createdAt: Date
   expiresAt: Date
 }

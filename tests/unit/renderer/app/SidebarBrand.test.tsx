@@ -19,8 +19,10 @@ describe('SidebarBrand', () => {
     expect(getByTestId('shell-sidebar-safe-area')).toBeInTheDocument();
   });
 
-  it('omits the macOS safe area on windows-like shells', () => {
-    const { queryByTestId } = render(<SidebarBrand shell="windows_like" />);
-    expect(queryByTestId('shell-sidebar-safe-area')).not.toBeInTheDocument();
+  it('also reserves the top spacer on windows-like shells (logo 下移对齐 + 拖拽区)', () => {
+    // 自 feat(window) logo 下移：Windows/Linux 无红绿灯，但保留同高顶部留白，
+    // 既与右侧 header 行对齐，又充当标题栏拖拽区（见 SidebarBrand 组件注释）。
+    const { getByTestId } = render(<SidebarBrand shell="windows_like" />);
+    expect(getByTestId('shell-sidebar-safe-area')).toBeInTheDocument();
   });
 });

@@ -18,15 +18,15 @@ export interface KiroAccountInfo {
   id: string
   email: string
   /** 'Github'/'Google' → 社交 profile ARN 兜底；其余 → BuilderId（resolveProfileArn 用）。 */
-  loginProvider?: string
+  loginProvider?: string | undefined
   /** 可能含 profileArn/region/machineId（与凭据 rawMetadata 同优先级解析）。 */
   profilePayload?: unknown
   /** 'SUSPENDED' 等持久化健康状态；用于候选过滤。 */
-  status?: string
+  status?: string | undefined
   /** 账号是否激活（isActive=false 的账号不进候选池）。 */
   isActive: boolean
   /** epoch ms，用于 LRU 选择。 */
-  lastUsedAt?: number
+  lastUsedAt?: number | undefined
 }
 
 /** 凭据库窄 port：按账号取解密凭据。 */

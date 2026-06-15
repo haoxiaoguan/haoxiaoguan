@@ -32,7 +32,7 @@ export interface CredentialStorePort {
 // ---------------------------------------------------------------------------
 export interface LaunchOptions {
   launchOnSwitch: boolean
-  executableOverride?: string
+  executableOverride?: string | undefined
 }
 
 export interface CredentialInjectionPort {

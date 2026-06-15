@@ -54,12 +54,12 @@ export class McpServer {
   static create(params: {
     id: string
     name: string
-    description?: string | null
+    description?: string | null | undefined
     spec: McpServerSpec
-    apps?: Record<string, boolean>
-    homepage?: string | null
-    docs?: string | null
-    tags?: string[]
+    apps?: Record<string, boolean> | undefined
+    homepage?: string | null | undefined
+    docs?: string | null | undefined
+    tags?: string[] | undefined
     sort_order?: number
     now: number
   }): McpServer {

@@ -104,7 +104,6 @@ export function useTrendSeries(
       cancelled = true
     }
     // refreshNonce intentionally included so callers can force a re-fetch
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, dimension, enabled, refreshNonce])
 
   return { points, total, loading }

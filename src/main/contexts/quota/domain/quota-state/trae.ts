@@ -13,10 +13,10 @@ import {
 } from './model'
 
 interface TraeUsageSummary {
-  label?: string
+  label?: string | undefined
   used: number
   total: number
-  resetAt?: Date
+  resetAt?: Date | undefined
 }
 
 export function stateFromProfile(

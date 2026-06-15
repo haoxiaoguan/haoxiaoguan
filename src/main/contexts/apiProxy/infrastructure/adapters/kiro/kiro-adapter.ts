@@ -78,7 +78,7 @@ interface PreparedCall {
   callCtx: KiroCallContext
   envelope: ReturnType<typeof buildConversationState>
   /** CodeWhisperer 大写内部模型 ID（仅 enableCodeWhisperer=true 且解析成功时有值）。 */
-  cwModelId?: string
+  cwModelId?: string | undefined
 }
 
 export class KiroAdapter implements PlatformUpstreamAdapter {

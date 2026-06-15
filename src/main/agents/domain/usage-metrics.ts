@@ -11,9 +11,9 @@ export interface UsageRecord {
   sourceKind: string
   sourcePath: string
   sourceEventId: string
-  sessionId?: string
+  sessionId?: string | undefined
   model: string
-  providerName?: string
+  providerName?: string | undefined
   /** Token counts are u64 in Rust; non-negative integers here. */
   inputTokens: number
   outputTokens: number

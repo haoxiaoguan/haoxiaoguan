@@ -32,36 +32,36 @@ export interface QuotaMetric {
   label: string
   kind: QuotaMetricKind
   unit: QuotaUnit
-  used?: number
-  total?: number
-  remaining?: number
-  percentUsed?: number
-  percentRemaining?: number
-  displayValue?: string
-  window?: QuotaWindow
-  resetAt?: Date
+  used?: number | undefined
+  total?: number | undefined
+  remaining?: number | undefined
+  percentUsed?: number | undefined
+  percentRemaining?: number | undefined
+  displayValue?: string | undefined
+  window?: QuotaWindow | undefined
+  resetAt?: Date | undefined
   status: QuotaStatus
 }
 
 export interface AccountQuotaSummary {
   accountId: string
   quotaStatus: QuotaStatus
-  primaryMetricKey?: string
-  primaryLabel?: string
-  primaryValue?: string
-  primaryPercent?: number
+  primaryMetricKey?: string | undefined
+  primaryLabel?: string | undefined
+  primaryValue?: string | undefined
+  primaryPercent?: number | undefined
   primaryUnit: QuotaUnit
-  resetAt?: Date
-  fetchedAt?: Date
+  resetAt?: Date | undefined
+  fetchedAt?: Date | undefined
 }
 
 export interface AccountQuotaStateFields {
   version: number
   status: QuotaStatus
-  primaryMetricKey?: string
+  primaryMetricKey?: string | undefined
   metrics: QuotaMetric[]
-  fetchedAt?: Date
-  error?: string
+  fetchedAt?: Date | undefined
+  error?: string | undefined
   providerPayload: JsonValue
 }
 
@@ -73,10 +73,10 @@ export interface AccountQuotaStateFields {
 export class AccountQuotaState {
   version: number
   status: QuotaStatus
-  primaryMetricKey?: string
+  primaryMetricKey?: string | undefined
   metrics: QuotaMetric[]
-  fetchedAt?: Date
-  error?: string
+  fetchedAt?: Date | undefined
+  error?: string | undefined
   providerPayload: JsonValue
 
   constructor(fields: AccountQuotaStateFields) {

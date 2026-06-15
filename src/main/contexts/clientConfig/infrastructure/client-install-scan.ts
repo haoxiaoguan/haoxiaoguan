@@ -89,7 +89,7 @@ async function loginShellPathDirs(): Promise<string[]> {
   }
 }
 
-async function probeAt(exe: string, dir: string): Promise<{ version?: string; runnable: boolean; error?: string }> {
+async function probeAt(exe: string, dir: string): Promise<{ version?: string | undefined; runnable: boolean; error?: string | undefined }> {
   try {
     const { stdout, stderr } = await execFileAsync(exe, ['--version'], {
       timeout: SCAN_TIMEOUT_MS,

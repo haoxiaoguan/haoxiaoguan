@@ -13,8 +13,8 @@ export interface ParsedProxyLine {
   protocol: ProxyProtocol
   host: string
   port: number
-  username?: string
-  password?: string
+  username?: string | undefined
+  password?: string | undefined
 }
 
 export type ParseLineResult =

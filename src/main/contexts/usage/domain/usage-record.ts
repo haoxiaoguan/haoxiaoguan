@@ -25,9 +25,9 @@ export class UsageRecord {
     sourceKind: string
     sourcePath: string
     sourceEventId: string
-    sessionId?: string
+    sessionId?: string | undefined
     model: string
-    providerName?: string
+    providerName?: string | undefined
     inputTokens: number
     outputTokens: number
     cacheReadTokens: number
@@ -59,9 +59,9 @@ export class UsageRecord {
     sourceKind: string
     sourcePath: string
     sourceEventId: string
-    sessionId?: string
+    sessionId?: string | undefined
     model: string
-    providerName?: string
+    providerName?: string | undefined
     inputTokens: number
     outputTokens: number
     cacheReadTokens: number

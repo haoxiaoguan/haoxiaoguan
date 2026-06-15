@@ -62,7 +62,7 @@ function geminiBucketMetrics(
     ['pro', 'Pro', 'pro'],
     ['flash', 'Flash', 'flash'],
   ] as const) {
-    let best: { remaining: number; resetAt?: Date } | undefined
+    let best: { remaining: number; resetAt?: Date | undefined } | undefined
     for (const bucket of buckets) {
       const model = pickString(bucket, [['modelId'], ['model_id'], ['name']])
       if (model === undefined || !model.toLowerCase().includes(needle)) continue

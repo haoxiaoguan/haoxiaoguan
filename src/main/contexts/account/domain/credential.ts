@@ -16,9 +16,9 @@ export interface CredentialJson {
 
 export class Credential {
   readonly token: string
-  readonly refreshToken?: string
-  readonly expiresAt?: Date
-  readonly rawMetadata?: JsonValue
+  readonly refreshToken?: string | undefined
+  readonly expiresAt?: Date | undefined
+  readonly rawMetadata?: JsonValue | undefined
 
   constructor(token: string, refreshToken?: string, expiresAt?: Date, rawMetadata?: JsonValue) {
     this.token = token

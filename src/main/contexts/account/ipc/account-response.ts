@@ -13,18 +13,18 @@ export interface AccountResponse {
   email: string
   identityKey: string
   displayIdentifier: string
-  name?: string
-  loginProvider?: string
-  planName?: string
-  planTier?: string
-  status?: string
-  statusReason?: string
+  name?: string | undefined
+  loginProvider?: string | undefined
+  planName?: string | undefined
+  planTier?: string | undefined
+  status?: string | undefined
+  statusReason?: string | undefined
   profilePayload: JsonValue
   tags: string[]
-  notes?: string
+  notes?: string | undefined
   isActive: boolean
   createdAt: string
-  lastUsedAt?: string
+  lastUsedAt?: string | undefined
 }
 
 /** Map an Account aggregate to its camelCase wire DTO. */

@@ -121,7 +121,7 @@ async function refreshKiroCredential(
   authMethod: KiroAuthMethod,
   region: string,
   refreshToken: string,
-): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: Date }> {
+): Promise<{ accessToken: string; refreshToken?: string | undefined; expiresAt?: Date | undefined }> {
   if (authMethod === 'idc') {
     const clientId = pickStringHttp(rawMetadata, [['client_id'], ['clientId']])
     const clientSecret = pickStringHttp(rawMetadata, [['client_secret'], ['clientSecret']])

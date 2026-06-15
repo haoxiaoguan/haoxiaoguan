@@ -10,11 +10,11 @@ export class ClientConfigProfileEntity {
   /** 'local-proxy' | 'manual' */
   @Property({ type: 'string', fieldName: 'source' }) source!: string
   @Property({ type: 'string', fieldName: 'base_url' }) baseUrl!: string
-  @Property({ type: 'string', fieldName: 'model', nullable: true }) model?: string
+  @Property({ type: 'string', fieldName: 'model', nullable: true }) model?: string | undefined
   /** 第三方明文 key 的加密信封（JSON StoredEnvelope）。 */
   @Property({ type: 'string', fieldName: 'key_enc', nullable: true }) keyEnc?: string
   /** 指向反代 client key 表的 id（local-proxy 用，phase3 解析）。 */
-  @Property({ type: 'string', fieldName: 'key_ref', nullable: true }) keyRef?: string
+  @Property({ type: 'string', fieldName: 'key_ref', nullable: true }) keyRef?: string | undefined
   @Property({ type: 'boolean', fieldName: 'is_current' }) isCurrent!: boolean
   /** 累加式:是否已注入 live（多份可同时为 true）。 */
   @Property({ type: 'boolean', fieldName: 'enabled', default: false }) enabled!: boolean
@@ -22,8 +22,8 @@ export class ClientConfigProfileEntity {
   @Property({ type: 'boolean', fieldName: 'is_default', default: false }) isDefault!: boolean
   @Property({ type: 'number', fieldName: 'sort_index' }) sortIndex!: number
   /** per-client 额外配置（JSON，按客户端形态各异；MVP 可空）。 */
-  @Property({ type: 'string', fieldName: 'settings_config', nullable: true }) settingsConfig?: string
+  @Property({ type: 'string', fieldName: 'settings_config', nullable: true }) settingsConfig?: string | undefined
   @Property({ type: 'string', fieldName: 'created_at' }) createdAt!: string
   @Property({ type: 'string', fieldName: 'updated_at' }) updatedAt!: string
-  @Property({ type: 'string', fieldName: 'notes', nullable: true }) notes?: string
+  @Property({ type: 'string', fieldName: 'notes', nullable: true }) notes?: string | undefined
 }

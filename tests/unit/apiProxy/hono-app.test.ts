@@ -158,7 +158,7 @@ describe('createHonoApp', () => {
   // ---- P1-4 速率限制 ----
   it('rate-limit: 超过 capacity 后返回 429 + Retry-After 头', async () => {
     // capacity=1：第 1 次 200，第 2 次 429
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 1, refillPerMinute: 1, clock: () => now })
     const app = createHonoApp(makeDeps([TEST_KEY], limiter))
     const req = () =>
@@ -177,7 +177,7 @@ describe('createHonoApp', () => {
   })
 
   it('rate-limit: 429 响应体符合 openai 错误结构', async () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 0, refillPerMinute: 1, clock: () => now })
     const app = createHonoApp(makeDeps([TEST_KEY], limiter))
     const res = await app.request('/v1/chat/completions', {
@@ -191,7 +191,7 @@ describe('createHonoApp', () => {
   })
 
   it('rate-limit: Anthropic 路径 429 响应体符合 anthropic 错误结构', async () => {
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 0, refillPerMinute: 1, clock: () => now })
     const app = createHonoApp(makeDeps([TEST_KEY], limiter))
     const res = await app.request('/v1/messages', {
@@ -224,7 +224,7 @@ describe('createHonoApp', () => {
     // keys=[] + allowAnonymousLoopback：isLoopback=false（test env 无真实 socket）→ 401
     // 改为 keys 配置了 key 但不带 Authorization 头走匿名路径：无 keyId → 跳过限流
     // 此测试验证：即使 limiter capacity=0，anonymous loopback 路径（无 keyId）也不会被 limiter 拦截
-    let now = 0
+    const now = 0
     const limiter = new KeyRateLimiter({ capacity: 0, refillPerMinute: 1, clock: () => now })
     // keys 为空 + allowAnonymousLoopback=true → 匿名放行（无 keyId）
     const registry = new PlatformRegistry()

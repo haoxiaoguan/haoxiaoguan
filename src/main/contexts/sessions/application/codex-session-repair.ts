@@ -130,8 +130,8 @@ export class CodexSessionRepair {
           rewriteNeeded: boolean
           originalSessionMetaLines: string[]
           hasUserEvent: boolean
-          threadId?: string
-          cwd?: string
+          threadId?: string | undefined
+          cwd?: string | undefined
         }
         try {
           // 永远流式扫描：内存恒定（峰值 heap <100MB）。整文件 readFile+analyzeRollout 会为每个

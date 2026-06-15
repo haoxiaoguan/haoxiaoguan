@@ -247,7 +247,7 @@ function regionFromArn(arn: string | undefined): string | undefined {
 function resolveRegistration(
   authPath: string,
   clientIdHash: string | undefined,
-): { clientId?: string; clientSecret?: string } {
+): { clientId?: string | undefined; clientSecret?: string | undefined } {
   if (clientIdHash === undefined) return {}
   const cacheDir = dirname(authPath)
   const reg = readJsonObject(join(cacheDir, `${clientIdHash}.json`))

@@ -6,6 +6,11 @@
     "lib": ["ES2023"],
     "types": ["node", "electron-vite/node"],
     "strict": true,
+    // 子类覆盖父类成员必须显式 override，防止误命名/签名漂移。
+    "noImplicitOverride": true,
+    // 严格的可选属性语义：禁止把 `undefined` 显式赋给可选属性，强制用
+    // `...(x !== undefined ? { x } : {})` 条件展开或在类型上显式标注 `| undefined`。
+    "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "noEmit": true,
     "experimentalDecorators": true,

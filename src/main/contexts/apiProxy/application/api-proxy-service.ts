@@ -214,27 +214,27 @@ async function* prependFirstFromPromise(
 // apiProxy 上下文的 application 服务。包装 ApiHttpServer 提供 start/stop + 状态投影（M1），
 // 并编排单请求链路 handleRequest（M2b）。语义对标 contexts/websocket/application/websocket-service.ts。
 export class ApiProxyService {
-  private readonly registry?: PlatformRegistry
+  private readonly registry?: PlatformRegistry | undefined
   private readonly converters: InboundConverters
   // 原生（ChatGPT OAuth）透传：注入则对 /v1/responses 的原生模型走 HTTP 级原始透传（不转 IR）。
-  private readonly codexNative?: CodexNativePassthrough
+  private readonly codexNative?: CodexNativePassthrough | undefined
   // responses 第三方透传适配器列表：对 /v1/responses 的第三方模型走 HTTP 级透传到对应上游。
   private readonly responsesPassthroughs: ResponsesPassthroughUpstream[]
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘）；仅 /v1/responses 用。
-  private readonly responsesStore?: ResponsesStore
+  private readonly responsesStore?: ResponsesStore | undefined
   // 请求级可观测性（G3）：注入则记录每请求落点 + 累计计数器（喂 G10 /metrics）。
-  private readonly observability?: ProxyRequestLog
+  private readonly observability?: ProxyRequestLog | undefined
   // 路由组合只读源（注入则支持「组合名当 model」的跨供应商降级链）。
-  private readonly combos?: ComboSource
+  private readonly combos?: ComboSource | undefined
   // 模型别名解析器（把组合每一跳 `kr/x` 解析为 platform+model）；不注入则组合步骤按裸模型名路由。
   private readonly resolveAlias: PlatformAliasResolver
   // Phase 2 配额感知跳过：判定某平台池是否「确凿不可用」（kiro=池内无 available 账号）。
   // 用账号池健康（已反映超额：超额服务中的账号仍 available），故 nEnabled 超额池不会被误跳。
-  private readonly isPlatformExhausted?: (platform: string) => Promise<boolean>
+  private readonly isPlatformExhausted?: ((platform: string) => Promise<boolean>) | undefined
   private readonly clock: () => number
   // server 可后置注入（解循环依赖：container 先建 service 再建 listener+server，最后 attachServer）。
   // M1 单参构造 new ApiProxyService(server) 仍合法——server 既可构造传入也可 attach。
-  private server?: ApiHttpServer
+  private server?: ApiHttpServer | undefined
 
   constructor(
     server?: ApiHttpServer,

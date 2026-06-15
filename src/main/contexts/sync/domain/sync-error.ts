@@ -51,12 +51,12 @@ export type SyncErrorKind =
 export class SyncError extends Error {
   readonly kind: SyncErrorKind
   /** Network sub-classification (only for kind === 'network'). */
-  readonly networkKind?: NetworkKind
+  readonly networkKind?: NetworkKind | undefined
   /** HTTP status (only for kind === 'http'). */
-  readonly status?: number
+  readonly status?: number | undefined
   /** Protocol versions (only for kind === 'versionIncompatible'). */
-  readonly expected?: number
-  readonly actual?: number
+  readonly expected?: number | undefined
+  readonly actual?: number | undefined
 
   private constructor(
     kind: SyncErrorKind,

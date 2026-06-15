@@ -103,13 +103,13 @@ async function defaultKiroTransportFetch(url: string, init: RequestInit): Promis
   if (dispatcher !== undefined) {
     // proxy dispatcher 持有连接池，直接委托（TLS 选项由 proxy dispatcher 自身管理）。
     return (await undiciFetch(url, {
-      ...(init as Parameters<typeof undiciFetch>[1]),
+      ...(init as unknown as Parameters<typeof undiciFetch>[1]),
       dispatcher,
     })) as unknown as Response
   }
   // 直连：使用带 TLS 调整的 Agent。
   return (await undiciFetch(url, {
-    ...(init as Parameters<typeof undiciFetch>[1]),
+    ...(init as unknown as Parameters<typeof undiciFetch>[1]),
     dispatcher: defaultTlsAgent,
   })) as unknown as Response
 }

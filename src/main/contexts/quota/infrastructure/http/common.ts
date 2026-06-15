@@ -54,7 +54,7 @@ export async function httpFetch(
   try {
     if (dispatcher !== undefined) {
       const response = await undiciFetch(url, {
-        ...(init as Parameters<typeof undiciFetch>[1]),
+        ...(init as unknown as Parameters<typeof undiciFetch>[1]),
         signal: controller.signal,
         dispatcher,
       })

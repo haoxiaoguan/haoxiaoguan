@@ -55,7 +55,7 @@ export async function fetch(
   // 会员有效期:accounts/check 的 entitlement.expires_at。best-effort,
   // 失败不影响额度刷新(保持上次值/有效期未知)。
   const accountId = chatgptAccountId(accessToken, credential.rawMetadata, profilePayload)
-  let subscription: { activeUntil?: string; planType?: string } = {}
+  let subscription: { activeUntil?: string | undefined; planType?: string | undefined } = {}
   try {
     subscription = await fetchSubscription(accessToken, accountId)
   } catch {
@@ -135,7 +135,7 @@ async function fetchUsage(
 async function fetchSubscription(
   accessToken: string,
   accountId: string | undefined,
-): Promise<{ activeUntil?: string; planType?: string }> {
+): Promise<{ activeUntil?: string | undefined; planType?: string | undefined }> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     Accept: 'application/json',

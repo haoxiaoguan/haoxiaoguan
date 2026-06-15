@@ -29,8 +29,8 @@ export function toDesktopWorkspacePath(value: string): string | undefined {
 export interface RolloutAnalysis {
   nextText: string
   rewriteNeeded: boolean
-  threadId?: string         // 首个 session_meta 的 payload.id
-  cwd?: string              // 首个 session_meta 的 payload.cwd 经 toDesktopWorkspacePath
+  threadId?: string | undefined         // 首个 session_meta 的 payload.id
+  cwd?: string | undefined              // 首个 session_meta 的 payload.cwd 经 toDesktopWorkspacePath
   hasUserEvent: boolean     // text 含 "user_message" 或 "user_input"
   hasEncrypted: boolean     // text 含 "encrypted_content"
   providers: string[]       // 各 session_meta 的 model_provider(缺失记 "(missing)")
@@ -41,8 +41,8 @@ export interface RolloutAnalysis {
 /** session_meta 行处理的可变累积器（RolloutAnalysis 的子集，整文件/流式两条路径共用）。 */
 export interface SessionMetaAccumulator {
   rewriteNeeded: boolean
-  threadId?: string
-  cwd?: string
+  threadId?: string | undefined
+  cwd?: string | undefined
   providers: string[]
   originalSessionMetaLines: string[]
   sessionMetaCount: number

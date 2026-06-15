@@ -26,13 +26,6 @@ import { ValidationService } from './contexts/account/application/validation-ser
 import { AccountHealthService } from './contexts/account/application/health-service'
 import { TokenRefreshScheduler } from './contexts/account/application/token-refresh-scheduler'
 import { PlatformQuotaScheduler } from './contexts/quota/application/platform-quota-scheduler'
-import type {
-  ProviderCapabilityRegistry,
-  ValidationCapability,
-  QuotaCapability,
-  CredentialValidationResult as AccountValidationResult,
-  QuotaFetchResult as AccountQuotaFetchResult,
-} from './contexts/account/application/capability-ports'
 import { AgentCredentialInjectorRegistry } from './agents/credential-injection/injector-registry'
 import { loadOrCreateMasterKey, CryptoService } from './platform/crypto/crypto-service'
 
@@ -47,8 +40,6 @@ import { MikroOrmPendingImportRepository } from './contexts/credential/infrastru
 import { OAuthService } from './contexts/credential/application/oauth-service'
 import { ImportService } from './contexts/credential/application/import-service'
 import { ValidationService as CredentialValidationService } from './contexts/credential/application/validation-service'
-import { validationResultToJson } from './contexts/credential/domain/capability-types'
-
 // Quota context.
 import { MikroOrmQuotaCacheRepository } from './contexts/quota/infrastructure/mikro-orm-quota-cache-repository'
 import { MikroOrmQuotaStateRepository } from './contexts/quota/infrastructure/mikro-orm-quota-state-repository'
@@ -144,22 +135,13 @@ import { renderPrometheus, type AccountStateTally } from './contexts/apiProxy/do
 import { FailoverAdapter } from './contexts/apiProxy/domain/account-selection/failover-adapter'
 import { ConversationIdCache } from './contexts/apiProxy/domain/account-selection/conversation-id-cache'
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
+import { buildAccountCapabilityRegistry } from './container-helpers/account-capability-registry'
+import { createKiroTokenRefresher } from './container-helpers/kiro-token-refresher'
 import type {
   KiroCredentialPort,
   KiroDispatcherPort,
-  KiroTokenRefresher,
   KiroCredential,
-  RefreshedKiroToken,
 } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
-// 号小管 Kiro 身份 helper —— token 刷新 + auth-method/region/profileArn 解析（与额度路径同源）。
-import {
-  refreshKiroToken,
-  resolveKiroAuthMethod,
-  normalizeRegion,
-  parseRegionFromArn,
-  defaultProfileArnFor,
-} from './platform/net/kiro/kiro-identity-client'
-
 // Proxy context — outbound proxy IP management. ProxyResolver is injected into
 // QuotaService so per-account quota fetches route through the bound proxy.
 import { MikroOrmProxyRepository } from './contexts/proxy/infrastructure/mikro-orm-proxy-repository'
@@ -192,65 +174,6 @@ import { CodexNativeUpstream } from './contexts/apiProxy/infrastructure/adapters
 import { CodexNativeTokenManager } from './contexts/apiProxy/infrastructure/adapters/codex-native/codex-native-token-manager'
 import { loadCodexNativeModels } from './contexts/apiProxy/infrastructure/adapters/codex-native/codex-native-models'
 import { ResponsesPassthroughUpstream } from './contexts/apiProxy/infrastructure/adapters/relay/responses-passthrough-upstream'
-
-/**
- * Account capability-registry adapter (quota manifest §5b).
- *
- * The account context's `ProviderCapabilityRegistry` is a NARROWER, account-id-
- * keyed shape than the quota context's `ProviderRegistry` (which is the
- * capability-trait registry keyed by credential/payload). This adapter bridges
- * the two: it implements the account interface on top of the credential
- * `ValidationService` (envelope-aware validation) and the quota
- * `QuotaApplicationService` (cache-first quota read), replacing the former
- * NULL_PROVIDER_REGISTRY placeholder.
- *
- * Note: `buildCredentialRegistry()` registers a real CredentialValidationCapability
- * for Kiro (decrypt + expiry/refresh check); other providers still return
- * `unsupported` until ported. So account health/validation flows through the real
- * wired services, with Kiro reporting valid/expired instead of unsupported. When
- * per-provider validation capabilities are added they light up automatically, and
- * health's quota leg (only reached when validation is `valid`) reads through the
- * quota service.
- */
-function buildAccountCapabilityRegistry(
-  credentialValidation: CredentialValidationService,
-  quotaService: QuotaApplicationService,
-): ProviderCapabilityRegistry {
-  const validationCapability: ValidationCapability = {
-    async validate(accountId: string): Promise<AccountValidationResult> {
-      const result = await credentialValidation.validate(accountId)
-      return validationResultToJson(result)
-    },
-  }
-  const quotaCapability: QuotaCapability = {
-    async fetchQuota(accountId: string): Promise<AccountQuotaFetchResult> {
-      const info = await quotaService.getQuota(accountId)
-      return {
-        outcome: 'success',
-        source: 'live',
-        freshness: 'fresh',
-        fetched_at: info.fetchedAt.toISOString(),
-        models: info.models.map((m) => {
-          const model: AccountQuotaFetchResult['models'][number] = {
-            model_name: m.modelName,
-            used: m.used,
-            total: m.total,
-          }
-          if (m.resetAt !== undefined) model.reset_at = m.resetAt.toISOString()
-          return model
-        }),
-      }
-    },
-  }
-  return {
-    validation(): ValidationCapability | undefined {
-      return validationCapability
-    },
-    quota(): QuotaCapability | undefined {
-      return quotaCapability
-    },
-  }
-}
 
 /** Holds lifecycle-managed singletons that main.ts needs beyond the IPC services. */
 export interface Container extends Services {
@@ -518,38 +441,7 @@ export async function buildContainer(): Promise<Container> {
       return systemProxyResolver.resolveDispatcher()
     },
   }
-  const kiroTokenRefresher: KiroTokenRefresher = {
-    async refresh(cred: KiroCredential, region: string): Promise<RefreshedKiroToken | undefined> {
-      const refresh = cred.refreshToken
-      if (refresh === undefined || refresh.trim().length === 0) return undefined
-      const authMethod = resolveKiroAuthMethod(cred.rawMetadata)
-      if (authMethod === 'api_key') return undefined // api_key 模式不刷新。
-      // region：传入优先，否则按 profileArn 段兜底（与额度路径一致）。
-      const meta = (cred.rawMetadata ?? {}) as Record<string, unknown>
-      const profileArn =
-        typeof meta.profileArn === 'string'
-          ? meta.profileArn
-          : typeof meta.profile_arn === 'string'
-            ? (meta.profile_arn as string)
-            : defaultProfileArnFor(authMethod)
-      const useRegion = normalizeRegion(region || parseRegionFromArn(profileArn))
-      try {
-        if (authMethod === 'idc') {
-          const clientId = typeof meta.client_id === 'string' ? meta.client_id : (meta.clientId as string | undefined)
-          const clientSecret =
-            typeof meta.client_secret === 'string' ? meta.client_secret : (meta.clientSecret as string | undefined)
-          if (clientId === undefined || clientSecret === undefined) return undefined
-          const out = await refreshKiroToken({ kind: 'idc', clientId, clientSecret, refreshToken: refresh, region: useRegion })
-          return { token: out.accessToken, ...(out.refreshToken ? { refreshToken: out.refreshToken } : {}), ...(out.expiresAt ? { expiresAt: out.expiresAt } : {}) }
-        }
-        const out = await refreshKiroToken({ kind: 'social', refreshToken: refresh, region: useRegion })
-        return { token: out.accessToken, ...(out.refreshToken ? { refreshToken: out.refreshToken } : {}), ...(out.expiresAt ? { expiresAt: out.expiresAt } : {}) }
-      } catch {
-        // 刷新失败（含 invalid_grant 永久失效）→ 放弃重试，由上游抛鉴权错误。
-        return undefined
-      }
-    },
-  }
+  const kiroTokenRefresher = createKiroTokenRefresher()
   const kiroUpstreamClient = new KiroUpstreamClient({ refresher: kiroTokenRefresher })
   const kiroCacheTracker = new PromptCacheTracker()
   const apiProxyHealth = new AccountHealthTracker({

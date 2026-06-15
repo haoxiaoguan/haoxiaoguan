@@ -18,7 +18,7 @@ export interface SyncOutcome {
 export interface UnmanagedSkillEntry {
   dir_name: string
   path: string
-  description?: string
+  description?: string | undefined
 }
 
 /**

@@ -13,11 +13,11 @@ import type { DecryptedCredential } from './credential-injection'
 
 interface CursorAuthFields {
   accessToken: string
-  refreshToken?: string
-  email?: string
-  membershipType?: string
-  subscriptionStatus?: string
-  signUpType?: string
+  refreshToken?: string | undefined
+  email?: string | undefined
+  membershipType?: string | undefined
+  subscriptionStatus?: string | undefined
+  signUpType?: string | undefined
 }
 
 function pickString(v: unknown): string | undefined {
