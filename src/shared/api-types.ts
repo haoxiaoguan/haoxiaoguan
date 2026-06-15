@@ -83,10 +83,20 @@ import type {
   AccountBindingDto,
   ApiProxyStatus,
   ApiProxyKeyMeta,
+  ApiProxySelectionConfigDto,
   AccountPoolHealthRow,
   ProxyRequestRecord,
   RouteComboDto,
   RouteComboInputDto,
+  RoutingWindowDto,
+  RoutingGranularityDto,
+  RoutingBreakdownDimDto,
+  RoutingSummaryDto,
+  RoutingTrendPointDto,
+  RoutingBreakdownRowDto,
+  RoutingErrorRowDto,
+  RoutingRecentFilterDto,
+  RoutingRecentRowDto,
   AccountGroupDto,
   CreateAccountGroupRequest,
   UpdateAccountGroupRequest,
@@ -107,6 +117,9 @@ import type {
   ClientConfigSnapshotDto,
   ClientConfigConnTest,
 } from './api/routing'
+// 值导出（非类型）：反代池平台判定，供渲染层判断账号是否可入池。
+export { PROXY_POOL_PLATFORMS, isProxyPoolPlatform } from './api/routing'
+export type { ProxyPoolPlatform } from './api/routing'
 
 export interface HxgApi {
   settings: {
@@ -185,9 +198,17 @@ export interface HxgApi {
       proxyId?: string,
       accountId?: string,
     ): Promise<ImportedCredentialMaterial>
-    importTokenJson(provider: string, payload: string, proxyId?: string): Promise<ImportedCredentialMaterial>
+    importTokenJson(
+      provider: string,
+      payload: string,
+      proxyId?: string,
+    ): Promise<ImportedCredentialMaterial>
     scanLocalCredentials(provider: string, proxyId?: string): Promise<ImportedCredentialMaterial[]>
-    importDeeplink(provider: string, url: string, proxyId?: string): Promise<ImportedCredentialMaterial>
+    importDeeplink(
+      provider: string,
+      url: string,
+      proxyId?: string,
+    ): Promise<ImportedCredentialMaterial>
     validateCredential(accountId: string): Promise<CredentialValidationResult>
     validateBatch(
       accountIds: string[],
@@ -226,16 +247,19 @@ export interface HxgApi {
     deleteSkillBackup(backupId: string): Promise<void>
     restoreSkillBackup(backupId: string): Promise<InstalledSkillDto>
     discoverAvailableSkills(): Promise<DiscoverableSkillDto[]>
-    searchSkillsSh(req: { query: string; limit?: number; offset?: number }): Promise<
-      DiscoverableSkillDto[]
-    >
+    searchSkillsSh(req: {
+      query: string
+      limit?: number
+      offset?: number
+    }): Promise<DiscoverableSkillDto[]>
     getSkillRepos(): Promise<SkillRepoDto[]>
     addSkillRepo(req: { owner: string; name: string; branch: string }): Promise<void>
     removeSkillRepo(req: { owner: string; name: string }): Promise<void>
     scanUnmanagedSkills(agentId: string): Promise<UnmanagedSkillEntryDto[]>
-    importSkillsFromApps(req: { agent_id: string; dir_names: string[] }): Promise<
-      InstalledSkillDto[]
-    >
+    importSkillsFromApps(req: {
+      agent_id: string
+      dir_names: string[]
+    }): Promise<InstalledSkillDto[]>
     openZipFileDialog(): Promise<string | null>
     installSkillsFromZip(zipPath: string): Promise<InstalledSkillDto[]>
     migrateSkillStorage(skillId: string, target: string): Promise<void>
@@ -328,8 +352,20 @@ export interface HxgApi {
     setClientKeyActive(id: string, isActive: boolean): Promise<void>
     /** 删除客户端 Key。 */
     deleteClientKey(id: string): Promise<void>
-    /** 查询账号池运行态健康（合并持久化 meta + 内存运行态）。 */
-    getAccountPoolHealth(): Promise<AccountPoolHealthRow[]>
+    /** 查询账号池运行态健康（合并持久化 meta + 内存运行态 + 入池标识 + 窗口内请求统计）。 */
+    getAccountPoolHealth(window?: RoutingWindowDto): Promise<AccountPoolHealthRow[]>
+    /** 设置账号是否在反代池内（加入/移出池标识）。 */
+    setAccountPooled(accountId: string, pooled: boolean): Promise<void>
+    /** 设置账号选号权重优先级（仅对在池账号生效）。 */
+    setAccountPriority(accountId: string, priority: number): Promise<void>
+    /** 设置账号并发上限（仅对在池账号生效）。 */
+    setAccountConcurrency(accountId: string, concurrency: number): Promise<void>
+    /** 列出已入池的账号 id（供账号管理页显示入池开关状态）。 */
+    getPooledAccountIds(): Promise<string[]>
+    /** 读取反代池全局选号配置（轮询策略 / 亲密度 / 每账号并发）。 */
+    getSelectionConfig(): Promise<ApiProxySelectionConfigDto>
+    /** 保存反代池全局选号配置（持久化 + 运行时热更选号器）。 */
+    setSelectionConfig(config: ApiProxySelectionConfigDto): Promise<void>
     /** 拉取最近 N 条请求日志（G3）；省略 limit 返回环形缓冲全部。 */
     getRequestLog(limit?: number): Promise<ProxyRequestRecord[]>
     /** 清空请求日志环形缓冲（计数器保持单调，不影响 /metrics）。 */
@@ -346,6 +382,27 @@ export interface HxgApi {
     deleteCombo(id: string): Promise<void>
     /** 可路由模型 id 清单（别名前缀形式，如 kr/claude-sonnet-4.5）；组合步骤选择器用。 */
     listRoutableModels(): Promise<string[]>
+  }
+  /** 路由日志分析（持久化反代请求日志的多维聚合查询）。 */
+  routingLog: {
+    /** 窗口内汇总（请求/成功率/延迟 P95/Token/降级与组合占比）。 */
+    summary(window: RoutingWindowDto): Promise<RoutingSummaryDto>
+    /** 趋势序列：hour 走明细秒桶，day 走日桶 rollup。 */
+    trend(
+      window: RoutingWindowDto,
+      granularity: RoutingGranularityDto,
+    ): Promise<RoutingTrendPointDto[]>
+    /** 维度下钻（平台/组合/模型/状态/账号）。 */
+    breakdown(
+      window: RoutingWindowDto,
+      dimension: RoutingBreakdownDimDto,
+    ): Promise<RoutingBreakdownRowDto[]>
+    /** Top 错误（按脱敏消息归并）。 */
+    topErrors(window: RoutingWindowDto, limit?: number): Promise<RoutingErrorRowDto[]>
+    /** 最近请求明细（可按成功/失败/平台/组合过滤）。 */
+    recent(limit?: number, filter?: RoutingRecentFilterDto): Promise<RoutingRecentRowDto[]>
+    /** 清空持久化日志（明细 + 日桶）。 */
+    clear(): Promise<void>
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>
@@ -370,7 +427,10 @@ export interface HxgApi {
     repairPreview(): Promise<CodexRepairPreviewDto>
     repair(req: CodexRepairRequestDto): Promise<CodexRepairResultDto>
     /** 启用/停用 codex 接入档 + 会话迁移合并为单次 Codex 重启。返回迁移结果或 null（无库/无可迁移）。 */
-    codexSwitchRepair(args: { id: string; action: 'enable' | 'disable' }): Promise<CodexRepairResultDto | null>
+    codexSwitchRepair(args: {
+      id: string
+      action: 'enable' | 'disable'
+    }): Promise<CodexRepairResultDto | null>
     repairRollback(backupId: string): Promise<void>
     onRepairProgress(cb: (p: CodexRepairProgressDto) => void): () => void
   }

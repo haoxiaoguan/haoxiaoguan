@@ -34,8 +34,23 @@ export interface ProxyRequestRecord {
   clientKeyId?: string
   inputTokens?: number
   outputTokens?: number
+  /** 缓存命中读取的 token（prompt cache 读，上游 usage 提供时回填）。 */
+  cacheReadTokens?: number
+  /** 缓存写入/创建的 token（prompt cache 写，上游 usage 提供时回填）。 */
+  cacheWriteTokens?: number
   /** 失败时的错误消息（已脱敏）。 */
   errorMessage?: string
+  // ── 路由维度（路由日志分析模块）：组合/降级链相关，直连请求多为 undefined ──
+  /** 命中的路由组合名（裸名/直连为 undefined）。 */
+  comboName?: string
+  /** 客户端请求的原始 model（裸名或组合名；models/health 等无模型为 undefined）。 */
+  requestedModel?: string
+  /** 实际服务该请求的最终模型（组合命中跳或直连别名解析后；失败时为最后尝试的跳）。 */
+  finalModel?: string
+  /** 组合降级链尝试的跳数（直连=1；组合按实际尝试到第几跳）。 */
+  routeHops?: number
+  /** 依次尝试的跳模型（保序；直连=[finalModel]；用于「降级链路径」展示）。 */
+  routePath?: string[]
 }
 
 /** record() 入参：除 seq/tsMs（由本服务生成）外的全部字段。 */
@@ -67,6 +82,9 @@ export class ProxyRequestLog {
   // 单订阅推送（容器把它接到 webContents.send；无注解箭头初始化以避开 bytecode 限制——
   // 这里是 null 字面量初始化，安全）。
   private listener: ((r: ProxyRequestRecord) => void) | null = null
+  // 持久化 sink（容器把它接到 RoutingLogService.enqueue；与 listener 独立，
+  // 一条记录同时推 UI（listener）+ 落库（persistSink），互不影响、各自吞错）。
+  private persistSink: ((r: ProxyRequestRecord) => void) | null = null
   // 计数器（单调）。
   private requestsTotal = 0
   private successTotal = 0
@@ -116,6 +134,13 @@ export class ProxyRequestLog {
         // 推送失败不影响主流程
       }
     }
+    if (this.persistSink !== null) {
+      try {
+        this.persistSink(rec)
+      } catch {
+        // 落库入队失败不影响主流程（最坏丢一条分析样本）
+      }
+    }
     return rec
   }
 
@@ -134,6 +159,11 @@ export class ProxyRequestLog {
   /** 设置/清除单订阅（null 取消）。 */
   setListener(fn: ((r: ProxyRequestRecord) => void) | null): void {
     this.listener = fn
+  }
+
+  /** 设置/清除持久化 sink（null 取消）。容器注入后每条记录入 RoutingLogService 缓冲。 */
+  setPersistSink(fn: ((r: ProxyRequestRecord) => void) | null): void {
+    this.persistSink = fn
   }
 
   /** 计数器快照（喂 /metrics）。 */
@@ -159,4 +189,21 @@ export interface RequestObservation {
   accountId?: string
   inputTokens?: number
   outputTokens?: number
+  /** 缓存读 token（上游 usage 回填）。 */
+  cacheReadTokens?: number
+  /** 缓存写/创建 token（上游 usage 回填）。 */
+  cacheWriteTokens?: number
+  // ── 路由维度回填（ApiProxyService 编排时写入；组合每跳回填 final*/routeHops/routePath）──
+  /** 命中的路由组合名（matchCombo 命中时写入）。 */
+  comboName?: string
+  /** 客户端请求的原始 model（handleRequest 入口写入）。 */
+  requestedModel?: string
+  /** 实际服务的最终模型（直连=解析后模型；组合=成功/最后尝试跳的真实模型）。 */
+  finalModel?: string
+  /** 最终命中平台（组合跳别名解析后回填；直连由 intent.platform 提供）。 */
+  finalPlatform?: string
+  /** 组合降级链尝试跳数（直连=1）。 */
+  routeHops?: number
+  /** 依次尝试的跳模型（保序）。 */
+  routePath?: string[]
 }

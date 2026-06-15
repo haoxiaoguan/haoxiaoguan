@@ -49,6 +49,11 @@ const USAGE_SYNC_INTERVAL_MS = 60 * 1000
 let usageSyncTimer: ReturnType<typeof setInterval> | null = null
 let usageSyncRunning = false
 
+// 路由日志分析：把内存缓冲的反代请求日志定时批量落库（明细 + 日桶 rollup）。
+// 15s 一次平衡「实时性」与「写放大」；退出前再 flush 一次避免丢最后一批。
+const ROUTING_LOG_FLUSH_INTERVAL_MS = 15 * 1000
+let routingLogFlushTimer: ReturnType<typeof setInterval> | null = null
+
 // Deep-link URL captured before the renderer/container is ready (macOS can emit
 // open-url before whenReady resolves). Flushed once the window exists.
 let pendingDeepLink: string | null = null
@@ -384,6 +389,13 @@ if (!gotLock) {
     void runBackgroundSync()
     usageSyncTimer = setInterval(() => void runBackgroundSync(), USAGE_SYNC_INTERVAL_MS)
 
+    // 路由日志定时落库（非阻塞；flush 内部有重入保护，空缓冲直接返回）。
+    routingLogFlushTimer = setInterval(() => {
+      services?.routingLogService.flush().catch((e) => {
+        console.error('[routingLog] periodic flush failed:', e)
+      })
+    }, ROUTING_LOG_FLUSH_INTERVAL_MS)
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(false)
       else showMainWindow()
@@ -410,6 +422,14 @@ app.on('before-quit', () => {
     clearInterval(usageSyncTimer)
     usageSyncTimer = null
   }
+  if (routingLogFlushTimer) {
+    clearInterval(routingLogFlushTimer)
+    routingLogFlushTimer = null
+  }
+  // 退出前最后落库一次（best-effort；异步不阻塞退出，最坏丢极少量未落库样本）。
+  services?.routingLogService.flush().catch((e) => {
+    console.error('[routingLog] flush on quit failed:', e)
+  })
   services?.tokenRefreshScheduler.stop()
   services?.platformQuotaScheduler.stop()
   services?.apiProxyService.stop().catch((e) => {

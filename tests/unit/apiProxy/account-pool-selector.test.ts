@@ -56,6 +56,17 @@ describe('AccountPoolSelector', () => {
     expect(sel.acquire([{ id: 'a' }], ctx())?.id).toBe('a') // 释放后可再选
     l2.release()
   })
+  it('每账号并发上限：候选自带 concurrency 覆盖全局', () => {
+    const sel = mk('sticky-lru') // 全局 perAccountConcurrency=2
+    // a 自带 concurrency=1 → 第一次成功，第二次满载被过滤
+    const l1 = sel.acquire([{ id: 'a', concurrency: 1 }], ctx())!
+    expect(l1.id).toBe('a')
+    expect(sel.acquire([{ id: 'a', concurrency: 1 }], ctx())).toBeNull()
+    l1.release()
+    // 释放后可再选
+    expect(sel.acquire([{ id: 'a', concurrency: 1 }], ctx())?.id).toBe('a')
+  })
+
   it('round-robin 游标推进', () => {
     const sel = mk('round-robin')
     const cands = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
@@ -73,6 +84,59 @@ describe('AccountPoolSelector', () => {
     now.t = 2000 // > affinityTtlMs 1000
     const lease = sel.acquire([{ id: 'a', lastUsedAt: 1 }, { id: 'b', lastUsedAt: 9 }], ctx({ hint: 'h1' }))
     expect(lease?.id).toBe('a') // 过期 → 落 LRU
+  })
+})
+
+describe('AccountPoolSelector — 优先级加权选号', () => {
+  const ALWAYS = { isAvailable: () => true }
+  // 注入固定 random 的选号器（权重 = max(0,priority)+1）。
+  const mkRand = (r: number) =>
+    new AccountPoolSelector(
+      { strategy: 'round-robin', perAccountConcurrency: 10, affinityTtlMs: 1000, clock: () => 0, random: () => r },
+      ALWAYS,
+    )
+  // a 权重 1（priority 0）、b 权重 10（priority 9）；总权重 11。
+  const cands = [{ id: 'a', priority: 0 }, { id: 'b', priority: 9 }]
+
+  it('random 落在低权重区间 → 选中低优先级 a', () => {
+    // r=0 → 0*11=0 → 落在 a 的 [0,1) 区间
+    expect(mkRand(0).acquire(cands, ctx())?.id).toBe('a')
+  })
+
+  it('random 落在高权重区间 → 选中高优先级 b', () => {
+    // r=0.5 → 5.5 → 跨过 a(1) 落入 b
+    expect(mkRand(0.5).acquire(cands, ctx())?.id).toBe('b')
+    // r≈1 → 落在 b 区间末端
+    expect(mkRand(0.99).acquire(cands, ctx())?.id).toBe('b')
+  })
+
+  it('全相等优先级（非 0）仍走原策略（leastLoadedLru 确定性，不随机）', () => {
+    const sel = new AccountPoolSelector(
+      { strategy: 'sticky-lru', perAccountConcurrency: 2, affinityTtlMs: 1000, clock: () => 0, random: () => 0.99 },
+      ALWAYS,
+    )
+    // 等权重 → 不加权 → 落 LRU（lastUsedAt 最早 = b），与 random 无关
+    const lease = sel.acquire(
+      [{ id: 'a', lastUsedAt: 100, priority: 5 }, { id: 'b', lastUsedAt: 50, priority: 5 }],
+      ctx(),
+    )
+    expect(lease?.id).toBe('b')
+  })
+
+  it('updateOpts 热更策略：sticky-lru → round-robin 后游标推进', () => {
+    const sel = new AccountPoolSelector(
+      { strategy: 'sticky-lru', perAccountConcurrency: 2, affinityTtlMs: 1000, clock: () => 0 },
+      ALWAYS,
+    )
+    sel.updateOpts({ strategy: 'round-robin' })
+    const cs = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    const ids = [0, 1, 2].map(() => {
+      const l = sel.acquire(cs, ctx())!
+      const id = l.id
+      l.release()
+      return id
+    })
+    expect(new Set(ids).size).toBeGreaterThan(1)
   })
 })
 

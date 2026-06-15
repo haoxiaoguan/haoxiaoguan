@@ -131,7 +131,14 @@ import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/
 import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'
 import { ProxyRequestLog } from './contexts/apiProxy/domain/observability/proxy-request-log'
-import { renderPrometheus, type AccountStateTally } from './contexts/apiProxy/domain/observability/prometheus'
+import { MikroOrmRoutingLogRepository } from './contexts/apiProxy/infrastructure/routing-log/mikro-orm-routing-log.repository'
+import { RoutingLogService } from './contexts/apiProxy/application/routing-log-service'
+import { ProxyPoolRepository } from './contexts/apiProxy/infrastructure/account-pool/proxy-pool.repository'
+import { ProxyPoolService } from './contexts/apiProxy/application/proxy-pool-service'
+import {
+  renderPrometheus,
+  type AccountStateTally,
+} from './contexts/apiProxy/domain/observability/prometheus'
 import { FailoverAdapter } from './contexts/apiProxy/domain/account-selection/failover-adapter'
 import { ConversationIdCache } from './contexts/apiProxy/domain/account-selection/conversation-id-cache'
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
@@ -146,7 +153,10 @@ import type {
 // QuotaService so per-account quota fetches route through the bound proxy.
 import { MikroOrmProxyRepository } from './contexts/proxy/infrastructure/mikro-orm-proxy-repository'
 import { ProxyDispatcherFactory } from './contexts/proxy/infrastructure/proxy-dispatcher-factory'
-import { ProxyResolver, asAccountGroupResolverStore } from './contexts/proxy/infrastructure/proxy-resolver'
+import {
+  ProxyResolver,
+  asAccountGroupResolverStore,
+} from './contexts/proxy/infrastructure/proxy-resolver'
 import { ProxyTester } from './contexts/proxy/infrastructure/proxy-tester'
 import { ProxyService } from './contexts/proxy/application/proxy-service'
 
@@ -460,20 +470,36 @@ export async function buildContainer(): Promise<Container> {
     },
     apiProxyHealth,
   )
-  const kiroConversationIdCache = new ConversationIdCache({ ttlMs: 2 * 60 * 60 * 1000, maxEntries: 1000 })
+  const kiroConversationIdCache = new ConversationIdCache({
+    ttlMs: 2 * 60 * 60 * 1000,
+    maxEntries: 1000,
+  })
   const kiroInner = new KiroAdapter({
     client: kiroUpstreamClient,
     cacheTracker: kiroCacheTracker,
     conversationIdCache: kiroConversationIdCache,
     genConversationId: randomUUID,
   })
-  platformRegistry.register(new FailoverAdapter({
-    inner: kiroInner, selector: apiProxySelector, health: apiProxyHealth,
-    accounts: kiroAccountPort, credentials: kiroCredentialPort, dispatchers: kiroDispatcherPort,
-    maxRetries: settings.getApiProxyMaxRetries(),
-    retryDelayMs: settings.getApiProxyRetryDelayMs(),
-    random: Math.random,
-  }))
+  // 反代账号池成员（独立标识）：仅池内账号才进选号候选。启动载入持久化成员到内存。
+  const proxyPoolRepo = new ProxyPoolRepository()
+  const proxyPoolService = new ProxyPoolService(proxyPoolRepo)
+  await proxyPoolService.load()
+  platformRegistry.register(
+    new FailoverAdapter({
+      inner: kiroInner,
+      selector: apiProxySelector,
+      health: apiProxyHealth,
+      accounts: kiroAccountPort,
+      credentials: kiroCredentialPort,
+      dispatchers: kiroDispatcherPort,
+      maxRetries: settings.getApiProxyMaxRetries(),
+      retryDelayMs: settings.getApiProxyRetryDelayMs(),
+      isPooled: (id) => proxyPoolService.has(id),
+      getPriority: (id) => proxyPoolService.getPriority(id),
+      getConcurrency: (id) => proxyPoolService.getConcurrency(id),
+      random: Math.random,
+    }),
+  )
 
   // 第三方中转上游（relay）— DB 已初始化、cryptoService 已建，安全注册。
   const relayUpstreamRepo = new RelayUpstreamRepository(cryptoService)
@@ -532,20 +558,23 @@ export async function buildContainer(): Promise<Container> {
   const apiProxyKeyService = new ApiProxyKeyService(apiProxyKeyRepo)
 
   // 启动迁移：将 settings 明文 Key 搬入加密表，然后清空 settings 字段（幂等，空则 no-op）。
-  await migrateClientKeys(
-    settings.getApiProxyClientKeys(),
-    apiProxyKeyRepo,
-    () => { void settings.updateSettings({ api_proxy_client_keys: '' }) },
-  )
+  await migrateClientKeys(settings.getApiProxyClientKeys(), apiProxyKeyRepo, () => {
+    void settings.updateSettings({ api_proxy_client_keys: '' })
+  })
 
   // Responses 有状态持久化（previous_response_id 历史链 + store 落盘），默认目录在 appDataDir()/responses。
   const responsesStore = new ResponsesStore()
   // 请求级可观测性（G3）：环形缓冲 + 累计计数器。注入 service 记录每请求；container 把它接到
   // webContents.send 推前端日志页（main.ts），并作为 /metrics（G10）的计数器源。
   const apiProxyRequestLog = new ProxyRequestLog({ capacity: 500 })
+  // 路由日志分析（持久化）：仓储 + 应用服务。每条 G3 记录经 persistSink 入缓冲，由 main.ts 定时 flush 落库。
+  const routingLogService = new RoutingLogService(new MikroOrmRoutingLogRepository())
+  apiProxyRequestLog.setPersistSink((rec) => routingLogService.enqueue(rec))
   // 模型别名解析器（kr→kiro / cx→codex-native / relay-<id> 平台名自身）。闭包到实时注册表，
   // relay 热重载后即时可用。service（组合每跳解析）与 hono（入站 model 前缀解析）共用一份。
-  const apiProxyAliasResolver = makePlatformAliasResolver((n) => platformRegistry.get(n) !== undefined)
+  const apiProxyAliasResolver = makePlatformAliasResolver(
+    (n) => platformRegistry.get(n) !== undefined,
+  )
   // 路由组合（命名的跨供应商降级链）：仓储 + 应用服务（含内存缓存作 ComboSource）。
   // 组合优先级最高、运行时盖过同名上游模型（9router 式），仅禁止组合间重名。
   const routeComboRepo = new RouteComboRepository()
@@ -572,13 +601,17 @@ export async function buildContainer(): Promise<Container> {
       if (platform !== 'kiro') return false
       const accts = await kiroAccountPort.listByPlatform()
       if (accts.length === 0) return false
-      return apiProxyHealth.snapshotAll(accts.map((a) => a.id)).every((s) => s.runtimeState !== 'available')
+      return apiProxyHealth
+        .snapshotAll(accts.map((a) => a.id))
+        .every((s) => s.runtimeState !== 'available')
     },
   })
   // 客户端 Key 令牌桶限流器（后续可接 settings 动态配置 capacity/refillPerMinute）。
   const apiProxyKeyRateLimiter = new KeyRateLimiter({ capacity: 10, refillPerMinute: 10 })
   // 若 apiProxyHttps=true，尝试加载/生成自签证书并启用 HTTPS；失败时降级 HTTP 并打警告，不阻断启动。
-  let tlsConfig: { tls: import('./contexts/apiProxy/infrastructure/http/self-signed-cert').CertBundle } | Record<string, never> = {}
+  let tlsConfig:
+    | { tls: import('./contexts/apiProxy/infrastructure/http/self-signed-cert').CertBundle }
+    | Record<string, never> = {}
   if (settings.getApiProxyHttps()) {
     try {
       const cert = loadOrCreateCert()
@@ -594,7 +627,9 @@ export async function buildContainer(): Promise<Container> {
     for (const s of apiProxyHealth.snapshotAll(accts.map((a) => a.id))) tally[s.runtimeState] += 1
     const counters = apiProxyRequestLog.counters()
     const uptimeSeconds =
-      counters.startedAtMs === null ? 0 : Math.max(0, Math.floor((Date.now() - counters.startedAtMs) / 1000))
+      counters.startedAtMs === null
+        ? 0
+        : Math.max(0, Math.floor((Date.now() - counters.startedAtMs) / 1000))
     return renderPrometheus({
       counters,
       uptimeSeconds,
@@ -678,7 +713,10 @@ export async function buildContainer(): Promise<Container> {
     // 可路由名清单：账号池/relay 模型 + 启用的路由组合（组合用显式 cb/<name>，可作注入 model）。
     listModels: () => [
       ...platformRegistry.listAllModels().map((m) => m.id),
-      ...comboService.list().filter((c) => c.enabled).map((c) => `${COMBO_MODEL_PREFIX}${c.name}`),
+      ...comboService
+        .list()
+        .filter((c) => c.enabled)
+        .map((c) => `${COMBO_MODEL_PREFIX}${c.name}`),
     ],
     listCatalogModels: () => {
       // 按平台排除占位 echo 与原生 codex-native（原生由 Codex 自带 models_cache 提供），
@@ -729,7 +767,10 @@ export async function buildContainer(): Promise<Container> {
       comboService
         .list()
         .filter((c) => c.enabled)
-        .map((c) => ({ id: `${COMBO_MODEL_PREFIX}${c.name}`, displayName: `${c.name} · 号小管组合` })),
+        .map((c) => ({
+          id: `${COMBO_MODEL_PREFIX}${c.name}`,
+          displayName: `${c.name} · 号小管组合`,
+        })),
   }
   // relay 桥（T8）：按 clientConfig 接入档 id 建/删 relay 上游并热重载。
   const clientConfigRelayProvisioning: RelayProvisioningPort = {
@@ -795,8 +836,14 @@ export async function buildContainer(): Promise<Container> {
 
   // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。
   // logSources 同时注入 sessionsService 与 activitySync，接新 agent 只动这一个数组。
-  const logSources = [new ClaudeSessionSource(), new CodexSessionSource(), new GeminiSessionSource()]
-  const sessionsService = new SessionsService(logSources, () => settings.getTerminalLaunchTemplate())
+  const logSources = [
+    new ClaudeSessionSource(),
+    new CodexSessionSource(),
+    new GeminiSessionSource(),
+  ]
+  const sessionsService = new SessionsService(logSources, () =>
+    settings.getTerminalLaunchTemplate(),
+  )
   const codexSessionRepair = new CodexSessionRepair(
     dotDir('codex'),
     join(dotDir('codex'), 'config.toml'),
@@ -840,6 +887,9 @@ export async function buildContainer(): Promise<Container> {
     kiroAccountPort,
     apiProxyKeyService,
     apiProxyRequestLog,
+    routingLogService,
+    proxyPoolService,
+    apiProxySelector,
     comboService,
     clientConfigService,
     clientVersionService,

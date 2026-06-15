@@ -222,6 +222,12 @@ export const API_PROXY_CHANNELS = {
   setClientKeyActive: 'apiProxy:setClientKeyActive',
   deleteClientKey: 'apiProxy:deleteClientKey',
   getAccountPoolHealth: 'apiProxy:getAccountPoolHealth',
+  setAccountPooled: 'apiProxy:setAccountPooled',
+  setAccountPriority: 'apiProxy:setAccountPriority',
+  setAccountConcurrency: 'apiProxy:setAccountConcurrency',
+  getPooledAccountIds: 'apiProxy:getPooledAccountIds',
+  getSelectionConfig: 'apiProxy:getSelectionConfig',
+  setSelectionConfig: 'apiProxy:setSelectionConfig',
   getRequestLog: 'apiProxy:getRequestLog',
   clearRequestLog: 'apiProxy:clearRequestLog',
   // 路由组合（命名的跨供应商降级链）CRUD + 可路由模型清单（组合步骤选择器用）。
@@ -235,6 +241,16 @@ export const API_PROXY_CHANNELS = {
 // 主进程 → 渲染层推送：每条反代请求日志（G3 请求级可观测性）。
 export const API_PROXY_EVENTS = {
   requestLog: 'apiProxy:requestLog',
+} as const
+
+// 路由日志分析模块（routing-log）—— 持久化的反代请求日志聚合查询。channel 取 "routingLog:<method>"。
+export const ROUTING_LOG_CHANNELS = {
+  summary: 'routingLog:summary',
+  trend: 'routingLog:trend',
+  breakdown: 'routingLog:breakdown',
+  topErrors: 'routingLog:topErrors',
+  recent: 'routingLog:recent',
+  clear: 'routingLog:clear',
 } as const
 
 // 主进程 → 渲染层推送：修复会话进度（sessions:repairProgress）。

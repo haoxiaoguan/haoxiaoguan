@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, forwardRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useRef, useState, forwardRef } from 'react'
+import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   Bell,
   Eye,
@@ -15,17 +15,17 @@ import {
   type LucideIcon,
   Upload,
   Users,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,24 +35,26 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from '@/components/ui/alert-dialog'
 import {
   ManagementIconButton as HeaderIconButton,
   ManagementInfoPill as InfoPill,
   ManagementSearchField,
-} from '@/components/management/ManagementControls';
-import AddAccountSheet from '../components/AddAccountSheet';
-import ExportAccountsDialog from '../components/accounts/ExportAccountsDialog';
-import AccountCard from '../components/accounts/AccountCard';
-import EditAccountDialog from '../components/accounts/EditAccountDialog';
-import { PlatformSettingsDialog } from '../components/accounts/PlatformSettingsDialog';
-import { AccountDataTable } from '../components/accounts/AccountDataTable';
-import { PlatformIcon } from '../components/accounts/PlatformIcon';
-import { primaryMetric } from '../components/accounts/quota-display';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAccountStore, useHealthStore, usePlatformStore, useQuotaStateStore } from '../stores';
-import { cn } from '@/lib/utils';
-import type { Account, AccountQuotaState, AgentId } from '../types';
+} from '@/components/management/ManagementControls'
+import AddAccountSheet from '../components/AddAccountSheet'
+import ExportAccountsDialog from '../components/accounts/ExportAccountsDialog'
+import AccountCard from '../components/accounts/AccountCard'
+import EditAccountDialog from '../components/accounts/EditAccountDialog'
+import { PlatformSettingsDialog } from '../components/accounts/PlatformSettingsDialog'
+import { AccountDataTable } from '../components/accounts/AccountDataTable'
+import { PlatformIcon } from '../components/accounts/PlatformIcon'
+import { primaryMetric } from '../components/accounts/quota-display'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAccountStore, useHealthStore, usePlatformStore, useQuotaStateStore } from '../stores'
+import { useApiProxyStore } from '../stores/apiProxyStore'
+import { cn } from '@/lib/utils'
+import { isProxyPoolPlatform } from '@shared/api-types'
+import type { Account, AccountQuotaState, AgentId } from '../types'
 
 const ALL_PLATFORMS: AgentId[] = [
   'cursor',
@@ -67,9 +69,9 @@ const ALL_PLATFORMS: AgentId[] = [
   'qoder',
   'trae',
   'zed',
-];
+]
 
-const FILTER_ALL_TAGS = '__all__';
+const FILTER_ALL_TAGS = '__all__'
 const PLATFORM_SORT_ORDER: AgentId[] = [
   'codex',
   'cursor',
@@ -83,15 +85,15 @@ const PLATFORM_SORT_ORDER: AgentId[] = [
   'codebuddy',
   'codebuddy-cn',
   'kiro',
-];
+]
 const PLATFORM_SORT_INDEX = new Map<AgentId, number>(
   PLATFORM_SORT_ORDER.map((item, index) => [item, index]),
-);
+)
 
-type ViewMode = 'card' | 'table';
-type StatusFilter = 'all' | 'healthy' | 'warning' | 'pending';
-type QuotaFilter = 'all' | 'ok' | 'warning' | 'unknown';
-type SortMode = 'quota' | 'recent' | 'name';
+type ViewMode = 'card' | 'table'
+type StatusFilter = 'all' | 'healthy' | 'warning' | 'pending'
+type QuotaFilter = 'all' | 'ok' | 'warning' | 'unknown'
+type SortMode = 'quota' | 'recent' | 'name'
 
 const PLATFORM_DESCRIPTIONS: Record<string, string> = {
   cursor: '管理 Cursor 登录态、额度刷新与实例切换',
@@ -106,247 +108,272 @@ const PLATFORM_DESCRIPTIONS: Record<string, string> = {
   qoder: '管理 Qoder 登录态、额度刷新与实例切换',
   trae: '管理 Trae 登录态、额度刷新与实例切换',
   zed: '管理 Zed 登录态、Keychain 与用量额度',
-};
+}
 
 export default function Accounts() {
-  const { platform } = useParams<{ platform?: string }>();
-  const { t } = useTranslation('accounts');
-  const { t: tCommon } = useTranslation('translation');
+  const { platform } = useParams<{ platform?: string }>()
+  const { t } = useTranslation('accounts')
+  const { t: tCommon } = useTranslation('translation')
   const { accounts, loading, fetchAccounts, switchAccount, deleteAccount, batchDelete } =
-    useAccountStore();
-  const detectActiveAccounts = useAccountStore((s) => s.detectActiveAccounts);
-  const { getDisplayName, fetchPlatforms } = usePlatformStore();
-  const { refreshBatch, snapshots } = useHealthStore();
-  const quotaStates = useQuotaStateStore((s) => s.states);
-  const ensureQuotaStates = useQuotaStateStore((s) => s.ensureMany);
-  const refreshQuotaState = useQuotaStateStore((s) => s.refresh);
+    useAccountStore()
+  const detectActiveAccounts = useAccountStore((s) => s.detectActiveAccounts)
+  const { getDisplayName, fetchPlatforms } = usePlatformStore()
+  const { refreshBatch, snapshots } = useHealthStore()
+  const quotaStates = useQuotaStateStore((s) => s.states)
+  const ensureQuotaStates = useQuotaStateStore((s) => s.ensureMany)
+  const refreshQuotaState = useQuotaStateStore((s) => s.refresh)
+  // 反代池：入池标识集合 + 拉取/切换（仅可入池平台的账号显示开关）。
+  const pooledIds = useApiProxyStore((s) => s.pooledIds)
+  const fetchPooledIds = useApiProxyStore((s) => s.fetchPooledIds)
+  const setPooled = useApiProxyStore((s) => s.setPooled)
 
   const [selectedPlatform, setSelectedPlatform] = useState<AgentId>(
     isAgentId(platform) ? platform : PLATFORM_SORT_ORDER[0],
-  );
-  const [platformSearch, setPlatformSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [tagFilter, setTagFilter] = useState('');
-  const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('all');
-  const [sortMode, setSortMode] = useState<SortMode>('quota');
-  const [searchText, setSearchText] = useState('');
-  const [view, setView] = useState<ViewMode>('card');
-  const [showImportSheet, setShowImportSheet] = useState(false);
+  )
+  const [platformSearch, setPlatformSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [tagFilter, setTagFilter] = useState('')
+  const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('all')
+  const [sortMode, setSortMode] = useState<SortMode>('quota')
+  const [searchText, setSearchText] = useState('')
+  const [view, setView] = useState<ViewMode>('card')
+  const [showImportSheet, setShowImportSheet] = useState(false)
   // 导出弹窗：null=关闭；数组=待导出账号 id（单账号导出传 [id]，工具栏全量导出传全部）。
-  const [exportIds, setExportIds] = useState<string[] | null>(null);
+  const [exportIds, setExportIds] = useState<string[] | null>(null)
   // 隐私模式：打码卡片/表格上的邮箱（截图/录屏场景），跨会话记住。
   const [hideEmails, setHideEmails] = useState(
     () => localStorage.getItem('hxg:accounts:hide-emails') === '1',
-  );
+  )
   const toggleHideEmails = () => {
     setHideEmails((prev) => {
-      const next = !prev;
-      localStorage.setItem('hxg:accounts:hide-emails', next ? '1' : '0');
-      return next;
-    });
-  };
-  const [showPlatformSettings, setShowPlatformSettings] = useState(false);
-  const [editTarget, setEditTarget] = useState<Account | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const switchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const next = !prev
+      localStorage.setItem('hxg:accounts:hide-emails', next ? '1' : '0')
+      return next
+    })
+  }
+  const [showPlatformSettings, setShowPlatformSettings] = useState(false)
+  const [editTarget, setEditTarget] = useState<Account | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [switchingId, setSwitchingId] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const switchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    fetchPlatforms();
-    ALL_PLATFORMS.forEach((item) => fetchAccounts(item));
-  }, [fetchAccounts, fetchPlatforms]);
+    fetchPlatforms()
+    ALL_PLATFORMS.forEach((item) => fetchAccounts(item))
+  }, [fetchAccounts, fetchPlatforms])
+
+  // 反代池入池标识（进入页面拉取一次；切换平台后由开关本地乐观更新）。
+  useEffect(() => {
+    void fetchPooledIds()
+  }, [fetchPooledIds])
+
+  // 当前平台是否可入反代池（仅这些平台账号显示入池开关）。
+  const poolable = isProxyPoolPlatform(selectedPlatform)
+  const pooledSet = useMemo(() => new Set(pooledIds), [pooledIds])
 
   // On entering the page, reverse-detect which account each IDE is actually
   // logged into and reconcile the "in use" badges with reality. Best-effort.
   useEffect(() => {
-    void detectActiveAccounts();
-  }, [detectActiveAccounts]);
+    void detectActiveAccounts()
+  }, [detectActiveAccounts])
 
   useEffect(() => {
-    if (isAgentId(platform)) setSelectedPlatform(platform);
-  }, [platform]);
+    if (isAgentId(platform)) setSelectedPlatform(platform)
+  }, [platform])
 
   useEffect(() => {
-    setSelectedIds(new Set());
-    setHighlightedId(null);
-    setSearchText('');
-    setTagFilter('');
-    setStatusFilter('all');
-    setQuotaFilter('all');
-  }, [selectedPlatform]);
+    setSelectedIds(new Set())
+    setHighlightedId(null)
+    setSearchText('')
+    setTagFilter('')
+    setStatusFilter('all')
+    setQuotaFilter('all')
+  }, [selectedPlatform])
 
   const allAccounts = useMemo(() => {
-    const out: Account[] = [];
-    accounts.forEach((list) => out.push(...list));
-    return out;
-  }, [accounts]);
+    const out: Account[] = []
+    accounts.forEach((list) => out.push(...list))
+    return out
+  }, [accounts])
 
   useEffect(() => {
-    const ids = allAccounts.map((account) => account.id);
-    if (ids.length === 0) return;
-    refreshBatch(ids).catch(() => {});
-  }, [allAccounts, refreshBatch]);
+    const ids = allAccounts.map((account) => account.id)
+    if (ids.length === 0) return
+    refreshBatch(ids).catch(() => {})
+  }, [allAccounts, refreshBatch])
 
   const platformCounts = useMemo(() => {
-    const counts = new Map<AgentId, number>();
-    ALL_PLATFORMS.forEach((item) => counts.set(item, accounts.get(item)?.length ?? 0));
-    return counts;
-  }, [accounts]);
+    const counts = new Map<AgentId, number>()
+    ALL_PLATFORMS.forEach((item) => counts.set(item, accounts.get(item)?.length ?? 0))
+    return counts
+  }, [accounts])
 
-  const selectedAccounts = accounts.get(selectedPlatform) ?? [];
+  const selectedAccounts = accounts.get(selectedPlatform) ?? []
 
   const healthBucket = useCallback(
     (account: Account): StatusFilter => {
-      const state = snapshots.get(account.id)?.validation.state ?? normalizeAccountStatus(account.status);
-      if (state === 'valid') return 'healthy';
-      if (state === 'pending' || state === 'unsupported') return 'pending';
-      return 'warning';
+      const state =
+        snapshots.get(account.id)?.validation.state ?? normalizeAccountStatus(account.status)
+      if (state === 'valid') return 'healthy'
+      if (state === 'pending' || state === 'unsupported') return 'pending'
+      return 'warning'
     },
     [snapshots],
-  );
+  )
 
   const selectedStats = useMemo(() => {
-    let warning = 0;
+    let warning = 0
     for (const account of selectedAccounts) {
-      if (healthBucket(account) === 'warning') warning += 1;
+      if (healthBucket(account) === 'warning') warning += 1
     }
     return {
       total: selectedAccounts.length,
       warning,
-    };
-  }, [healthBucket, selectedAccounts]);
+    }
+  }, [healthBucket, selectedAccounts])
 
   const tags = useMemo(() => {
-    const set = new Set<string>();
-    selectedAccounts.forEach((account) => account.tags.forEach((tag) => set.add(tag)));
-    return Array.from(set).sort();
-  }, [selectedAccounts]);
+    const set = new Set<string>()
+    selectedAccounts.forEach((account) => account.tags.forEach((tag) => set.add(tag)))
+    return Array.from(set).sort()
+  }, [selectedAccounts])
 
   const filteredAccounts = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
+    const query = searchText.trim().toLowerCase()
     return selectedAccounts
       .filter((account) => {
-        if (statusFilter !== 'all' && healthBucket(account) !== statusFilter) return false;
-        if (tagFilter && !account.tags.includes(tagFilter)) return false;
+        if (statusFilter !== 'all' && healthBucket(account) !== statusFilter) return false
+        if (tagFilter && !account.tags.includes(tagFilter)) return false
         if (quotaFilter !== 'all' && quotaBucket(quotaStates.get(account.id)) !== quotaFilter) {
-          return false;
+          return false
         }
-        if (!query) return true;
+        if (!query) return true
         return (
           account.email.toLowerCase().includes(query) ||
           account.identityKey.toLowerCase().includes(query) ||
           account.displayIdentifier.toLowerCase().includes(query) ||
           (account.name?.toLowerCase().includes(query) ?? false) ||
           account.tags.some((tag) => tag.toLowerCase().includes(query))
-        );
+        )
       })
-      .sort((a, b) => compareAccounts(a, b, sortMode, quotaStates));
-  }, [healthBucket, quotaFilter, quotaStates, searchText, selectedAccounts, sortMode, statusFilter, tagFilter]);
+      .sort((a, b) => compareAccounts(a, b, sortMode, quotaStates))
+  }, [
+    healthBucket,
+    quotaFilter,
+    quotaStates,
+    searchText,
+    selectedAccounts,
+    sortMode,
+    statusFilter,
+    tagFilter,
+  ])
 
   useEffect(() => {
-    const ids = filteredAccounts.map((account) => account.id);
-    if (ids.length === 0) return;
-    ensureQuotaStates(ids).catch(() => {});
-  }, [ensureQuotaStates, filteredAccounts]);
+    const ids = filteredAccounts.map((account) => account.id)
+    if (ids.length === 0) return
+    ensureQuotaStates(ids).catch(() => {})
+  }, [ensureQuotaStates, filteredAccounts])
 
   const visiblePlatforms = useMemo(() => {
-    const query = platformSearch.trim().toLowerCase();
+    const query = platformSearch.trim().toLowerCase()
     const filtered = query
-      ? ALL_PLATFORMS.filter((item) =>
-          getDisplayName(item).toLowerCase().includes(query) || item.toLowerCase().includes(query),
+      ? ALL_PLATFORMS.filter(
+          (item) =>
+            getDisplayName(item).toLowerCase().includes(query) ||
+            item.toLowerCase().includes(query),
         )
-      : ALL_PLATFORMS;
+      : ALL_PLATFORMS
     return [...filtered].sort((a, b) => {
-      const countDiff = (platformCounts.get(b) ?? 0) - (platformCounts.get(a) ?? 0);
-      if (countDiff !== 0) return countDiff;
-      return platformOrder(a) - platformOrder(b);
-    });
-  }, [getDisplayName, platformCounts, platformSearch]);
+      const countDiff = (platformCounts.get(b) ?? 0) - (platformCounts.get(a) ?? 0)
+      if (countDiff !== 0) return countDiff
+      return platformOrder(a) - platformOrder(b)
+    })
+  }, [getDisplayName, platformCounts, platformSearch])
 
   const handleSwitch = useCallback(
     (accountPlatform: AgentId, accountId: string) => {
-      if (switchingId) return;
-      if (switchDebounceRef.current) clearTimeout(switchDebounceRef.current);
-      setSwitchingId(accountId);
+      if (switchingId) return
+      if (switchDebounceRef.current) clearTimeout(switchDebounceRef.current)
+      setSwitchingId(accountId)
       switchDebounceRef.current = setTimeout(async () => {
         try {
-          await switchAccount(accountPlatform, accountId);
-          toast.success(t('switchSuccess'));
+          await switchAccount(accountPlatform, accountId)
+          toast.success(t('switchSuccess'))
         } catch {
-          toast.error(t('switchFailed'));
+          toast.error(t('switchFailed'))
         } finally {
-          setSwitchingId(null);
+          setSwitchingId(null)
         }
-      }, 300);
+      }, 300)
     },
     [switchAccount, switchingId, t],
-  );
+  )
 
   const handleDelete = async (accountId: string) => {
     try {
-      await deleteAccount(accountId);
+      await deleteAccount(accountId)
       setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(accountId);
-        return next;
-      });
+        const next = new Set(prev)
+        next.delete(accountId)
+        return next
+      })
     } catch {
-      toast.error(t('switchFailed'));
+      toast.error(t('switchFailed'))
     }
-  };
+  }
 
   const handleBatchDelete = async () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0) return
     try {
-      await batchDelete(Array.from(selectedIds));
-      setSelectedIds(new Set());
-      setShowDeleteConfirm(false);
+      await batchDelete(Array.from(selectedIds))
+      setSelectedIds(new Set())
+      setShowDeleteConfirm(false)
     } catch {
-      toast.error(t('switchFailed'));
+      toast.error(t('switchFailed'))
     }
-  };
+  }
 
   const handleRefreshSelectedPlatform = async () => {
-    if (refreshing) return;
-    setRefreshing(true);
+    if (refreshing) return
+    setRefreshing(true)
     try {
-      const ids = selectedAccounts.map((account) => account.id);
-      await refreshBatch(ids).catch(() => {});
-      const results = await Promise.allSettled(ids.map((id) => refreshQuotaState(id)));
+      const ids = selectedAccounts.map((account) => account.id)
+      await refreshBatch(ids).catch(() => {})
+      const results = await Promise.allSettled(ids.map((id) => refreshQuotaState(id)))
       // 刷新结束后重新拉取该平台账号,使会员计划/有效期等账号字段同步更新
-      await fetchAccounts(selectedPlatform);
+      await fetchAccounts(selectedPlatform)
       // 同时探测各 agent 真机当前登录的账号,回写「使用中」状态(尽力而为,失败不影响额度刷新结果)
-      await detectActiveAccounts().catch(() => {});
-      const failed = results.filter((result) => result.status === 'rejected').length;
+      await detectActiveAccounts().catch(() => {})
+      const failed = results.filter((result) => result.status === 'rejected').length
       if (failed > 0) {
         toast.error(t('refreshFailed'), {
           description: t('refreshFailedCount', { failed, total: ids.length }),
-        });
+        })
       }
     } finally {
-      setRefreshing(false);
+      setRefreshing(false)
     }
-  };
+  }
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredAccounts.length && filteredAccounts.length > 0) {
-      setSelectedIds(new Set());
+      setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(filteredAccounts.map((account) => account.id)));
+      setSelectedIds(new Set(filteredAccounts.map((account) => account.id)))
     }
-  };
+  }
 
   return (
     <div
@@ -370,7 +397,7 @@ export default function Accounts() {
         <ScrollArea data-testid="accounts-platform-scroll" className="mt-2 min-h-0 flex-1 pr-1">
           <nav className="flex min-w-0 flex-col gap-1" aria-label="账号平台">
             {visiblePlatforms.map((item) => {
-              const active = item === selectedPlatform;
+              const active = item === selectedPlatform
               return (
                 <button
                   key={item}
@@ -391,7 +418,7 @@ export default function Accounts() {
                     {platformCounts.get(item) ?? 0}
                   </span>
                 </button>
-              );
+              )
             })}
           </nav>
         </ScrollArea>
@@ -434,7 +461,9 @@ export default function Accounts() {
                       onClick={handleRefreshSelectedPlatform}
                     />
                   </TooltipTrigger>
-                  <TooltipContent>{refreshing ? t('refreshing') : t('tooltips.refresh')}</TooltipContent>
+                  <TooltipContent>
+                    {refreshing ? t('refreshing') : t('tooltips.refresh')}
+                  </TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -476,13 +505,23 @@ export default function Accounts() {
                 >
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <ViewButton label={t('tooltips.viewTable')} active={view === 'table'} icon={Table2} onClick={() => setView('table')} />
+                      <ViewButton
+                        label={t('tooltips.viewTable')}
+                        active={view === 'table'}
+                        icon={Table2}
+                        onClick={() => setView('table')}
+                      />
                     </TooltipTrigger>
                     <TooltipContent>{t('tooltips.viewTable')}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <ViewButton label={t('tooltips.viewCard')} active={view === 'card'} icon={LayoutGrid} onClick={() => setView('card')} />
+                      <ViewButton
+                        label={t('tooltips.viewCard')}
+                        active={view === 'card'}
+                        icon={LayoutGrid}
+                        onClick={() => setView('card')}
+                      />
                     </TooltipTrigger>
                     <TooltipContent>{t('tooltips.viewCard')}</TooltipContent>
                   </Tooltip>
@@ -502,8 +541,14 @@ export default function Accounts() {
               placeholder="搜索账号 / 邮箱 / 用户 ID"
             />
 
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-              <SelectTrigger data-testid="accounts-status-filter" className="h-8 w-[98px] rounded-[8px] text-[12px]">
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+            >
+              <SelectTrigger
+                data-testid="accounts-status-filter"
+                className="h-8 w-[98px] rounded-[8px] text-[12px]"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -518,7 +563,10 @@ export default function Accounts() {
               value={tagFilter || FILTER_ALL_TAGS}
               onValueChange={(value) => setTagFilter(value === FILTER_ALL_TAGS ? '' : value)}
             >
-              <SelectTrigger data-testid="accounts-tag-filter" className="h-8 w-[98px] rounded-[8px] text-[12px]">
+              <SelectTrigger
+                data-testid="accounts-tag-filter"
+                className="h-8 w-[98px] rounded-[8px] text-[12px]"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -531,8 +579,14 @@ export default function Accounts() {
               </SelectContent>
             </Select>
 
-            <Select value={quotaFilter} onValueChange={(value) => setQuotaFilter(value as QuotaFilter)}>
-              <SelectTrigger data-testid="accounts-quota-filter" className="h-8 w-[98px] rounded-[8px] text-[12px]">
+            <Select
+              value={quotaFilter}
+              onValueChange={(value) => setQuotaFilter(value as QuotaFilter)}
+            >
+              <SelectTrigger
+                data-testid="accounts-quota-filter"
+                className="h-8 w-[98px] rounded-[8px] text-[12px]"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -544,7 +598,10 @@ export default function Accounts() {
             </Select>
 
             <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-              <SelectTrigger data-testid="accounts-sort-filter" className="h-8 w-[118px] rounded-[8px] text-[12px]">
+              <SelectTrigger
+                data-testid="accounts-sort-filter"
+                className="h-8 w-[118px] rounded-[8px] text-[12px]"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -553,7 +610,6 @@ export default function Accounts() {
                 <SelectItem value="name">排序：账号名称</SelectItem>
               </SelectContent>
             </Select>
-
           </div>
         </div>
 
@@ -606,6 +662,14 @@ export default function Accounts() {
                       onEdit={() => setEditTarget(account)}
                       onExport={() => setExportIds([account.id])}
                       hideEmail={hideEmails}
+                      pool={
+                        poolable
+                          ? {
+                              pooled: pooledSet.has(account.id),
+                              onToggle: (v) => void setPooled(account.id, v),
+                            }
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -624,11 +688,14 @@ export default function Accounts() {
                   onDelete={handleDelete}
                   onOpen={setHighlightedId}
                   onEdit={(id) => {
-                    const acc = filteredAccounts.find((a) => a.id === id);
-                    if (acc) setEditTarget(acc);
+                    const acc = filteredAccounts.find((a) => a.id === id)
+                    if (acc) setEditTarget(acc)
                   }}
                   onExport={(id) => setExportIds([id])}
                   hideEmail={hideEmails}
+                  poolable={poolable}
+                  pooledIds={pooledSet}
+                  onTogglePooled={(id, v) => void setPooled(id, v)}
                 />
                 {selectedIds.size > 0 ? (
                   <div className="mt-2 flex h-11 items-center justify-between rounded-[8px] border border-border bg-muted/20 px-4">
@@ -656,15 +723,15 @@ export default function Accounts() {
         onOpenChange={setShowImportSheet}
         defaultPlatform={selectedPlatform}
         onSuccess={() => {
-          toast.success(t('importSuccess'));
-          fetchAccounts(selectedPlatform);
+          toast.success(t('importSuccess'))
+          fetchAccounts(selectedPlatform)
         }}
       />
 
       <ExportAccountsDialog
         open={exportIds !== null}
         onOpenChange={(open) => {
-          if (!open) setExportIds(null);
+          if (!open) setExportIds(null)
         }}
         platform={selectedPlatform}
         accountIds={exportIds ?? []}
@@ -674,7 +741,7 @@ export default function Accounts() {
         account={editTarget}
         open={editTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setEditTarget(null);
+          if (!open) setEditTarget(null)
         }}
         onSaved={() => fetchAccounts(selectedPlatform)}
       />
@@ -705,16 +772,16 @@ export default function Accounts() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }
 
 const ViewButton = forwardRef<
   HTMLButtonElement,
   {
-    label: string;
-    active: boolean;
-    icon: LucideIcon;
-    onClick: () => void;
+    label: string
+    active: boolean
+    icon: LucideIcon
+    onClick: () => void
   }
 >(function ViewButton({ label, active, icon: Icon, onClick }, ref) {
   return (
@@ -731,34 +798,34 @@ const ViewButton = forwardRef<
     >
       <Icon className="size-3.5" strokeWidth={2} />
     </button>
-  );
-});
+  )
+})
 
 function isAgentId(value: unknown): value is AgentId {
-  return typeof value === 'string' && ALL_PLATFORMS.includes(value as AgentId);
+  return typeof value === 'string' && ALL_PLATFORMS.includes(value as AgentId)
 }
 
 function platformOrder(platform: AgentId) {
-  return PLATFORM_SORT_INDEX.get(platform) ?? Number.MAX_SAFE_INTEGER;
+  return PLATFORM_SORT_INDEX.get(platform) ?? Number.MAX_SAFE_INTEGER
 }
 
 function normalizeAccountStatus(status?: string): string {
-  const normalized = status?.trim().toLowerCase();
-  if (!normalized) return 'pending';
-  if (['active', 'valid', 'ok', 'enabled'].includes(normalized)) return 'valid';
-  if (['expired', 'disabled'].includes(normalized)) return 'expired';
-  if (['revoked', 'failed', 'error'].includes(normalized)) return 'revoked';
-  if (['limited', 'warning', 'rate_limited'].includes(normalized)) return 'rate_limited';
-  return 'pending';
+  const normalized = status?.trim().toLowerCase()
+  if (!normalized) return 'pending'
+  if (['active', 'valid', 'ok', 'enabled'].includes(normalized)) return 'valid'
+  if (['expired', 'disabled'].includes(normalized)) return 'expired'
+  if (['revoked', 'failed', 'error'].includes(normalized)) return 'revoked'
+  if (['limited', 'warning', 'rate_limited'].includes(normalized)) return 'rate_limited'
+  return 'pending'
 }
 
 function quotaBucket(state: AccountQuotaState | undefined): QuotaFilter {
-  if (!state) return 'unknown';
-  if (state.status === 'ok') return 'ok';
+  if (!state) return 'unknown'
+  if (state.status === 'ok') return 'ok'
   if (state.status === 'warning' || state.status === 'exhausted' || state.status === 'error') {
-    return 'warning';
+    return 'warning'
   }
-  return 'unknown';
+  return 'unknown'
 }
 
 export function compareAccounts(
@@ -769,24 +836,24 @@ export function compareAccounts(
 ) {
   // The account the agent is currently using always pins to the top, regardless
   // of sort mode, so "which account is active" is answerable at a glance.
-  if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
-  if (sortMode === 'name') return accountTitle(a).localeCompare(accountTitle(b));
-  if (sortMode === 'recent') return dateValue(b.lastUsedAt) - dateValue(a.lastUsedAt);
-  return quotaScore(quotaStates.get(b.id)) - quotaScore(quotaStates.get(a.id));
+  if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
+  if (sortMode === 'name') return accountTitle(a).localeCompare(accountTitle(b))
+  if (sortMode === 'recent') return dateValue(b.lastUsedAt) - dateValue(a.lastUsedAt)
+  return quotaScore(quotaStates.get(b.id)) - quotaScore(quotaStates.get(a.id))
 }
 
 function accountTitle(account: Account) {
-  return account.name || account.displayIdentifier || account.email;
+  return account.name || account.displayIdentifier || account.email
 }
 
 function quotaScore(state?: AccountQuotaState) {
-  if (!state) return -1;
-  const metric = primaryMetric(state);
-  return metric?.percentUsed ?? metric?.percentRemaining ?? 0;
+  if (!state) return -1
+  const metric = primaryMetric(state)
+  return metric?.percentUsed ?? metric?.percentRemaining ?? 0
 }
 
 function dateValue(iso?: string) {
-  if (!iso) return 0;
-  const value = new Date(iso).getTime();
-  return Number.isNaN(value) ? 0 : value;
+  if (!iso) return 0
+  const value = new Date(iso).getTime()
+  return Number.isNaN(value) ? 0 : value
 }

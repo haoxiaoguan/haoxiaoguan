@@ -40,7 +40,9 @@
     "tagsNone": "No tags",
     "quotaTitle": "Quota usage",
     "quotaEmpty": "Not fetched",
-    "active": "In use"
+    "active": "In use",
+    "pool": "Proxy pool",
+    "poolHint": "Pooled accounts join reverse-proxy selection"
   },
   "list": {
     "header": {

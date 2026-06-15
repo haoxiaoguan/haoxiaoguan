@@ -55,6 +55,11 @@ import type { AccountHealthTracker } from '../contexts/apiProxy/domain/account-s
 import type { KiroAccountPort } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
 import type { ApiProxyKeyService } from '../contexts/apiProxy/application/api-proxy-key-service'
 import type { ProxyRequestLog } from '../contexts/apiProxy/domain/observability/proxy-request-log'
+import type { RoutingLogService } from '../contexts/apiProxy/application/routing-log-service'
+import { registerRoutingLogHandlers } from '../contexts/apiProxy/ipc/routing-log-handlers'
+import type { ProxyPoolService } from '../contexts/apiProxy/application/proxy-pool-service'
+import type { AccountPoolSelector } from '../contexts/apiProxy/domain/account-selection/account-pool-selector'
+import { registerProxyPoolConfigHandlers } from '../contexts/apiProxy/ipc/proxy-pool-config-handlers'
 
 import type { SessionsService } from '../contexts/sessions/application/sessions-service'
 import { registerSessionsHandlers } from '../contexts/sessions/ipc/sessions-handlers'
@@ -132,6 +137,12 @@ export interface Services {
   apiProxyKeyService?: ApiProxyKeyService
   /** 请求级可观测性日志（G3）：供 IPC getRequestLog/clearRequestLog + 推送给渲染层。 */
   apiProxyRequestLog: ProxyRequestLog
+  /** 路由日志分析（持久化反代请求日志 + 日桶 rollup + 多维查询）。 */
+  routingLogService: RoutingLogService
+  /** 反代账号池成员（独立标识；仅池内账号可被反代选号）。 */
+  proxyPoolService: ProxyPoolService
+  /** 反代选号器（供「反代设置」运行时热更轮询策略/亲密度/并发）。 */
+  apiProxySelector: AccountPoolSelector
   /** 路由组合服务（CRUD + ComboSource）。 */
   comboService?: ComboService
 
@@ -179,8 +190,27 @@ export function registerAllHandlers(services: Services): void {
   registerWebSocketHandlers(services.websocket)
   registerProxyHandlers(services.proxyService)
   registerAccountGroupHandlers(services.accountGroupService)
-  registerApiProxyHandlers(services.apiProxyService, services.apiProxyHealth, services.kiroAccountPort, services.apiProxyKeyService, services.settings.getApiProxyQuotaResetMs(), services.apiProxyRequestLog, services.comboService)
-  registerSessionsHandlers(services.sessionsService, services.codexSessionRepair, services.clientConfigService)
+  registerApiProxyHandlers(
+    services.apiProxyService,
+    services.apiProxyHealth,
+    services.kiroAccountPort,
+    services.apiProxyKeyService,
+    services.settings.getApiProxyQuotaResetMs(),
+    services.apiProxyRequestLog,
+    services.comboService,
+    services.proxyPoolService,
+    services.routingLogService,
+  )
+  registerProxyPoolConfigHandlers({
+    selector: services.apiProxySelector,
+    settings: services.settings,
+  })
+  registerRoutingLogHandlers(services.routingLogService)
+  registerSessionsHandlers(
+    services.sessionsService,
+    services.codexSessionRepair,
+    services.clientConfigService,
+  )
   registerActivityHandlers(services.activitySync, services.activityQuery)
   registerClientConfigHandlers(services.clientConfigService, services.clientVersionService)
 }

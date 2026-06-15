@@ -2,7 +2,13 @@
 // （clientConfig · apiProxy · combo · proxy · accountGroup context）。
 
 // ─── clientConfig DTO（与 main domain 同形）─────────────────────────────────
-export type ClientConfigClientId = 'claude' | 'codex' | 'gemini_cli' | 'opencode' | 'openclaw' | 'hermes'
+export type ClientConfigClientId =
+  | 'claude'
+  | 'codex'
+  | 'gemini_cli'
+  | 'opencode'
+  | 'openclaw'
+  | 'hermes'
 export type ClientConfigWriteMode = 'switch' | 'additive'
 export interface ClientConfigClientInfo {
   clientId: ClientConfigClientId
@@ -143,6 +149,99 @@ export interface ProxyRequestRecord {
   clientKeyId?: string
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  errorMessage?: string
+  // ── 路由维度（路由日志分析模块）──
+  comboName?: string
+  requestedModel?: string
+  finalModel?: string
+  routeHops?: number
+  routePath?: string[]
+}
+
+// ── 路由日志分析 DTO（routing-log 模块；与 main domain 的 routing-log-record 同形）────────
+/** 查询窗口：epoch 秒闭区间。 */
+export interface RoutingWindowDto {
+  startSec: number
+  endSec: number
+}
+export type RoutingGranularityDto = 'hour' | 'day'
+export type RoutingBreakdownDimDto = 'platform' | 'combo' | 'model' | 'status' | 'account'
+export interface RoutingSummaryDto {
+  requests: number
+  success: number
+  failed: number
+  successRate: number
+  errorRate: number
+  avgDurationMs: number
+  p95DurationMs: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  fallbackRequests: number
+  comboRequests: number
+  /** 峰值 RPM：窗口内单分钟最高请求数。 */
+  peakRpm: number
+}
+export interface RoutingTrendPointDto {
+  date: string
+  requests: number
+  success: number
+  failed: number
+  avgDurationMs: number
+  inputTokens: number
+  outputTokens: number
+}
+export interface RoutingBreakdownRowDto {
+  key: string
+  requests: number
+  success: number
+  failed: number
+  successRate: number
+  avgDurationMs: number
+  inputTokens: number
+  outputTokens: number
+  shareRatio: number
+}
+export interface RoutingErrorRowDto {
+  message: string
+  count: number
+  lastStatus: number
+  lastTsMs: number
+}
+export interface RoutingRecentFilterDto {
+  okOnly?: boolean
+  failedOnly?: boolean
+  platform?: string
+  comboName?: string
+}
+export interface RoutingRecentRowDto {
+  seq: number
+  tsMs: number
+  method: string
+  path: string
+  format: string
+  platform?: string
+  action: string
+  stream: boolean
+  status: number
+  ok: boolean
+  durationMs: number
+  attempts: number
+  accountId?: string
+  clientKeyId?: string
+  comboName?: string
+  requestedModel?: string
+  finalModel?: string
+  routeHops?: number
+  routePath?: string[]
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
   errorMessage?: string
 }
 
@@ -187,9 +286,22 @@ export interface UpdateStatus {
   error?: string
 }
 
-// 账号池健康行（IPC 返回）：合并账号 meta + 运行态快照。
+/**
+ * 已接入「反代账号选号」的平台（账号型上游）。其账号才可被加入反代池 / 显示入池开关。
+ * 目前仅 Kiro 走 FailoverAdapter 选号链；以后新增账号型上游平台时在此登记即自动纳入。
+ */
+export const PROXY_POOL_PLATFORMS = ['kiro'] as const
+export type ProxyPoolPlatform = (typeof PROXY_POOL_PLATFORMS)[number]
+/** 平台是否可入反代池。 */
+export function isProxyPoolPlatform(platform: string): boolean {
+  return (PROXY_POOL_PLATFORMS as readonly string[]).includes(platform)
+}
+
+// 账号池健康行（IPC 返回）：合并账号 meta + 运行态快照 + 入池标识 + 窗口内请求统计。
 export interface AccountPoolHealthRow {
   accountId: string
+  /** 账号所属平台（agentId，如 'kiro'）；前端展示平台标识/徽章。 */
+  platform: string
   email: string
   status?: string
   runtimeState: 'available' | 'cooldown' | 'quota_exhausted' | 'suspended'
@@ -198,6 +310,40 @@ export interface AccountPoolHealthRow {
   quotaExhaustedAtMs?: number
   /** quota_exhausted 恢复时间戳（ms）：由服务端按配置值计算，前端直接展示。 */
   quotaResetsAtMs?: number
+  /** 是否在反代账号池内（拥有池标识，才会被反代选号）。 */
+  pooled: boolean
+  /** 选号权重优先级（越大占比越高；未入池为 0）。 */
+  priority: number
+  /** 每账号并发上限（同时在途请求数；未入池为默认值）。 */
+  concurrency: number
+  /** 窗口内被请求次数（来自路由日志聚合）。 */
+  requests: number
+  /** 窗口内成功次数。 */
+  success: number
+  /** 窗口内失败次数。 */
+  failed: number
+  /** 窗口内命中 429（限流）的次数。 */
+  rateLimited: number
+  /** 窗口内平均延迟（ms）。 */
+  avgDurationMs: number
+  /** 窗口内峰值 RPM（单分钟最高请求数）。 */
+  peakRpm: number
+  /** 窗口内输入 token 合计。 */
+  inputTokens: number
+  /** 窗口内输出 token 合计。 */
+  outputTokens: number
+  /** 窗口内缓存 token 合计（读 + 写）。 */
+  cacheTokens: number
+  /** 窗口内最近一次被请求时刻（ms；无则 undefined）。 */
+  lastRequestMs?: number
+}
+
+// 反代池全局选号配置（池级；优先级与并发为每账号配置，不在此）。
+export interface ApiProxySelectionConfigDto {
+  /** 轮询策略：会话粘性 LRU / 轮询。 */
+  strategy: 'sticky-lru' | 'round-robin'
+  /** 亲密度：会话粘性保持时长（ms，0=不粘）。 */
+  affinityTtlMs: number
 }
 
 // 客户端 Key 元信息（不含明文/密文）。

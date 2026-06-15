@@ -91,7 +91,7 @@ const navButtonClassName =
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
 type ClientConfigHeaderTab = 'manage' | 'access';
-type RouteServiceHeaderTab = 'service' | 'combos' | 'keys' | 'health';
+type RouteServiceHeaderTab = 'service' | 'combos' | 'keys' | 'health' | 'logs';
 
 function getRouteTitleKey(pathname: string) {
   if (pathname.startsWith('/accounts')) return 'accounts:title';
@@ -228,7 +228,9 @@ export function AppShell({ shell }: AppShellProps) {
       ? 'keys'
       : location.pathname.startsWith('/api-service/health')
         ? 'health'
-        : 'service';
+        : location.pathname.startsWith('/api-service/logs')
+          ? 'logs'
+          : 'service';
   const activeClientConfigTab: ClientConfigHeaderTab = location.pathname.startsWith('/client-config/access')
     ? 'access'
     : 'manage'; // /client-config 默认进客户端管理
@@ -342,6 +344,7 @@ export function AppShell({ shell }: AppShellProps) {
                   { value: 'combos', label: t('nav:service.combos.title'), to: '/api-service/combos' },
                   { value: 'keys', label: t('nav:clientKeys.title'), to: '/api-service/keys' },
                   { value: 'health', label: t('nav:poolHealth.title'), to: '/api-service/health' },
+                  { value: 'logs', label: t('nav:routingLog.title'), to: '/api-service/logs' },
                 ]}
               />
             ) : isClientConfigRoute ? (

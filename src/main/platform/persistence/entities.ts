@@ -14,7 +14,8 @@
 //   - quota       (2 tables: quota_cache, account_quota_state)
 //   - mcp         (1 table: mcp_servers)
 //   - proxy       (2 tables: proxies, account_proxy_bindings)
-//   - api-proxy   (2 tables: api_proxy_keys, relay_upstreams)
+//   - api-proxy   (api_proxy_keys, relay_upstreams, route_combos,
+//                  routing_request_logs, routing_daily_rollups)
 //
 // The `credentials` table is owned by the credential context's CredentialEntity
 // (it supersedes the account context's former TEMP CredentialRefEntity, now
@@ -52,6 +53,9 @@ import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infr
 import { ApiProxyKeyEntity } from '../../contexts/apiProxy/infrastructure/api-proxy-key.entity'
 import { RelayUpstreamEntity } from '../../contexts/apiProxy/infrastructure/relay/relay-upstream.entity'
 import { RouteComboEntity } from '../../contexts/apiProxy/infrastructure/route-combo.entity'
+import { RoutingRequestLogEntity } from '../../contexts/apiProxy/infrastructure/routing-log/routing-request-log.entity'
+import { RoutingDailyRollupEntity } from '../../contexts/apiProxy/infrastructure/routing-log/routing-daily-rollup.entity'
+import { ProxyPoolMemberEntity } from '../../contexts/apiProxy/infrastructure/account-pool/proxy-pool-member.entity'
 
 import { ClientConfigProfileEntity } from '../../contexts/clientConfig/infrastructure/client-config-profile.entity'
 
@@ -93,6 +97,11 @@ export const ALL_ENTITIES: unknown[] = [
   ApiProxyKeyEntity,
   RelayUpstreamEntity,
   RouteComboEntity,
+  // api-proxy · routing-log analysis (2 tables: routing_request_logs, routing_daily_rollups)
+  RoutingRequestLogEntity,
+  RoutingDailyRollupEntity,
+  // api-proxy · account pool membership (1 table: proxy_pool_members)
+  ProxyPoolMemberEntity,
   // client-config context (1 table: client_config_profiles)
   ClientConfigProfileEntity,
   // activity context

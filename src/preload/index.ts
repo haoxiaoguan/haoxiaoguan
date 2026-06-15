@@ -18,6 +18,7 @@ import {
   PROXY_CHANNELS,
   API_PROXY_CHANNELS,
   API_PROXY_EVENTS,
+  ROUTING_LOG_CHANNELS,
   SESSIONS_CHANNELS,
   SESSIONS_EVENTS,
   ACTIVITY_CHANNELS,
@@ -27,7 +28,12 @@ import {
   WINDOW_CHANNELS,
   WINDOW_EVENTS,
 } from '../shared/ipc-channels'
-import type { HxgApi, UpdateStatus, ProxyRequestRecord, CodexRepairProgressDto } from '../shared/api-types'
+import type {
+  HxgApi,
+  UpdateStatus,
+  ProxyRequestRecord,
+  CodexRepairProgressDto,
+} from '../shared/api-types'
 
 const api: HxgApi = {
   settings: {
@@ -88,7 +94,12 @@ const api: HxgApi = {
     startOauth: (provider, mode) =>
       ipcRenderer.invoke(CREDENTIAL_CHANNELS.startOauth, { provider, mode }),
     completeOauth: (pendingId, code, proxyId, accountId) =>
-      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, { pendingId, code, proxyId, accountId }),
+      ipcRenderer.invoke(CREDENTIAL_CHANNELS.completeOauth, {
+        pendingId,
+        code,
+        proxyId,
+        accountId,
+      }),
     importTokenJson: (provider, payload, proxyId) =>
       ipcRenderer.invoke(CREDENTIAL_CHANNELS.importTokenJson, { provider, payload, proxyId }),
     scanLocalCredentials: (provider, proxyId) =>
@@ -194,19 +205,31 @@ const api: HxgApi = {
       ipcRenderer.invoke(PROXY_CHANNELS.getAccountBinding, { accountId }),
     bindAccountToProxy: (accountId, proxyId) =>
       ipcRenderer.invoke(PROXY_CHANNELS.bindAccountToProxy, { accountId, proxyId }),
-    unbindAccount: (accountId) =>
-      ipcRenderer.invoke(PROXY_CHANNELS.unbindAccount, { accountId }),
+    unbindAccount: (accountId) => ipcRenderer.invoke(PROXY_CHANNELS.unbindAccount, { accountId }),
   },
   apiProxy: {
     start: () => ipcRenderer.invoke(API_PROXY_CHANNELS.start),
     stop: () => ipcRenderer.invoke(API_PROXY_CHANNELS.stop),
     getStatus: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getStatus),
-    clearAccountSuspension: (accountId: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.clearAccountSuspension, accountId),
+    clearAccountSuspension: (accountId: string) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.clearAccountSuspension, accountId),
     createClientKey: (name: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.createClientKey, name),
     listClientKeys: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listClientKeys),
-    setClientKeyActive: (id: string, isActive: boolean) => ipcRenderer.invoke(API_PROXY_CHANNELS.setClientKeyActive, id, isActive),
+    setClientKeyActive: (id: string, isActive: boolean) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.setClientKeyActive, id, isActive),
     deleteClientKey: (id: string) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteClientKey, id),
-    getAccountPoolHealth: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getAccountPoolHealth),
+    getAccountPoolHealth: (window) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.getAccountPoolHealth, window),
+    setAccountPooled: (accountId: string, pooled: boolean) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.setAccountPooled, accountId, pooled),
+    setAccountPriority: (accountId: string, priority: number) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.setAccountPriority, accountId, priority),
+    setAccountConcurrency: (accountId: string, concurrency: number) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.setAccountConcurrency, accountId, concurrency),
+    getPooledAccountIds: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getPooledAccountIds),
+    getSelectionConfig: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getSelectionConfig),
+    setSelectionConfig: (config) =>
+      ipcRenderer.invoke(API_PROXY_CHANNELS.setSelectionConfig, config),
     getRequestLog: (limit?: number) => ipcRenderer.invoke(API_PROXY_CHANNELS.getRequestLog, limit),
     clearRequestLog: () => ipcRenderer.invoke(API_PROXY_CHANNELS.clearRequestLog),
     onRequestLog: (cb: (record: ProxyRequestRecord) => void) => {
@@ -220,6 +243,16 @@ const api: HxgApi = {
     deleteCombo: (id) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteCombo, id),
     listRoutableModels: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listRoutableModels),
   },
+  routingLog: {
+    summary: (window) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.summary, window),
+    trend: (window, granularity) =>
+      ipcRenderer.invoke(ROUTING_LOG_CHANNELS.trend, window, granularity),
+    breakdown: (window, dimension) =>
+      ipcRenderer.invoke(ROUTING_LOG_CHANNELS.breakdown, window, dimension),
+    topErrors: (window, limit) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.topErrors, window, limit),
+    recent: (limit, filter) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.recent, limit, filter),
+    clear: () => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.clear),
+  },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),
     createGroup: (req) => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.createGroup, req),
@@ -227,8 +260,7 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.updateGroup, { id, patch }),
     deleteGroup: (id, force) =>
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.deleteGroup, { id, force: force ?? false }),
-    listMembers: (groupId) =>
-      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listMembers, { groupId }),
+    listMembers: (groupId) => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listMembers, { groupId }),
     listGroupsForAccount: (accountId) =>
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroupsForAccount, { accountId }),
     addMembers: (groupId, accountIds) =>
@@ -237,8 +269,7 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.removeMembers, { groupId, accountIds }),
     bindGroupToProxy: (groupId, proxyId) =>
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.bindGroupToProxy, { groupId, proxyId }),
-    unbindGroup: (groupId) =>
-      ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.unbindGroup, { groupId }),
+    unbindGroup: (groupId) => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.unbindGroup, { groupId }),
     getGroupBinding: (groupId) =>
       ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.getGroupBinding, { groupId }),
   },
@@ -255,7 +286,8 @@ const api: HxgApi = {
     repairPreview: () => ipcRenderer.invoke(SESSIONS_CHANNELS.repairPreview),
     repair: (req) => ipcRenderer.invoke(SESSIONS_CHANNELS.repair, req),
     codexSwitchRepair: (args) => ipcRenderer.invoke(SESSIONS_CHANNELS.codexSwitchRepair, args),
-    repairRollback: (backupId) => ipcRenderer.invoke(SESSIONS_CHANNELS.repairRollback, { backupId }),
+    repairRollback: (backupId) =>
+      ipcRenderer.invoke(SESSIONS_CHANNELS.repairRollback, { backupId }),
     onRepairProgress: (cb: (p: CodexRepairProgressDto) => void) => {
       const h = (_e: unknown, p: CodexRepairProgressDto) => cb(p)
       ipcRenderer.on(SESSIONS_EVENTS.repairProgress, h)
@@ -295,10 +327,13 @@ const api: HxgApi = {
     clear: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clear, id),
     enable: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.enable, id),
     disable: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.disable, id),
-    setDefault: (clientId, id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setDefault, clientId, id),
+    setDefault: (clientId, id) =>
+      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setDefault, clientId, id),
     history: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.history, clientId),
-    rollback: (clientId, entryId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.rollback, clientId, entryId),
-    connectLocalProxy: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.connectLocalProxy, clientId),
+    rollback: (clientId, entryId) =>
+      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.rollback, clientId, entryId),
+    connectLocalProxy: (clientId) =>
+      ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.connectLocalProxy, clientId),
     testConnectivity: (id) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.testConnectivity, id),
     setRouting: (clientId, enabled) =>
       ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.setRouting, clientId, enabled),

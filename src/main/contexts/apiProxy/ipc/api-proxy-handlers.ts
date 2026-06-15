@@ -11,6 +11,9 @@ import type { ApiProxyKeyService } from '../application/api-proxy-key-service'
 import type { ProxyRequestLog } from '../domain/observability/proxy-request-log'
 import type { ComboService } from '../application/combo-service'
 import type { RouteComboInput } from '../infrastructure/route-combo.repository'
+import type { ProxyPoolService } from '../application/proxy-pool-service'
+import type { RoutingLogService } from '../application/routing-log-service'
+import type { RoutingWindow } from '../domain/observability/routing-log-record'
 
 // 注册 apiProxy 的 IPC handlers：start / stop / getStatus / clearAccountSuspension。
 // start/stop 均返回最新状态投影，方便 renderer 一次拿到结果免再查。
@@ -22,6 +25,8 @@ export function registerApiProxyHandlers(
   quotaResetMs?: number,
   requestLog?: ProxyRequestLog,
   combos?: ComboService,
+  pool?: ProxyPoolService,
+  routingLog?: RoutingLogService,
 ): void {
   ipcMain.handle(API_PROXY_CHANNELS.start, async (): Promise<ApiProxyStatus> => {
     try {
@@ -51,18 +56,67 @@ export function registerApiProxyHandlers(
 
   if (health && accounts) {
     const clearSuspensionHandler = makeClearSuspensionHandler(health, accounts)
-    ipcMain.handle(API_PROXY_CHANNELS.clearAccountSuspension, async (_e, accountId: string): Promise<void> => {
+    ipcMain.handle(
+      API_PROXY_CHANNELS.clearAccountSuspension,
+      async (_e, accountId: string): Promise<void> => {
+        try {
+          await clearSuspensionHandler(accountId)
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
+
+    const poolHealthHandler = makeAccountPoolHealthHandler({
+      health,
+      accounts,
+      quotaResetMs: quotaResetMs ?? 3_600_000,
+      ...(pool ? { pool } : {}),
+      ...(routingLog ? { routingLog } : {}),
+    })
+    ipcMain.handle(API_PROXY_CHANNELS.getAccountPoolHealth, async (_e, window?: RoutingWindow) => {
       try {
-        await clearSuspensionHandler(accountId)
+        return await poolHealthHandler(window)
       } catch (e) {
         throw new Error(toIpcError(e))
       }
     })
+  }
 
-    const poolHealthHandler = makeAccountPoolHealthHandler(health, accounts, quotaResetMs ?? 3_600_000)
-    ipcMain.handle(API_PROXY_CHANNELS.getAccountPoolHealth, async () => {
+  if (pool) {
+    ipcMain.handle(
+      API_PROXY_CHANNELS.setAccountPooled,
+      async (_e, accountId: string, pooled: boolean): Promise<void> => {
+        try {
+          await pool.setPooled(accountId, pooled)
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
+    ipcMain.handle(
+      API_PROXY_CHANNELS.setAccountPriority,
+      async (_e, accountId: string, priority: number): Promise<void> => {
+        try {
+          await pool.setPriority(accountId, Math.max(0, Math.trunc(Number(priority) || 0)))
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
+    ipcMain.handle(
+      API_PROXY_CHANNELS.setAccountConcurrency,
+      async (_e, accountId: string, concurrency: number): Promise<void> => {
+        try {
+          await pool.setConcurrency(accountId, Math.max(1, Math.trunc(Number(concurrency) || 1)))
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
+    ipcMain.handle(API_PROXY_CHANNELS.getPooledAccountIds, async (): Promise<string[]> => {
       try {
-        return await poolHealthHandler()
+        return pool.listIds()
       } catch (e) {
         throw new Error(toIpcError(e))
       }
@@ -84,13 +138,16 @@ export function registerApiProxyHandlers(
         throw new Error(toIpcError(e))
       }
     })
-    ipcMain.handle(API_PROXY_CHANNELS.setClientKeyActive, async (_e, id: string, isActive: boolean) => {
-      try {
-        await keyService.setActive(id, isActive)
-      } catch (e) {
-        throw new Error(toIpcError(e))
-      }
-    })
+    ipcMain.handle(
+      API_PROXY_CHANNELS.setClientKeyActive,
+      async (_e, id: string, isActive: boolean) => {
+        try {
+          await keyService.setActive(id, isActive)
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
     ipcMain.handle(API_PROXY_CHANNELS.deleteClientKey, async (_e, id: string) => {
       try {
         await keyService.delete(id)
@@ -141,13 +198,16 @@ export function registerApiProxyHandlers(
         throw new Error(toIpcError(e))
       }
     })
-    ipcMain.handle(API_PROXY_CHANNELS.updateCombo, async (_e, id: string, patch: Partial<RouteComboInput>) => {
-      try {
-        return await combos.update(id, patch)
-      } catch (e) {
-        throw new Error(toIpcError(e))
-      }
-    })
+    ipcMain.handle(
+      API_PROXY_CHANNELS.updateCombo,
+      async (_e, id: string, patch: Partial<RouteComboInput>) => {
+        try {
+          return await combos.update(id, patch)
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
     ipcMain.handle(API_PROXY_CHANNELS.deleteCombo, async (_e, id: string): Promise<void> => {
       try {
         await combos.remove(id)

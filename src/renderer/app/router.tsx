@@ -7,6 +7,7 @@ import ApiProxyService from '../pages/ApiProxyService';
 import ApiProxyCombos from '../pages/ApiProxyCombos';
 import ApiProxyKeys from '../pages/ApiProxyKeys';
 import ApiProxyHealth from '../pages/ApiProxyHealth';
+import ApiProxyLogs from '../pages/ApiProxyLogs';
 import ClientConfig from '../pages/ClientConfig';
 import ClientManage from '../pages/ClientManage';
 import Proxies from '../pages/Proxies';
@@ -43,6 +44,7 @@ export function AppRouter() {
             <Route path="combos" element={<ApiProxyCombos />} />
             <Route path="keys" element={<ApiProxyKeys />} />
             <Route path="health" element={<ApiProxyHealth />} />
+            <Route path="logs" element={<ApiProxyLogs />} />
             <Route index element={<Navigate to="service" replace />} />
           </Route>
           {/* /client-config 默认进「客户端管理」（版本/升级/诊断）；接入配置移到 /access。 */}

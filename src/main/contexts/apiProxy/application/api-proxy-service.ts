@@ -10,11 +10,7 @@ import type { ComboSource } from './combo-service'
 import { runComboChain } from './combo-orchestrator'
 import type { UpstreamCtx } from '../domain/platform-adapter'
 import { extractSessionHint } from '../domain/account-selection/session-hint'
-import type {
-  CanonicalRequest,
-  CanonicalResponse,
-  CanonicalStreamEvent,
-} from '../domain/canonical'
+import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent } from '../domain/canonical'
 import {
   openaiToIR,
   irToOpenAIResponse,
@@ -32,13 +28,19 @@ import {
   irToGeminiResponse,
   serializeGeminiStream,
 } from '../infrastructure/inbound/gemini'
-import { responsesToIR, responsesCustomToolNames } from '../infrastructure/inbound/responses/responses-input'
+import {
+  responsesToIR,
+  responsesCustomToolNames,
+} from '../infrastructure/inbound/responses/responses-input'
 import { irToResponsesResponse } from '../infrastructure/inbound/responses/responses-response'
 import { serializeResponsesStream } from '../infrastructure/inbound/responses/responses-stream'
 import type { CodexNativePassthrough } from '../domain/codex-native-passthrough'
 import type { ResponsesPassthroughUpstream } from '../infrastructure/adapters/relay/responses-passthrough-upstream'
 import { expandPreviousResponseHistory } from '../infrastructure/responses-store/responses-history'
-import type { ResponsesStore, StoredResponseDoc } from '../infrastructure/responses-store/responses-store'
+import type {
+  ResponsesStore,
+  StoredResponseDoc,
+} from '../infrastructure/responses-store/responses-store'
 import type { ResponsesRequest } from '../infrastructure/inbound/responses/responses-types'
 import type { ContentBlock } from '../domain/canonical'
 import type { ApiProxyStatus } from '../../../../shared/api-types'
@@ -69,9 +71,21 @@ export interface InboundConverters {
 }
 
 export const DEFAULT_INBOUND_CONVERTERS: InboundConverters = {
-  openai: { toIR: openaiToIR, toResponse: irToOpenAIResponse, serializeStream: serializeOpenAIStream },
-  anthropic: { toIR: anthropicToIR, toResponse: irToAnthropicResponse, serializeStream: serializeAnthropicStream },
-  gemini: { toIR: geminiToIR, toResponse: irToGeminiResponse, serializeStream: serializeGeminiStream },
+  openai: {
+    toIR: openaiToIR,
+    toResponse: irToOpenAIResponse,
+    serializeStream: serializeOpenAIStream,
+  },
+  anthropic: {
+    toIR: anthropicToIR,
+    toResponse: irToAnthropicResponse,
+    serializeStream: serializeAnthropicStream,
+  },
+  gemini: {
+    toIR: geminiToIR,
+    toResponse: irToGeminiResponse,
+    serializeStream: serializeGeminiStream,
+  },
 }
 
 // handleRequest 输入：路由意图 + 已解析 body + 调用方注入的稳定 requestId + 中止信号。
@@ -124,17 +138,21 @@ export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHtt
   const e = err as { name?: string; status?: number; message?: string }
   const msg = e?.message ?? 'upstream error'
   switch (e?.name) {
-    case 'KiroUpstreamSuspendedError': return new ApiProxyHttpError(403, msg, format)
-    case 'KiroUpstreamAuthError': return new ApiProxyHttpError(401, msg, format)
+    case 'KiroUpstreamSuspendedError':
+      return new ApiProxyHttpError(403, msg, format)
+    case 'KiroUpstreamAuthError':
+      return new ApiProxyHttpError(401, msg, format)
     case 'NoKiroAccountError':
-    case 'NoHealthyAccountError': return new ApiProxyHttpError(503, msg, format)
+    case 'NoHealthyAccountError':
+      return new ApiProxyHttpError(503, msg, format)
     case 'KiroUpstreamError': {
       const s = e.status
       if (s === 429) return new ApiProxyHttpError(429, msg, format)
       if (s === 400 || s === 422) return new ApiProxyHttpError(s, msg, format)
       return new ApiProxyHttpError(502, msg, format)
     }
-    default: return new ApiProxyHttpError(500, 'Internal server error', format)
+    default:
+      return new ApiProxyHttpError(500, 'Internal server error', format)
   }
 }
 
@@ -183,7 +201,11 @@ async function* prependFirst(
     }
   } finally {
     if (typeof it.return === 'function') {
-      try { await it.return() } catch { /* 忽略回收阶段错误 */ }
+      try {
+        await it.return()
+      } catch {
+        /* 忽略回收阶段错误 */
+      }
     }
   }
 }
@@ -206,9 +228,32 @@ async function* prependFirstFromPromise(
     }
   } finally {
     if (typeof it.return === 'function') {
-      try { await it.return() } catch { /* 忽略回收阶段错误 */ }
+      try {
+        await it.return()
+      } catch {
+        /* 忽略回收阶段错误 */
+      }
     }
   }
+}
+
+/**
+ * 把上游 usage 回填到观测对象：output + 缓存读/写 token（供路由日志的 Token 统计）。
+ * 输入「真实优先」：上游回报 inputTokens>0 时覆盖之前的本地估算，否则保留估算（兜底）。
+ */
+function captureUsage(
+  obs: RequestObservation,
+  usage: {
+    inputTokens?: number
+    outputTokens: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+  },
+): void {
+  obs.outputTokens = usage.outputTokens
+  if (usage.inputTokens !== undefined && usage.inputTokens > 0) obs.inputTokens = usage.inputTokens
+  if (usage.cacheReadTokens !== undefined) obs.cacheReadTokens = usage.cacheReadTokens
+  if (usage.cacheWriteTokens !== undefined) obs.cacheWriteTokens = usage.cacheWriteTokens
 }
 
 // apiProxy 上下文的 application 服务。包装 ApiHttpServer 提供 start/stop + 状态投影（M1），
@@ -322,22 +367,50 @@ export class ApiProxyService {
     }
     const combo = this.matchCombo(input)
     const obs: RequestObservation = { attempts: 0 }
+    if (input.intent.model !== undefined) obs.requestedModel = input.intent.model
+    if (combo !== undefined) obs.comboName = combo.name
     const t0 = this.clock()
     try {
       const result = combo
         ? await this.dispatchCombo(combo, input, obs)
         : await this.dispatch(input, obs)
+      this.finalizeRouteObs(input, obs)
       this.observability?.record(
-        this.buildRecord(input, obs, result.status, result.kind === 'stream', this.clock() - t0, true),
+        this.buildRecord(
+          input,
+          obs,
+          result.status,
+          result.kind === 'stream',
+          this.clock() - t0,
+          true,
+        ),
       )
       return result
     } catch (err) {
       const status = err instanceof ApiProxyHttpError ? err.status : 500
       const message = err instanceof Error ? err.message : String(err)
+      this.finalizeRouteObs(input, obs)
       this.observability?.record(
         this.buildRecord(input, obs, status, false, this.clock() - t0, false, message),
       )
       throw err
+    }
+  }
+
+  /**
+   * 直连路径补默认路由维度（组合路径已在 dispatchCombo 逐跳回填）。成功/失败两路在记录前都调一次：
+   * routeHops 缺省 1；finalModel/finalPlatform 缺省取 intent 的解析结果；routePath 缺省单跳。
+   */
+  private finalizeRouteObs(input: HandleRequestInput, obs: RequestObservation): void {
+    if (obs.routeHops === undefined) obs.routeHops = 1
+    if (obs.finalModel === undefined && input.intent.model !== undefined) {
+      obs.finalModel = input.intent.model
+    }
+    if (obs.finalPlatform === undefined && input.intent.platform !== undefined) {
+      obs.finalPlatform = input.intent.platform
+    }
+    if (obs.routePath === undefined) {
+      obs.routePath = obs.finalModel !== undefined ? [obs.finalModel] : []
     }
   }
 
@@ -382,7 +455,11 @@ export class ApiProxyService {
   ): Promise<HandleResult> {
     const allSteps = enabledStepModels(combo)
     if (allSteps.length === 0) {
-      throw new ApiProxyHttpError(503, `combo "${combo.name}" has no enabled steps`, input.intent.format)
+      throw new ApiProxyHttpError(
+        503,
+        `combo "${combo.name}" has no enabled steps`,
+        input.intent.format,
+      )
     }
     // Phase 2 配额感知跳过：剔除「确凿不可用」的跳（如 kiro 池内无 available 账号，且非超额服务中），
     // 避免对必失败的上游做无谓往返。但若全部看起来不可用，则保留全链交由反应式回退兜底（健康可能滞后）。
@@ -397,9 +474,18 @@ export class ApiProxyService {
       const live = allSteps.filter((_, i) => !exhausted[i])
       if (live.length > 0) steps = live
     }
-    return runComboChain(steps, (stepModel) =>
-      this.dispatch(this.synthesizeStepInput(input, stepModel), obs),
-    )
+    // 逐跳回填路由维度（供路由日志分析）：attempted 累积已尝试的跳模型，finalModel/finalPlatform
+    // 指向当前（成功即最终；失败即最后尝试）跳，routeHops 为已尝试跳数。
+    const attempted: string[] = []
+    return runComboChain(steps, (stepModel, index) => {
+      attempted.push(stepModel)
+      obs.routeHops = index + 1
+      obs.routePath = [...attempted]
+      const { platform, model } = resolveModelAlias(stepModel, this.resolveAlias)
+      obs.finalModel = model ?? stepModel
+      if (platform !== undefined) obs.finalPlatform = platform
+      return this.dispatch(this.synthesizeStepInput(input, stepModel), obs)
+    })
   }
 
   /**
@@ -429,7 +515,10 @@ export class ApiProxyService {
    * 错误统一抛 ApiProxyHttpError（由 hono onError 按 format 渲染错误体）。
    * obs 在链路中被 FailoverAdapter 回填账号/尝试次数，并在此记录 input/output tokens。
    */
-  private async dispatch(input: HandleRequestInput, obs: RequestObservation): Promise<HandleResult> {
+  private async dispatch(
+    input: HandleRequestInput,
+    obs: RequestObservation,
+  ): Promise<HandleResult> {
     const { intent, body, requestId, signal } = input
 
     if (intent.action === 'health') {
@@ -450,11 +539,26 @@ export class ApiProxyService {
       if (intent.model !== undefined) {
         for (const pt of this.responsesPassthroughs) {
           if (pt.supportsModel(intent.model)) {
-            return this.proxyResponsesPassthrough(pt, body, requestId, intent.stream, signal, input.headers)
+            return this.proxyResponsesPassthrough(
+              pt,
+              body,
+              requestId,
+              intent.stream,
+              signal,
+              input.headers,
+            )
           }
         }
       }
-      return this.handleResponses(intent, body, requestId, obs, signal, input.headers, input.clientKeyId)
+      return this.handleResponses(
+        intent,
+        body,
+        requestId,
+        obs,
+        signal,
+        input.headers,
+        input.clientKeyId,
+      )
     }
 
     if (this.registry === undefined) {
@@ -486,14 +590,21 @@ export class ApiProxyService {
     if (intent.stream) {
       const it = adapter.chatStream(ir, ctx)[Symbol.asyncIterator]()
       let first: IteratorResult<CanonicalStreamEvent>
-      try { first = await it.next() } catch (e) { throw classifyToHttp(e, intent.format) }
+      try {
+        first = await it.next()
+      } catch (e) {
+        throw classifyToHttp(e, intent.format)
+      }
       const events = prependFirst(first, it)
       return this.serializeStreamLazy(intent, ir, events, requestId)
     }
     let resp
-    try { resp = await adapter.chat(ir, ctx) }
-    catch (e) { throw classifyToHttp(e, intent.format) }
-    if (resp.usage) obs.outputTokens = resp.usage.outputTokens
+    try {
+      resp = await adapter.chat(ir, ctx)
+    } catch (e) {
+      throw classifyToHttp(e, intent.format)
+    }
+    if (resp.usage) captureUsage(obs, resp.usage)
     return { kind: 'json', status: 200, body: this.toResponseBody(intent, resp, requestId) }
   }
 
@@ -521,7 +632,9 @@ export class ApiProxyService {
     const req = (body ?? {}) as ResponsesRequest
 
     const historyMessages = req.previous_response_id
-      ? expandPreviousResponseHistory(req.previous_response_id, (id) => this.responsesStore!.load(id))
+      ? expandPreviousResponseHistory(req.previous_response_id, (id) =>
+          this.responsesStore!.load(id),
+        )
       : undefined
     const ir = responsesToIR(req, { ...(historyMessages ? { historyMessages } : {}) })
     // custom(freeform)工具名集合：响应序列化据此把 function_call 还原成 custom_tool_call（apply_patch 等）。
@@ -554,15 +667,29 @@ export class ApiProxyService {
       const firstP = upstream.next()
       const GRACE = Symbol('grace')
       let graceTimer: ReturnType<typeof setTimeout> | undefined
-      const graceP = new Promise<typeof GRACE>((resolve) => { graceTimer = setTimeout(() => resolve(GRACE), RESPONSES_FIRST_EVENT_GRACE_MS) })
+      const graceP = new Promise<typeof GRACE>((resolve) => {
+        graceTimer = setTimeout(() => resolve(GRACE), RESPONSES_FIRST_EVENT_GRACE_MS)
+      })
       let raced: { ok: IteratorResult<CanonicalStreamEvent> } | { err: unknown } | typeof GRACE
       try {
-        raced = await Promise.race([firstP.then((r) => ({ ok: r }), (e) => ({ err: e })), graceP])
+        raced = await Promise.race([
+          firstP.then(
+            (r) => ({ ok: r }),
+            (e) => ({ err: e }),
+          ),
+          graceP,
+        ])
       } finally {
         if (graceTimer !== undefined) clearTimeout(graceTimer)
       }
       if (raced !== GRACE && 'err' in raced) {
-        if (typeof upstream.return === 'function') { try { await upstream.return() } catch { /* ignore */ } }
+        if (typeof upstream.return === 'function') {
+          try {
+            await upstream.return()
+          } catch {
+            /* ignore */
+          }
+        }
         throw classifyToHttp(raced.err, 'openai-responses')
       }
       const self = this
@@ -580,16 +707,19 @@ export class ApiProxyService {
           // 仅成功收尾才折叠落盘（store/历史链）；上游中途出错 → 序列化器以 response.failed 收尾、不回调此处。
           onComplete: (events) => {
             const resp = foldStreamForStore(events, ir.model)
-            if (resp.usage) obs.outputTokens = resp.usage.outputTokens
+            if (resp.usage) captureUsage(obs, resp.usage)
             self.persistResponses(req, respId, resp, itemId, customToolNames)
           },
         }),
       }
     }
     let resp
-    try { resp = await adapter.chat(ir, ctx) }
-    catch (e) { throw classifyToHttp(e, 'openai-responses') }
-    if (resp.usage) obs.outputTokens = resp.usage.outputTokens
+    try {
+      resp = await adapter.chat(ir, ctx)
+    } catch (e) {
+      throw classifyToHttp(e, 'openai-responses')
+    }
+    if (resp.usage) captureUsage(obs, resp.usage)
     this.persistResponses(req, respId, resp, itemId, customToolNames)
     return {
       kind: 'json',
@@ -617,7 +747,11 @@ export class ApiProxyService {
     headers?: Record<string, string>,
   ): Promise<HandleResult> {
     if (this.codexNative === undefined) {
-      throw new ApiProxyHttpError(503, 'codex-native passthrough not configured', 'openai-responses')
+      throw new ApiProxyHttpError(
+        503,
+        'codex-native passthrough not configured',
+        'openai-responses',
+      )
     }
     try {
       const result = await this.codexNative.proxyResponses({
@@ -628,7 +762,12 @@ export class ApiProxyService {
         ...(headers ? { headers } : {}),
       })
       if (result.stream !== undefined) {
-        return { kind: 'stream', status: result.status, contentType: 'text/event-stream', frames: result.stream }
+        return {
+          kind: 'stream',
+          status: result.status,
+          contentType: 'text/event-stream',
+          frames: result.stream,
+        }
       }
       return { kind: 'json', status: result.status, body: result.body }
     } catch (e) {
@@ -658,7 +797,12 @@ export class ApiProxyService {
         ...(headers ? { headers } : {}),
       })
       if (result.stream !== undefined) {
-        return { kind: 'stream', status: result.status, contentType: 'text/event-stream', frames: result.stream }
+        return {
+          kind: 'stream',
+          status: result.status,
+          contentType: 'text/event-stream',
+          frames: result.stream,
+        }
       }
       return { kind: 'json', status: result.status, body: result.body }
     } catch (e) {
@@ -718,12 +862,20 @@ export class ApiProxyService {
       case 'openai-responses':
         // 不可达：handleRequest 已在上游把 openai-responses 分流到 handleResponses。
         // 保留分支仅为 switch 穷尽（RequestFormat 含此值），命中即编排不变量被破坏。
-        throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
+        throw new ApiProxyHttpError(
+          500,
+          'unreachable: openai-responses handled by handleResponses',
+          'openai-responses',
+        )
     }
   }
 
   // ---- 内部：出站非流式 ----
-  private toResponseBody(intent: RequestIntent, resp: CanonicalResponse, requestId: string): unknown {
+  private toResponseBody(
+    intent: RequestIntent,
+    resp: CanonicalResponse,
+    requestId: string,
+  ): unknown {
     switch (intent.format) {
       case 'openai':
         return this.converters.openai.toResponse(resp, { id: `chatcmpl-${requestId}`, created: 0 })
@@ -733,7 +885,11 @@ export class ApiProxyService {
         return this.converters.gemini.toResponse(resp)
       case 'openai-responses':
         // 不可达：openai-responses 走 handleResponses，不进 chat 类出站序列化（见上 toIR 注释）。
-        throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
+        throw new ApiProxyHttpError(
+          500,
+          'unreachable: openai-responses handled by handleResponses',
+          'openai-responses',
+        )
     }
   }
 
@@ -752,7 +908,10 @@ export class ApiProxyService {
           kind: 'stream',
           status: 200,
           contentType: 'text/event-stream',
-          frames: serializeOpenAIStreamLazy(events, ir.model, { id: `chatcmpl-${requestId}`, created: 0 }),
+          frames: serializeOpenAIStreamLazy(events, ir.model, {
+            id: `chatcmpl-${requestId}`,
+            created: 0,
+          }),
         }
       case 'anthropic':
         return {
@@ -760,7 +919,11 @@ export class ApiProxyService {
           status: 200,
           contentType: 'text/event-stream',
           // message_start input 用请求文本估算（惰性下流末 cache 字段省略，非流式不受影响）。
-          frames: serializeAnthropicStreamLazy(events, { model: ir.model, inputTokens: estimateRequestInputTokens(ir) }, { id: `msg_${requestId}` }),
+          frames: serializeAnthropicStreamLazy(
+            events,
+            { model: ir.model, inputTokens: estimateRequestInputTokens(ir) },
+            { id: `msg_${requestId}` },
+          ),
         }
       case 'gemini': {
         // Gemini 保持 drain（非 SSE、一次性 JSON chunk）。
@@ -777,7 +940,11 @@ export class ApiProxyService {
       }
       case 'openai-responses':
         // 不可达：openai-responses 走 handleResponses 的 serializeResponsesStream（见上 toIR 注释）。
-        throw new ApiProxyHttpError(500, 'unreachable: openai-responses handled by handleResponses', 'openai-responses')
+        throw new ApiProxyHttpError(
+          500,
+          'unreachable: openai-responses handled by handleResponses',
+          'openai-responses',
+        )
     }
   }
 
@@ -792,11 +959,13 @@ export class ApiProxyService {
     errorMessage?: string,
   ): ProxyRequestRecordInput {
     const { intent } = input
+    // platform：直连取 intent.platform；组合裸名 intent.platform 为空，回退到最终命中跳的平台。
+    const platform = intent.platform ?? obs.finalPlatform
     return {
       method: input.method ?? (intent.action === 'models' ? 'GET' : 'POST'),
       path: input.path ?? '',
       format: intent.format,
-      ...(intent.platform !== undefined ? { platform: intent.platform } : {}),
+      ...(platform !== undefined ? { platform } : {}),
       action: intent.action,
       stream,
       status,
@@ -807,7 +976,14 @@ export class ApiProxyService {
       ...(input.clientKeyId !== undefined ? { clientKeyId: input.clientKeyId } : {}),
       ...(obs.inputTokens !== undefined ? { inputTokens: obs.inputTokens } : {}),
       ...(obs.outputTokens !== undefined ? { outputTokens: obs.outputTokens } : {}),
+      ...(obs.cacheReadTokens !== undefined ? { cacheReadTokens: obs.cacheReadTokens } : {}),
+      ...(obs.cacheWriteTokens !== undefined ? { cacheWriteTokens: obs.cacheWriteTokens } : {}),
       ...(errorMessage !== undefined ? { errorMessage } : {}),
+      ...(obs.comboName !== undefined ? { comboName: obs.comboName } : {}),
+      ...(obs.requestedModel !== undefined ? { requestedModel: obs.requestedModel } : {}),
+      ...(obs.finalModel !== undefined ? { finalModel: obs.finalModel } : {}),
+      ...(obs.routeHops !== undefined ? { routeHops: obs.routeHops } : {}),
+      ...(obs.routePath !== undefined ? { routePath: obs.routePath } : {}),
     }
   }
 
@@ -863,7 +1039,9 @@ export class ApiProxyService {
           ...(m.maxOutputTokens !== undefined ? { max_output_tokens: m.maxOutputTokens } : {}),
           capabilities: {
             ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}),
-            ...(m.supportsPromptCaching !== undefined ? { prompt_caching: m.supportsPromptCaching } : {}),
+            ...(m.supportsPromptCaching !== undefined
+              ? { prompt_caching: m.supportsPromptCaching }
+              : {}),
           },
         })),
       ],
@@ -883,7 +1061,8 @@ function foldStreamForStore(events: CanonicalStreamEvent[], model: string): Cano
   let stopReason: CanonicalResponse['stopReason'] = 'end_turn'
   for (const ev of events) {
     if (ev.type === 'text_delta') text += ev.text
-    else if (ev.type === 'tool_use_start') tools.set(ev.index, { id: ev.id, name: ev.name, json: '' })
+    else if (ev.type === 'tool_use_start')
+      tools.set(ev.index, { id: ev.id, name: ev.name, json: '' })
     else if (ev.type === 'tool_use_delta') {
       const t = tools.get(ev.index)
       if (t) t.json += ev.partialJson

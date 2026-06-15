@@ -40,7 +40,9 @@
     "tagsNone": "暂无标签",
     "quotaTitle": "配额使用",
     "quotaEmpty": "暂未拉取",
-    "active": "使用中"
+    "active": "使用中",
+    "pool": "反代池",
+    "poolHint": "加入后该账号参与反代选号"
   },
   "list": {
     "header": {
