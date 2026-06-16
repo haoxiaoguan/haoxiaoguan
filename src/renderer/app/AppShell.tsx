@@ -42,7 +42,7 @@ import { ManagementHeaderTabs } from '@/components/management/ManagementControls
 import { cn } from '@/lib/utils';
 import { SidebarBrand } from './SidebarBrand';
 import { SidebarUserCard } from './SidebarUserCard';
-import { detectPlatformShell, type PlatformShell } from './platform-shell';
+import { detectPlatformShell, isWindowsChrome, type PlatformShell } from './platform-shell';
 import { SupportPopover } from './shell-utility/SupportPopover';
 import { FaqPopover } from './shell-utility/FaqPopover';
 import { systemService } from '../services/tauri';
@@ -50,6 +50,8 @@ import { useQuotaStateStore } from '../stores';
 import { NotificationPopover } from './shell-utility/NotificationPopover';
 import { UpdaterIndicator } from './shell-utility/UpdaterIndicator';
 import { WindowControls } from './shell-utility/WindowControls';
+import { useThemeValue } from '../hooks/use-theme';
+import { bridge } from '../services/bridge';
 
 interface AppShellProps {
   shell?: PlatformShell;
@@ -183,6 +185,11 @@ export function AppShell({ shell }: AppShellProps) {
   const navigate = useNavigate();
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const resolvedShell = shell ?? detectPlatformShell(window.location.search, navigator.userAgent);
+  // Windows：系统原生标题栏覆盖按钮 + 内容贴边(去上/下/右间距、去右圆角) + 更矮 header。
+  // Linux 同属 windows_like 但不支持 titleBarOverlay，仍走 header 自绘按钮 + 浮动卡片(保持原状)。
+  const isWindowsNative = resolvedShell === 'windows_like' && isWindowsChrome();
+  const isLinuxLike = resolvedShell === 'windows_like' && !isWindowsNative;
+  const themeValue = useThemeValue();
   // 记住进入设置前的主路由，供「返回」使用。
   useEffect(() => {
     if (!location.pathname.startsWith('/settings')) {
@@ -198,6 +205,12 @@ export function AppShell({ shell }: AppShellProps) {
     });
     return unsub;
   }, []);
+
+  // 仅 Windows：应用明暗主题变化时，同步系统原生覆盖按钮(min/max/close)的图标颜色。
+  useEffect(() => {
+    if (!isWindowsNative) return;
+    void bridge().windowControls.setOverlayTheme(themeValue === 'dark');
+  }, [isWindowsNative, themeValue]);
 
   const handleBack = () => {
     const last = sessionStorage.getItem('haoxiaoguan:last-main-route') || '/';
@@ -304,12 +317,22 @@ export function AppShell({ shell }: AppShellProps) {
 
         <SidebarInset
           data-testid="app-shell-stage"
-          className="relative flex min-w-0 flex-1 flex-col overflow-hidden border border-border/80 !bg-card shadow-sm [scrollbar-gutter:auto] md:peer-data-[state=collapsed]:peer-data-[variant=inset]:!ml-0"
+          className={cn(
+            'relative flex min-w-0 flex-1 flex-col overflow-hidden border border-border/80 !bg-card shadow-sm [scrollbar-gutter:auto] md:peer-data-[state=collapsed]:peer-data-[variant=inset]:!ml-0',
+            // Windows：去掉上/下/右间距 + 右侧圆角，内容贴窗口边(类原生窗口/Zed)；左侧保留圆角与侧栏留白。
+            isWindowsNative &&
+              'md:peer-data-[variant=inset]:!mt-0 md:peer-data-[variant=inset]:!mb-0 md:peer-data-[variant=inset]:!mr-0 md:peer-data-[variant=inset]:!rounded-r-none',
+          )}
         >
           <header
             data-testid="app-shell-header"
             data-tauri-drag-region
-            className="flex h-[58px] shrink-0 items-center border-b border-border/80 bg-card px-4"
+            className={cn(
+              'flex shrink-0 items-center border-b border-border/80 bg-card px-4',
+              // Windows：header 略矮(48px)，与系统原生覆盖按钮的标题栏高度一致(见 main 的
+              // WINDOWS_TITLEBAR_HEIGHT)；其余平台 58px。
+              isWindowsNative ? 'h-[48px]' : 'h-[58px]',
+            )}
           >
             <SidebarTrigger
               aria-label={t('common:sidebar.toggle')}
@@ -394,7 +417,16 @@ export function AppShell({ shell }: AppShellProps) {
                 <NotificationPopover />
               </ShellUtilityHoverItem>
             </div>
-            {resolvedShell === 'windows_like' ? <WindowControls /> : null}
+            {isLinuxLike ? <WindowControls /> : null}
+            {isWindowsNative ? (
+              // Windows：为系统原生覆盖按钮(min/max/close)预留右上角空间(贴窗口右边缘)，
+              // 避免工具图标被盖住。-mr-4 抵消 header 的 px-4，使预留区贴到窗口右边缘。
+              <div
+                aria-hidden="true"
+                data-tauri-drag-region
+                className="-mr-4 ml-1 h-full w-[140px] shrink-0"
+              />
+            ) : null}
           </header>
 
           <ScrollArea

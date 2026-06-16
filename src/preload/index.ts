@@ -359,6 +359,8 @@ const api: HxgApi = {
       ipcRenderer.on(WINDOW_EVENTS.maximizeChanged, listener)
       return () => ipcRenderer.removeListener(WINDOW_EVENTS.maximizeChanged, listener)
     },
+    setOverlayTheme: (isDark: boolean) =>
+      ipcRenderer.invoke(WINDOW_CHANNELS.setOverlayTheme, isDark),
   },
 }
 

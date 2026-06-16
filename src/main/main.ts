@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { buildContainer, type Container } from './container'
 import { registerAllHandlers } from './ipc/registry'
@@ -60,6 +60,23 @@ let pendingDeepLink: string | null = null
 
 const DEEP_LINK_SCHEME = 'haoxiaoguan'
 
+// Windows 原生标题栏覆盖按钮(min/max/close)所在标题栏高度，须与渲染层 Windows header
+// 高度一致（见 AppShell 的 h-[48px]），按钮才会在 header 行内垂直居中。
+const WINDOWS_TITLEBAR_HEIGHT = 48
+
+/** 原生覆盖按钮配置：背景透明(露出 header 底色)，图标色随明暗主题。 */
+function windowsOverlayOptions(isDark: boolean): {
+  color: string
+  symbolColor: string
+  height: number
+} {
+  return {
+    color: '#00000000',
+    symbolColor: isDark ? '#e6e6e6' : '#2b2b2b',
+    height: WINDOWS_TITLEBAR_HEIGHT,
+  }
+}
+
 function createWindow(silentStart: boolean): void {
   // 去掉 Windows/Linux 的原生应用菜单栏(File/Edit/View/Window)。macOS 保留系统菜单不动。
   if (process.platform !== 'darwin') {
@@ -71,10 +88,13 @@ function createWindow(silentStart: boolean): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    // macOS：hiddenInset(红绿灯,保持不变)。Windows/Linux：hidden(无原生标题栏/按钮)，
-    // 由渲染层在 header 右侧自绘 min/max/close(协调一致、两平台一套，见 WindowControls)。
+    // macOS：hiddenInset(红绿灯,保持不变)。Windows：hidden + titleBarOverlay(系统原生
+    // min/max/close 覆盖按钮)。Linux：hidden(无原生按钮)，由渲染层自绘(见 WindowControls)。
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     trafficLightPosition: { x: 4, y: 14 },
+    ...(process.platform === 'win32'
+      ? { titleBarOverlay: windowsOverlayOptions(nativeTheme.shouldUseDarkColors) }
+      : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
@@ -225,7 +245,7 @@ function registerShellAndAppHandlers(): void {
     applyAutostart(enabled)
   })
 
-  // 自绘窗口控制（Windows/Linux 无原生标题栏，渲染层 header 的 min/max/close 调这些）。
+  // 窗口控制：Linux 无原生标题栏，渲染层 header 的 min/max/close 调这些。
   ipcMain.handle(WINDOW_CHANNELS.minimize, () => mainWindow?.minimize())
   ipcMain.handle(WINDOW_CHANNELS.maximizeToggle, () => {
     if (!mainWindow) return
@@ -234,6 +254,11 @@ function registerShellAndAppHandlers(): void {
   })
   ipcMain.handle(WINDOW_CHANNELS.close, () => mainWindow?.close())
   ipcMain.handle(WINDOW_CHANNELS.isMaximized, () => mainWindow?.isMaximized() ?? false)
+  // 仅 Windows：应用主题切换时同步原生覆盖按钮的图标颜色（亮=深色图标，暗=浅色图标）。
+  ipcMain.handle(WINDOW_CHANNELS.setOverlayTheme, (_e, isDark: boolean) => {
+    if (!mainWindow || process.platform !== 'win32') return
+    mainWindow.setTitleBarOverlay(windowsOverlayOptions(isDark))
+  })
 }
 
 // ── Single-instance lock (Windows/Linux deep-link + focus-existing) ──────────

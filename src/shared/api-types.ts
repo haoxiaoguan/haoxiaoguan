@@ -496,7 +496,7 @@ export interface HxgApi {
   }
   shellOpen(target: string): Promise<void>
   getVersion(): Promise<string>
-  /** 自绘窗口控制（Windows/Linux 无原生标题栏时由 header 的 min/max/close 调用）。 */
+  /** 窗口控制：Linux 由 header 自绘 min/max/close 调用；Windows 用系统原生覆盖按钮。 */
   windowControls: {
     minimize(): Promise<void>
     maximizeToggle(): Promise<void>
@@ -504,6 +504,8 @@ export interface HxgApi {
     isMaximized(): Promise<boolean>
     /** 订阅最大化态变化（切 max/restore 图标）。返回取消订阅。 */
     onMaximizeChanged(cb: (maximized: boolean) => void): () => void
+    /** 仅 Windows：随应用主题更新原生标题栏覆盖按钮(min/max/close)的图标颜色。 */
+    setOverlayTheme(isDark: boolean): Promise<void>
   }
 }
 

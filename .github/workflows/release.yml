@@ -10,7 +10,19 @@ on:
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch: {}
+  # 手动触发：可只构建指定平台（如灰度预览只出 Windows）。版本取 package.json，
+  # 含 `-`（如 0.2.1-beta.0）→ 自动发为 Pre-release，稳定用户不受影响。
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to build (all / win / mac / linux)'
+        type: choice
+        default: all
+        options:
+          - all
+          - win
+          - mac
+          - linux
 
 permissions:
   contents: write # 创建 / 上传 Release 资产
@@ -29,12 +41,15 @@ jobs:
         include:
           - os: macos-latest # Apple Silicon → arm64：dmg + zip(自动更新通道)
             label: macOS arm64
+            short: mac
             ebFlags: --mac --arm64
           - os: windows-latest # x64：nsis 安装器
             label: Windows x64
+            short: win
             ebFlags: --win --x64
           - os: ubuntu-latest # x64：AppImage + deb
             label: Linux x64
+            short: linux
             ebFlags: --linux --x64
     steps:
       - uses: actions/checkout@v4
@@ -53,20 +68,25 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      # 手动触发且选了单平台时，只在对应 runner 上构建/发布；tag 推送(push)始终三平台全跑。
       - name: Build (electron-vite + better-sqlite3 native ABI)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.platforms == 'all' || inputs.platforms == matrix.short }}
         run: pnpm run build
 
       - name: Package & publish to GitHub Releases
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.platforms == 'all' || inputs.platforms == matrix.short }}
         # shell:bash 让 Windows runner 也能用 [[ ]]（Git Bash 自带）；mac/linux 默认就是 bash。
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 同仓 Release 写权限，免额外密钥
-        # 含 `-` 的预发布 tag → prerelease（标 GitHub Pre-release，github provider 默认跳过，
-        # 仅 allowPrerelease 客户端可见）；正式 tag → draft（人工 Publish 后放给所有用户）。
+        # 版本号取自 package.json：含 `-`（如 0.2.1-beta.0）→ prerelease（标 GitHub Pre-release，
+        # github provider 默认跳过，仅 allowPrerelease 客户端可见）；正式版 → draft（人工 Publish）。
+        # 读 package.json 而非 tag 名 → tag 推送与手动触发都判定一致。
         # npmRebuild:false → 不二次 rebuild（build 步已用 electron-rebuild 编好原生模块）。
         run: |
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then RT=prerelease; else RT=draft; fi
-          echo "tag=${GITHUB_REF_NAME} platform='${{ matrix.label }}' → releaseType=$RT"
+          VER=$(node -p "require('./package.json').version")
+          if [[ "$VER" == *-* ]]; then RT=prerelease; else RT=draft; fi
+          echo "version=$VER platform='${{ matrix.label }}' → releaseType=$RT"
           pnpm exec electron-builder ${{ matrix.ebFlags }} --publish always -c.publish.releaseType=$RT
 
 # ── 发布步骤（正式）──────────────────────────────────────────────────────────

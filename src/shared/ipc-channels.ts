@@ -308,12 +308,14 @@ export const CLIENT_CONFIG_CHANNELS = {
   setCodexProviderEnabled: 'clientConfig:setCodexProviderEnabled',
 } as const
 
-// 自绘窗口控制（Windows/Linux 无原生标题栏时，渲染层画 min/max/close 调这些）。
+// 自绘窗口控制（Linux 无原生标题栏时，渲染层画 min/max/close 调这些）。
+// Windows 改用系统原生覆盖按钮（titleBarOverlay），仅需 setOverlayTheme 同步图标颜色。
 export const WINDOW_CHANNELS = {
   minimize: 'window:minimize',
   maximizeToggle: 'window:maximizeToggle',
   close: 'window:close',
   isMaximized: 'window:isMaximized',
+  setOverlayTheme: 'window:setOverlayTheme',
 } as const
 
 // 主进程 → 渲染层：窗口最大化态变化（切换 max/restore 图标）。
