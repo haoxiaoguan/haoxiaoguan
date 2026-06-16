@@ -33,6 +33,7 @@ it('合并账号 meta（email/status）+ 运行态', async () => {
       pooled: false,
       priority: 0,
       concurrency: 4,
+      rateLimitCooldownMs: 0,
       requests: 0,
       success: 0,
       failed: 0,
@@ -53,6 +54,7 @@ it('合并账号 meta（email/status）+ 运行态', async () => {
       pooled: false,
       priority: 0,
       concurrency: 4,
+      rateLimitCooldownMs: 0,
       requests: 0,
       success: 0,
       failed: 0,
@@ -78,7 +80,7 @@ it('quota_exhausted 行携带 quotaResetsAtMs = quotaExhaustedAtMs + quotaResetM
     clock: () => now.t,
     random: () => 1,
   })
-  health.markRateLimited('a1')
+  health.markQuotaExhausted('a1')
   const accounts = {
     async listByPlatform() {
       return [{ id: 'a1', email: 'a1@x', isActive: true }]
@@ -89,6 +91,30 @@ it('quota_exhausted 行携带 quotaResetsAtMs = quotaExhaustedAtMs + quotaResetM
   expect(rows[0].runtimeState).toBe('quota_exhausted')
   expect(rows[0].quotaExhaustedAtMs).toBe(exhaustedAt)
   expect(rows[0].quotaResetsAtMs).toBe(exhaustedAt + quotaResetMs)
+})
+
+it('rate_limited 行携带 rateLimitedUntilMs（429 短冷却，非配额耗尽）', async () => {
+  const now = { t: 1_000 }
+  const health = new AccountHealthTracker({
+    baseCooldownMs: 1000,
+    maxBackoffMultiplier: 64,
+    quotaResetMs: 3_600_000,
+    rateLimitCooldownMs: 60_000,
+    probabilisticRetryChance: 0,
+    clock: () => now.t,
+    random: () => 1,
+  })
+  health.markRateLimited('a1')
+  const accounts = {
+    async listByPlatform() {
+      return [{ id: 'a1', email: 'a1@x', isActive: true }]
+    },
+  } as any
+  const handler = makeAccountPoolHealthHandler({ health, accounts, quotaResetMs: 3_600_000 })
+  const rows = await handler()
+  expect(rows[0].runtimeState).toBe('rate_limited')
+  expect(rows[0].rateLimitedUntilMs).toBe(1_000 + 60_000)
+  expect(rows[0].quotaExhaustedAtMs).toBeUndefined()
 })
 
 it('合并入池标识(pool.has) + 路由日志按账号统计', async () => {
@@ -113,6 +139,7 @@ it('合并入池标识(pool.has) + 路由日志按账号统计', async () => {
     has: (id: string) => id === 'a1',
     getPriority: (id: string) => (id === 'a1' ? 7 : 0),
     getConcurrency: (id: string) => (id === 'a1' ? 9 : 4),
+    getRateLimitCooldownMs: (id: string) => (id === 'a1' ? 30000 : 0),
   } as any
   const routingLog = {
     async accountStats() {
@@ -145,6 +172,7 @@ it('合并入池标识(pool.has) + 路由日志按账号统计', async () => {
   expect(a1.pooled).toBe(true)
   expect(a1.priority).toBe(7)
   expect(a1.concurrency).toBe(9)
+  expect(a1.rateLimitCooldownMs).toBe(30000)
   expect(a1).toMatchObject({
     requests: 5,
     success: 4,

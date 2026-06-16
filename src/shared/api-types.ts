@@ -360,6 +360,8 @@ export interface HxgApi {
     setAccountPriority(accountId: string, priority: number): Promise<void>
     /** 设置账号并发上限（仅对在池账号生效）。 */
     setAccountConcurrency(accountId: string, concurrency: number): Promise<void>
+    /** 批量设置账号 429 限流冷却覆盖（ms：0=用全局/-1=不冷却/>0=自定义；仅对在池账号生效）。返回生效 id。 */
+    setAccountRateLimitCooldown(accountIds: string[], rateLimitCooldownMs: number): Promise<string[]>
     /** 列出已入池的账号 id（供账号管理页显示入池开关状态）。 */
     getPooledAccountIds(): Promise<string[]>
     /** 读取反代池全局选号配置（轮询策略 / 亲密度 / 每账号并发）。 */

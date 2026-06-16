@@ -39,6 +39,8 @@ interface ApiProxyState {
   setPriority: (accountId: string, priority: number) => Promise<void>
   /** 设置账号并发上限（乐观更新本地行；失败回滚）。 */
   setConcurrency: (accountId: string, concurrency: number) => Promise<void>
+  /** 批量设置账号 429 限流冷却覆盖（ms：0=用全局/-1=不冷却/>0=自定义；乐观更新；失败回滚）。 */
+  setRateLimitCooldown: (accountIds: string[], rateLimitCooldownMs: number) => Promise<void>
   /** 拉取反代池全局选号配置。 */
   fetchSelectionConfig: () => Promise<void>
   /** 保存反代池全局选号配置（成功返回 true，供 UI 关闭弹窗）。 */
@@ -191,6 +193,23 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
     })
     try {
       await bridge().apiProxy.setAccountConcurrency(accountId, next)
+    } catch (e) {
+      set({ poolHealth: prevHealth, error: String(e) })
+    }
+  },
+
+  setRateLimitCooldown: async (accountIds: string[], rateLimitCooldownMs: number) => {
+    const raw = Math.trunc(rateLimitCooldownMs)
+    const next = Number.isFinite(raw) ? (raw < 0 ? -1 : raw) : 0
+    const ids = new Set(accountIds)
+    const prevHealth = get().poolHealth
+    set({
+      poolHealth: prevHealth.map((r) =>
+        ids.has(r.accountId) ? { ...r, rateLimitCooldownMs: next } : r,
+      ),
+    })
+    try {
+      await bridge().apiProxy.setAccountRateLimitCooldown([...ids], next)
     } catch (e) {
       set({ poolHealth: prevHealth, error: String(e) })
     }

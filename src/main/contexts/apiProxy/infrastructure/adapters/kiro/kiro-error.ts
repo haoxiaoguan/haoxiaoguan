@@ -19,8 +19,10 @@ export class KiroUpstreamSuspendedError extends Error {
 export function classifyKiroError(err: unknown): ErrorClass {
   const e = err as { name?: string; status?: number } | null
   if (e?.name === 'KiroUpstreamSuspendedError') return 'SUSPENDED'
+  if (e?.name === 'KiroTokenPermanentError') return 'DEPOOL' // token 永久失效 → 移出反代池
   if (e?.name === 'KiroUpstreamAuthError') return 'AUTH'
   if (e?.name === 'KiroUpstreamError') {
+    if (e.status === 402) return 'QUOTA' // 额度耗尽：冷却到配额重置时间
     if (e.status === 429) return 'RATE_LIMIT'
     if (e.status === 400 || e.status === 422) return 'FATAL'
     return 'SERVER' // 5xx / 502

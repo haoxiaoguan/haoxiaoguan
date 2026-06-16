@@ -26,6 +26,7 @@ export function registerProxyPoolConfigHandlers(deps: ProxyPoolConfigDeps): void
         return {
           strategy: settings.getApiProxySelectionStrategy(),
           affinityTtlMs: settings.getApiProxyAffinityTtlMs(),
+          rateLimitCooldownMs: settings.getApiProxyRateLimitCooldownMs(),
         }
       } catch (e) {
         throw new Error(toIpcError(e))
@@ -39,10 +40,13 @@ export function registerProxyPoolConfigHandlers(deps: ProxyPoolConfigDeps): void
       try {
         const strategy = clampStrategy(cfg?.strategy)
         const affinityTtlMs = Math.max(0, Math.trunc(Number(cfg?.affinityTtlMs) || 0))
+        const rateLimitCooldownMs = Math.max(0, Math.trunc(Number(cfg?.rateLimitCooldownMs) || 0))
         await settings.updateSettings({
           api_proxy_selection_strategy: strategy,
           api_proxy_affinity_ttl_ms: String(affinityTtlMs),
+          api_proxy_rate_limit_cooldown_ms: String(rateLimitCooldownMs),
         })
+        // 全局冷却由 health resolver 实时读 settings，无需热更内存对象；仅热更 selector 的策略/亲密度。
         selector.updateOpts({ strategy, affinityTtlMs })
       } catch (e) {
         throw new Error(toIpcError(e))

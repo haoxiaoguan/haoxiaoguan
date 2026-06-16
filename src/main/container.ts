@@ -145,6 +145,7 @@ import { ConversationIdCache } from './contexts/apiProxy/domain/account-selectio
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
 import { buildAccountCapabilityRegistry } from './container-helpers/account-capability-registry'
 import { createKiroTokenRefresher } from './container-helpers/kiro-token-refresher'
+import { makeQuotaResetResolver } from './container-helpers/quota-reset-resolver'
 import type {
   KiroCredentialPort,
   KiroDispatcherPort,
@@ -455,11 +456,23 @@ export async function buildContainer(): Promise<Container> {
   const kiroTokenRefresher = createKiroTokenRefresher()
   const kiroUpstreamClient = new KiroUpstreamClient({ refresher: kiroTokenRefresher })
   const kiroCacheTracker = new PromptCacheTracker()
+  // 反代账号池成员（独立标识）：仅池内账号才进选号候选。启动载入持久化成员到内存。
+  // 在 health 之前创建：health 的 429 冷却 resolver 需读池成员的 per-account 覆盖。
+  const proxyPoolRepo = new ProxyPoolRepository()
+  const proxyPoolService = new ProxyPoolService(proxyPoolRepo)
+  await proxyPoolService.load()
   const apiProxyHealth = new AccountHealthTracker({
     baseCooldownMs: settings.getApiProxyBaseCooldownMs(),
     maxBackoffMultiplier: settings.getApiProxyMaxBackoffMultiplier(),
     quotaResetMs: settings.getApiProxyQuotaResetMs(),
     probabilisticRetryChance: settings.getApiProxyProbabilisticRetryChance(),
+    // 429 限流冷却（按账号解析）：per-account 覆盖优先（-1=不冷却/>0=自定义 ms），否则用全局默认。
+    rateLimitCooldownResolver: (id) => {
+      const ov = proxyPoolService.getRateLimitCooldownMs(id)
+      if (ov < 0) return 0 // -1：不冷却（立即可再用）
+      if (ov > 0) return ov // 自定义 ms
+      return settings.getApiProxyRateLimitCooldownMs() // 0：用全局
+    },
   })
   const apiProxySelector = new AccountPoolSelector(
     {
@@ -481,10 +494,8 @@ export async function buildContainer(): Promise<Container> {
     conversationIdCache: kiroConversationIdCache,
     genConversationId: randomUUID,
   })
-  // 反代账号池成员（独立标识）：仅池内账号才进选号候选。启动载入持久化成员到内存。
-  const proxyPoolRepo = new ProxyPoolRepository()
-  const proxyPoolService = new ProxyPoolService(proxyPoolRepo)
-  await proxyPoolService.load()
+  // 402 额度耗尽：解析账号下一次配额重置时间（缓存优先 + live 兜底），冷却到那一刻再放行。
+  const quotaResetResolver = makeQuotaResetResolver({ quotaService })
   platformRegistry.register(
     new FailoverAdapter({
       inner: kiroInner,
@@ -498,6 +509,12 @@ export async function buildContainer(): Promise<Container> {
       isPooled: (id) => proxyPoolService.has(id),
       getPriority: (id) => proxyPoolService.getPriority(id),
       getConcurrency: (id) => proxyPoolService.getConcurrency(id),
+      quotaReset: quotaResetResolver,
+      // 401/403 token 永久失效 → 移出反代池（写穿落库）。
+      removeFromPool: async (id) => {
+        console.info(`[apiProxy] token 永久失效，移出反代池: ${id}`)
+        await proxyPoolService.setPooled(id, false)
+      },
       random: Math.random,
     }),
   )
@@ -638,7 +655,7 @@ export async function buildContainer(): Promise<Container> {
   // Prometheus /metrics（G10）数据源：G3 计数器 + 账号运行态汇总 + inflight + uptime。
   const apiProxyMetrics = async (): Promise<string> => {
     const accts = await kiroAccountPort.listByPlatform()
-    const tally: AccountStateTally = { available: 0, cooldown: 0, quota_exhausted: 0, suspended: 0 }
+    const tally: AccountStateTally = { available: 0, cooldown: 0, rate_limited: 0, quota_exhausted: 0, suspended: 0 }
     for (const s of apiProxyHealth.snapshotAll(accts.map((a) => a.id))) tally[s.runtimeState] += 1
     const counters = apiProxyRequestLog.counters()
     const uptimeSeconds =

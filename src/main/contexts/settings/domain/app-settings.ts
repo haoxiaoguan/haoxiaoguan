@@ -47,6 +47,8 @@ export interface RuntimeSettings {
   apiProxyBaseCooldownMs: number
   apiProxyMaxBackoffMultiplier: number
   apiProxyQuotaResetMs: number
+  /** 429 限流的全局冷却（ms，默认 60000=1min）；账号可在反代池内单独覆盖（0=用此全局/-1=不冷却/>0=自定义）。 */
+  apiProxyRateLimitCooldownMs: number
   apiProxyProbabilisticRetryChance: number
   // 本地反代是否启用 HTTPS（自签证书，P2-1）。默认 false（HTTP）；true 时
   // ApiHttpServer 使用 https.createServer + loadOrCreateCert() 生成/复用证书。
@@ -103,6 +105,7 @@ const RUNTIME_DEFAULTS: RuntimeSettings = {
   apiProxyBaseCooldownMs: 60000,
   apiProxyMaxBackoffMultiplier: 64,
   apiProxyQuotaResetMs: 3600000,
+  apiProxyRateLimitCooldownMs: 60000,
   apiProxyProbabilisticRetryChance: 0.1,
   apiProxyHttps: false,
   terminalLaunchTemplate: '',
@@ -188,6 +191,7 @@ export class AppSettings {
       api_proxy_base_cooldown_ms: String(this.runtime.apiProxyBaseCooldownMs),
       api_proxy_max_backoff_multiplier: String(this.runtime.apiProxyMaxBackoffMultiplier),
       api_proxy_quota_reset_ms: String(this.runtime.apiProxyQuotaResetMs),
+      api_proxy_rate_limit_cooldown_ms: String(this.runtime.apiProxyRateLimitCooldownMs),
       api_proxy_probabilistic_retry_chance: String(this.runtime.apiProxyProbabilisticRetryChance),
       api_proxy_https: String(this.runtime.apiProxyHttps),
       terminal_launch_template: this.runtime.terminalLaunchTemplate,
@@ -258,6 +262,8 @@ export class AppSettings {
         const n = Number(v); if (Number.isInteger(n) && n >= 1) this.runtime.apiProxyMaxBackoffMultiplier = n
       } else if (k === 'api_proxy_quota_reset_ms') {
         const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyQuotaResetMs = n
+      } else if (k === 'api_proxy_rate_limit_cooldown_ms') {
+        const n = Number(v); if (Number.isInteger(n) && n >= 0) this.runtime.apiProxyRateLimitCooldownMs = n
       } else if (k === 'api_proxy_probabilistic_retry_chance') {
         const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 1) this.runtime.apiProxyProbabilisticRetryChance = n
       } else if (k === 'api_proxy_https') {

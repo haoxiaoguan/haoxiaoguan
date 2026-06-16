@@ -225,6 +225,7 @@ export const API_PROXY_CHANNELS = {
   setAccountPooled: 'apiProxy:setAccountPooled',
   setAccountPriority: 'apiProxy:setAccountPriority',
   setAccountConcurrency: 'apiProxy:setAccountConcurrency',
+  setAccountRateLimitCooldown: 'apiProxy:setAccountRateLimitCooldown',
   getPooledAccountIds: 'apiProxy:getPooledAccountIds',
   getSelectionConfig: 'apiProxy:getSelectionConfig',
   setSelectionConfig: 'apiProxy:setSelectionConfig',

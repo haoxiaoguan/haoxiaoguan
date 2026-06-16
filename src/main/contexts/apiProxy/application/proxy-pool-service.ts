@@ -5,10 +5,12 @@ import {
   type ProxyPoolRepository,
 } from '../infrastructure/account-pool/proxy-pool.repository'
 
-/** 内存中的成员配置：优先级 + 并发上限。 */
+/** 内存中的成员配置：优先级 + 并发上限 + 429 限流冷却覆盖。 */
 interface MemberConfig {
   priority: number
   concurrency: number
+  /** 429 限流冷却（ms）。0=用全局；-1=不冷却；>0=自定义。 */
+  rateLimitCooldownMs: number
 }
 
 export class ProxyPoolService {
@@ -23,7 +25,11 @@ export class ProxyPoolService {
     const rows = await this.repo.list()
     this.members.clear()
     for (const r of rows) {
-      this.members.set(r.accountId, { priority: r.priority, concurrency: r.concurrency })
+      this.members.set(r.accountId, {
+        priority: r.priority,
+        concurrency: r.concurrency,
+        rateLimitCooldownMs: r.rateLimitCooldownMs,
+      })
     }
     this.loaded = true
   }
@@ -43,6 +49,11 @@ export class ProxyPoolService {
     return this.members.get(accountId)?.concurrency ?? DEFAULT_PROXY_POOL_CONCURRENCY
   }
 
+  /** 账号的 429 限流冷却覆盖（ms）。不在池内返回 0（=随全局）。0=全局/-1=不冷却/>0=自定义。 */
+  getRateLimitCooldownMs(accountId: string): number {
+    return this.members.get(accountId)?.rateLimitCooldownMs ?? 0
+  }
+
   /** 当前池成员账号 id 列表。 */
   listIds(): string[] {
     return [...this.members.keys()]
@@ -58,9 +69,12 @@ export class ProxyPoolService {
     accountId: string,
     priority = 0,
     concurrency = DEFAULT_PROXY_POOL_CONCURRENCY,
+    rateLimitCooldownMs = 0,
   ): Promise<void> {
-    await this.repo.add(accountId, priority, concurrency)
-    if (!this.members.has(accountId)) this.members.set(accountId, { priority, concurrency })
+    await this.repo.add(accountId, priority, concurrency, rateLimitCooldownMs)
+    if (!this.members.has(accountId)) {
+      this.members.set(accountId, { priority, concurrency, rateLimitCooldownMs })
+    }
   }
 
   /** 移出池（幂等，写穿落库）。 */
@@ -89,6 +103,21 @@ export class ProxyPoolService {
     if (m === undefined) return
     await this.repo.setConcurrency(accountId, concurrency)
     m.concurrency = concurrency
+  }
+
+  /**
+   * 批量设置成员 429 限流冷却覆盖（ms：0=全局/-1=不冷却/>0=自定义；仅对在池账号生效；写穿落库）。
+   * 返回实际生效的账号 id 列表（过滤掉不在池的）。
+   */
+  async setRateLimitCooldown(accountIds: string[], rateLimitCooldownMs: number): Promise<string[]> {
+    const pooled = accountIds.filter((id) => this.members.has(id))
+    if (pooled.length === 0) return []
+    await this.repo.setRateLimitCooldown(pooled, rateLimitCooldownMs)
+    for (const id of pooled) {
+      const m = this.members.get(id)
+      if (m !== undefined) m.rateLimitCooldownMs = rateLimitCooldownMs
+    }
+    return pooled
   }
 
   /** 是否已载入（诊断用）。 */

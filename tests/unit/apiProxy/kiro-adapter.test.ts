@@ -20,7 +20,7 @@ const ACCOUNT: KiroAccountInfo = {
 }
 const CRED: KiroCredential = { token: 'tok-1', refreshToken: 'refresh-1', rawMetadata: { provider: 'Github' } }
 
-const NO_REFRESH: KiroTokenRefresher = { async refresh() { return undefined } }
+const NO_REFRESH: KiroTokenRefresher = { async refresh() { return { kind: 'permanent' } } }
 
 function fetchReturning(list: { eventType: string; payload: unknown }[]): { impl: KiroFetchImpl; calls: Array<{ url: string; headers: Record<string, string> }> } {
   const calls: Array<{ url: string; headers: Record<string, string> }> = []

@@ -57,6 +57,7 @@ export class RelayAdapter implements PlatformUpstreamAdapter {
     const e = err as { name?: string; status?: number } | null
     if (e?.name === 'RelayHttpError') {
       const s = e.status
+      if (s === 402) return 'QUOTA' // 额度耗尽：冷却到配额重置时间
       if (s === 429) return 'RATE_LIMIT'
       if (s === 401 || s === 403) return 'AUTH'
       if (s === 400 || s === 422) return 'FATAL'

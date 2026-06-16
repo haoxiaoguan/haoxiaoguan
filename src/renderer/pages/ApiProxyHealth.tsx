@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Settings2,
+  Timer,
   Table2,
   Trash2,
   TriangleAlert,
@@ -59,6 +60,10 @@ const RUNTIME_STATE_TONE: Record<string, { className: string; dot: string }> = {
     className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
     dot: 'bg-yellow-500',
   },
+  rate_limited: {
+    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    dot: 'bg-amber-500',
+  },
   quota_exhausted: {
     className: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
     dot: 'bg-orange-500',
@@ -93,6 +98,9 @@ function useStateLabel() {
     let label = t(`poolHealth.state.${row.runtimeState}`)
     if (row.runtimeState === 'cooldown' && row.cooldownUntilMs !== undefined) {
       const remaining = Math.max(0, Math.ceil((row.cooldownUntilMs - now) / 1000))
+      label = `${label} (${remaining}s)`
+    } else if (row.runtimeState === 'rate_limited' && row.rateLimitedUntilMs !== undefined) {
+      const remaining = Math.max(0, Math.ceil((row.rateLimitedUntilMs - now) / 1000))
       label = `${label} (${remaining}s)`
     } else if (row.runtimeState === 'quota_exhausted' && row.quotaResetsAtMs !== undefined) {
       const resetAt = new Date(row.quotaResetsAtMs).toLocaleTimeString([], {
@@ -139,7 +147,7 @@ function TokenCell({ row, align }: { row: AccountPoolHealthRow; align?: 'end' })
 
 export default function ApiProxyHealth() {
   const { t } = useTranslation('nav')
-  const { error, poolHealth, fetchPoolHealth, setPooled, setPriority, setConcurrency, clearSuspension } =
+  const { error, poolHealth, fetchPoolHealth, setPooled, setPriority, setConcurrency, setRateLimitCooldown, clearSuspension } =
     useApiProxyStore()
   const stateLabel = useStateLabel()
   // 复用账号管理的额度：账号库（取 Account 供额度兜底/口径）+ 额度状态（按账号缓存）。
@@ -153,6 +161,7 @@ export default function ApiProxyHealth() {
   const [hideEmails, setHideEmails] = useState(() => localStorage.getItem(HIDE_EMAILS_KEY) === '1')
   const [addOpen, setAddOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [batchCooldownOpen, setBatchCooldownOpen] = useState(false)
 
   // 池账号变化后：按平台拉账号库（供额度兜底/计划字段）+ 拉取各账号额度状态。
   const poolIdsKey = poolHealth.map((r) => r.accountId).join(',')
@@ -469,6 +478,16 @@ export default function ApiProxyHealth() {
           <Settings2 className="size-3.5" aria-hidden />
           {t('poolHealth.settings')}
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5"
+          disabled={pooled.length === 0}
+          onClick={() => setBatchCooldownOpen(true)}
+        >
+          <Timer className="size-3.5" aria-hidden />
+          {t('poolHealth.batchCooldown')}
+        </Button>
         <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddOpen(true)}>
           <Plus className="size-3.5" strokeWidth={2.25} aria-hidden />
           {t('poolHealth.add')}
@@ -558,6 +577,14 @@ export default function ApiProxyHealth() {
       />
 
       <ProxySettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <BatchCooldownDialog
+        open={batchCooldownOpen}
+        onOpenChange={setBatchCooldownOpen}
+        accounts={pooled}
+        mask={mask}
+        onConfirm={(ids, ms) => void setRateLimitCooldown(ids, ms)}
+      />
     </div>
   )
 }
@@ -617,6 +644,7 @@ function ProxySettingsDialog({
 
   const [strategy, setStrategy] = useState<ApiProxySelectionConfigDto['strategy']>('sticky-lru')
   const [affinitySec, setAffinitySec] = useState('60')
+  const [rateLimitCooldownSec, setRateLimitCooldownSec] = useState('60')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -627,6 +655,7 @@ function ProxySettingsDialog({
     if (open && selectionConfig) {
       setStrategy(selectionConfig.strategy)
       setAffinitySec(String(Math.round(selectionConfig.affinityTtlMs / 1000)))
+      setRateLimitCooldownSec(String(Math.round(selectionConfig.rateLimitCooldownMs / 1000)))
     }
   }, [open, selectionConfig])
 
@@ -635,6 +664,7 @@ function ProxySettingsDialog({
     const ok = await saveSelectionConfig({
       strategy,
       affinityTtlMs: Math.max(0, Math.round(Number(affinitySec) || 0)) * 1000,
+      rateLimitCooldownMs: Math.max(0, Math.round(Number(rateLimitCooldownSec) || 0)) * 1000,
     })
     setSaving(false)
     if (ok) {
@@ -690,6 +720,21 @@ function ProxySettingsDialog({
               {t('poolHealth.settingsAffinityHint')}
             </span>
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-foreground">
+              {t('poolHealth.settingsRateLimitCooldown')}
+            </span>
+            <Input
+              type="number"
+              min={0}
+              value={rateLimitCooldownSec}
+              onChange={(e) => setRateLimitCooldownSec(e.target.value)}
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {t('poolHealth.settingsRateLimitCooldownHint')}
+            </span>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
@@ -697,6 +742,127 @@ function ProxySettingsDialog({
           </Button>
           <Button size="sm" disabled={saving} onClick={() => void save()}>
             {t('poolHealth.settingsSave')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── batch rate-limit cooldown dialog ───────────────────────────────────────
+
+function BatchCooldownDialog({
+  open,
+  onOpenChange,
+  accounts,
+  mask,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  accounts: AccountPoolHealthRow[]
+  mask: (v: string) => string
+  onConfirm: (ids: string[], rateLimitCooldownMs: number) => void
+}) {
+  const { t } = useTranslation('nav')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [sec, setSec] = useState('60')
+
+  useEffect(() => {
+    if (open) {
+      setSelected(new Set())
+      setSec('60')
+    }
+  }, [open])
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const allSelected = accounts.length > 0 && selected.size === accounts.length
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(accounts.map((a) => a.accountId)))
+
+  // 覆盖值展示：0=用全局；<0=不冷却；>0=秒。
+  const fmtOverride = (ms: number): string =>
+    ms === 0 ? t('poolHealth.cooldownGlobal') : ms < 0 ? t('poolHealth.cooldownNone') : `${Math.round(ms / 1000)}s`
+
+  const confirm = () => {
+    const raw = Math.trunc(Number(sec))
+    const ms = !Number.isFinite(raw) ? 0 : raw < 0 ? -1 : raw * 1000
+    onConfirm([...selected], ms)
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('poolHealth.batchDialog.title')}</DialogTitle>
+          <DialogDescription>{t('poolHealth.batchDialog.desc')}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium text-foreground">
+            {t('poolHealth.batchDialog.cooldownLabel')}
+          </span>
+          <Input type="number" value={sec} onChange={(e) => setSec(e.target.value)} />
+          <span className="text-[11px] text-muted-foreground">
+            {t('poolHealth.batchDialog.cooldownHint')}
+          </span>
+        </div>
+        {accounts.length === 0 ? (
+          <div className="py-8 text-center text-[12px] text-muted-foreground">
+            {t('poolHealth.addDialog.empty')}
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="flex items-center gap-2 self-start text-[12px] text-primary hover:underline"
+            >
+              <Checkbox checked={allSelected} aria-hidden />
+              {t('poolHealth.batchDialog.selectAll')}
+            </button>
+            <div className="max-h-[260px] overflow-y-auto rounded-[8px] border border-border">
+              {accounts.map((c) => {
+                const isSel = selected.has(c.accountId)
+                return (
+                  <button
+                    key={c.accountId}
+                    type="button"
+                    onClick={() => toggle(c.accountId)}
+                    className="flex w-full items-center gap-2.5 border-b border-border/60 px-3 py-2 text-left last:border-b-0 hover:bg-muted/40"
+                  >
+                    <Checkbox checked={isSel} aria-hidden />
+                    <PlatformIcon
+                      platform={c.platform as PlatformId}
+                      className="size-6 shrink-0 rounded-[6px]"
+                    />
+                    <span
+                      className="min-w-0 flex-1 truncate text-[12.5px] text-foreground"
+                      title={mask(c.email)}
+                    >
+                      {mask(c.email)}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {fmtOverride(c.rateLimitCooldownMs)}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            {t('poolHealth.settingsCancel')}
+          </Button>
+          <Button size="sm" disabled={selected.size === 0} onClick={confirm}>
+            {t('poolHealth.batchDialog.confirm', { count: selected.size })}
           </Button>
         </DialogFooter>
       </DialogContent>

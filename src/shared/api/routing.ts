@@ -304,9 +304,11 @@ export interface AccountPoolHealthRow {
   platform: string
   email: string
   status?: string
-  runtimeState: 'available' | 'cooldown' | 'quota_exhausted' | 'suspended'
+  runtimeState: 'available' | 'cooldown' | 'rate_limited' | 'quota_exhausted' | 'suspended'
   failureCount: number
   cooldownUntilMs?: number
+  /** rate_limited（429 限流）恢复时间戳（ms）：前端直接展示倒计时。 */
+  rateLimitedUntilMs?: number
   quotaExhaustedAtMs?: number
   /** quota_exhausted 恢复时间戳（ms）：由服务端按配置值计算，前端直接展示。 */
   quotaResetsAtMs?: number
@@ -316,6 +318,8 @@ export interface AccountPoolHealthRow {
   priority: number
   /** 每账号并发上限（同时在途请求数；未入池为默认值）。 */
   concurrency: number
+  /** 429 限流冷却覆盖（ms）：0=用全局/-1=不冷却/>0=自定义。未入池为 0。 */
+  rateLimitCooldownMs: number
   /** 窗口内被请求次数（来自路由日志聚合）。 */
   requests: number
   /** 窗口内成功次数。 */
@@ -344,6 +348,8 @@ export interface ApiProxySelectionConfigDto {
   strategy: 'sticky-lru' | 'round-robin'
   /** 亲密度：会话粘性保持时长（ms，0=不粘）。 */
   affinityTtlMs: number
+  /** 429 限流的全局冷却（ms，默认 60000=1min）；账号可在池内单独覆盖。 */
+  rateLimitCooldownMs: number
 }
 
 // 客户端 Key 元信息（不含明文/密文）。

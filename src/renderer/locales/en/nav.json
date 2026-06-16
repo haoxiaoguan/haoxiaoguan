@@ -261,6 +261,8 @@
     "settingsStrategyHint": "Sticky: reuse the same account within a session; round-robin: distribute evenly across accounts.",
     "settingsAffinity": "Stickiness (session retention, seconds)",
     "settingsAffinityHint": "Within this window a session sticks to the same account; 0 disables stickiness.",
+    "settingsRateLimitCooldown": "Rate-limit cooldown (429, global, seconds)",
+    "settingsRateLimitCooldownHint": "How long an account cools down after an upstream 429; accounts can override per-row (0=use global, -1=no cooldown).",
     "settingsConcurrency": "Per-account concurrency",
     "settingsConcurrencyHint": "Max simultaneous in-flight requests per account.",
     "settingsSave": "Save",
@@ -281,12 +283,24 @@
       "cancel": "Cancel",
       "confirm": "Add {{count}}"
     },
+    "batchCooldown": "Rate-limit cooldown",
+    "cooldownGlobal": "Global",
+    "cooldownNone": "No cooldown",
+    "batchDialog": {
+      "title": "Batch set 429 rate-limit cooldown",
+      "desc": "Set the post-429 cooldown for the selected accounts (overrides global)",
+      "cooldownLabel": "Cooldown (seconds)",
+      "cooldownHint": "0 = use global; -1 = no cooldown (immediate reuse); >0 = custom seconds",
+      "selectAll": "Select all",
+      "confirm": "Apply to {{count}}"
+    },
     "failures": "{{count}} failures",
     "clearSuspension": "Clear Suspension",
     "removeFromPool": "Remove from pool",
     "state": {
       "available": "Available",
       "cooldown": "Cooldown",
+      "rate_limited": "Rate Limited",
       "quota_exhausted": "Quota Exhausted",
       "suspended": "Suspended"
     },

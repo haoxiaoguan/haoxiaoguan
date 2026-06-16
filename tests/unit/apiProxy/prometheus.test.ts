@@ -12,7 +12,7 @@ const base = {
   },
   uptimeSeconds: 3600,
   inflight: 3,
-  accountStates: { available: 5, cooldown: 1, quota_exhausted: 2, suspended: 1 },
+  accountStates: { available: 5, cooldown: 1, rate_limited: 3, quota_exhausted: 2, suspended: 1 },
 }
 
 describe('renderPrometheus', () => {
@@ -33,6 +33,7 @@ describe('renderPrometheus', () => {
     expect(out).toContain('# TYPE apiproxy_accounts gauge')
     expect(out).toContain('apiproxy_accounts{state="available"} 5')
     expect(out).toContain('apiproxy_accounts{state="cooldown"} 1')
+    expect(out).toContain('apiproxy_accounts{state="rate_limited"} 3')
     expect(out).toContain('apiproxy_accounts{state="quota_exhausted"} 2')
     expect(out).toContain('apiproxy_accounts{state="suspended"} 1')
   })
@@ -50,7 +51,7 @@ describe('renderPrometheus', () => {
       counters: { requestsTotal: 0, successTotal: 0, failedTotal: 0, inputTokensTotal: 0, outputTokensTotal: 0, startedAtMs: null },
       uptimeSeconds: 0,
       inflight: 0,
-      accountStates: { available: 0, cooldown: 0, quota_exhausted: 0, suspended: 0 },
+      accountStates: { available: 0, cooldown: 0, rate_limited: 0, quota_exhausted: 0, suspended: 0 },
     })
     expect(out).toContain('apiproxy_requests_total 0')
     expect(out).toContain('apiproxy_accounts{state="available"} 0')

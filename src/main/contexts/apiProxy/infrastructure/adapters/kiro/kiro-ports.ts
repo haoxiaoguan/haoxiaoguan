@@ -58,9 +58,19 @@ export interface RefreshedKiroToken {
 }
 
 /**
- * token 刷新窄 port：用旧凭据换新 access/refresh。返回 undefined 表示无法刷新
- * （无 refreshToken / api_key 模式 / 永久失效）——调用方据此放弃重试、原样抛错。
+ * token 刷新结果（区分永久 vs 临时失败，供「401 刷不出新 token 则移出反代池」决策）：
+ * - refreshed：拿到新 access token。
+ * - permanent：永久失效（无 refreshToken / api_key 模式 / 缺 idc 凭据 / invalid_grant）→ 需移出反代池。
+ * - transient：临时失败（刷新接口 429 / 网络 / 5xx）→ 仅冷却稍后重试，不移池。
+ */
+export type KiroRefreshOutcome =
+  | ({ kind: 'refreshed' } & RefreshedKiroToken)
+  | { kind: 'permanent' }
+  | { kind: 'transient' }
+
+/**
+ * token 刷新窄 port：用旧凭据换新 access/refresh，并明确区分永久/临时失败。
  */
 export interface KiroTokenRefresher {
-  refresh(cred: KiroCredential, region: string): Promise<RefreshedKiroToken | undefined>
+  refresh(cred: KiroCredential, region: string): Promise<KiroRefreshOutcome>
 }

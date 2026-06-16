@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { AccountHealthTracker } from '../../../src/main/contexts/apiProxy/domain/account-selection/account-health-tracker'
 
 function mk(now: { t: number }) {
-  return new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
+  return new AccountHealthTracker({ baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000, rateLimitCooldownMs: 60000, probabilisticRetryChance: 0, clock: () => now.t, random: () => 1 })
 }
 
 describe('AccountHealthTracker.snapshot', () => {
@@ -13,8 +13,12 @@ describe('AccountHealthTracker.snapshot', () => {
     const now = { t: 0 }; const h = mk(now); h.markRateLimited('a'); h.markSuspended('a')
     expect(h.snapshot('a').runtimeState).toBe('suspended')
   })
-  it('markRateLimited → quota_exhausted + 时间戳', () => {
+  it('markRateLimited → rate_limited + 恢复时间戳（短冷却）', () => {
     const now = { t: 5 }; const h = mk(now); h.markRateLimited('a')
+    expect(h.snapshot('a')).toMatchObject({ runtimeState: 'rate_limited', rateLimitedUntilMs: 5 + 60000 })
+  })
+  it('markQuotaExhausted → quota_exhausted + 时间戳（真配额耗尽）', () => {
+    const now = { t: 5 }; const h = mk(now); h.markQuotaExhausted('a')
     expect(h.snapshot('a')).toMatchObject({ runtimeState: 'quota_exhausted', quotaExhaustedAtMs: 5 })
   })
   it('markFailure → cooldown + 截止', () => {

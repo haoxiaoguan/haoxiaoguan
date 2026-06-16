@@ -18,6 +18,13 @@ export class ProxyPoolMemberEntity {
   @Property({ type: 'integer', default: 4 })
   concurrency: number = 4
 
+  /**
+   * 每账号 429 限流冷却（ms）。0=用全局配置；-1=不冷却（立即可再用）；>0=自定义 ms。
+   * updateSchema 在存量库上自动 ADD COLUMN（默认 0=随全局）。
+   */
+  @Property({ type: 'integer', fieldName: 'rate_limit_cooldown_ms', default: 0 })
+  rateLimitCooldownMs: number = 0
+
   @Property({ type: 'bigint', fieldName: 'created_at' })
   createdAt!: number
 }

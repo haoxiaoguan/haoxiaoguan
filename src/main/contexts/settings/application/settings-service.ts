@@ -109,6 +109,10 @@ export class SettingsApplicationService {
   getApiProxyQuotaResetMs(): number {
     return this.file.loadSync().runtime.apiProxyQuotaResetMs
   }
+  /** 429 限流的全局冷却（ms）。账号可在反代池内单独覆盖（0=用此全局/-1=不冷却/>0=自定义）。 */
+  getApiProxyRateLimitCooldownMs(): number {
+    return this.file.loadSync().runtime.apiProxyRateLimitCooldownMs
+  }
   getApiProxyProbabilisticRetryChance(): number {
     return this.file.loadSync().runtime.apiProxyProbabilisticRetryChance
   }

@@ -2,17 +2,23 @@ import { describe, it, expect } from 'vitest'
 import { ProxyPoolService } from '../../../src/main/contexts/apiProxy/application/proxy-pool-service'
 import type { ProxyPoolRepository } from '../../../src/main/contexts/apiProxy/infrastructure/account-pool/proxy-pool.repository'
 
-/** 内存假仓储（用 Map 模拟持久化：id → {priority, concurrency}）。 */
+/** 内存假仓储（用 Map 模拟持久化：id → {priority, concurrency, rateLimitCooldownMs}）。 */
 function makeFakeRepo(initial: string[] = []) {
-  const store = new Map<string, { priority: number; concurrency: number }>(
-    initial.map((id) => [id, { priority: 0, concurrency: 4 }]),
-  )
+  const store = new Map<
+    string,
+    { priority: number; concurrency: number; rateLimitCooldownMs?: number }
+  >(initial.map((id) => [id, { priority: 0, concurrency: 4 }]))
   const repo = {
     async list() {
-      return [...store.entries()].map(([accountId, m]) => ({ accountId, ...m }))
+      return [...store.entries()].map(([accountId, m]) => ({
+        accountId,
+        priority: m.priority,
+        concurrency: m.concurrency,
+        rateLimitCooldownMs: m.rateLimitCooldownMs ?? 0,
+      }))
     },
-    async add(id: string, priority = 0, concurrency = 4) {
-      if (!store.has(id)) store.set(id, { priority, concurrency })
+    async add(id: string, priority = 0, concurrency = 4, rateLimitCooldownMs = 0) {
+      if (!store.has(id)) store.set(id, { priority, concurrency, rateLimitCooldownMs })
     },
     async setPriority(id: string, priority: number) {
       const m = store.get(id)
@@ -21,6 +27,12 @@ function makeFakeRepo(initial: string[] = []) {
     async setConcurrency(id: string, concurrency: number) {
       const m = store.get(id)
       if (m) m.concurrency = concurrency
+    },
+    async setRateLimitCooldown(ids: string[], ms: number) {
+      for (const id of ids) {
+        const m = store.get(id)
+        if (m) m.rateLimitCooldownMs = ms
+      }
     },
     async remove(id: string) {
       store.delete(id)
@@ -120,5 +132,23 @@ describe('ProxyPoolService', () => {
     await svc.add('a', 9, 1) // 已在池 → 不覆盖
     expect(svc.getPriority('a')).toBe(4)
     expect(svc.getConcurrency('a')).toBe(6)
+  })
+
+  it('setRateLimitCooldown 批量写穿 + 更新内存（仅对在池账号生效，返回生效 id）', async () => {
+    const { repo, store } = makeFakeRepo(['a', 'b'])
+    const svc = new ProxyPoolService(repo)
+    await svc.load()
+    expect(svc.getRateLimitCooldownMs('a')).toBe(0) // 默认 0=用全局
+    const affected = await svc.setRateLimitCooldown(['a', 'b', 'ghost'], 5000)
+    expect(new Set(affected)).toEqual(new Set(['a', 'b'])) // ghost 不在池被过滤
+    expect(svc.getRateLimitCooldownMs('a')).toBe(5000)
+    expect(svc.getRateLimitCooldownMs('b')).toBe(5000)
+    expect(store.get('a')?.rateLimitCooldownMs).toBe(5000)
+    expect(store.has('ghost')).toBe(false)
+    // -1（不冷却）也可设置
+    await svc.setRateLimitCooldown(['a'], -1)
+    expect(svc.getRateLimitCooldownMs('a')).toBe(-1)
+    // 不在池账号默认 0
+    expect(svc.getRateLimitCooldownMs('missing')).toBe(0)
   })
 })

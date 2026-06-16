@@ -279,7 +279,7 @@ export interface KiroSendOpts {
   cwModelId?: string
 }
 
-// 抛给上层的鉴权错误（刷新失败/无法刷新时）。
+// 抛给上层的鉴权错误（刷新后仍 401/403：token 能刷但仍被拒，非"拿不到新 token"）。
 export class KiroUpstreamAuthError extends Error {
   constructor(
     message: string,
@@ -287,6 +287,21 @@ export class KiroUpstreamAuthError extends Error {
   ) {
     super(message)
     this.name = 'KiroUpstreamAuthError'
+  }
+}
+
+/**
+ * token 永久失效：401/403 且刷新「永久」拿不到新 access token
+ * （无 refreshToken / api_key 模式 / 缺 idc 凭据 / invalid_grant）。
+ * 故障转移据此把该账号移出反代池（setPooled(false)）。
+ */
+export class KiroTokenPermanentError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+    this.name = 'KiroTokenPermanentError'
   }
 }
 
@@ -449,18 +464,31 @@ export class KiroUpstreamClient {
 
         if (resp.status === 401 || resp.status === 403) {
           if (!refreshed) {
-            const next = await this.refresher.refresh(toCred(curCtx), curCtx.region)
-            if (next !== undefined) {
+            const outcome = await this.refresher.refresh(toCred(curCtx), curCtx.region)
+            if (outcome.kind === 'refreshed') {
               refreshed = true
               curCtx = {
                 ...curCtx,
-                accessToken: next.token,
-                ...(next.refreshToken ? { refreshToken: next.refreshToken } : {}),
+                accessToken: outcome.token,
+                ...(outcome.refreshToken ? { refreshToken: outcome.refreshToken } : {}),
               }
               continue // 同端点用新 token 再试一次。
             }
+            if (outcome.kind === 'permanent') {
+              // 永久失效（无 refreshToken / api_key / invalid_grant）→ 专用错误，故障转移据此移出反代池。
+              throw new KiroTokenPermanentError(
+                `token permanently invalid (${resp.status}): refresh unavailable`,
+                resp.status,
+              )
+            }
+            // transient：刷新临时失败（429/网络/5xx）→ 当作临时服务端错误，冷却 + 切号稍后重试，不移池。
+            // KiroUpstreamError(401/403) → classifyKiroError → SERVER。
+            throw new KiroUpstreamError(
+              `auth refresh transient failure (${resp.status})`,
+              resp.status,
+            )
           }
-          // 无法刷新或刷新后仍 401 → 鉴权错误，不再尝试其它端点。
+          // 刷新后仍 401/403：token 能刷但仍被拒（非"拿不到新 token"）→ 鉴权错误，不移池。
           throw new KiroUpstreamAuthError(`auth error ${resp.status}: ${body}`, resp.status)
         }
 

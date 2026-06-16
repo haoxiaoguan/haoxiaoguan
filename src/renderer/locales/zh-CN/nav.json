@@ -261,6 +261,8 @@
     "settingsStrategyHint": "粘性：同一会话尽量复用同一账号；轮询：在账号间均匀分发。",
     "settingsAffinity": "粘黏度（会话保持时长，秒）",
     "settingsAffinityHint": "同一会话在该时长内尽量去到同一个账号；0 表示不粘。",
+    "settingsRateLimitCooldown": "限流冷却（429，全局，秒）",
+    "settingsRateLimitCooldownHint": "账号被上游 429 限流后冷却多久再用；账号可在表内单独覆盖（0=用全局，-1=不冷却）。",
     "settingsConcurrency": "每账号并发上限",
     "settingsConcurrencyHint": "单个账号允许的同时在途请求数。",
     "settingsSave": "保存",
@@ -281,12 +283,24 @@
       "cancel": "取消",
       "confirm": "添加 {{count}} 个"
     },
+    "batchCooldown": "限流冷却",
+    "cooldownGlobal": "全局",
+    "cooldownNone": "不冷却",
+    "batchDialog": {
+      "title": "批量设置 429 限流冷却",
+      "desc": "对所选账号批量设置被上游 429 限流后的冷却时长（覆盖全局）",
+      "cooldownLabel": "冷却时长（秒）",
+      "cooldownHint": "0=用全局配置；-1=不冷却（立即可再用）；>0=自定义秒数",
+      "selectAll": "全选",
+      "confirm": "应用到 {{count}} 个"
+    },
     "failures": "失败 {{count}} 次",
     "clearSuspension": "解除挂起",
     "removeFromPool": "移出反代池",
     "state": {
       "available": "可用",
       "cooldown": "冷却中",
+      "rate_limited": "限流中",
       "quota_exhausted": "配额耗尽",
       "suspended": "已挂起"
     },

@@ -3,6 +3,13 @@ export interface HealthTrackerOpts {
   maxBackoffMultiplier: number
   quotaResetMs: number
   probabilisticRetryChance: number
+  /** 429 限流的固定短冷却（ms）；区别于 quotaResetMs（真配额耗尽长冷却）。默认 60_000=1min。 */
+  rateLimitCooldownMs?: number
+  /**
+   * 按账号解析 429 限流的有效冷却（ms）：返回 <=0 表示不冷却（立即可再用）。
+   * 注入后 markRateLimited 优先用它（每账号覆盖 + 全局默认在 container 内合成）；不注入则用 rateLimitCooldownMs。
+   */
+  rateLimitCooldownResolver?: (id: string) => number
   clock?: () => number
   random?: () => number
 }
@@ -10,20 +17,33 @@ export interface HealthTrackerOpts {
 interface HealthState {
   failureCount: number
   cooldownUntil: number
-  quotaExhaustedAt: number  // -1 = 未耗尽
+  quotaExhaustedAt: number   // -1 = 未耗尽；标记时刻（展示用）
+  quotaExhaustedUntil: number // 0 = 未耗尽；额度恢复（下一次配额重置）的绝对时间戳
+  rateLimitedUntil: number   // 0 = 未限流；429 短冷却到期时间戳
   suspended: boolean
 }
 
 export interface AccountRuntimeHealth {
   accountId: string
-  runtimeState: 'available' | 'cooldown' | 'quota_exhausted' | 'suspended'
+  runtimeState: 'available' | 'cooldown' | 'rate_limited' | 'quota_exhausted' | 'suspended'
   failureCount: number
   cooldownUntilMs?: number
   quotaExhaustedAtMs?: number
+  /** quota_exhausted（402 额度耗尽）恢复时间戳（ms）：账号下一次配额重置时间。 */
+  quotaExhaustedUntilMs?: number
+  /** rate_limited（429 限流）恢复时间戳（ms）。 */
+  rateLimitedUntilMs?: number
 }
 
 function fresh(): HealthState {
-  return { failureCount: 0, cooldownUntil: 0, quotaExhaustedAt: -1, suspended: false }
+  return {
+    failureCount: 0,
+    cooldownUntil: 0,
+    quotaExhaustedAt: -1,
+    quotaExhaustedUntil: 0,
+    rateLimitedUntil: 0,
+    suspended: false,
+  }
 }
 
 /**
@@ -36,10 +56,14 @@ export class AccountHealthTracker {
   private readonly states = new Map<string, HealthState>()
   private readonly clock: () => number
   private readonly random: () => number
+  private readonly rateLimitCooldownMs: number
+  private readonly rateLimitCooldownResolver: ((id: string) => number) | undefined
 
   constructor(private readonly opts: HealthTrackerOpts) {
     this.clock = opts.clock ?? Date.now
     this.random = opts.random ?? Math.random
+    this.rateLimitCooldownMs = opts.rateLimitCooldownMs ?? 60_000
+    this.rateLimitCooldownResolver = opts.rateLimitCooldownResolver
   }
 
   private getOrCreate(id: string): HealthState {
@@ -53,8 +77,11 @@ export class AccountHealthTracker {
     if (s === undefined) return true
     if (s.suspended) return false
     const now = this.clock()
-    if (s.quotaExhaustedAt >= 0 && now - s.quotaExhaustedAt < this.opts.quotaResetMs) return false
-    if (now < s.cooldownUntil) {
+    // 额度耗尽（402）：硬冷却到下一次配额重置时间，期间不放行、不做半开探测
+    // （配额未重置前重试必再 402，徒耗请求预算）。
+    if (s.quotaExhaustedUntil > 0 && now < s.quotaExhaustedUntil) return false
+    // 429 限流短冷却 + 熔断冷却：均走概率半开探测，到期自动恢复。
+    if (now < s.rateLimitedUntil || now < s.cooldownUntil) {
       return this.random() < this.opts.probabilisticRetryChance // 半开探测
     }
     return true
@@ -65,6 +92,8 @@ export class AccountHealthTracker {
     s.failureCount = 0
     s.cooldownUntil = 0
     s.quotaExhaustedAt = -1
+    s.quotaExhaustedUntil = 0
+    s.rateLimitedUntil = 0
     // 健康账号无需长期占 entry：状态已 fresh 且未 suspended 则删除。
     if (!s.suspended) this.states.delete(id)
   }
@@ -79,7 +108,8 @@ export class AccountHealthTracker {
       if (s.suspended) continue
       if (s.failureCount !== 0) continue
       if (now < s.cooldownUntil) continue
-      const quotaCleared = s.quotaExhaustedAt < 0 || now - s.quotaExhaustedAt >= this.opts.quotaResetMs
+      if (now < s.rateLimitedUntil) continue
+      const quotaCleared = s.quotaExhaustedUntil <= 0 || now >= s.quotaExhaustedUntil
       if (!quotaCleared) continue
       this.states.delete(id)
     }
@@ -92,8 +122,42 @@ export class AccountHealthTracker {
     s.cooldownUntil = this.clock() + this.opts.baseCooldownMs * mult
   }
 
+  /**
+   * 429 限流 → 固定短冷却（按账号解析：resolver(id) 优先，否则全局 rateLimitCooldownMs），
+   * 区别于真配额耗尽（markQuotaExhausted）。有效冷却 <=0 时不冷却（立即可再用）。
+   * 不累加 failureCount、不走指数退避、不置 quotaExhausted；走半开探测快速恢复。
+   */
   markRateLimited(id: string): void {
-    this.getOrCreate(id).quotaExhaustedAt = this.clock()
+    const cooldownMs = this.rateLimitCooldownResolver?.(id) ?? this.rateLimitCooldownMs
+    if (cooldownMs <= 0) return // 不冷却（立即可再用）
+    const s = this.getOrCreate(id)
+    const until = this.clock() + cooldownMs
+    if (until > s.rateLimitedUntil) s.rateLimitedUntil = until
+  }
+
+  /**
+   * 真配额耗尽（无已知重置时间）→ quotaResetMs（默认 1h）后自恢复。
+   * 与 429 限流（短冷却）区分；作为 markQuotaExhaustedUntil 拿不到 resetAt 时的兜底。
+   */
+  markQuotaExhausted(id: string): void {
+    const s = this.getOrCreate(id)
+    const now = this.clock()
+    s.quotaExhaustedAt = now
+    const until = now + this.opts.quotaResetMs
+    if (until > s.quotaExhaustedUntil) s.quotaExhaustedUntil = until
+  }
+
+  /**
+   * 额度耗尽（402）→ 硬冷却到该账号的下一次配额重置时间（untilMs，绝对时间戳）。
+   * untilMs 不在未来（<= now，resetAt 过期/异常）时退回默认冷却（now + quotaResetMs），避免不冷却。
+   * 取已有 quotaExhaustedUntil 与本次的较晚者，防止并发回写把冷却时间提前。
+   */
+  markQuotaExhaustedUntil(id: string, untilMs: number): void {
+    const s = this.getOrCreate(id)
+    const now = this.clock()
+    s.quotaExhaustedAt = now
+    const until = untilMs > now ? untilMs : now + this.opts.quotaResetMs
+    if (until > s.quotaExhaustedUntil) s.quotaExhaustedUntil = until
   }
 
   markSuspended(id: string): void {
@@ -106,16 +170,27 @@ export class AccountHealthTracker {
     s.failureCount = 0
     s.cooldownUntil = 0
     s.quotaExhaustedAt = -1
+    s.quotaExhaustedUntil = 0
+    s.rateLimitedUntil = 0
   }
 
-  /** 派生运行态（优先级 suspended > quota_exhausted > cooldown > available）。 */
+  /** 派生运行态（优先级 suspended > quota_exhausted > rate_limited > cooldown > available）。 */
   snapshot(id: string): AccountRuntimeHealth {
     const s = this.states.get(id)
     if (s === undefined) return { accountId: id, runtimeState: 'available', failureCount: 0 }
     if (s.suspended) return { accountId: id, runtimeState: 'suspended', failureCount: s.failureCount }
     const now = this.clock()
-    if (s.quotaExhaustedAt >= 0 && now - s.quotaExhaustedAt < this.opts.quotaResetMs) {
-      return { accountId: id, runtimeState: 'quota_exhausted', failureCount: s.failureCount, quotaExhaustedAtMs: s.quotaExhaustedAt }
+    if (s.quotaExhaustedUntil > 0 && now < s.quotaExhaustedUntil) {
+      return {
+        accountId: id,
+        runtimeState: 'quota_exhausted',
+        failureCount: s.failureCount,
+        ...(s.quotaExhaustedAt >= 0 ? { quotaExhaustedAtMs: s.quotaExhaustedAt } : {}),
+        quotaExhaustedUntilMs: s.quotaExhaustedUntil,
+      }
+    }
+    if (now < s.rateLimitedUntil) {
+      return { accountId: id, runtimeState: 'rate_limited', failureCount: s.failureCount, rateLimitedUntilMs: s.rateLimitedUntil }
     }
     if (now < s.cooldownUntil) {
       return { accountId: id, runtimeState: 'cooldown', failureCount: s.failureCount, cooldownUntilMs: s.cooldownUntil }

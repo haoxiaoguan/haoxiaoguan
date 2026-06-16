@@ -40,15 +40,23 @@ export function makeAccountPoolHealthHandler(deps: PoolHealthDeps) {
         runtimeState: snap.runtimeState,
         failureCount: snap.failureCount,
         ...(snap.cooldownUntilMs !== undefined ? { cooldownUntilMs: snap.cooldownUntilMs } : {}),
-        ...(snap.quotaExhaustedAtMs !== undefined
+        ...(snap.rateLimitedUntilMs !== undefined ? { rateLimitedUntilMs: snap.rateLimitedUntilMs } : {}),
+        // quota_exhausted（402）：恢复时间优先用真实重置时间（quotaExhaustedUntilMs，
+        // 来自账号配额 resetAt）；缺失才退回「标记时刻 + 配置冷却」的旧估算。
+        ...(snap.quotaExhaustedUntilMs !== undefined || snap.quotaExhaustedAtMs !== undefined
           ? {
-              quotaExhaustedAtMs: snap.quotaExhaustedAtMs,
-              quotaResetsAtMs: snap.quotaExhaustedAtMs + quotaResetMs,
+              ...(snap.quotaExhaustedAtMs !== undefined
+                ? { quotaExhaustedAtMs: snap.quotaExhaustedAtMs }
+                : {}),
+              quotaResetsAtMs:
+                snap.quotaExhaustedUntilMs ??
+                (snap.quotaExhaustedAtMs as number) + quotaResetMs,
             }
           : {}),
         pooled: pool?.has(a.id) ?? false,
         priority: pool?.getPriority(a.id) ?? 0,
         concurrency: pool?.getConcurrency(a.id) ?? 4,
+        rateLimitCooldownMs: pool?.getRateLimitCooldownMs(a.id) ?? 0,
         requests: st?.requests ?? 0,
         success: st?.success ?? 0,
         failed: st?.failed ?? 0,

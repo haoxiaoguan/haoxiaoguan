@@ -4,7 +4,7 @@ import { AccountHealthTracker } from '../../../src/main/contexts/apiProxy/domain
 function mk(now: { t: number }, random = () => 1) {
   return new AccountHealthTracker({
     baseCooldownMs: 1000, maxBackoffMultiplier: 64, quotaResetMs: 3600000,
-    probabilisticRetryChance: 0.1, clock: () => now.t, random,
+    rateLimitCooldownMs: 60000, probabilisticRetryChance: 0.1, clock: () => now.t, random,
   })
 }
 
@@ -36,11 +36,48 @@ describe('AccountHealthTracker', () => {
     h.markFailure('a'); h.recordSuccess('a')
     expect(h.isAvailable('a')).toBe(true)
   })
-  it('markRateLimited → quotaResetMs 后恢复', () => {
+  it('markRateLimited → 短冷却(rateLimitCooldownMs=60s) 后恢复（非 1h 配额）', () => {
     const now = { t: 0 }; const h = mk(now)
     h.markRateLimited('a')
     expect(h.isAvailable('a')).toBe(false)
+    now.t = 59999; expect(h.isAvailable('a')).toBe(false)
+    now.t = 60000; expect(h.isAvailable('a')).toBe(true) // 1 分钟即恢复
+  })
+  it('markQuotaExhausted → quotaResetMs(1h) 后恢复（真配额耗尽长冷却）', () => {
+    const now = { t: 0 }; const h = mk(now)
+    h.markQuotaExhausted('a')
+    expect(h.isAvailable('a')).toBe(false)
+    now.t = 3599999; expect(h.isAvailable('a')).toBe(false)
     now.t = 3600000; expect(h.isAvailable('a')).toBe(true)
+  })
+  it('markQuotaExhaustedUntil → 硬冷却到指定重置时间戳，到点恢复（402 额度耗尽）', () => {
+    const now = { t: 1000 }; const h = mk(now, () => 0) // random=0 < chance：验证额度耗尽不走半开探测
+    h.markQuotaExhaustedUntil('a', 5000)
+    expect(h.isAvailable('a')).toBe(false)
+    now.t = 4999; expect(h.isAvailable('a')).toBe(false) // 重置前一直硬冷却，不放行
+    now.t = 5000; expect(h.isAvailable('a')).toBe(true)  // 到重置时间恢复
+  })
+  it('markQuotaExhaustedUntil 的 untilMs 不在未来 → 退回默认 quotaResetMs 冷却', () => {
+    const now = { t: 10000 }; const h = mk(now)
+    h.markQuotaExhaustedUntil('a', 5000) // 过期时间戳（<= now）
+    expect(h.isAvailable('a')).toBe(false)
+    now.t = 10000 + 3599999; expect(h.isAvailable('a')).toBe(false)
+    now.t = 10000 + 3600000; expect(h.isAvailable('a')).toBe(true)
+  })
+  it('markQuotaExhaustedUntil 取较晚者，并发回写不提前冷却', () => {
+    const now = { t: 0 }; const h = mk(now)
+    h.markQuotaExhaustedUntil('a', 9000)
+    h.markQuotaExhaustedUntil('a', 3000) // 更早，应被忽略
+    now.t = 8999; expect(h.isAvailable('a')).toBe(false)
+    now.t = 9000; expect(h.isAvailable('a')).toBe(true)
+  })
+  it('snapshot 暴露 quota_exhausted + quotaExhaustedUntilMs（真重置时间）', () => {
+    const now = { t: 1000 }; const h = mk(now)
+    h.markQuotaExhaustedUntil('a', 7000)
+    const snap = h.snapshot('a')
+    expect(snap.runtimeState).toBe('quota_exhausted')
+    expect(snap.quotaExhaustedUntilMs).toBe(7000)
+    expect(snap.quotaExhaustedAtMs).toBe(1000)
   })
   it('markSuspended → 永久不可用，clearSuspension 才恢复', () => {
     const now = { t: 0 }; const h = mk(now)
@@ -92,8 +129,15 @@ describe('AccountHealthTracker', () => {
 
   it('sweep 清理配额恢复且 failureCount=0 的 entry', () => {
     const now = { t: 0 }; const h = mk(now)
-    h.markRateLimited('a')        // quotaExhaustedAt=0, failureCount=0
+    h.markQuotaExhausted('a')     // quotaExhaustedAt=0, failureCount=0
     now.t = 3600001               // quota 已恢复（quotaResetMs=3600000）
+    h.sweep()
+    expect(h.snapshot('a').runtimeState).toBe('available')
+  })
+  it('sweep 清理限流恢复的 entry（429 短冷却过后）', () => {
+    const now = { t: 0 }; const h = mk(now)
+    h.markRateLimited('a')        // rateLimitedUntil=60000, failureCount=0
+    now.t = 60001                 // 短冷却已过
     h.sweep()
     expect(h.snapshot('a').runtimeState).toBe('available')
   })

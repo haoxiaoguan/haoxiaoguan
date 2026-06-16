@@ -115,6 +115,21 @@ export function registerApiProxyHandlers(
         }
       },
     )
+    // 批量设置 429 限流冷却覆盖（ms：0=用全局/-1=不冷却/>0=自定义）。返回实际生效（在池）的 id 列表。
+    ipcMain.handle(
+      API_PROXY_CHANNELS.setAccountRateLimitCooldown,
+      async (_e, accountIds: string[], rateLimitCooldownMs: number): Promise<string[]> => {
+        try {
+          const ids = Array.isArray(accountIds) ? accountIds.filter((x) => typeof x === 'string') : []
+          // 仅允许 -1（不冷却）/ 0（用全局）/ 正整数 ms；其余规整到最近的合法值。
+          const raw = Math.trunc(Number(rateLimitCooldownMs))
+          const ms = Number.isFinite(raw) ? (raw < 0 ? -1 : raw) : 0
+          return await pool.setRateLimitCooldown(ids, ms)
+        } catch (e) {
+          throw new Error(toIpcError(e))
+        }
+      },
+    )
     ipcMain.handle(API_PROXY_CHANNELS.getPooledAccountIds, async (): Promise<string[]> => {
       try {
         return pool.listIds()

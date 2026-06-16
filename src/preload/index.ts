@@ -226,6 +226,12 @@ const api: HxgApi = {
       ipcRenderer.invoke(API_PROXY_CHANNELS.setAccountPriority, accountId, priority),
     setAccountConcurrency: (accountId: string, concurrency: number) =>
       ipcRenderer.invoke(API_PROXY_CHANNELS.setAccountConcurrency, accountId, concurrency),
+    setAccountRateLimitCooldown: (accountIds: string[], rateLimitCooldownMs: number) =>
+      ipcRenderer.invoke(
+        API_PROXY_CHANNELS.setAccountRateLimitCooldown,
+        accountIds,
+        rateLimitCooldownMs,
+      ),
     getPooledAccountIds: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getPooledAccountIds),
     getSelectionConfig: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getSelectionConfig),
     setSelectionConfig: (config) =>

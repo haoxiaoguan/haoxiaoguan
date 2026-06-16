@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isSuspendedResponse, KiroUpstreamSuspendedError, classifyKiroError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-error'
-import { KiroUpstreamAuthError, KiroUpstreamError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
+import { KiroUpstreamAuthError, KiroUpstreamError, KiroTokenPermanentError } from '../../../src/main/contexts/apiProxy/infrastructure/adapters/kiro/kiro-upstream-client'
 
 describe('isSuspendedResponse', () => {
   it('403 + TEMPORARILY_SUSPENDED', () => {
@@ -24,6 +24,12 @@ describe('classifyKiroError', () => {
   })
   it('Auth → AUTH', () => {
     expect(classifyKiroError(new KiroUpstreamAuthError('x', 401))).toBe('AUTH')
+  })
+  it('TokenPermanent → DEPOOL（token 永久失效 → 移出反代池）', () => {
+    expect(classifyKiroError(new KiroTokenPermanentError('x', 403))).toBe('DEPOOL')
+  })
+  it('402 → QUOTA（额度耗尽，冷却到重置时间）', () => {
+    expect(classifyKiroError(new KiroUpstreamError('x', 402))).toBe('QUOTA')
   })
   it('429 → RATE_LIMIT', () => {
     expect(classifyKiroError(new KiroUpstreamError('x', 429))).toBe('RATE_LIMIT')

@@ -148,6 +148,7 @@ export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHtt
   switch (e?.name) {
     case 'KiroUpstreamSuspendedError':
       return new ApiProxyHttpError(403, msg, format)
+    case 'KiroTokenPermanentError': // token 永久失效（已移出反代池）
     case 'KiroUpstreamAuthError':
       return new ApiProxyHttpError(401, msg, format)
     case 'NoKiroAccountError':
@@ -155,6 +156,7 @@ export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHtt
       return new ApiProxyHttpError(503, msg, format)
     case 'KiroUpstreamError': {
       const s = e.status
+      if (s === 402) return new ApiProxyHttpError(402, msg, format) // 额度耗尽，语义透传
       if (s === 429) return new ApiProxyHttpError(429, msg, format)
       if (s === 400 || s === 422) return new ApiProxyHttpError(s, msg, format)
       return new ApiProxyHttpError(502, msg, format)

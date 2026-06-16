@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   KiroUpstreamClient,
+  KiroTokenPermanentError,
+  KiroUpstreamError,
   endpointsForRegion,
   foldEventsToResponse,
   type KiroFetchImpl,
@@ -72,9 +74,12 @@ function errResp(status: number, body = 'err'): KiroFetchResponse {
   }
 }
 
-const NO_REFRESH: KiroTokenRefresher = { async refresh() { return undefined } }
+// 永久刷不出新 token（无 refresh 能力）。
+const NO_REFRESH: KiroTokenRefresher = { async refresh() { return { kind: 'permanent' } } }
+// 临时刷新失败（429/网络）。
+const TRANSIENT_REFRESH: KiroTokenRefresher = { async refresh() { return { kind: 'transient' } } }
 function refresherTo(tok: RefreshedKiroToken): KiroTokenRefresher {
-  return { async refresh(_c: KiroCredential, _r: string) { return tok } }
+  return { async refresh(_c: KiroCredential, _r: string) { return { kind: 'refreshed', ...tok } } }
 }
 
 describe('endpointsForRegion', () => {
@@ -276,11 +281,22 @@ describe('KiroUpstreamClient.chat — 401 refresh retry', () => {
     expect(f.calls[0].url).toContain('q.us-east-1')
   })
 
-  it('does not retry when refresher returns undefined — throws auth error', async () => {
+  it('永久刷不出新 token（permanent）→ 抛 KiroTokenPermanentError（供移出反代池）', async () => {
     const f = scriptedFetch([errResp(403, 'forbidden')])
     const client = new KiroUpstreamClient({ refresher: NO_REFRESH, fetchImpl: f.impl })
-    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)).rejects.toThrow(/auth/i)
-    expect(f.calls).toHaveLength(1)
+    await expect(client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ)).rejects.toBeInstanceOf(
+      KiroTokenPermanentError,
+    )
+    expect(f.calls).toHaveLength(1) // 不重试
+  })
+
+  it('刷新临时失败（transient）→ 抛 KiroUpstreamError（归 SERVER：冷却+切号，不移池）', async () => {
+    const f = scriptedFetch([errResp(401, 'expired')])
+    const client = new KiroUpstreamClient({ refresher: TRANSIENT_REFRESH, fetchImpl: f.impl })
+    const err = await client.chat(ENVELOPE, CTX, 'claude-sonnet-4.5', REQ).catch((e) => e)
+    expect(err).toBeInstanceOf(KiroUpstreamError)
+    expect(err).not.toBeInstanceOf(KiroTokenPermanentError)
+    expect(f.calls).toHaveLength(1) // 不重试同端点
   })
 })
 

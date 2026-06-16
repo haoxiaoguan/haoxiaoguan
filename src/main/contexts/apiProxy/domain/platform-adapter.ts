@@ -9,8 +9,13 @@ import type { KiroAccountInfo, KiroCredential } from '../infrastructure/adapters
 import type { Dispatcher } from 'undici'
 import type { RequestObservation } from './observability/proxy-request-log'
 
-/** 上游错误分类（故障转移决策）。M4 错误转移/健康追踪。 */
-export type ErrorClass = 'SUSPENDED' | 'AUTH' | 'RATE_LIMIT' | 'SERVER' | 'FATAL'
+/**
+ * 上游错误分类（故障转移决策）。M4 错误转移/健康追踪。
+ * - QUOTA：账号额度耗尽（HTTP 402）→ 冷却到该账号的下一次配额重置时间再放行，
+ *   区别于 RATE_LIMIT（429 限速，短冷却）与 SERVER（临时抖动，指数退避短熔断）。
+ * - DEPOOL：token 永久失效（401/403 且刷新永久拿不到新 token）→ 直接移出反代池（setPooled(false)）。
+ */
+export type ErrorClass = 'SUSPENDED' | 'AUTH' | 'RATE_LIMIT' | 'QUOTA' | 'DEPOOL' | 'SERVER' | 'FATAL'
 
 /** 模型信息 + 能力字段（G8 客户端能力下发；能力字段可选，未填则 buildModelsBody 退最简形状）。 */
 export interface ModelInfo {

@@ -90,7 +90,7 @@ describe('KiroAdapter ctx 注入', () => {
   it('send() 对 403 suspended body 抛 KiroUpstreamSuspendedError（不浪费刷新）', async () => {
     let refreshCalls = 0
     const fetchImpl = async () => ({ ok: false, status: 403, text: async () => '{"reason":"TEMPORARILY_SUSPENDED"}', bytes: async () => new Uint8Array(), bytesStream: async function* () {} as any })
-    const client = new KiroUpstreamClient({ fetchImpl: fetchImpl as any, refresher: { async refresh() { refreshCalls++; return undefined } } })
+    const client = new KiroUpstreamClient({ fetchImpl: fetchImpl as any, refresher: { async refresh() { refreshCalls++; return { kind: 'permanent' as const } } } })
     const callCtx = { accessToken: 't', region: 'us-east-1', machineId: 'm', agentMode: 'spec' as const, invocationId: 'i' }
     await expect(client.chat({} as any, callCtx, 'claude-sonnet-4.5', ir)).rejects.toBeInstanceOf(KiroUpstreamSuspendedError)
     expect(refreshCalls).toBe(0) // suspended 不触发刷新

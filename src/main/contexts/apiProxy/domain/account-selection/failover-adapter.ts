@@ -24,6 +24,15 @@ export class NoHealthyAccountError extends Error {
   }
 }
 
+/**
+ * 额度重置时间解析 port（402 额度耗尽时用）：返回该账号下一次配额重置的绝对时间戳（epoch ms），
+ * 拿不到（无重置时间/查询失败）返回 undefined → 由调用方退回默认冷却。
+ * 实现按平台解析（如 Kiro getUsageLimits 的 resetAt），由 container 桥接 quota 上下文注入。
+ */
+export interface QuotaResetResolverPort {
+  resetAtForAccount(accountId: string): Promise<number | undefined>
+}
+
 export interface FailoverDeps {
   inner: PlatformUpstreamAdapter
   selector: AccountPoolSelector
@@ -49,6 +58,16 @@ export interface FailoverDeps {
   getConcurrency?: (accountId: string) => number
   /** SERVER 类错误切号前等待时长（ms），给上游喘息。默认 100ms。实际等待加 ±20% jitter。 */
   retryDelayMs: number
+  /**
+   * 额度重置时间解析器（402 额度耗尽用）：拿到 resetAt → 冷却该账号到重置时间；
+   * 不注入或返回 undefined → 退回默认配额冷却（health.markQuotaExhausted，quotaResetMs）。
+   */
+  quotaReset?: QuotaResetResolverPort
+  /**
+   * 移出反代池回调（DEPOOL 用）：token 永久失效（401/403 刷不出新 token）→ setPooled(false)。
+   * 不注入则跳过移池（仅记一次失败熔断）。持久化由实现负责（写穿账号池仓储）。
+   */
+  removeFromPool?: (accountId: string) => Promise<void>
   /** 可注入 sleep 函数（测试用），默认 setTimeout。 */
   sleep?: (ms: number) => Promise<void>
   /** 可注入随机函数（测试用），默认 Math.random。用于退避 jitter。 */
@@ -221,11 +240,38 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
       } catch {
         /* 持久化失败不阻断切号 */
       }
+    } else if (cls === 'QUOTA') {
+      // 额度耗尽（402）：冷却该账号到下一次配额重置时间，期间不再选它；拿不到 resetAt 退回默认冷却。
+      await this.penalizeQuota(id)
+    } else if (cls === 'DEPOOL') {
+      // token 永久失效（401/403 刷不出新 token）：直接移出反代池（持久），本轮也熔断防再选。
+      this.deps.health.markFailure(id)
+      if (this.deps.removeFromPool !== undefined) {
+        try {
+          await this.deps.removeFromPool(id)
+        } catch {
+          /* 移池持久化失败不阻断切号 */
+        }
+      }
     } else if (cls === 'RATE_LIMIT') {
       this.deps.health.markRateLimited(id)
     } else if (cls === 'AUTH' || cls === 'SERVER') {
       this.deps.health.markFailure(id)
     }
     // FATAL 不罚账号
+  }
+
+  /** 额度耗尽：解析重置时间（混合：缓存优先 + live），冷却到该时刻；解析失败用默认配额冷却兜底。 */
+  private async penalizeQuota(id: string): Promise<void> {
+    let resetAt: number | undefined
+    if (this.deps.quotaReset !== undefined) {
+      try {
+        resetAt = await this.deps.quotaReset.resetAtForAccount(id)
+      } catch {
+        /* 解析失败 → 走兜底 */
+      }
+    }
+    if (resetAt !== undefined) this.deps.health.markQuotaExhaustedUntil(id, resetAt)
+    else this.deps.health.markQuotaExhausted(id)
   }
 }

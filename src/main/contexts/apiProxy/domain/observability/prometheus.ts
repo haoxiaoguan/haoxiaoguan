@@ -6,6 +6,7 @@ import type { ProxyMetricsCounters } from './proxy-request-log'
 export interface AccountStateTally {
   available: number
   cooldown: number
+  rate_limited: number
   quota_exhausted: number
   suspended: number
 }
@@ -22,6 +23,7 @@ export interface PrometheusInput {
 const ACCOUNT_STATES: ReadonlyArray<keyof AccountStateTally> = [
   'available',
   'cooldown',
+  'rate_limited',
   'quota_exhausted',
   'suspended',
 ]
