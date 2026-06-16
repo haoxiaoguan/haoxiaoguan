@@ -49,6 +49,7 @@ import { PlatformSettingsDialog } from '../components/accounts/PlatformSettingsD
 import { AccountDataTable } from '../components/accounts/AccountDataTable'
 import { PlatformIcon } from '../components/accounts/PlatformIcon'
 import { primaryMetric } from '../components/accounts/quota-display'
+import { accountPlanLabel } from '../components/accounts/account-plan'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAccountStore, useHealthStore, usePlatformStore, useQuotaStateStore } from '../stores'
 import { useApiProxyStore } from '../stores/apiProxyStore'
@@ -71,7 +72,7 @@ const ALL_PLATFORMS: AgentId[] = [
   'zed',
 ]
 
-const FILTER_ALL_TAGS = '__all__'
+const FILTER_ALL_PLANS = '__all_plans__'
 const PLATFORM_SORT_ORDER: AgentId[] = [
   'codex',
   'cursor',
@@ -140,7 +141,7 @@ export default function Accounts() {
   )
   const [platformSearch, setPlatformSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [tagFilter, setTagFilter] = useState('')
+  const [planFilter, setPlanFilter] = useState('')
   const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('quota')
   const [searchText, setSearchText] = useState('')
@@ -202,7 +203,7 @@ export default function Accounts() {
     setSelectedIds(new Set())
     setHighlightedId(null)
     setSearchText('')
-    setTagFilter('')
+    setPlanFilter('')
     setStatusFilter('all')
     setQuotaFilter('all')
   }, [selectedPlatform])
@@ -249,10 +250,14 @@ export default function Accounts() {
     }
   }, [healthBucket, selectedAccounts])
 
-  const tags = useMemo(() => {
+  // 会员计划（订阅计划）候选：取缓存账号字段派生的可读计划名（与卡片/表格展示同源），去重排序。
+  const plans = useMemo(() => {
     const set = new Set<string>()
-    selectedAccounts.forEach((account) => account.tags.forEach((tag) => set.add(tag)))
-    return Array.from(set).sort()
+    selectedAccounts.forEach((account) => {
+      const label = accountPlanLabel(account).trim()
+      if (label) set.add(label)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [selectedAccounts])
 
   const filteredAccounts = useMemo(() => {
@@ -260,7 +265,7 @@ export default function Accounts() {
     return selectedAccounts
       .filter((account) => {
         if (statusFilter !== 'all' && healthBucket(account) !== statusFilter) return false
-        if (tagFilter && !account.tags.includes(tagFilter)) return false
+        if (planFilter && accountPlanLabel(account) !== planFilter) return false
         if (quotaFilter !== 'all' && quotaBucket(quotaStates.get(account.id)) !== quotaFilter) {
           return false
         }
@@ -276,13 +281,13 @@ export default function Accounts() {
       .sort((a, b) => compareAccounts(a, b, sortMode, quotaStates))
   }, [
     healthBucket,
+    planFilter,
     quotaFilter,
     quotaStates,
     searchText,
     selectedAccounts,
     sortMode,
     statusFilter,
-    tagFilter,
   ])
 
   useEffect(() => {
@@ -606,20 +611,20 @@ export default function Accounts() {
             </Select>
 
             <Select
-              value={tagFilter || FILTER_ALL_TAGS}
-              onValueChange={(value) => setTagFilter(value === FILTER_ALL_TAGS ? '' : value)}
+              value={planFilter || FILTER_ALL_PLANS}
+              onValueChange={(value) => setPlanFilter(value === FILTER_ALL_PLANS ? '' : value)}
             >
               <SelectTrigger
-                data-testid="accounts-tag-filter"
-                className="h-8 w-[98px] rounded-[8px] text-[12px]"
+                data-testid="accounts-plan-filter"
+                className="h-8 w-[120px] rounded-[8px] text-[12px]"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={FILTER_ALL_TAGS}>标签：全部</SelectItem>
-                {tags.map((tag) => (
-                  <SelectItem key={tag} value={tag}>
-                    {tag}
+                <SelectItem value={FILTER_ALL_PLANS}>会员计划：全部</SelectItem>
+                {plans.map((plan) => (
+                  <SelectItem key={plan} value={plan}>
+                    {plan}
                   </SelectItem>
                 ))}
               </SelectContent>
