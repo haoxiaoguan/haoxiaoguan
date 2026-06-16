@@ -43,7 +43,7 @@ import {
 } from '@/components/management/ManagementControls'
 import AddAccountSheet from '../components/AddAccountSheet'
 import ExportAccountsDialog from '../components/accounts/ExportAccountsDialog'
-import AccountCard from '../components/accounts/AccountCard'
+import { AccountCardGrid } from '../components/accounts/AccountCardGrid'
 import EditAccountDialog from '../components/accounts/EditAccountDialog'
 import { PlatformSettingsDialog } from '../components/accounts/PlatformSettingsDialog'
 import { AccountDataTable } from '../components/accounts/AccountDataTable'
@@ -114,11 +114,19 @@ export default function Accounts() {
   const { platform } = useParams<{ platform?: string }>()
   const { t } = useTranslation('accounts')
   const { t: tCommon } = useTranslation('translation')
-  const { accounts, loading, fetchAccounts, switchAccount, deleteAccount, batchDelete } =
-    useAccountStore()
+  // Selective store selectors (not whole-store destructuring) so the page only
+  // re-renders when the slice it uses actually changes — important when loading
+  // 12 platforms × hundreds of accounts fires many store writes on mount.
+  const accounts = useAccountStore((s) => s.accounts)
+  const loading = useAccountStore((s) => s.loading)
+  const fetchAccounts = useAccountStore((s) => s.fetchAccounts)
+  const switchAccount = useAccountStore((s) => s.switchAccount)
+  const deleteAccount = useAccountStore((s) => s.deleteAccount)
+  const batchDelete = useAccountStore((s) => s.batchDelete)
   const detectActiveAccounts = useAccountStore((s) => s.detectActiveAccounts)
   const { getDisplayName, fetchPlatforms } = usePlatformStore()
-  const { refreshBatch, snapshots } = useHealthStore()
+  const refreshBatch = useHealthStore((s) => s.refreshBatch)
+  const snapshots = useHealthStore((s) => s.snapshots)
   const quotaStates = useQuotaStateStore((s) => s.states)
   const ensureQuotaStates = useQuotaStateStore((s) => s.ensureMany)
   const refreshQuotaState = useQuotaStateStore((s) => s.refresh)
@@ -159,6 +167,12 @@ export default function Accounts() {
   const [refreshing, setRefreshing] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const switchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Mirror of switchingId read by the (stable) switch handler, so the handler
+  // identity doesn't change every time a switch starts/ends.
+  const switchingIdRef = useRef<string | null>(null)
+  // The page's scroll viewport — handed to the card grid / table so they can
+  // virtualize rows against it.
+  const scrollViewportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchPlatforms()
@@ -295,8 +309,9 @@ export default function Accounts() {
 
   const handleSwitch = useCallback(
     (accountPlatform: AgentId, accountId: string) => {
-      if (switchingId) return
+      if (switchingIdRef.current) return
       if (switchDebounceRef.current) clearTimeout(switchDebounceRef.current)
+      switchingIdRef.current = accountId
       setSwitchingId(accountId)
       switchDebounceRef.current = setTimeout(async () => {
         try {
@@ -305,25 +320,29 @@ export default function Accounts() {
         } catch {
           toast.error(t('switchFailed'))
         } finally {
+          switchingIdRef.current = null
           setSwitchingId(null)
         }
       }, 300)
     },
-    [switchAccount, switchingId, t],
+    [switchAccount, t],
   )
 
-  const handleDelete = async (accountId: string) => {
-    try {
-      await deleteAccount(accountId)
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(accountId)
-        return next
-      })
-    } catch {
-      toast.error(t('switchFailed'))
-    }
-  }
+  const handleDelete = useCallback(
+    async (accountId: string) => {
+      try {
+        await deleteAccount(accountId)
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          next.delete(accountId)
+          return next
+        })
+      } catch {
+        toast.error(t('switchFailed'))
+      }
+    },
+    [deleteAccount, t],
+  )
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return
@@ -358,14 +377,41 @@ export default function Accounts() {
     }
   }
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
+
+  // Stable per-account adapters for the (memoized) card grid. Keeping these
+  // references constant lets AccountCard.memo skip re-rendering on unrelated
+  // parent updates (search typing, filter changes, a single row switching…).
+  const handleCardOpen = useCallback((account: Account) => setHighlightedId(account.id), [])
+  const handleCardToggleSelect = useCallback(
+    (account: Account) => toggleSelect(account.id),
+    [toggleSelect],
+  )
+  const handleCardEdit = useCallback((account: Account) => setEditTarget(account), [])
+  const handleCardExport = useCallback((account: Account) => setExportIds([account.id]), [])
+  const handleCardDelete = useCallback(
+    (account: Account) => {
+      void handleDelete(account.id)
+    },
+    [handleDelete],
+  )
+  const handleCardSwitch = useCallback(
+    (account: Account) => handleSwitch(account.platform, account.id),
+    [handleSwitch],
+  )
+  const handleCardTogglePool = useCallback(
+    (account: Account, pooled: boolean) => {
+      void setPooled(account.id, pooled)
+    },
+    [setPooled],
+  )
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredAccounts.length && filteredAccounts.length > 0) {
@@ -613,7 +659,11 @@ export default function Accounts() {
           </div>
         </div>
 
-        <ScrollArea data-testid="accounts-data-scroll" className="min-h-0 min-w-0 flex-1">
+        <ScrollArea
+          data-testid="accounts-data-scroll"
+          className="min-h-0 min-w-0 flex-1"
+          viewportRef={scrollViewportRef}
+        >
           <div className="min-w-0 px-3 py-3">
             {loading && selectedAccounts.length === 0 ? (
               <div className="flex min-h-[320px] items-center justify-center rounded-[8px] border border-border">
@@ -644,41 +694,30 @@ export default function Accounts() {
                 ) : null}
               </div>
             ) : view === 'card' ? (
-              <div className="accounts-card-region min-w-0">
-                <div className="accounts-card-grid">
-                  {filteredAccounts.map((account) => (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      platformDisplayName={getDisplayName(account.platform)}
-                      selected={selectedIds.has(account.id)}
-                      active={account.isActive}
-                      highlighted={highlightedId === account.id}
-                      switching={switchingId === account.id}
-                      onToggleSelect={() => toggleSelect(account.id)}
-                      onSwitch={() => handleSwitch(account.platform, account.id)}
-                      onDelete={() => handleDelete(account.id)}
-                      onOpen={() => setHighlightedId(account.id)}
-                      onEdit={() => setEditTarget(account)}
-                      onExport={() => setExportIds([account.id])}
-                      hideEmail={hideEmails}
-                      pool={
-                        poolable
-                          ? {
-                              pooled: pooledSet.has(account.id),
-                              onToggle: (v) => void setPooled(account.id, v),
-                            }
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
+              <AccountCardGrid
+                accounts={filteredAccounts}
+                scrollRef={scrollViewportRef}
+                getDisplayName={getDisplayName}
+                selectedIds={selectedIds}
+                highlightedId={highlightedId}
+                switchingId={switchingId}
+                hideEmail={hideEmails}
+                poolable={poolable}
+                pooledIds={pooledSet}
+                onToggleSelect={handleCardToggleSelect}
+                onSwitch={handleCardSwitch}
+                onDelete={handleCardDelete}
+                onOpen={handleCardOpen}
+                onEdit={handleCardEdit}
+                onExport={handleCardExport}
+                onTogglePool={handleCardTogglePool}
+              />
             ) : (
               <div>
                 <AccountDataTable
                   accounts={filteredAccounts}
                   platformDisplayName={getDisplayName}
+                  scrollRef={scrollViewportRef}
                   selectedIds={selectedIds}
                   highlightedId={highlightedId}
                   switchingId={switchingId}

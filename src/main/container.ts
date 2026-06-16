@@ -140,6 +140,7 @@ import {
   type AccountStateTally,
 } from './contexts/apiProxy/domain/observability/prometheus'
 import { FailoverAdapter } from './contexts/apiProxy/domain/account-selection/failover-adapter'
+import { KiroModelCatalog } from './contexts/apiProxy/infrastructure/adapters/kiro/kiro-model-catalog'
 import { ConversationIdCache } from './contexts/apiProxy/domain/account-selection/conversation-id-cache'
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
 import { buildAccountCapabilityRegistry } from './container-helpers/account-capability-registry'
@@ -501,6 +502,19 @@ export async function buildContainer(): Promise<Container> {
     }),
   )
 
+  // kiro 模型「实时」目录：单一内存快照（启动后台预热 + 手动刷新才重建），按「会员档位最高」的
+  // 可用账号调上游 ListAvailableModels（纯替代，拉不到回退硬编码）；服务期严格门控——此刻无可用账号
+  // 则不下发 kiro。供 /v1/models、可路由清单与客户端接入目录共用（无账号下发 kiro 会让调用方报错）。
+  const kiroModelCatalog = new KiroModelCatalog({
+    accounts: kiroAccountPort,
+    health: apiProxyHealth,
+    credentials: kiroCredentialPort,
+    isPooled: (id) => proxyPoolService.has(id),
+    fallbackModels: () => kiroInner.listModels(),
+    // 收口：只下发 adapter 能路由的模型（保证 /v1/models 列出即可调用）。
+    canServe: (id) => kiroInner.supportsModel(id),
+  })
+
   // 第三方中转上游（relay）— DB 已初始化、cryptoService 已建，安全注册。
   const relayUpstreamRepo = new RelayUpstreamRepository(cryptoService)
   const relayUpstreamRegistry = new RelayUpstreamRegistry({
@@ -594,6 +608,7 @@ export async function buildContainer(): Promise<Container> {
     ...(codexNative ? { codexNative } : {}),
     responsesPassthroughs,
     combos: comboService,
+    kiroModelCatalog,
     resolvePlatformAlias: apiProxyAliasResolver,
     // Phase 2 配额感知跳过：仅 kiro 有账号池健康可视；池内无 available 账号即「确凿不可用」。
     // 账号池健康已反映超额（超额服务中的账号仍 available），故 nEnabled 超额池不会被误跳。
@@ -661,6 +676,10 @@ export async function buildContainer(): Promise<Container> {
   )
   apiProxyService.attachServer(apiHttpServer)
 
+  // 启动后台预热 kiro 模型快照（非阻塞）：拉「会员最高」可用账号的 ListAvailableModels 入缓存。
+  // 失败不阻断启动（服务期门控会在无账号/无快照时暂以硬编码兜底，待手动刷新或下次预热重建）。
+  void kiroModelCatalog.warm().catch(() => {})
+
   // 客户端接入管理（clientConfig）：把反代/第三方 provider 写进各 CLI 客户端配置。
   // writer 路径经 path-resolver(dotDir) 解析；历史快照存 appDataDir/client-config/history。
   const clientConfigRegistry = new WriterRegistry()
@@ -711,32 +730,49 @@ export async function buildContainer(): Promise<Container> {
     revokeKey: (id) => apiProxyKeyService.delete(id),
     getRelayInjectionKey: () => relayInjectionKey,
     // 可路由名清单：账号池/relay 模型 + 启用的路由组合（组合用显式 cb/<name>，可作注入 model）。
-    listModels: () => [
-      ...platformRegistry.listAllModels().map((m) => m.id),
-      ...comboService
-        .list()
-        .filter((c) => c.enabled)
-        .map((c) => `${COMBO_MODEL_PREFIX}${c.name}`),
-    ],
+    // kiro 走实时快照（无可用账号 → 不出现），其余平台仍取注册表静态清单。
+    listModels: () => {
+      const seen = new Set<string>()
+      const ids: string[] = []
+      const push = (id: string): void => {
+        if (!seen.has(id)) {
+          seen.add(id)
+          ids.push(id)
+        }
+      }
+      for (const { platform, model } of platformRegistry.listAllModelsWithPlatform()) {
+        if (platform === 'kiro') continue
+        push(model.id)
+      }
+      for (const m of kiroModelCatalog.listForServe()) push(m.id)
+      for (const c of comboService.list()) {
+        if (c.enabled) push(`${COMBO_MODEL_PREFIX}${c.name}`)
+      }
+      return ids
+    },
     listCatalogModels: () => {
       // 按平台排除占位 echo 与原生 codex-native（原生由 Codex 自带 models_cache 提供），
       // 只留账号池 Claude + 第三方 relay。按 id 去重。
       const seen = new Set<string>()
       const out: Array<{ id: string; displayName?: string; contextLength?: number }> = []
+      const pushModel = (m: { id: string; displayName?: string; contextLength?: number }): void => {
+        if (seen.has(m.id)) return
+        seen.add(m.id)
+        out.push({
+          id: m.id,
+          ...(m.displayName !== undefined ? { displayName: m.displayName } : {}),
+          ...(m.contextLength !== undefined ? { contextLength: m.contextLength } : {}),
+        })
+      }
       for (const platform of platformRegistry.knownPlatforms()) {
-        if (platform === 'echo' || platform === 'codex-native') continue
+        // kiro 走实时快照（下方单独追加）；echo 占位、codex-native 由 Codex 自带 models_cache 提供。
+        if (platform === 'echo' || platform === 'codex-native' || platform === 'kiro') continue
         const adapter = platformRegistry.get(platform)
         if (adapter === undefined) continue
-        for (const m of adapter.listModels()) {
-          if (seen.has(m.id)) continue
-          seen.add(m.id)
-          out.push({
-            id: m.id,
-            ...(m.displayName !== undefined ? { displayName: m.displayName } : {}),
-            ...(m.contextLength !== undefined ? { contextLength: m.contextLength } : {}),
-          })
-        }
+        for (const m of adapter.listModels()) pushModel(m)
       }
+      // kiro：实时快照 + 门控（无可用账号 → 不出现）。
+      for (const m of kiroModelCatalog.listForServe()) pushModel(m)
       // 启用的路由组合追加为可注入 model：用显式 cb/<name>，与同名上游模型消歧（中转注入下也能寻址）。
       for (const c of comboService.list()) {
         if (!c.enabled) continue
@@ -749,9 +785,8 @@ export async function buildContainer(): Promise<Container> {
     },
     listAccountPoolModels: () => {
       // 仅账号池(kiro/Claude)模型；relay-* 与 codex-native/echo 不算。
-      const kiro = platformRegistry.get('kiro')
-      if (kiro === undefined) return []
-      return kiro.listModels().map((m) => ({
+      // 实时快照 + 门控：无可用 kiro 账号 → 返回空（不再下发会让调用方报错的模型）。
+      return kiroModelCatalog.listForServe().map((m) => ({
         id: m.id, // slug 保持裸名：带固定注入 key 时裸名直连 kiro，路由不变
         // display_name 强制带「· 号小管账号」标记，让 Codex 等选择器里与原生 GPT/组合一眼可分。
         displayName: `${m.displayName ?? m.id} · 号小管账号`,
@@ -885,6 +920,7 @@ export async function buildContainer(): Promise<Container> {
     apiProxyService,
     apiProxyHealth,
     kiroAccountPort,
+    kiroModelCatalog,
     apiProxyKeyService,
     apiProxyRequestLog,
     routingLogService,

@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react'
+import { memo, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -38,17 +38,24 @@ interface AccountCardProps {
   active?: boolean
   highlighted?: boolean
   switching?: boolean
-  onToggleSelect: () => void
-  onSwitch: () => void
-  onDelete: () => void
-  onOpen: () => void
-  onEdit?: () => void
+  // Callbacks receive the account so the parent can pass a single stable
+  // reference for the whole list (instead of one closure per card). Stable
+  // props are what let React.memo skip re-rendering off-changed cards.
+  onToggleSelect: (account: Account) => void
+  onSwitch: (account: Account) => void
+  onDelete: (account: Account) => void
+  onOpen: (account: Account) => void
+  onEdit?: (account: Account) => void
   /** 导出单个账号（cpa 格式）。 */
-  onExport?: () => void
+  onExport?: (account: Account) => void
   /** 隐私模式：打码邮箱（截图/录屏场景）。 */
   hideEmail?: boolean
-  /** 反代池开关（仅可入池平台账号传入；不传则不渲染）。 */
-  pool?: { pooled: boolean; onToggle: (pooled: boolean) => void }
+  /** 当前平台是否可入反代池（true 时渲染入池开关）。 */
+  poolable?: boolean
+  /** 该账号是否已入池。 */
+  pooled?: boolean
+  /** 切换该账号入池。 */
+  onTogglePool?: (account: Account, pooled: boolean) => void
 }
 
 const HEALTH_TONE: Record<string, { labelKey: string; className: string; dot: string }> = {
@@ -72,6 +79,13 @@ const HEALTH_TONE: Record<string, { labelKey: string; className: string; dot: st
     className: 'bg-orange-500/10 text-orange-600 dark:text-orange-300',
     dot: 'bg-orange-500',
   },
+  // 额度刷新失败（如代理不可用）：账号凭据未必失效，故用 amber 警示而非红色失效态，
+  // 文案复用底部红字同款「刷新失败」，避免徽标继续显示「正常」误导。
+  refresh_error: {
+    labelKey: 'health.refresh_error',
+    className: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',
+    dot: 'bg-amber-500',
+  },
   pending: {
     labelKey: 'health.pending',
     className: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
@@ -79,7 +93,10 @@ const HEALTH_TONE: Record<string, { labelKey: string; className: string; dot: st
   },
 }
 
-export default function AccountCard(props: AccountCardProps) {
+// 比「刷新失败」更严重的健康态：已是这些态时不被刷新失败覆盖。
+const SEVERE_HEALTH_STATES = new Set(['expired', 'revoked', 'rate_limited'])
+
+function AccountCard(props: AccountCardProps) {
   const { t } = useTranslation('accounts')
   const snapshot = useHealthStore((s) => s.snapshots.get(props.account.id))
   const refreshing = useHealthStore((s) => s.refreshing.has(props.account.id))
@@ -102,7 +119,12 @@ export default function AccountCard(props: AccountCardProps) {
       })
   }
 
-  const state = snapshot?.validation.state ?? normalizeAccountStatus(props.account.status)
+  const baseState = snapshot?.validation.state ?? normalizeAccountStatus(props.account.status)
+  // 额度刷新失败（本次报错或持久化 quota_state=error）时，徽标不应继续显示「正常」：
+  // 降级为「刷新失败」(amber)，但不覆盖更严重的失效态（过期/撤销/限流）。
+  const refreshFailed = Boolean(quotaError) || quotaState?.status === 'error'
+  const state =
+    refreshFailed && !SEVERE_HEALTH_STATES.has(baseState) ? 'refresh_error' : baseState
   const health = HEALTH_TONE[state] ?? {
     labelKey: `health.${state}`,
     className: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
@@ -124,11 +146,11 @@ export default function AccountCard(props: AccountCardProps) {
       role="button"
       tabIndex={0}
       aria-pressed={props.selected}
-      onClick={props.onOpen}
+      onClick={() => props.onOpen(props.account)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          props.onOpen()
+          props.onOpen(props.account)
         }
       }}
       className={cn(
@@ -179,7 +201,7 @@ export default function AccountCard(props: AccountCardProps) {
         ))}
       </div>
 
-      {props.pool ? (
+      {props.poolable ? (
         <div
           className="mt-3 flex items-center justify-between rounded-[7px] bg-muted/40 px-2.5 py-1.5"
           onClick={(e) => e.stopPropagation()}
@@ -189,8 +211,8 @@ export default function AccountCard(props: AccountCardProps) {
             <div className="text-[10.5px] text-muted-foreground">{t('card.poolHint')}</div>
           </div>
           <Switch
-            checked={props.pool.pooled}
-            onCheckedChange={props.pool.onToggle}
+            checked={props.pooled ?? false}
+            onCheckedChange={(v) => props.onTogglePool?.(props.account, v)}
             aria-label={t('card.pool')}
           />
         </div>
@@ -230,7 +252,7 @@ export default function AccountCard(props: AccountCardProps) {
             label={props.switching ? t('actions.switching') : t('actions.switch')}
             disabled={props.active || !!props.switching}
             icon={ArrowLeftRight}
-            onClick={props.onSwitch}
+            onClick={() => props.onSwitch(props.account)}
           />
           <IconAction
             label={t('actions.refresh')}
@@ -242,17 +264,27 @@ export default function AccountCard(props: AccountCardProps) {
           <IconAction
             label={t('actions.viewDetail')}
             icon={Pencil}
-            onClick={props.onEdit ?? props.onOpen}
+            onClick={() => (props.onEdit ?? props.onOpen)(props.account)}
           />
           {props.onExport && (
-            <IconAction label={t('actions.export')} icon={Upload} onClick={props.onExport} />
+            <IconAction
+              label={t('actions.export')}
+              icon={Upload}
+              onClick={() => props.onExport?.(props.account)}
+            />
           )}
-          <IconAction label={t('actions.delete')} icon={Trash2} onClick={props.onDelete} />
+          <IconAction
+            label={t('actions.delete')}
+            icon={Trash2}
+            onClick={() => props.onDelete(props.account)}
+          />
         </div>
       </div>
     </article>
   )
 }
+
+export default memo(AccountCard)
 
 function SubscriptionLine({ info }: { info: CodexSubscriptionInfo }) {
   return (

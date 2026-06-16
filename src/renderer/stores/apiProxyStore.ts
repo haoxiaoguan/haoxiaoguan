@@ -49,6 +49,8 @@ interface ApiProxyState {
   createCombo: (input: RouteComboInputDto) => Promise<boolean>
   updateCombo: (id: string, patch: Partial<RouteComboInputDto>) => Promise<boolean>
   deleteCombo: (id: string) => Promise<void>
+  /** 手动刷新 kiro 模型快照（按「会员最高」可用账号重拉 ListAvailableModels）；成功返回 true。 */
+  refreshModels: () => Promise<boolean>
 }
 
 export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
@@ -267,6 +269,16 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
       await get().fetchCombos()
     } catch (e) {
       set({ error: String(e) })
+    }
+  },
+
+  // 成功/失败由调用方（页面）自行 toast；此处不写 error，避免与页面 error 监听重复弹窗。
+  refreshModels: async () => {
+    try {
+      await bridge().apiProxy.refreshModels()
+      return true
+    } catch {
+      return false
     }
   },
 }))

@@ -74,7 +74,7 @@ describe('RelayUpstreamRegistry', () => {
     expect(adapterMap['relay-p2']).toBeDefined()
   })
 
-  it('models 正确传入 adapter（listModels 返回一致）', async () => {
+  it('models 正确传入 adapter（缺省 ownedBy 补为上游 displayName）', async () => {
     const models = [
       { id: 'deepseek-chat', displayName: 'DeepSeek Chat', contextLength: 65536 },
     ]
@@ -86,9 +86,22 @@ describe('RelayUpstreamRegistry', () => {
 
     const adapters = await registry.buildAdapters()
     expect(adapters).toHaveLength(1)
-    expect(adapters[0].listModels()).toEqual(models)
+    // 缺省 ownedBy → 补为上游 displayName，避免 /v1/models 把 relay 模型错标成 kiro。
+    expect(adapters[0].listModels()).toEqual([{ ...models[0], ownedBy: 'M1' }])
     expect(adapters[0].supportsModel('deepseek-chat')).toBe(true)
     expect(adapters[0].supportsModel('unknown-model')).toBe(false)
+  })
+
+  it('models 显式 ownedBy → 保留不覆盖', async () => {
+    const models = [{ id: 'glm-5.1', displayName: 'GLM-5.1', ownedBy: 'zhipu' }]
+    const records: RelayUpstreamRecord[] = [
+      { id: 'm2', displayName: 'kimi', protocol: 'openai', baseUrl: 'https://m2.com', models, enabled: true, createdAt: now, updatedAt: now },
+    ]
+    const repo = makeFakeRepo(records, { m2: 'key-m2' })
+    const registry = new RelayUpstreamRegistry({ repository: repo as never, client: fakeClient })
+
+    const adapters = await registry.buildAdapters()
+    expect(adapters[0].listModels()[0].ownedBy).toBe('zhipu')
   })
 
   it('没有任何上游时返回空数组', async () => {

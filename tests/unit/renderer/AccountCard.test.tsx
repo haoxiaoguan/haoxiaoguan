@@ -89,6 +89,47 @@ describe('AccountCard', () => {
     expect(screen.getAllByText('PRO 20x').length).toBeGreaterThan(0);
   });
 
+  it('shows the 刷新失败 badge instead of 正常 when the last quota refresh errored', () => {
+    act(() => {
+      useHealthStore.setState({
+        snapshots: new Map([
+          [
+            codexAccount.id,
+            {
+              account_id: codexAccount.id,
+              validation: { state: 'valid', checked_at: '2026-05-28T08:00:00Z' },
+              quota: undefined,
+              checked_at: '2026-05-28T08:00:00Z',
+            },
+          ],
+        ]),
+        refreshing: new Set(),
+        lastBatchAt: null,
+      });
+      useQuotaStateStore.setState({
+        states: new Map(),
+        loading: new Set(),
+        errors: new Map([[codexAccount.id, '通过代理连接失败：SocksClient internal error']]),
+      });
+    });
+
+    render(
+      <AccountCard
+        account={codexAccount}
+        platformDisplayName="Codex"
+        selected={false}
+        onToggleSelect={() => {}}
+        onSwitch={() => {}}
+        onDelete={() => {}}
+        onOpen={() => {}}
+      />,
+    );
+
+    // 刷新失败 → 角标降级为 refresh_error，不再显示 valid（正常）。
+    expect(screen.getByText('health.refresh_error')).toBeInTheDocument();
+    expect(screen.queryByText('health.valid')).not.toBeInTheDocument();
+  });
+
   it('shows the Codex membership expiry when available', () => {
     act(() => {
       useQuotaStateStore.setState({

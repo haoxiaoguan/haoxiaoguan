@@ -62,12 +62,18 @@ export class RelayUpstreamRegistry {
         )
       } else {
         const codec = createRelayCodec(rec.protocol)
+        // 给模型补 ownedBy（缺省用上游 displayName，如 "kimi"）：否则 /v1/models 的
+        // owned_by 会命中 buildModelsBody 的 `?? 'kiro'` 兜底，把 relay 模型错标成 kiro。
+        const models = rec.models.map((m) => ({
+          ...m,
+          ...(m.ownedBy === undefined ? { ownedBy: rec.displayName } : {}),
+        }))
         adapters.push(
           new RelayAdapter({
             platform,
             baseUrl: rec.baseUrl,
             apiKey,
-            models: rec.models,
+            models,
             client: this.client,
             codec,
           }),

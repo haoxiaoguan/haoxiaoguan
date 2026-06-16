@@ -242,6 +242,7 @@ const api: HxgApi = {
     updateCombo: (id, patch) => ipcRenderer.invoke(API_PROXY_CHANNELS.updateCombo, id, patch),
     deleteCombo: (id) => ipcRenderer.invoke(API_PROXY_CHANNELS.deleteCombo, id),
     listRoutableModels: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listRoutableModels),
+    refreshModels: () => ipcRenderer.invoke(API_PROXY_CHANNELS.refreshModels),
   },
   routingLog: {
     summary: (window) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.summary, window),

@@ -184,6 +184,20 @@ it('isPooled 门控：仅池内账号进候选（未入池的被过滤）', asyn
   expect(obs.accountId).toBe('b')
 })
 
+it('反代选号不要求 is_active：inactive 但已入池的账号仍进候选', async () => {
+  // is_active 是「当前 CLI 切换选中的账号」标志（每平台通常仅 1 个），与反代池无关。
+  // 池成员都是导入后未切换的 inactive 账号；若要求 active 会把整池过滤空 → 503。
+  const fa = deps(
+    [{ id: 'a', isActive: false, lastUsedAt: 1 }],
+    async () => okResp,
+    { isPooled: () => true },
+  )
+  const obs: RequestObservation = { attempts: 0 }
+  const resp = await fa.chat(ir, { requestId: 'r', observation: obs })
+  expect(resp.content[0]).toMatchObject({ text: 'ok' })
+  expect(obs.accountId).toBe('a')
+})
+
 it('空池（isPooled 全 false）→ 无候选 → NoHealthyAccountError(503 语义)', async () => {
   const fa = deps(
     [

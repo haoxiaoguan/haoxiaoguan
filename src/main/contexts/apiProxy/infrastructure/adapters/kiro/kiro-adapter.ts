@@ -6,14 +6,12 @@
 import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 import { runWithDispatcher } from '../../../../../platform/net/dispatcher-context'
-import { getMachineId } from '../../../../../platform/identity/machine-id'
 import {
   normalizeRegion,
   parseRegionFromArn,
   resolveKiroAuthMethod,
-  KIRO_SOCIAL_PROFILE_ARN,
-  KIRO_BUILDER_ID_PROFILE_ARN,
 } from '../../../../../platform/net/kiro/kiro-identity-client'
+import { resolveProfileArn, explicitRegion, resolveMachineId } from './kiro-account-fingerprint'
 import { mapModelId, normalizeClaudeVersion, resolveCodeWhispererModelId } from './kiro-model-map'
 import { buildConversationState } from './kiro-conversation-state'
 import { classifyKiroError } from './kiro-error'
@@ -249,47 +247,5 @@ function historyFingerprint(ir: CanonicalRequest): string | undefined {
   return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 24)
 }
 
-// --- 路由解析辅助（profileArn 解析；优先级与 quota/http/kiro.ts 一致） ---
-
-function asRecord(v: unknown): Record<string, unknown> | undefined {
-  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined
-}
-
-function pickString(src: unknown, keys: string[]): string | undefined {
-  const obj = asRecord(src)
-  if (obj === undefined) return undefined
-  for (const k of keys) {
-    const val = obj[k]
-    if (typeof val === 'string' && val.trim().length > 0) return val.trim()
-  }
-  return undefined
-}
-
-// profileArn：显式（profilePayload/rawMetadata）> provider 兜底（Github/Google→社交，否则 BuilderId）。
-function resolveProfileArn(account: KiroAccountInfo, cred: KiroCredential): string | undefined {
-  const explicit =
-    pickString(account.profilePayload, ['profileArn', 'profile_arn']) ??
-    pickString(cred.rawMetadata, ['profileArn', 'profile_arn', 'arn'])
-  if (explicit !== undefined) return explicit
-  const provider = (account.loginProvider ?? pickString(cred.rawMetadata, ['provider']) ?? '').toLowerCase()
-  if (provider === 'github' || provider === 'google') return KIRO_SOCIAL_PROFILE_ARN
-  // 非社交（含企业/未知）→ BuilderId 兜底（与号小管额度路径一致）。
-  return KIRO_BUILDER_ID_PROFILE_ARN
-}
-
-// region：显式 region（profilePayload/rawMetadata）优先；否则交给调用方用 parseRegionFromArn 兜底。
-function explicitRegion(account: KiroAccountInfo, cred: KiroCredential): string | undefined {
-  return (
-    pickString(account.profilePayload, ['region']) ??
-    pickString(cred.rawMetadata, ['region', 'ssoRegion', 'sso_region'])
-  )
-}
-
-// machineId：凭据/profilePayload 有则用，无则 per-account sha256 派生（P1-3 隔离）。
-function resolveMachineId(account: KiroAccountInfo, cred: KiroCredential): string {
-  return (
-    pickString(cred.rawMetadata, ['machineId', 'machine_id']) ??
-    pickString(account.profilePayload, ['machineId', 'machine_id']) ??
-    getMachineId(account.id)
-  )
-}
+// 路由解析辅助（profileArn / region / machineId）已抽取到 ./kiro-account-fingerprint，供本适配器
+// 与模型目录（KiroModelCatalog 调 ListAvailableModels）共用同一套解析。

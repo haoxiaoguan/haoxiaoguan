@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Plug, Terminal } from 'lucide-react';
+import { Copy, Plug, RefreshCw, Terminal } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApiProxyStore } from '../stores/apiProxyStore';
 import { Switch } from '@/components/ui/switch';
@@ -57,7 +57,8 @@ const ENDPOINTS: EndpointRow[] = [
 
 export default function ApiProxyService() {
   const { t } = useTranslation('nav');
-  const { status, loading, error, fetchStatus, start, stop } = useApiProxyStore();
+  const { status, loading, error, fetchStatus, start, stop, refreshModels } = useApiProxyStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     void fetchStatus();
@@ -77,6 +78,15 @@ export default function ApiProxyService() {
     if (loading) return;
     if (next) void start();
     else void stop();
+  };
+
+  const onRefreshModels = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    const ok = await refreshModels();
+    setRefreshing(false);
+    if (ok) toast.success(t('service.modelsRefreshed'));
+    else toast.error(t('service.modelsRefreshFailed'));
   };
 
   const copyText = async (text: string) => {
@@ -157,8 +167,20 @@ export default function ApiProxyService() {
 
       {/* ── endpoints ───────────────────────────────────────────────── */}
       <div>
-        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {t('service.endpointsTitle')}
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t('service.endpointsTitle')}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 gap-1.5 text-[12px] text-muted-foreground hover:text-foreground"
+            disabled={refreshing}
+            onClick={() => void onRefreshModels()}
+          >
+            <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} aria-hidden />
+            {t('service.refreshModels')}
+          </Button>
         </div>
         <div
           className={cn(

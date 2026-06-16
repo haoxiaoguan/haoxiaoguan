@@ -236,6 +236,8 @@ export const API_PROXY_CHANNELS = {
   updateCombo: 'apiProxy:updateCombo',
   deleteCombo: 'apiProxy:deleteCombo',
   listRoutableModels: 'apiProxy:listRoutableModels',
+  // 手动刷新 kiro 模型快照（重新按「会员最高」账号拉 ListAvailableModels 重建）。
+  refreshModels: 'apiProxy:refreshModels',
 } as const
 
 // 主进程 → 渲染层推送：每条反代请求日志（G3 请求级可观测性）。

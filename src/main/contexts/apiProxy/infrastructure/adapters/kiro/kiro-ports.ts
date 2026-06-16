@@ -27,6 +27,10 @@ export interface KiroAccountInfo {
   isActive: boolean
   /** epoch ms，用于 LRU 选择。 */
   lastUsedAt?: number | undefined
+  /** 会员档位人类可读名（如 "KIRO PRO+"）。供「会员最高账号」选号取实时模型清单。 */
+  planName?: string | undefined
+  /** 会员档位内部码（如 Q_DEVELOPER_STANDALONE_PRO_PLUS）。 */
+  planTier?: string | undefined
 }
 
 /** 凭据库窄 port：按账号取解密凭据。 */

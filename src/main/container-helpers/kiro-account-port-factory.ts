@@ -13,6 +13,8 @@ interface AccountRow {
   statusReason?: string | null
   isActive: boolean
   lastUsedAt?: Date | string | null
+  planName?: string | null
+  planTier?: string | null
   // Account domain 对象可能有 updateProfilePayload 方法（优先调用以保持 domain 不变式）。
   updateProfilePayload?: (patch: unknown) => void
 }
@@ -52,6 +54,8 @@ export function makeKiroAccountPort(accountRepo: AccountRepoLike): KiroAccountPo
         ...(acc.status !== undefined && acc.status !== null ? { status: acc.status } : {}),
         isActive: acc.isActive,
         ...(toEpochMs(acc.lastUsedAt) !== undefined ? { lastUsedAt: toEpochMs(acc.lastUsedAt) } : {}),
+        ...(acc.planName !== undefined && acc.planName !== null ? { planName: acc.planName } : {}),
+        ...(acc.planTier !== undefined && acc.planTier !== null ? { planTier: acc.planTier } : {}),
       }))
     },
 

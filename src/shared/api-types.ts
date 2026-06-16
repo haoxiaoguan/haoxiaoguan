@@ -382,6 +382,8 @@ export interface HxgApi {
     deleteCombo(id: string): Promise<void>
     /** 可路由模型 id 清单（别名前缀形式，如 kr/claude-sonnet-4.5）；组合步骤选择器用。 */
     listRoutableModels(): Promise<string[]>
+    /** 手动刷新 kiro 模型快照（按「会员最高」可用账号重拉 ListAvailableModels 重建）。 */
+    refreshModels(): Promise<void>
   }
   /** 路由日志分析（持久化反代请求日志的多维聚合查询）。 */
   routingLog: {

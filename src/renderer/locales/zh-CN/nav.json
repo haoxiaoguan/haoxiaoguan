@@ -187,6 +187,9 @@
     "curlTitle": "快速接入示例",
     "curlCopy": "复制示例",
     "disabledHint": "开启服务后可用",
+    "refreshModels": "刷新模型",
+    "modelsRefreshed": "模型已刷新（按会员最高账号重新拉取）",
+    "modelsRefreshFailed": "刷新模型失败",
     "aliasHint": "按模型名路由：在 model 前加平台别名前缀可显式指定供应商，如 kr/claude-sonnet-4.5（kr=号小管账号池）；不加前缀则按模型名自动匹配。可用别名见 /v1/models 返回的模型 id。",
     "endpoints": {
       "chatCompletions": "OpenAI 兼容 · Chat Completions",

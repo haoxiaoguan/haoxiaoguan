@@ -187,6 +187,9 @@
     "curlTitle": "Quick Start Example",
     "curlCopy": "Copy Example",
     "disabledHint": "Enable the service to use these endpoints",
+    "refreshModels": "Refresh Models",
+    "modelsRefreshed": "Models refreshed (re-fetched from the highest-tier account)",
+    "modelsRefreshFailed": "Failed to refresh models",
     "aliasHint": "Routing by model name: prefix the model with a platform alias to target a provider explicitly, e.g. kr/claude-sonnet-4.5 (kr = local account pool); without a prefix it is matched by model name. See the model ids returned by /v1/models for available aliases.",
     "endpoints": {
       "chatCompletions": "OpenAI-compatible · Chat Completions",

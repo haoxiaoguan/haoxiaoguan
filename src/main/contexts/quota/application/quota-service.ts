@@ -105,8 +105,21 @@ export class QuotaApplicationService {
         }),
       )
     } catch (e) {
-      const message = errorMessage(e)
+      const rawMessage = errorMessage(e)
+      // 仅当本次走了代理（dispatcher 存在）且报错形似代理/连接层失败时，按代理问题处理：
+      //  ① 丢弃缓存 dispatcher，迫使下次重建（修代理空闲隧道被复用 → SOCKS 内部异常这类 stale 复用）；
+      //  ② 把晦涩的底层错误（如 "SocksClient internal error (this should not happen)"）改写成可操作提示。
+      const proxyRelated = dispatcher !== undefined && isProxyRelatedError(rawMessage)
+      if (proxyRelated && this.dispatcherResolver?.evictDispatcherForAccount !== undefined) {
+        try {
+          await this.dispatcherResolver.evictDispatcherForAccount(accountId)
+        } catch {
+          // 驱逐失败不阻断错误上报
+        }
+      }
+      const message = proxyRelated ? describeProxyError(rawMessage) : rawMessage
       await this.recordFailedQuotaRefresh(account, accountId, message)
+      if (proxyRelated) throw new Error(message)
       throw e instanceof Error ? e : new Error(message)
     }
 
@@ -412,4 +425,28 @@ function clamp(value: number, min: number, max: number): number {
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+/**
+ * 判断错误是否像「代理/连接层」失败。仅在本次确实走了代理（dispatcher 存在）时调用，
+ * 故 ECONNREFUSED/超时等在此语境下基本可归因为代理不可用。涵盖 SOCKS 库的内部断言
+ * "SocksClient internal error (this should not happen)"。
+ */
+function isProxyRelatedError(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('socks') ||
+    m.includes('proxy') ||
+    m.includes('econnrefused') ||
+    m.includes('etimedout') ||
+    m.includes('econnreset') ||
+    m.includes('ehostunreach') ||
+    m.includes('enetunreach') ||
+    m.includes('socket hang up')
+  )
+}
+
+/** 把晦涩的代理底层错误改写成可操作提示（保留原因，便于排查）。 */
+function describeProxyError(message: string): string {
+  return `通过代理连接失败：${message}。请检查该账号（或其所在分组）绑定的代理是否可用，以及协议/地址/端口/账号密码是否正确。`
 }

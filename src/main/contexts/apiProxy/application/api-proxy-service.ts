@@ -8,7 +8,7 @@ import type { RouteCombo } from '../domain/route-combo'
 import { enabledStepModels, COMBO_MODEL_PREFIX } from '../domain/route-combo'
 import type { ComboSource } from './combo-service'
 import { runComboChain } from './combo-orchestrator'
-import type { UpstreamCtx } from '../domain/platform-adapter'
+import type { UpstreamCtx, ModelInfo } from '../domain/platform-adapter'
 import { extractSessionHint } from '../domain/account-selection/session-hint'
 import type { CanonicalRequest, CanonicalResponse, CanonicalStreamEvent } from '../domain/canonical'
 import {
@@ -119,6 +119,14 @@ export interface StreamResult {
 }
 
 export type HandleResult = JsonResult | StreamResult
+
+/**
+ * kiro 模型实时来源（由 KiroModelCatalog 实现）。注入 ApiProxyService 后，/v1/models 与
+ * 可路由清单的 kiro 部分改用其快照 + 实时门控（无可用账号 → 返回 []，即不下发 kiro）。
+ */
+export interface KiroModelSource {
+  listForServe(): ModelInfo[]
+}
 
 // 业务错误：携带 HTTP 状态，供 hono onError 按 format 输出错误体。
 export class ApiProxyHttpError extends Error {
@@ -271,6 +279,9 @@ export class ApiProxyService {
   private readonly observability?: ProxyRequestLog | undefined
   // 路由组合只读源（注入则支持「组合名当 model」的跨供应商降级链）。
   private readonly combos?: ComboSource | undefined
+  // kiro 模型实时来源（KiroModelCatalog）：注入则 /v1/models 与可路由清单的 kiro 部分改用它
+  // （单一快照 + 实时门控：无可用账号不下发 kiro）。不注入则回退注册表里 kiro 适配器的静态清单。
+  private readonly kiroModelCatalog?: KiroModelSource | undefined
   // 模型别名解析器（把组合每一跳 `kr/x` 解析为 platform+model）；不注入则组合步骤按裸模型名路由。
   private readonly resolveAlias: PlatformAliasResolver
   // Phase 2 配额感知跳过：判定某平台池是否「确凿不可用」（kiro=池内无 available 账号）。
@@ -292,6 +303,7 @@ export class ApiProxyService {
       codexNative?: CodexNativePassthrough
       responsesPassthroughs?: ResponsesPassthroughUpstream[]
       combos?: ComboSource
+      kiroModelCatalog?: KiroModelSource
       resolvePlatformAlias?: PlatformAliasResolver
       isPlatformExhausted?: (platform: string) => Promise<boolean>
     } = {},
@@ -304,6 +316,7 @@ export class ApiProxyService {
     this.responsesStore = deps.responsesStore
     this.observability = deps.observability
     this.combos = deps.combos
+    this.kiroModelCatalog = deps.kiroModelCatalog
     // 默认解析器：无前缀/未知前缀返回 undefined（步骤退化为裸模型名路由）。
     this.resolveAlias = deps.resolvePlatformAlias ?? (() => undefined)
     this.isPlatformExhausted = deps.isPlatformExhausted
@@ -338,13 +351,28 @@ export class ApiProxyService {
    */
   listRoutableModels(): string[] {
     if (this.registry === undefined) return []
-    return this.registry
-      .listAllModelsWithPlatform()
+    return this.modelEntries(undefined)
       .filter(({ platform }) => platform !== 'echo') // echo 是占位/测试适配器，不暴露给用户
       .map(({ platform, model }) => {
         const alias = PLATFORM_NAME_TO_ALIAS.get(platform)
         return alias !== undefined ? `${alias}/${model.id}` : model.id
       })
+  }
+
+  /**
+   * 聚合各平台模型条目（带来源 platform）。kiro 若注入了实时来源（KiroModelCatalog）则用其
+   * 快照 + 实时门控替换注册表里的 kiro 静态清单（无可用账号 → kiro 部分为空）；其余平台不变。
+   * /v1/models 与 listRoutableModels 共用此处，保证「下发」与「可路由」一致。
+   */
+  private modelEntries(platform: string | undefined): Array<{ platform: string; model: ModelInfo }> {
+    let entries = this.registry ? this.registry.listAllModelsWithPlatform(platform) : []
+    if (this.kiroModelCatalog !== undefined && (platform === undefined || platform === 'kiro')) {
+      entries = entries.filter((e) => e.platform !== 'kiro')
+      for (const model of this.kiroModelCatalog.listForServe()) {
+        entries.push({ platform: 'kiro', model })
+      }
+    }
+    return entries
   }
 
   getStatus(): ApiProxyStatus {
@@ -991,7 +1019,8 @@ export class ApiProxyService {
   private buildModelsBody(intent: RequestIntent): unknown {
     // 有别名的平台（kr/cx）给模型 id 加前缀 → 客户端可直接复制「可路由名」`kr/claude-...`；
     // 无别名平台（relay-<id>/echo）保持裸名（按模型名感知路由）。
-    const entries = this.registry ? this.registry.listAllModelsWithPlatform(intent.platform) : []
+    // kiro 经 modelEntries 切到实时来源（KiroModelCatalog 快照 + 门控）。
+    const entries = this.modelEntries(intent.platform)
     const models = entries.map(({ platform, model }) => {
       const alias = PLATFORM_NAME_TO_ALIAS.get(platform)
       return alias !== undefined ? { ...model, id: `${alias}/${model.id}` } : model

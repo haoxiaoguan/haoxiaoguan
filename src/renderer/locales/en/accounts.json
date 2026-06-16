@@ -259,6 +259,7 @@
     "expired": "Expired",
     "revoked": "Revoked",
     "rate_limited": "Rate Limited",
+    "refresh_error": "Refresh Failed",
     "network_error": "Network Error",
     "unknown_error": "Unknown",
     "unsupported": "Unsupported",

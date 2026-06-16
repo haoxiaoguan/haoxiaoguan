@@ -53,6 +53,7 @@ import { registerApiProxyHandlers } from '../contexts/apiProxy/ipc/api-proxy-han
 import type { ComboService } from '../contexts/apiProxy/application/combo-service'
 import type { AccountHealthTracker } from '../contexts/apiProxy/domain/account-selection/account-health-tracker'
 import type { KiroAccountPort } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-ports'
+import type { KiroModelCatalog } from '../contexts/apiProxy/infrastructure/adapters/kiro/kiro-model-catalog'
 import type { ApiProxyKeyService } from '../contexts/apiProxy/application/api-proxy-key-service'
 import type { ProxyRequestLog } from '../contexts/apiProxy/domain/observability/proxy-request-log'
 import type { RoutingLogService } from '../contexts/apiProxy/application/routing-log-service'
@@ -133,6 +134,8 @@ export interface Services {
   apiProxyHealth: AccountHealthTracker
   /** Kiro 账号 port（供 T10 IPC 持久化 clearSuspension 用）。 */
   kiroAccountPort: KiroAccountPort
+  /** kiro 模型实时目录（单一快照）。供 IPC「手动刷新模型」调用 refresh()。 */
+  kiroModelCatalog: KiroModelCatalog
   /** 客户端 Key 管理（可选，Task 6 container 注入后激活 IPC handler）。 */
   apiProxyKeyService?: ApiProxyKeyService
   /** 请求级可观测性日志（G3）：供 IPC getRequestLog/clearRequestLog + 推送给渲染层。 */
@@ -200,6 +203,7 @@ export function registerAllHandlers(services: Services): void {
     services.comboService,
     services.proxyPoolService,
     services.routingLogService,
+    () => services.kiroModelCatalog.refresh(),
   )
   registerProxyPoolConfigHandlers({
     selector: services.apiProxySelector,

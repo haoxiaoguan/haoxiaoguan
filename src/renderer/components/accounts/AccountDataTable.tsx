@@ -55,6 +55,8 @@ interface AccountDataTableProps {
   pooledIds?: Set<string>
   /** 切换账号入池。 */
   onTogglePooled?: (id: string, pooled: boolean) => void
+  /** 页面纵向滚动容器（ScrollArea viewport），用于行虚拟化。 */
+  scrollRef?: React.RefObject<HTMLElement | null>
 }
 
 const PINNING: ColumnPinningState = {
@@ -79,6 +81,7 @@ export function AccountDataTable({
   poolable,
   pooledIds,
   onTogglePooled,
+  scrollRef,
 }: AccountDataTableProps) {
   const { t } = useTranslation('accounts')
   const allSelected = accounts.length > 0 && selectedIds.size === accounts.length
@@ -221,6 +224,8 @@ export function AccountDataTable({
       data={accounts}
       getRowId={(account) => account.id}
       columnPinning={PINNING}
+      scrollRef={scrollRef}
+      estimateRowHeight={64}
       tableClassName="min-w-[1040px] table-fixed"
       headCellClassName="h-10 px-2.5 text-[11.5px] font-medium"
       cellClassName="px-2.5 py-2.5"
@@ -315,7 +320,13 @@ function AccountPlanCell({ account }: { account: Account }) {
 function AccountStatus({ account }: { account: Account }) {
   const { t } = useTranslation('accounts')
   const snapshot = useHealthStore((s) => s.snapshots.get(account.id))
-  const state = snapshot?.validation.state ?? normalizeAccountStatus(account.status)
+  const quotaState = useQuotaStateStore((s) => s.states.get(account.id))
+  const quotaError = useQuotaStateStore((s) => s.errors.get(account.id))
+  const baseState = snapshot?.validation.state ?? normalizeAccountStatus(account.status)
+  // 与卡片视图一致：额度刷新失败时显示「刷新失败」而非「正常」（不覆盖更严重的失效态）。
+  const refreshFailed = Boolean(quotaError) || quotaState?.status === 'error'
+  const state =
+    refreshFailed && !SEVERE_HEALTH_STATES.has(baseState) ? 'refresh_error' : baseState
   return (
     <span
       className={cn(
@@ -490,10 +501,14 @@ function IconAction({
   )
 }
 
+// 比「刷新失败」更严重的健康态：已是这些态时不被刷新失败覆盖（与 AccountCard 一致）。
+const SEVERE_HEALTH_STATES = new Set(['expired', 'revoked', 'rate_limited'])
+
 function statusColor(state: string) {
   if (state === 'valid') return 'text-emerald-600'
   if (state === 'expired' || state === 'revoked') return 'text-rose-600'
   if (state === 'rate_limited') return 'text-orange-600'
+  if (state === 'refresh_error') return 'text-amber-600'
   return 'text-muted-foreground'
 }
 
@@ -501,6 +516,7 @@ function statusDot(state: string) {
   if (state === 'valid') return 'bg-emerald-500'
   if (state === 'expired' || state === 'revoked') return 'bg-rose-500'
   if (state === 'rate_limited') return 'bg-orange-500'
+  if (state === 'refresh_error') return 'bg-amber-500'
   return 'bg-zinc-400'
 }
 

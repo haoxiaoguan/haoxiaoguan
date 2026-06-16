@@ -43,7 +43,43 @@ export const useQuotaStateStore = create<QuotaStateStore>((set, get) => ({
   },
 
   ensureMany: async (accountIds) => {
-    await Promise.all(accountIds.map((id) => get().ensure(id)));
+    // Coalesce into a single fetch wave + at most two commits, instead of
+    // calling ensure() per account (which did 3 set()s each → up to 3N store
+    // writes, each rebuilding every Map and notifying every subscriber). With
+    // hundreds of accounts that storm dominated the accounts page load.
+    const { states, loading } = get();
+    const targets = accountIds.filter((id) => !states.has(id) && !loading.has(id));
+    if (targets.length === 0) return;
+
+    const pending = new Set(get().loading);
+    targets.forEach((id) => pending.add(id));
+    set({ loading: pending });
+
+    const results = await Promise.all(
+      targets.map(async (id) => {
+        try {
+          const state = await quotaService.getQuotaState(id);
+          return { id, state, error: undefined as string | undefined };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, state: undefined as AccountQuotaState | undefined, error: message };
+        }
+      }),
+    );
+
+    const nextStates = new Map(get().states);
+    const nextErrors = new Map(get().errors);
+    const nextLoading = new Set(get().loading);
+    for (const result of results) {
+      if (result.state) {
+        nextStates.set(result.id, result.state);
+        nextErrors.delete(result.id);
+      } else if (result.error) {
+        nextErrors.set(result.id, result.error);
+      }
+      nextLoading.delete(result.id);
+    }
+    set({ states: nextStates, errors: nextErrors, loading: nextLoading });
   },
 
   refresh: async (accountId) => {

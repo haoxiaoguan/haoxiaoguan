@@ -72,6 +72,11 @@ export interface QuotaPlatformLookup {
  */
 export interface AccountDispatcherResolver {
   dispatcherForAccount(accountId: string): Promise<import('undici').Dispatcher | undefined>
+  /**
+   * 丢弃该账号代理的缓存 dispatcher，迫使下次重建。可选——代理类请求失败后调用，
+   * 修「代理空闲隧道被复用 → SOCKS/连接异常」这类 stale 复用问题。
+   */
+  evictDispatcherForAccount?(accountId: string): Promise<void>
 }
 
 export type { QuotaFetchResult }

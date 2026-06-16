@@ -8,6 +8,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { cn } from '@/lib/utils';
 import {
   TableBody,
@@ -55,6 +56,15 @@ export interface DataTableProps<TData> {
   /** Rendered in place of the body when there are no rows. */
   emptyState?: React.ReactNode;
   testId?: string;
+  /**
+   * Vertical scroll container (e.g. a page ScrollArea viewport). When provided
+   * and measurable, body rows are virtualized with @tanstack/react-virtual so
+   * only on-screen rows mount. Falls back to rendering every row when absent or
+   * unmeasurable (so non-scrolling hosts and tests behave unchanged).
+   */
+  scrollRef?: React.RefObject<HTMLElement | null>;
+  /** Fixed row height (px) used for virtualization estimates. */
+  estimateRowHeight?: number;
 }
 
 const DEFAULT_HEAD_CELL = 'h-10 px-3 text-[12px] font-medium text-muted-foreground';
@@ -85,6 +95,8 @@ export function DataTable<TData>({
   className,
   emptyState,
   testId,
+  scrollRef,
+  estimateRowHeight = 48,
 }: DataTableProps<TData>) {
   const table = useReactTable({
     data,
@@ -95,11 +107,11 @@ export function DataTable<TData>({
     state: columnPinning ? { columnPinning } : undefined,
   });
 
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const hScrollRef = React.useRef<HTMLDivElement>(null);
   const [ping, setPing] = React.useState({ left: false, right: false });
 
   const syncPing = React.useCallback(() => {
-    const el = scrollRef.current;
+    const el = hScrollRef.current;
     if (!el) return;
     const maxScroll = el.scrollWidth - el.clientWidth;
     const left = el.scrollLeft > 1;
@@ -108,7 +120,7 @@ export function DataTable<TData>({
   }, []);
 
   React.useEffect(() => {
-    const el = scrollRef.current;
+    const el = hScrollRef.current;
     if (!el) return;
     syncPing();
     el.addEventListener('scroll', syncPing, { passive: true });
@@ -125,6 +137,111 @@ export function DataTable<TData>({
 
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
+  const leafColumnCount = table.getAllLeafColumns().length;
+
+  // Optional row virtualization against an external vertical scroll container.
+  // We measure the viewport height (→ whether to virtualize) and the body's
+  // offset within the scroll content (→ react-virtual scrollMargin). When the
+  // container is absent or unmeasurable (e.g. jsdom), we render every row.
+  const bodyRef = React.useRef<HTMLTableSectionElement>(null);
+  const [viewportHeight, setViewportHeight] = React.useState(0);
+  const [rowScrollMargin, setRowScrollMargin] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    const scroller = scrollRef?.current;
+    if (!scroller) return;
+    const measure = () => {
+      setViewportHeight(scroller.clientHeight);
+      const body = bodyRef.current;
+      if (body) {
+        const offset =
+          body.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top +
+          scroller.scrollTop;
+        setRowScrollMargin(Math.max(0, offset));
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [scrollRef, rows.length]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef?.current ?? null,
+    estimateSize: () => estimateRowHeight,
+    overscan: 10,
+    scrollMargin: rowScrollMargin,
+  });
+
+  const virtualizeRows = Boolean(scrollRef?.current) && viewportHeight > 0 && hasRows;
+
+  const renderRow = (row: Row<TData>) => {
+    const attrs = rowProps?.(row);
+    const tid = attrs?.testId ?? rowTestId;
+    // Idle row tint feeds --dt-row-tint, which both pinned and non-pinned cells
+    // render. Hover/selected are layered via CSS so pinned and non-pinned stay
+    // pixel-identical.
+    const style = attrs?.tint
+      ? ({ '--dt-row-tint': attrs.tint } as React.CSSProperties)
+      : undefined;
+    return (
+      <TableRow
+        key={row.id}
+        data-testid={tid}
+        data-state={attrs?.selected ? 'selected' : undefined}
+        className={cn('group dt-row', attrs?.className)}
+        style={style}
+        onDoubleClick={attrs?.onDoubleClick}
+      >
+        {row.getVisibleCells().map((cell) => (
+          <TableCell
+            key={cell.id}
+            className={cn(cellClassName, pinClasses(cell.column, false))}
+            style={pinStyle(cell.column)}
+          >
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </TableCell>
+        ))}
+      </TableRow>
+    );
+  };
+
+  const renderBody = () => {
+    if (!hasRows) {
+      return emptyState ? (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={leafColumnCount}>{emptyState}</TableCell>
+        </TableRow>
+      ) : null;
+    }
+    if (!virtualizeRows) return rows.map(renderRow);
+
+    const items = rowVirtualizer.getVirtualItems();
+    if (items.length === 0) return rows.map(renderRow);
+    const totalSize = rowVirtualizer.getTotalSize();
+    const paddingTop = items[0].start - rowScrollMargin;
+    const paddingBottom = totalSize - (items[items.length - 1].end - rowScrollMargin);
+    return (
+      <>
+        {paddingTop > 0 ? (
+          <tr aria-hidden="true">
+            <td colSpan={leafColumnCount} style={{ height: paddingTop, padding: 0, border: 0 }} />
+          </tr>
+        ) : null}
+        {items.map((item) => renderRow(rows[item.index]))}
+        {paddingBottom > 0 ? (
+          <tr aria-hidden="true">
+            <td
+              colSpan={leafColumnCount}
+              style={{ height: paddingBottom, padding: 0, border: 0 }}
+            />
+          </tr>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <div
@@ -135,7 +252,7 @@ export function DataTable<TData>({
       )}
     >
       <div
-        ref={scrollRef}
+        ref={hScrollRef}
         data-ping-left={ping.left}
         data-ping-right={ping.right}
         className="data-table-scroll relative w-full overflow-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
@@ -158,48 +275,7 @@ export function DataTable<TData>({
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody>
-            {hasRows
-              ? rows.map((row) => {
-                  const attrs = rowProps?.(row);
-                  const tid = attrs?.testId ?? rowTestId;
-                  // Idle row tint feeds --dt-row-tint, which both pinned and
-                  // non-pinned cells render. Hover/selected are layered via
-                  // CSS so pinned and non-pinned stay pixel-identical.
-                  const style = attrs?.tint
-                    ? ({ '--dt-row-tint': attrs.tint } as React.CSSProperties)
-                    : undefined;
-                  return (
-                    <TableRow
-                      key={row.id}
-                      data-testid={tid}
-                      data-state={attrs?.selected ? 'selected' : undefined}
-                      className={cn('group dt-row', attrs?.className)}
-                      style={style}
-                      onDoubleClick={attrs?.onDoubleClick}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          className={cn(cellClassName, pinClasses(cell.column, false))}
-                          style={pinStyle(cell.column)}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })
-              : emptyState
-                ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={table.getAllLeafColumns().length}>
-                        {emptyState}
-                      </TableCell>
-                    </TableRow>
-                  )
-                : null}
-          </TableBody>
+          <TableBody ref={bodyRef}>{renderBody()}</TableBody>
         </table>
       </div>
     </div>

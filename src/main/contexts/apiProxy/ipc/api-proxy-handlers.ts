@@ -27,6 +27,7 @@ export function registerApiProxyHandlers(
   combos?: ComboService,
   pool?: ProxyPoolService,
   routingLog?: RoutingLogService,
+  refreshModels?: () => Promise<void>,
 ): void {
   ipcMain.handle(API_PROXY_CHANNELS.start, async (): Promise<ApiProxyStatus> => {
     try {
@@ -182,6 +183,17 @@ export function registerApiProxyHandlers(
       throw new Error(toIpcError(e))
     }
   })
+
+  // 手动刷新 kiro 模型快照（按「会员最高」可用账号重拉 ListAvailableModels 重建）。
+  if (refreshModels) {
+    ipcMain.handle(API_PROXY_CHANNELS.refreshModels, async (): Promise<void> => {
+      try {
+        await refreshModels()
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    })
+  }
 
   if (combos) {
     ipcMain.handle(API_PROXY_CHANNELS.listCombos, async () => {

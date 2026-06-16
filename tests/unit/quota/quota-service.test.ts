@@ -405,3 +405,51 @@ describe('QuotaApplicationService.refreshAll', () => {
     expect(results[0].error).toContain('boom')
   })
 })
+
+describe('QuotaApplicationService.refreshQuota — 代理错误处理', () => {
+  const SOCKS_ERR = 'fetch failed [cause: SocksClient internal error (this should not happen)]'
+
+  it('走代理时 SOCKS 报错 → 驱逐缓存 dispatcher + 改写为可读消息', async () => {
+    const account = makeAccount('kiro')
+    const evicted: string[] = []
+    const resolver = {
+      dispatcherForAccount: async () => ({}) as unknown as import('undici').Dispatcher,
+      evictDispatcherForAccount: async (id: string) => {
+        evicted.push(id)
+      },
+    }
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new FailingFetcher(SOCKS_ERR),
+      undefined,
+      resolver,
+    )
+    await expect(svc.refreshQuota(account.id)).rejects.toThrow(/通过代理连接失败/)
+    expect(evicted).toEqual([account.id])
+  })
+
+  it('未走代理（直连）时同样的报错 → 原样抛出、不驱逐', async () => {
+    const account = makeAccount('cursor')
+    const evicted: string[] = []
+    const resolver = {
+      dispatcherForAccount: async () => undefined,
+      evictDispatcherForAccount: async (id: string) => {
+        evicted.push(id)
+      },
+    }
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new FailingFetcher(SOCKS_ERR),
+      undefined,
+      resolver,
+    )
+    await expect(svc.refreshQuota(account.id)).rejects.toThrow(/SocksClient internal error/)
+    expect(evicted).toEqual([])
+  })
+})

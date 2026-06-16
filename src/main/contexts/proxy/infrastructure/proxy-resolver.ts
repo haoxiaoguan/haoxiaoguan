@@ -65,6 +65,18 @@ export class ProxyResolver {
   }
 
   /**
+   * 丢弃该账号绑定代理的缓存 dispatcher（连同其连接池），迫使下次重建。
+   * 代理类请求失败后调用：修「代理空闲隧道被复用 → SOCKS/连接异常」这类 stale 复用问题。
+   * 无 factory / 无绑定代理时静默 no-op。
+   */
+  async evictDispatcherForAccount(accountId: string): Promise<void> {
+    if (this.dispatcherFactory === undefined) return
+    const proxy = await this.resolveProxyForAccount(accountId)
+    if (proxy === undefined) return
+    await this.dispatcherFactory.evict(proxy)
+  }
+
+  /**
    * Resolve a Dispatcher directly by proxyId — no accountId needed.
    * Used during credential import when the account does not yet exist in the DB.
    * Returns undefined when no factory, or when the proxy is not found.

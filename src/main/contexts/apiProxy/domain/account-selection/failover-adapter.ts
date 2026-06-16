@@ -177,10 +177,12 @@ export class FailoverAdapter implements PlatformUpstreamAdapter {
     const isPooled = this.deps.isPooled ?? (() => true)
     const getPriority = this.deps.getPriority ?? (() => 0)
     const getConcurrency = this.deps.getConcurrency
+    // 反代选号资格 = 在池 + 未挂起 + health 可用（有凭据由 bindAccount 兜底）。
+    // 不要求 a.isActive：is_active 是「当前 CLI 切换选中的那个账号」标志（每平台通常仅 1 个），
+    // 与反代池无关——池成员都是导入后未切换的 inactive 账号，若要求 active 会把整池过滤空 → 503。
     const usable = all.filter(
       (a) =>
         isPooled(a.id) &&
-        a.isActive &&
         a.status !== 'SUSPENDED' &&
         this.deps.health.isAvailable(a.id),
     )

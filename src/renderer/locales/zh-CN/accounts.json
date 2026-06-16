@@ -259,6 +259,7 @@
     "expired": "已过期",
     "revoked": "已撤销",
     "rate_limited": "限流中",
+    "refresh_error": "刷新失败",
     "network_error": "网络错误",
     "unknown_error": "未知错误",
     "unsupported": "未支持",
