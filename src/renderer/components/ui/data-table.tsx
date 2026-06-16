@@ -148,7 +148,9 @@ export function DataTable<TData>({
   const [rowScrollMargin, setRowScrollMargin] = React.useState(0);
 
   React.useLayoutEffect(() => {
-    const scroller = scrollRef?.current;
+    // 优先用外部滚动容器（页面 ScrollArea）；未提供时回退到表格自身的滚动容器
+    // （antd 式：表格占满父高、内部纵向滚动、表头吸顶）。
+    const scroller = scrollRef?.current ?? hScrollRef.current;
     if (!scroller) return;
     const measure = () => {
       setViewportHeight(scroller.clientHeight);
@@ -169,13 +171,14 @@ export function DataTable<TData>({
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollRef?.current ?? null,
+    getScrollElement: () => scrollRef?.current ?? hScrollRef.current,
     estimateSize: () => estimateRowHeight,
     overscan: 10,
     scrollMargin: rowScrollMargin,
   });
 
-  const virtualizeRows = Boolean(scrollRef?.current) && viewportHeight > 0 && hasRows;
+  const virtualizeRows =
+    Boolean(scrollRef?.current ?? hScrollRef.current) && viewportHeight > 0 && hasRows;
 
   const renderRow = (row: Row<TData>) => {
     const attrs = rowProps?.(row);
@@ -247,7 +250,8 @@ export function DataTable<TData>({
     <div
       data-testid={testId}
       className={cn(
-        'min-w-0 overflow-hidden rounded-[10px] border border-border/80 bg-card',
+        // antd 式：占满父容器高度（父需给定高度，如 min-h-0 flex-1），纵横滚动都收在表格内部。
+        'flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-border/80 bg-card',
         className,
       )}
     >
@@ -255,10 +259,10 @@ export function DataTable<TData>({
         ref={hScrollRef}
         data-ping-left={ping.left}
         data-ping-right={ping.right}
-        className="data-table-scroll relative w-full overflow-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+        className="data-table-scroll relative min-h-0 w-full flex-1 overflow-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
       >
         <table className={cn('w-full caption-bottom text-sm', tableClassName)}>
-          <TableHeader className="bg-muted/25">
+          <TableHeader className="dt-head-sticky sticky top-0 z-40 [&_tr]:border-b [&_tr]:border-border">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => (

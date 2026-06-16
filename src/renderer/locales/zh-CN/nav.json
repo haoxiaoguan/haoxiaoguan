@@ -248,6 +248,8 @@
     "summaryPooled": "{{count}} 个已入池",
     "summaryCandidates": "{{count}} 个可加入",
     "emptyPoolWarning": "账号池为空：所有反代请求都会返回 503，请先把账号加入池子",
+    "searchPlaceholder": "搜索账号 / 邮箱 / 用户 ID",
+    "searchEmpty": "无匹配账号",
     "add": "添加",
     "showEmails": "显示邮箱",
     "hideEmails": "隐藏邮箱",

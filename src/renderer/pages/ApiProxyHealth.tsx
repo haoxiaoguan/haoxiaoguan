@@ -8,6 +8,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Search,
   Settings2,
   Timer,
   Table2,
@@ -157,6 +158,7 @@ export default function ApiProxyHealth() {
   const ensureQuota = useQuotaStateStore((s) => s.ensureMany)
 
   const [range, setRange] = useState<TimeRange>(() => presetRange('7d', Date.now()))
+  const [search, setSearch] = useState('')
   const [view, setView] = useState<'card' | 'table'>('card')
   const [hideEmails, setHideEmails] = useState(() => localStorage.getItem(HIDE_EMAILS_KEY) === '1')
   const [addOpen, setAddOpen] = useState(false)
@@ -199,6 +201,14 @@ export default function ApiProxyHealth() {
   const pooled = useMemo(() => poolHealth.filter((r) => r.pooled), [poolHealth])
   const candidates = useMemo(() => poolHealth.filter((r) => !r.pooled), [poolHealth])
   const poolEmpty = poolHealth.length > 0 && pooled.length === 0
+  // 搜索：按邮箱 / 账号 ID 过滤已入池账号（用原始邮箱匹配，不受隐私打码影响）。
+  const filteredPooled = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return pooled
+    return pooled.filter(
+      (r) => r.email.toLowerCase().includes(q) || r.accountId.toLowerCase().includes(q),
+    )
+  }, [pooled, search])
 
   const toggleHideEmails = () => {
     setHideEmails((prev) => {
@@ -408,9 +418,10 @@ export default function ApiProxyHealth() {
   )
 
   return (
-    <div className="flex flex-col gap-4 px-6 py-5">
-      {/* ── header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex h-[calc(100vh-98px)] min-h-0 flex-col overflow-hidden px-6 py-5">
+      {/* ── 头部（固定不滚动）───────────────────────────────────────────── */}
+      <div className="flex shrink-0 flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-primary/10">
           <Activity className="size-4.5 text-primary" strokeWidth={1.85} aria-hidden />
         </div>
@@ -515,51 +526,77 @@ export default function ApiProxyHealth() {
         </div>
       )}
 
-      {/* ── content ─────────────────────────────────────────────────────── */}
-      {pooled.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-[8px] border border-border bg-card py-14">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-            <Users className="size-5 text-muted-foreground" strokeWidth={1.85} />
-          </div>
-          <div className="space-y-1 text-center">
-            <p className="text-sm font-medium text-foreground">{t('poolHealth.emptyPool')}</p>
-            <p className="text-xs text-muted-foreground">
-              {poolHealth.length === 0
-                ? t('poolHealth.emptyNoCandidates')
-                : t('poolHealth.emptyHint')}
-            </p>
-          </div>
-          {candidates.length > 0 && (
-            <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
-              <Plus className="size-3.5" strokeWidth={2.25} aria-hidden />
-              {t('poolHealth.add')}
-            </Button>
-          )}
-        </div>
-      ) : view === 'table' ? (
-        <DataTable
-          columns={columns}
-          data={pooled}
-          getRowId={(r) => r.accountId}
-          tableClassName="min-w-[1620px]"
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {pooled.map((row) => (
-            <AccountCard
-              key={row.accountId}
-              row={row}
-              email={mask(row.email)}
-              stateLabel={stateLabel(row)}
-              quota={quotaInfo(row)}
-              onTogglePooled={(v) => void setPooled(row.accountId, v)}
-              onSetPriority={(v) => void setPriority(row.accountId, v)}
-              onSetConcurrency={(v) => void setConcurrency(row.accountId, v)}
-              onClearSuspension={() => void clearSuspension(row.accountId)}
+        {/* ── 搜索 ───────────────────────────────────────────────────────── */}
+        {pooled.length > 0 && (
+          <div className="relative w-full max-w-xs">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              strokeWidth={1.9}
+              aria-hidden
             />
-          ))}
-        </div>
-      )}
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('poolHealth.searchPlaceholder')}
+              className="h-8 rounded-[8px] pl-7 text-[12px]"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── 内容（头部固定，本区域滚动）─────────────────────────────────── */}
+      <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">
+        {pooled.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-[8px] border border-border bg-card">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
+              <Users className="size-5 text-muted-foreground" strokeWidth={1.85} />
+            </div>
+            <div className="space-y-1 text-center">
+              <p className="text-sm font-medium text-foreground">{t('poolHealth.emptyPool')}</p>
+              <p className="text-xs text-muted-foreground">
+                {poolHealth.length === 0
+                  ? t('poolHealth.emptyNoCandidates')
+                  : t('poolHealth.emptyHint')}
+              </p>
+            </div>
+            {candidates.length > 0 && (
+              <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
+                <Plus className="size-3.5" strokeWidth={2.25} aria-hidden />
+                {t('poolHealth.add')}
+              </Button>
+            )}
+          </div>
+        ) : filteredPooled.length === 0 ? (
+          <div className="flex h-full items-center justify-center rounded-[8px] border border-border bg-card text-[13px] text-muted-foreground">
+            {t('poolHealth.searchEmpty')}
+          </div>
+        ) : view === 'table' ? (
+          <DataTable
+            columns={columns}
+            data={filteredPooled}
+            getRowId={(r) => r.accountId}
+            tableClassName="min-w-[1620px]"
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredPooled.map((row) => (
+                <AccountCard
+                  key={row.accountId}
+                  row={row}
+                  email={mask(row.email)}
+                  stateLabel={stateLabel(row)}
+                  quota={quotaInfo(row)}
+                  onTogglePooled={(v) => void setPooled(row.accountId, v)}
+                  onSetPriority={(v) => void setPriority(row.accountId, v)}
+                  onSetConcurrency={(v) => void setConcurrency(row.accountId, v)}
+                  onClearSuspension={() => void clearSuspension(row.accountId)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       <AddAccountsDialog
         open={addOpen}

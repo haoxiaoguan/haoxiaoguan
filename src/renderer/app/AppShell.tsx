@@ -22,7 +22,8 @@ import {
   useEffect,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { KeepAliveOutlet } from './KeepAliveOutlet';
 import {
   Sidebar,
   SidebarContent,
@@ -402,7 +403,8 @@ export function AppShell({ shell }: AppShellProps) {
             type="auto"
           >
             <div className="min-h-full min-w-0">
-              <Outlet />
+              {/* 路由级 KeepAlive：缓存已访问页面、切换不丢状态（settings 自带嵌套 Outlet，排除）。 */}
+              <KeepAliveOutlet exclude={(p) => p.startsWith('/settings')} />
             </div>
           </ScrollArea>
         </SidebarInset>

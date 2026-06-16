@@ -269,6 +269,14 @@ main {
       linear-gradient(hsl(var(--card)), hsl(var(--card)));
   }
 
+  /* 吸顶表头条：与 dt-head-pinned 同款「不透明卡片底 + 25% muted 叠加」复合背景，
+     让 sticky 表头既能遮住下方滚动的行，又与非固定列表头的 bg-muted/25 观感完全一致。 */
+  .dt-head-sticky {
+    background-image:
+      linear-gradient(hsl(var(--muted) / 0.25), hsl(var(--muted) / 0.25)),
+      linear-gradient(hsl(var(--card)), hsl(var(--card)));
+  }
+
   /* Pinned body cells composite an opaque card base with the row's tint
      (active / highlighted / hover / selected) on top — same color the
      non-pinned cells inherit from the row. */

@@ -6,6 +6,7 @@
     "mcp": "MCP 数量",
     "skills": "Skills 数量",
     "sessions": "会话数",
+    "sessionsTooltip": "本机当前磁盘上的会话文件数（实时）。各工具（如 Claude Code）会按其保留期自动清理旧会话，故该数会随之增减，并非历史累计值。",
     "weekNew": "本周 +{{n}}",
     "platformsCovered": "覆盖 {{x}}/{{y}} 平台",
     "enabledDisabled": "{{on}} 启用 · {{off}} 停用"

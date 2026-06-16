@@ -616,7 +616,7 @@ export default function Accounts() {
             >
               <SelectTrigger
                 data-testid="accounts-plan-filter"
-                className="h-8 w-[120px] rounded-[8px] text-[12px]"
+                className="h-8 w-[150px] rounded-[8px] text-[12px]"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -624,7 +624,7 @@ export default function Accounts() {
                 <SelectItem value={FILTER_ALL_PLANS}>会员计划：全部</SelectItem>
                 {plans.map((plan) => (
                   <SelectItem key={plan} value={plan}>
-                    {plan}
+                    会员计划：{plan}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -664,41 +664,45 @@ export default function Accounts() {
           </div>
         </div>
 
-        <ScrollArea
-          data-testid="accounts-data-scroll"
-          className="min-h-0 min-w-0 flex-1"
-          viewportRef={scrollViewportRef}
-        >
-          <div className="min-w-0 px-3 py-3">
-            {loading && selectedAccounts.length === 0 ? (
-              <div className="flex min-h-[320px] items-center justify-center rounded-[8px] border border-border">
-                <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
-              </div>
-            ) : filteredAccounts.length === 0 ? (
+        {loading && selectedAccounts.length === 0 ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center px-3 py-3">
+            <div className="flex min-h-[320px] w-full items-center justify-center rounded-[8px] border border-border">
+              <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
+            </div>
+          </div>
+        ) : filteredAccounts.length === 0 ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center px-3 py-3">
+            <div
+              data-testid="accounts-empty-state"
+              className="flex min-h-[320px] w-full flex-col items-center justify-center gap-3 rounded-[8px] border border-border bg-card"
+            >
               <div
-                data-testid="accounts-empty-state"
-                className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-[8px] border border-border bg-card"
+                data-testid="accounts-empty-icon"
+                className="mx-auto flex size-10 shrink-0 items-center justify-center rounded-full bg-muted"
               >
-                <div
-                  data-testid="accounts-empty-icon"
-                  className="mx-auto flex size-10 shrink-0 items-center justify-center rounded-full bg-muted"
-                >
-                  <Users className="size-5 text-muted-foreground" strokeWidth={1.85} />
-                </div>
-                <div className="space-y-1 text-center">
-                  <p className="text-sm font-medium text-foreground">
-                    {selectedAccounts.length === 0 ? t('empty.title') : t('empty.noMatch')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{t('empty.subtitle')}</p>
-                </div>
-                {selectedAccounts.length === 0 ? (
-                  <Button size="sm" onClick={() => setShowImportSheet(true)} className="gap-1.5">
-                    <Plus className="size-3.5" strokeWidth={2.25} />
-                    {t('import')}
-                  </Button>
-                ) : null}
+                <Users className="size-5 text-muted-foreground" strokeWidth={1.85} />
               </div>
-            ) : view === 'card' ? (
+              <div className="space-y-1 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  {selectedAccounts.length === 0 ? t('empty.title') : t('empty.noMatch')}
+                </p>
+                <p className="text-xs text-muted-foreground">{t('empty.subtitle')}</p>
+              </div>
+              {selectedAccounts.length === 0 ? (
+                <Button size="sm" onClick={() => setShowImportSheet(true)} className="gap-1.5">
+                  <Plus className="size-3.5" strokeWidth={2.25} />
+                  {t('import')}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : view === 'card' ? (
+          <ScrollArea
+            data-testid="accounts-data-scroll"
+            className="min-h-0 min-w-0 flex-1"
+            viewportRef={scrollViewportRef}
+          >
+            <div className="min-w-0 px-3 py-3">
               <AccountCardGrid
                 accounts={filteredAccounts}
                 scrollRef={scrollViewportRef}
@@ -717,49 +721,51 @@ export default function Accounts() {
                 onExport={handleCardExport}
                 onTogglePool={handleCardTogglePool}
               />
-            ) : (
-              <div>
-                <AccountDataTable
-                  accounts={filteredAccounts}
-                  platformDisplayName={getDisplayName}
-                  scrollRef={scrollViewportRef}
-                  selectedIds={selectedIds}
-                  highlightedId={highlightedId}
-                  switchingId={switchingId}
-                  onToggleSelectAll={toggleSelectAll}
-                  onToggleSelect={toggleSelect}
-                  onSwitch={handleSwitch}
-                  onDelete={handleDelete}
-                  onOpen={setHighlightedId}
-                  onEdit={(id) => {
-                    const acc = filteredAccounts.find((a) => a.id === id)
-                    if (acc) setEditTarget(acc)
-                  }}
-                  onExport={(id) => setExportIds([id])}
-                  hideEmail={hideEmails}
-                  poolable={poolable}
-                  pooledIds={pooledSet}
-                  onTogglePooled={(id, v) => void setPooled(id, v)}
-                />
-                {selectedIds.size > 0 ? (
-                  <div className="mt-2 flex h-11 items-center justify-between rounded-[8px] border border-border bg-muted/20 px-4">
-                    <span className="text-[12px] text-muted-foreground">
-                      {t('actions.selected', { count: selectedIds.size })}
-                    </span>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      {t('actions.batchDelete')}
-                    </Button>
-                  </div>
-                ) : null}
+            </div>
+          </ScrollArea>
+        ) : (
+          // 表格视图：表格占满剩余高度、在表格内部滚动（不传 scrollRef → DataTable 内部滚动 + 表头吸顶）。
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 py-3">
+            <div className="min-h-0 min-w-0 flex-1">
+              <AccountDataTable
+                accounts={filteredAccounts}
+                platformDisplayName={getDisplayName}
+                selectedIds={selectedIds}
+                highlightedId={highlightedId}
+                switchingId={switchingId}
+                onToggleSelectAll={toggleSelectAll}
+                onToggleSelect={toggleSelect}
+                onSwitch={handleSwitch}
+                onDelete={handleDelete}
+                onOpen={setHighlightedId}
+                onEdit={(id) => {
+                  const acc = filteredAccounts.find((a) => a.id === id)
+                  if (acc) setEditTarget(acc)
+                }}
+                onExport={(id) => setExportIds([id])}
+                hideEmail={hideEmails}
+                poolable={poolable}
+                pooledIds={pooledSet}
+                onTogglePooled={(id, v) => void setPooled(id, v)}
+              />
+            </div>
+            {selectedIds.size > 0 ? (
+              <div className="mt-2 flex h-11 shrink-0 items-center justify-between rounded-[8px] border border-border bg-muted/20 px-4">
+                <span className="text-[12px] text-muted-foreground">
+                  {t('actions.selected', { count: selectedIds.size })}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  {t('actions.batchDelete')}
+                </Button>
               </div>
-            )}
+            ) : null}
           </div>
-        </ScrollArea>
+        )}
       </section>
 
       <AddAccountSheet

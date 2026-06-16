@@ -248,6 +248,8 @@
     "summaryPooled": "{{count}} pooled",
     "summaryCandidates": "{{count}} available",
     "emptyPoolWarning": "The pool is empty: all proxied requests return 503. Add accounts to the pool first.",
+    "searchPlaceholder": "Search account / email / user ID",
+    "searchEmpty": "No matching accounts",
     "add": "Add",
     "showEmails": "Show emails",
     "hideEmails": "Hide emails",

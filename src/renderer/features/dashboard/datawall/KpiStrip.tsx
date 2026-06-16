@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { skillsService, mcpService } from '@/services/tauri'
 
 interface KpiStripProps {
@@ -66,6 +68,7 @@ function KpiCell({
   value,
   badge,
   hint,
+  tooltip,
 }: {
   accent: string
   gradient: string
@@ -73,6 +76,8 @@ function KpiCell({
   value: string
   badge?: string
   hint: string
+  /** 可选：标签旁的信息图标 + 悬浮说明（解释该指标口径）。 */
+  tooltip?: string
 }) {
   return (
     <div
@@ -82,7 +87,27 @@ function KpiCell({
       )}
     >
       <span className={cn('absolute left-5 top-0 h-[3px] w-10 rounded-b-full', accent)} aria-hidden />
-      <p className="truncate text-[11px] font-medium leading-4 text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-1">
+        <p className="truncate text-[11px] font-medium leading-4 text-muted-foreground">{label}</p>
+        {tooltip ? (
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={label}
+                  className="shrink-0 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                >
+                  <Info className="size-3" strokeWidth={2} aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px] text-[12px] leading-snug">
+                {tooltip}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+      </div>
       <p
         className="mt-1 truncate text-[26px] font-extrabold leading-8 tracking-tight text-foreground"
         style={{ fontVariantNumeric: 'tabular-nums' }}
@@ -130,6 +155,7 @@ export function KpiStrip({
         gradient="bg-gradient-to-br from-orange-400/[0.09] to-transparent"
         label={t('kpis.sessions')}
         value={sessionsTotal.toLocaleString('en-US')}
+        tooltip={t('kpis.sessionsTooltip')}
         hint={
           lastActive != null
             ? `${lastActive.tool} · ${relativeTime(lastActive.at, Date.now(), t)}`

@@ -6,6 +6,7 @@
     "mcp": "MCP servers",
     "skills": "Skills",
     "sessions": "Sessions",
+    "sessionsTooltip": "Live count of session files currently on disk. Tools (e.g. Claude Code) auto-prune old sessions per their retention period, so this number rises and falls — it is not a cumulative total.",
     "weekNew": "+{{n}} this week",
     "platformsCovered": "{{x}}/{{y}} platforms",
     "enabledDisabled": "{{on}} enabled · {{off}} disabled"
