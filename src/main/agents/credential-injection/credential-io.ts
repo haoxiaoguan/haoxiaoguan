@@ -1,6 +1,7 @@
 import { readFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { atomicWrite } from '../../platform/fs/atomic-write'
+import { AgentError } from '../domain/agent-error'
 
 // Credential-IO primitives — faithful port of Rust primitives::credential_io.
 // Three on-disk formats: VSCode-family storage.json (merge), standalone JSON
@@ -15,16 +16,19 @@ type JsonObject = Record<string, unknown>
 
 async function readJsonObject(path: string): Promise<JsonObject> {
   if (!existsSync(path)) return {}
+  const content = await readFile(path, 'utf8')
+  let parsed: unknown
   try {
-    const content = await readFile(path, 'utf8')
-    const parsed = JSON.parse(content) as unknown
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as JsonObject)
-      : {}
-  } catch {
-    // Unparseable existing file → start from empty (mirrors unwrap_or json!({})).
-    return {}
+    parsed = JSON.parse(content)
+  } catch (e) {
+    // 不再静默清空：存量文件解析失败时抛错而非用 {} 覆盖，避免抹掉用户原有配置
+    // （凭证注入是高价值写入，损坏的 storage.json/hosts.json 宁可中止也不能整文件覆盖）。
+    throw AgentError.configParse(path, e instanceof Error ? e.message : String(e))
   }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw AgentError.configParse(path, '期望 JSON 对象')
+  }
+  return parsed as JsonObject
 }
 
 /** VSCode family: merge token into storage.json's storage.serviceMachineId. */
@@ -39,9 +43,17 @@ export async function injectCredentialToJsonFile(token: string, credentialPath: 
   await atomicWrite(credentialPath, JSON.stringify({ token }, null, 2))
 }
 
-/** GitHub Copilot: overwrite hosts.json with {"github.com":{"oauth_token":...}}. */
+/** GitHub Copilot: merge github.com.oauth_token into hosts.json, preserving other hosts/fields. */
 export async function injectCredentialToHostsJson(token: string, credentialPath: string): Promise<void> {
-  await atomicWrite(credentialPath, JSON.stringify({ 'github.com': { oauth_token: token } }, null, 2))
+  const root = await readJsonObject(credentialPath)
+  const existing = root['github.com']
+  const githubEntry =
+    existing !== null && typeof existing === 'object' && !Array.isArray(existing)
+      ? (existing as JsonObject)
+      : {}
+  githubEntry['oauth_token'] = token
+  root['github.com'] = githubEntry
+  await atomicWrite(credentialPath, JSON.stringify(root, null, 2))
 }
 
 /** Remove a credential file if it exists. */

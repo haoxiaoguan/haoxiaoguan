@@ -188,16 +188,20 @@ export class CodexSessionSource implements SessionSource {
     const files = await this.files()
     const withMtime = await Promise.all(files.map(async (f) => ({ f, m: await mtimeMs(f) })))
     let latestMtime = since
+    let blockedMtime: number | undefined
     const events: RawLogEvent[] = []
     for (const { f, m } of withMtime) {
-      if (m > latestMtime) latestMtime = m
       if (m < since) continue
       let text: string
       try {
         text = await readTextAsync(f)
       } catch {
+        // 读失败：不推进 watermark，记录最早失败 mtime 供下轮重试（避免永久漏计该文件事件）。
+        console.warn(`[activity] ${this.tool} 读取会话日志失败，跳过且不推进 watermark: ${f}`)
+        if (blockedMtime === undefined || m < blockedMtime) blockedMtime = m
         continue
       }
+      if (m > latestMtime) latestMtime = m
       let sessionTs: number | undefined
       let isSubagent = false
       const fileToolEvents: RawLogEvent[] = []
@@ -238,7 +242,7 @@ export class CodexSessionSource implements SessionSource {
       if (sessionTs !== undefined) events.push({ tool: this.tool, kind: 'session', ts: sessionTs, sourceKey: f })
       events.push(...fileToolEvents)
     }
-    return { events, latestMtime }
+    return blockedMtime !== undefined ? { events, latestMtime, blockedMtime } : { events, latestMtime }
   }
 }
 

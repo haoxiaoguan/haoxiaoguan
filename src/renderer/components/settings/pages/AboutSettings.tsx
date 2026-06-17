@@ -51,7 +51,8 @@ export default function AboutSettings() {
       .catch(() => setDirs(null));
   }, []);
 
-  // 订阅更新状态(顶栏 UpdaterIndicator 通常已订阅；这里再订阅一次确保设置页独立可用)。
+  // 订阅更新状态：store.init 内部按引用计数与顶栏 UpdaterIndicator 复用同一 IPC 订阅，
+  // 重复 init 不会注册多余监听器；箭头函数返回 init() 的取消函数，卸载时递减引用计数。
   useEffect(() => initUpd(), [initUpd]);
 
   const onCheck = async () => {

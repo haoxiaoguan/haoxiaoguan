@@ -503,7 +503,8 @@ export class KiroUpstreamClient {
 
   /**
    * 增量流事件解析器：逐 chunk 喂入 parser，delta 事件即时 yield；
-   * 流末 flush 收口：usage 事件替换为本地估算（output 数累积输出文本，input 按 contextPct 反推或降级）。
+   * 流末 flush 收口：usage 事件优先采用上游真实 token（messageMetadataEvent.tokenUsage，含 cache），
+   * 仅当上游未提供（in/out 全 0）时降级本地估算（output 数累积输出文本，input 按 contextPct 反推或降级）。
    */
   private async *parseStream(
     body: AsyncIterable<Uint8Array>,
@@ -521,7 +522,11 @@ export class KiroUpstreamClient {
     }
     for (const ev of parser.flush()) {
       if (ev.type === 'usage') {
-        const usage = estimateUsage(model, request, outputText, ev.contextUsagePercentage)
+        // 优先采用上游真实 usage（含 cacheRead/cacheWrite）；上游未提供（in/out 全 0）时才降级本地估算。
+        const hasUpstream = ev.usage.inputTokens > 0 || ev.usage.outputTokens > 0
+        const usage = hasUpstream
+          ? ev.usage
+          : estimateUsage(model, request, outputText, ev.contextUsagePercentage)
         yield {
           type: 'usage',
           usage,
@@ -552,8 +557,9 @@ interface ToolFold {
  * 把 parseKiroEventStream 的事件序列折叠为非流式 CanonicalResponse。
  * 连续 text/thinking 各并为单块；tool_use_start 开块、tool_use_delta 累积 JSON，结束统一 parse。
  * content 块按首次出现顺序保序。stopReason 取流末事件。
- * usage 不取上游零值，而由 estimateUsage 本地估算（output 数输出文本；input 按 contextUsagePercentage
- * 反推减 output，无百分比时降级估算请求文本）。
+ * usage 优先采用上游真实 token（messageMetadataEvent.tokenUsage，含 cache）；上游未提供（in/out 全 0）
+ * 时降级 estimateUsage 本地估算（output 数输出文本；input 按 contextUsagePercentage 反推减 output，
+ * 无百分比时降级估算请求文本）。
  */
 export function foldEventsToResponse(
   events: CanonicalStreamEvent[],
@@ -564,6 +570,7 @@ export function foldEventsToResponse(
   let stopReason: StopReason = 'end_turn'
   let outputChars = ''
   let contextPct: number | undefined
+  let upstreamUsage: Usage | undefined
 
   let textBuf: { type: 'text'; text: string } | null = null
   let thinkBuf: { type: 'thinking'; text: string } | null = null
@@ -606,6 +613,7 @@ export function foldEventsToResponse(
       outputChars += ev.partialJson
     } else if (ev.type === 'usage') {
       contextPct = ev.contextUsagePercentage
+      upstreamUsage = ev.usage
     } else if (ev.type === 'message_stop') {
       stopReason = ev.stopReason
     }
@@ -632,7 +640,11 @@ export function foldEventsToResponse(
     }
   }
 
-  const usage = estimateUsage(model, request, outputChars, contextPct)
+  // 优先采用上游真实 usage（含 cacheRead/cacheWrite）；上游未提供（in/out 全 0）时降级本地估算。
+  const usage =
+    upstreamUsage !== undefined && (upstreamUsage.inputTokens > 0 || upstreamUsage.outputTokens > 0)
+      ? upstreamUsage
+      : estimateUsage(model, request, outputChars, contextPct)
 
   // Kiro 上游（CodeWhisperer）事件流无截断信号（无 finishReason/limitReached 等字段）。
   // 本地推断：当 outputTokens 达到请求 maxTokens 且当前 stopReason 为 'end_turn' 时，

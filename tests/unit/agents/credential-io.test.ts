@@ -30,12 +30,13 @@ describe('credential-io injection formats', () => {
     expect(parsed['other.key']).toBe('keepme') // not clobbered
   })
 
-  it('storage.json: tolerates a corrupt existing file by starting fresh', async () => {
+  it('storage.json: 既有文件损坏时抛错且不覆盖（避免抹掉用户配置）', async () => {
     const path = join(dir, 'storage.json')
-    writeFileSync(path, '{ this is : not json')
-    await injectCredentialToStorageJson('tok', path)
-    const parsed = JSON.parse(readFileSync(path, 'utf8'))
-    expect(parsed['storage.serviceMachineId']).toBe('tok')
+    const corrupt = '{ this is : not json'
+    writeFileSync(path, corrupt)
+    await expect(injectCredentialToStorageJson('tok', path)).rejects.toThrow()
+    // 原损坏文件必须保持不变，未被整文件覆盖。
+    expect(readFileSync(path, 'utf8')).toBe(corrupt)
   })
 
   it('storage.json: creates parent dirs when absent', async () => {
@@ -56,6 +57,22 @@ describe('credential-io injection formats', () => {
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
       'github.com': { oauth_token: 'gho_xxx' },
     })
+  })
+
+  it('hosts.json: merges oauth_token while preserving other hosts/fields', async () => {
+    const path = join(dir, 'hosts.json')
+    writeFileSync(
+      path,
+      JSON.stringify({
+        'github.com': { user: 'alice' },
+        'ghe.example.com': { oauth_token: 'keep' },
+      }),
+    )
+    await injectCredentialToHostsJson('gho_new', path)
+    const parsed = JSON.parse(readFileSync(path, 'utf8'))
+    expect(parsed['github.com'].oauth_token).toBe('gho_new')
+    expect(parsed['github.com'].user).toBe('alice') // 同 host 其他字段保留
+    expect(parsed['ghe.example.com'].oauth_token).toBe('keep') // 其他 host 保留
   })
 })
 

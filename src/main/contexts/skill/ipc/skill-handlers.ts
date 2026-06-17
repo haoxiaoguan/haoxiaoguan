@@ -12,10 +12,6 @@
 
 import { ipcMain } from 'electron'
 import { dialog } from 'electron'
-import AdmZip from 'adm-zip'
-import { mkdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
 import { toIpcError } from '../../../ipc/error'
 import { SKILL_CHANNELS } from '../../../../shared/ipc-channels'
 import type { SkillApplicationService } from '../application/skill-application-service'
@@ -24,8 +20,6 @@ import type { BackupService } from '../application/backup-service'
 import type { StorageService } from '../application/storage-service'
 import { SkillRepo } from '../domain/skill-repo'
 import { parseAgentId } from '../../../agents/domain/agent-id'
-import { defaultSsotRoot } from '../application/skill-application-service'
-import { InstalledSkill } from '../domain/installed-skill'
 
 export interface SkillServices {
   skillService: SkillApplicationService
@@ -277,51 +271,11 @@ export function registerSkillHandlers(services: SkillServices): void {
     }
   })
 
-  // 18. install_skills_from_zip -- Electron adm-zip implementation (was Tauri TODO stub)
+  // 18. install_skills_from_zip -- 安全解压（路径穿越防护）+ 持久化入库由 service 统一处理。
   ipcMain.handle(SKILL_CHANNELS.installSkillsFromZip, async (_e, zipPath: string) => {
     try {
-      const zip = new AdmZip(zipPath)
-      const entries = zip.getEntries()
-      const ssotRoot = defaultSsotRoot()
-      const installed: ReturnType<InstalledSkill['toJson']>[] = []
-
-      // Extract each top-level directory as a skill
-      const topLevelDirs = new Set<string>()
-      for (const entry of entries) {
-        const parts = entry.entryName.split('/')
-        if (parts[0]) topLevelDirs.add(parts[0])
-      }
-
-      for (const dirName of topLevelDirs) {
-        const destPath = join(ssotRoot, dirName)
-        mkdirSync(destPath, { recursive: true })
-        // Extract only entries under this dir
-        for (const entry of entries) {
-          if (entry.entryName.startsWith(`${dirName}/`) && !entry.isDirectory) {
-            const relPath = entry.entryName.slice(dirName.length + 1)
-            if (relPath) {
-              zip.extractEntryTo(entry, destPath, false, true)
-            }
-          }
-        }
-
-        const now = Math.floor(Date.now() / 1000)
-        const id = randomUUID()
-        const apps: Record<string, boolean> = {}
-        const skill = InstalledSkill.create({
-          id,
-          name: dirName,
-          directory: dirName,
-          apps,
-          installed_at: now,
-          updated_at: now,
-          ssot_path: destPath,
-          storage_location: 'haoxiaoguan',
-        })
-        installed.push(skill.toJson())
-      }
-
-      return installed
+      const skills = await skillService.installFromZip(zipPath)
+      return skills.map((s) => s.toJson())
     } catch (e) {
       throw new Error(toIpcError(e))
     }

@@ -20,4 +20,9 @@ export interface ActivityCollectResult {
   events: RawLogEvent[]
   /** 本次扫描见到的最大文件 mtime（毫秒），用于推进增量 watermark */
   latestMtime: number
+  /**
+   * 本次扫描中读取失败（IO 错误）的文件的最早 mtime（毫秒）。syncAll 用它给全局
+   * watermark 封顶，确保失败文件下轮仍被重扫（避免永久漏计）。无读取失败时省略。
+   */
+  blockedMtime?: number
 }

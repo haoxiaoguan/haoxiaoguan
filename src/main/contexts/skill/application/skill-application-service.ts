@@ -2,10 +2,11 @@
 // scan-unmanaged, import-from-agent use cases.
 // Mirrors Rust modules::skill::application::skill_service::SkillApplicationService.
 
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import AdmZip from 'adm-zip'
 
 import type { InstalledSkillRepository } from '../domain/installed-skill-repository'
 import type { SkillBackupRepository } from '../domain/skill-backup-repository'
@@ -24,6 +25,10 @@ export interface SkillUninstallResult {
 export function defaultSsotRoot(): string {
   return join(homedir(), '.haoxiaoguan', 'skills')
 }
+
+// ZIP 安装解压上限（与 sync/skills-archive 的同类防护对齐，防恶意/超大归档）。
+const MAX_ZIP_ENTRIES = 10_000
+const MAX_ZIP_BYTES = 512 * 1024 * 1024
 
 export class SkillApplicationService {
   constructor(
@@ -76,6 +81,110 @@ export class SkillApplicationService {
     await this.syncToAgent(installed, targetAgent)
 
     await this.installedRepo.save(installed)
+    return installed
+  }
+
+  /**
+   * 从本地 ZIP 安装技能：每个顶层目录视作一个技能解压到 SSOT root 下并持久化入库。
+   *
+   * 安全：三重路径穿越防护——① 顶层目录名拒绝空段/`.`/`..`；② 目标目录 resolve 后必须落在
+   * SSOT root 内；③ 逐条目 resolve 后必须落在其技能目录内（防 `foo/../../x` 这类条目）。
+   * 另设条目数/总字节上限防恶意归档。已存在同名 directory 仅更新时间戳（去重，不重复建条目）。
+   *
+   * @param ssotRootOverride 仅供测试注入隔离根目录；生产省略，使用 defaultSsotRoot()。
+   */
+  async installFromZip(zipPath: string, ssotRootOverride?: string): Promise<InstalledSkill[]> {
+    if (!existsSync(zipPath)) {
+      throw SkillError.filesystem(zipPath, new Error('zip 文件不存在'))
+    }
+    let zip: AdmZip
+    try {
+      zip = new AdmZip(zipPath)
+    } catch (e) {
+      throw SkillError.filesystem(zipPath, e as Error)
+    }
+    const entries = zip.getEntries()
+    if (entries.length > MAX_ZIP_ENTRIES) {
+      throw new SkillError(
+        `zip 条目数 ${entries.length} 超过上限 ${MAX_ZIP_ENTRIES}`,
+        'FILESYSTEM',
+      )
+    }
+
+    const ssotRoot = ssotRootOverride ?? defaultSsotRoot()
+    const ssotResolved = resolve(ssotRoot)
+
+    // 收集合法顶层目录名（拒绝空段 / '.' / '..'）。
+    const topLevelDirs = new Set<string>()
+    for (const entry of entries) {
+      const first = entry.entryName.replace(/\\/g, '/').split('/')[0]
+      if (!first || first === '.' || first === '..') continue
+      topLevelDirs.add(first)
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    const installed: InstalledSkill[] = []
+    let totalBytes = 0
+
+    for (const dirName of topLevelDirs) {
+      const destPath = join(ssotRoot, dirName)
+      const destResolved = resolve(destPath)
+      // 防 dirName 仍含穿越：目标目录必须落在 SSOT root 内。
+      if (destResolved !== ssotResolved && !destResolved.startsWith(ssotResolved + sep)) {
+        continue
+      }
+
+      // 延迟到首次写文件时才建目录：顶层若是裸文件而非技能目录，不留空目录、不建空 skill。
+      let wroteAny = false
+      for (const entry of entries) {
+        const norm = entry.entryName.replace(/\\/g, '/')
+        if (entry.isDirectory || !norm.startsWith(`${dirName}/`)) continue
+        const relPath = norm.slice(dirName.length + 1)
+        if (!relPath) continue
+        const outPath = resolve(destPath, relPath)
+        // 逐条目边界校验：解压目标必须仍在该技能目录内（防 `../` 穿越）。
+        if (outPath !== destResolved && !outPath.startsWith(destResolved + sep)) {
+          continue
+        }
+        const data = entry.getData()
+        totalBytes += data.length
+        if (totalBytes > MAX_ZIP_BYTES) {
+          throw new SkillError(`解压字节超过上限 ${MAX_ZIP_BYTES}`, 'FILESYSTEM')
+        }
+        try {
+          mkdirSync(dirname(outPath), { recursive: true })
+          writeFileSync(outPath, data)
+          wroteAny = true
+        } catch (e) {
+          throw SkillError.filesystem(outPath, e as Error)
+        }
+      }
+
+      // 顶层项下无任何有效文件（如 zip 顶层是裸文件而非技能目录）→ 跳过，不建空 skill 条目。
+      if (!wroteAny) continue
+
+      // 持久化入库（修复此前只返回不落库、重启即丢失的问题）；同名 directory 去重。
+      const existing = await this.installedRepo.findByDirectory(dirName)
+      if (existing) {
+        existing.updated_at = now
+        await this.installedRepo.save(existing)
+        installed.push(existing)
+        continue
+      }
+      const skill = InstalledSkill.create({
+        id: randomUUID(),
+        name: dirName,
+        directory: dirName,
+        apps: {},
+        installed_at: now,
+        updated_at: now,
+        ssot_path: destPath,
+        storage_location: 'haoxiaoguan',
+      })
+      await this.installedRepo.save(skill)
+      installed.push(skill)
+    }
+
     return installed
   }
 

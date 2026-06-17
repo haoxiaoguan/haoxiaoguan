@@ -162,16 +162,27 @@ export class GeminiSessionSource implements SessionSource {
     const files = await this.files()
     const withMtime = await Promise.all(files.map(async (f) => ({ f, m: await mtimeMs(f) })))
     let latestMtime = since
+    let blockedMtime: number | undefined
     const events: RawLogEvent[] = []
     for (const { f, m } of withMtime) {
-      if (m > latestMtime) latestMtime = m
       if (m < since) continue
+      let raw: string
+      try {
+        raw = await readTextAsync(f)
+      } catch {
+        // 读失败（IO）：不推进 watermark，记录最早失败 mtime 供下轮重试（避免永久漏计）。
+        console.warn(`[activity] ${this.tool} 读取会话日志失败，跳过且不推进 watermark: ${f}`)
+        if (blockedMtime === undefined || m < blockedMtime) blockedMtime = m
+        continue
+      }
+      if (m > latestMtime) latestMtime = m
       let root: Record<string, unknown>
       try {
-        const v = JSON.parse(await readTextAsync(f))
+        const v = JSON.parse(raw)
         if (!isObject(v)) continue
         root = v
       } catch {
+        // 内容损坏（非 IO 问题）：重试无意义，watermark 已推进，跳过该文件。
         continue
       }
       const createdAt = parseTimestampToMs(root.startTime) ?? parseTimestampToMs(root.lastUpdated)
@@ -188,6 +199,6 @@ export class GeminiSessionSource implements SessionSource {
         })
       })
     }
-    return { events, latestMtime }
+    return blockedMtime !== undefined ? { events, latestMtime, blockedMtime } : { events, latestMtime }
   }
 }
