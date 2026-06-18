@@ -63,6 +63,22 @@ describe('serializeResponsesStream（真流式异步生成器）', () => {
     expect(got).toHaveLength(3)
   })
 
+  it('completed 帧 usage：input_tokens 含 cache（inputTokens+cacheRead+cacheWrite），cached_tokens 仅命中读取', async () => {
+    const events: CanonicalStreamEvent[] = [
+      { type: 'text_delta', text: 'Hi' },
+      { type: 'usage', usage: { inputTokens: 10, outputTokens: 7, cacheReadTokens: 200, cacheWriteTokens: 50 } },
+      { type: 'message_stop', stopReason: 'end_turn' },
+    ]
+    const frames = await collect(serializeResponsesStream(fromArray(events), OPTS))
+    const completedFrame = frames.find((f) => f.includes('event: response.completed'))
+    expect(completedFrame).toBeDefined()
+    const data = JSON.parse(completedFrame!.split('data: ')[1].trim())
+    expect(data.response.usage.input_tokens).toBe(260) // 10 + 200 + 50
+    expect(data.response.usage.output_tokens).toBe(7)
+    expect(data.response.usage.total_tokens).toBe(267)
+    expect(data.response.usage.input_tokens_details.cached_tokens).toBe(200)
+  })
+
   it('工具流：function_call item + function_call_arguments.delta + 收尾', async () => {
     const events: CanonicalStreamEvent[] = [
       { type: 'tool_use_start', index: 0, id: 'c1', name: 'f' },

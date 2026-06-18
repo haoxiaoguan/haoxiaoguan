@@ -122,8 +122,8 @@ vi.mock('@/stores', () => ({
       setPlatformRefreshInterval: vi.fn(async () => {}),
       setIdePath: vi.fn(async () => {}),
       setQuotaRefreshConcurrency: vi.fn(async () => {}),
-      allowStaleKiroImport: false,
-      setAllowStaleKiroImport: vi.fn(async () => {}),
+      requireOnlineIdentityCheck: {},
+      setRequireOnlineIdentityCheck: vi.fn(async () => {}),
     };
     return selector ? selector(state) : state;
   },

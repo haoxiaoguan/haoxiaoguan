@@ -73,7 +73,6 @@ test('IPC round-trips through the bridge to real services + DB', async () => {
   expect(settings).toMatchObject({
     theme: expect.any(String),
     language: expect.any(String),
-    wsPort: expect.any(Number),
   })
 
   // settings round-trip: update then read back (proves write -> disk -> read)
@@ -117,22 +116,6 @@ test('IPC round-trips through the bridge to real services + DB', async () => {
     }).api.credential.validateBatch([], 4),
   )
   expect(Array.isArray(batch)).toBe(true)
-
-  // ws:getWsStatus + toggle -> the newly-wired websocket context (P0)
-  const wsFlow = await window.evaluate(async () => {
-    const api = (window as unknown as {
-      api: { ws: { getWsStatus(): Promise<{ running: boolean }>; toggleWs(e: boolean): Promise<void> } }
-    }).api
-    const before = await api.ws.getWsStatus()
-    await api.ws.toggleWs(true)
-    const afterOn = await api.ws.getWsStatus()
-    await api.ws.toggleWs(false)
-    const afterOff = await api.ws.getWsStatus()
-    return { before: before.running, afterOn: afterOn.running, afterOff: afterOff.running }
-  })
-  expect(wsFlow.before).toBe(false)
-  expect(wsFlow.afterOn).toBe(true)
-  expect(wsFlow.afterOff).toBe(false)
 })
 
 test('heavy usage sync does not block the event loop (no UI freeze)', async () => {

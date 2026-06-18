@@ -31,7 +31,23 @@ describe('irToResponsesResponse', () => {
     expect(fc?.call_id).toBe('c1')
     expect(fc?.name).toBe('f')
     expect(fc?.arguments).toBe('{"a":1}')
+    // input_tokens 为总输入（含 cache）：inputTokens(100) + cacheRead(80) = 180；cached_tokens 仅命中读取。
+    expect(r.usage.input_tokens).toBe(180)
+    expect(r.usage.total_tokens).toBe(185)
     expect(r.usage.input_tokens_details?.cached_tokens).toBe(80)
+  })
+
+  it('cacheWrite 也计入 input_tokens（含读+写），cached_tokens 仅命中读取', () => {
+    const resp: CanonicalResponse = {
+      model: 'm',
+      content: [{ type: 'text', text: 'Hi' }],
+      stopReason: 'end_turn',
+      usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 200, cacheWriteTokens: 50 },
+    }
+    const r = irToResponsesResponse(resp, OPTS)
+    expect(r.usage.input_tokens).toBe(260) // 10 + 200 + 50
+    expect(r.usage.total_tokens).toBe(265)
+    expect(r.usage.input_tokens_details?.cached_tokens).toBe(200)
   })
 
   it('custom 工具的 tool_use → custom_tool_call item（input 取自 arguments.input）', () => {

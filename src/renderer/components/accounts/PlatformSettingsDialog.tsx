@@ -37,7 +37,8 @@ const BATCH_OPTIONS = [0, 10, 15, 30, 60, 120, 240];
  *  - refresh_interval_<p>: active-account quota refresh (2–30 min)
  *  - ide_path_<p>: app/IDE launch path. The placeholder is a platform+OS aware
  *    suggestion; the refresh button auto-detects the installed path.
- *  - platform-specific: Kiro reuses the global allowStaleKiroImport toggle.
+ *  - require_online_check_<p>: per-platform「必须联网检查身份」(shown for all
+ *    platforms; only Kiro acts on it at import time, default off = direct import).
  */
 export function PlatformSettingsDialog({ platform, open, onOpenChange }: PlatformSettingsDialogProps) {
   const { t } = useTranslation('accounts');
@@ -51,8 +52,8 @@ export function PlatformSettingsDialog({ platform, open, onOpenChange }: Platfor
     setPlatformRefreshInterval,
     setIdePath,
     setQuotaRefreshConcurrency,
-    allowStaleKiroImport,
-    setAllowStaleKiroImport,
+    requireOnlineIdentityCheck,
+    setRequireOnlineIdentityCheck,
     codexLaunchOnSwitch,
     setCodexLaunchOnSwitch,
   } = useSettingsStore();
@@ -266,19 +267,17 @@ export function PlatformSettingsDialog({ platform, open, onOpenChange }: Platfor
             </div>
           ) : null}
 
-          {/* Platform-specific: Kiro import toggle */}
-          {platform === 'kiro' ? (
-            <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-              <label className="text-[13px] text-foreground">
-                {t('platformSettings.special.kiroAllowStale')}
-              </label>
-              <Switch
-                checked={allowStaleKiroImport}
-                onCheckedChange={(v) => void setAllowStaleKiroImport(v)}
-                aria-label={t('platformSettings.special.kiroAllowStale')}
-              />
-            </div>
-          ) : null}
+          {/* 必须联网检查身份（所有平台）：默认关=导入时直接导入、不联网；开=导入时联网核对身份，失败则阻止。 */}
+          <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+            <label className="text-[13px] text-foreground">
+              {t('platformSettings.special.requireOnlineCheck')}
+            </label>
+            <Switch
+              checked={requireOnlineIdentityCheck[platform] ?? false}
+              onCheckedChange={(v) => void setRequireOnlineIdentityCheck(platform, v)}
+              aria-label={t('platformSettings.special.requireOnlineCheck')}
+            />
+          </div>
         </div>
       </DialogContent>
     </Dialog>

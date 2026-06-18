@@ -211,7 +211,11 @@ export function anthropicResponseToIR(raw: AnthropicMessage): CanonicalResponse 
 interface AnthropicSseMessageStart {
   type: 'message_start'
   message: {
-    usage?: { input_tokens?: number }
+    usage?: {
+      input_tokens?: number
+      cache_read_input_tokens?: number
+      cache_creation_input_tokens?: number
+    }
   }
 }
 
@@ -244,6 +248,8 @@ interface AnthropicSseMessageDelta {
   }
   usage?: {
     output_tokens?: number
+    cache_read_input_tokens?: number
+    cache_creation_input_tokens?: number
   }
 }
 
@@ -275,6 +281,10 @@ export function createAnthropicSseToEventsParser(): RelayStreamParser {
   let buffer = ''
   let inputTokensAccum = 0
   let outputTokensAccum = 0
+  // cache 读写用量：message_start 给出（部分上游也在 message_delta 重申）。
+  // 与 usageFromAnthropic 口径一致：inputTokens 不含 cache，cache 读写单列。
+  let cacheReadAccum: number | undefined
+  let cacheCreationAccum: number | undefined
 
   function processDataLine(line: string): CanonicalStreamEvent[] {
     const events: CanonicalStreamEvent[] = []
@@ -296,6 +306,12 @@ export function createAnthropicSseToEventsParser(): RelayStreamParser {
     if (t === 'message_start') {
       const f = frame as AnthropicSseMessageStart
       inputTokensAccum = f.message?.usage?.input_tokens ?? 0
+      if (f.message?.usage?.cache_read_input_tokens !== undefined) {
+        cacheReadAccum = f.message.usage.cache_read_input_tokens
+      }
+      if (f.message?.usage?.cache_creation_input_tokens !== undefined) {
+        cacheCreationAccum = f.message.usage.cache_creation_input_tokens
+      }
       // 不立即 emit；usage 事件在 message_delta 时发出
     } else if (t === 'content_block_start') {
       const f = frame as AnthropicSseContentBlockStart
@@ -323,6 +339,13 @@ export function createAnthropicSseToEventsParser(): RelayStreamParser {
       const f = frame as AnthropicSseMessageDelta
       // 累积 output_tokens
       outputTokensAccum = f.usage?.output_tokens ?? outputTokensAccum
+      // 部分上游在 message_delta 重申 cache 用量（以最后出现的为准）。
+      if (f.usage?.cache_read_input_tokens !== undefined) {
+        cacheReadAccum = f.usage.cache_read_input_tokens
+      }
+      if (f.usage?.cache_creation_input_tokens !== undefined) {
+        cacheCreationAccum = f.usage.cache_creation_input_tokens
+      }
       // emit message_stop（顺序：stop 在前）
       const stopReason = stopReasonToIR(f.delta?.stop_reason)
       events.push({ type: 'message_stop', stopReason })
@@ -331,6 +354,8 @@ export function createAnthropicSseToEventsParser(): RelayStreamParser {
         inputTokens: inputTokensAccum,
         outputTokens: outputTokensAccum,
       }
+      if (cacheReadAccum !== undefined) usage.cacheReadTokens = cacheReadAccum
+      if (cacheCreationAccum !== undefined) usage.cacheWriteTokens = cacheCreationAccum
       events.push({ type: 'usage', usage })
     }
     // content_block_stop / message_stop / ping → 无事件

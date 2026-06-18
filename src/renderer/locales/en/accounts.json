@@ -235,7 +235,7 @@
       "notFound": "App not found for this platform; pick it manually"
     },
     "special": {
-      "kiroAllowStale": "Allow import when identity cannot be confirmed online",
+      "requireOnlineCheck": "Require online identity check",
       "codexLaunchOnSwitch": "Relaunch Codex App after switching accounts"
     }
   },

@@ -253,11 +253,14 @@ function stopReasonToOpenAI(reason: StopReason): 'stop' | 'length' | 'tool_calls
 }
 
 // IR Usage → OpenAI usage（不变量 7）。
+// OpenAI 的 prompt_tokens 是「总输入（含命中/写入缓存）」；IR inputTokens 仅非缓存新增，
+// 故把 cache 读写补回总输入，cached_tokens 仅取命中读取部分。
 function usageToOpenAI(usage: CanonicalResponse['usage']): OpenAIUsage {
+  const promptTotal = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
   const out: OpenAIUsage = {
-    prompt_tokens: usage.inputTokens,
+    prompt_tokens: promptTotal,
     completion_tokens: usage.outputTokens,
-    total_tokens: usage.inputTokens + usage.outputTokens,
+    total_tokens: promptTotal + usage.outputTokens,
   }
   if (usage.cacheReadTokens !== undefined) {
     out.prompt_tokens_details = { cached_tokens: usage.cacheReadTokens }

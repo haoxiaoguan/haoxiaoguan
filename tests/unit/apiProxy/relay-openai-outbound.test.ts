@@ -172,6 +172,8 @@ describe('openAIChatResponseToIR', () => {
       }),
     )
     expect(ir.stopReason).toBe('max_tokens')
+    // IR inputTokens 为非缓存新增：prompt_tokens(8) - cached(3) = 5；cache 命中单列。
+    expect(ir.usage.inputTokens).toBe(5)
     expect(ir.usage.cacheReadTokens).toBe(3)
   })
 

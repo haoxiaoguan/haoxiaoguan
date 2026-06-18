@@ -13,10 +13,13 @@ export interface IrToResponsesOpts {
 }
 
 function usageToResponses(usage: CanonicalResponse['usage']): ResponsesUsage {
+  // Responses 的 input_tokens 是「总输入（含命中/写入缓存）」；IR inputTokens 仅非缓存新增，
+  // 故把 cache 读写补回总输入，cached_tokens 仅取命中读取部分（对齐 OpenAI 语义）。
+  const inputTotal = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
   const out: ResponsesUsage = {
-    input_tokens: usage.inputTokens,
+    input_tokens: inputTotal,
     output_tokens: usage.outputTokens,
-    total_tokens: usage.inputTokens + usage.outputTokens,
+    total_tokens: inputTotal + usage.outputTokens,
   }
   if (usage.cacheReadTokens !== undefined) {
     out.input_tokens_details = { cached_tokens: usage.cacheReadTokens }

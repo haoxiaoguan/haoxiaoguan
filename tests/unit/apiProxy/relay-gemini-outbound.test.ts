@@ -228,6 +228,16 @@ describe('geminiResponseToIR', () => {
     expect(ir.usage).toEqual({ inputTokens: 20, outputTokens: 8 })
   })
 
+  it('cachedContentTokenCount → cacheReadTokens；inputTokens 扣去命中缓存（非缓存新增）', () => {
+    const ir = geminiResponseToIR(
+      baseResp({
+        usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 5, totalTokenCount: 105, cachedContentTokenCount: 80 },
+      }),
+    )
+    // promptTokenCount(100) 含缓存；IR inputTokens = 100 - 80 = 20，cache 命中单列。
+    expect(ir.usage).toEqual({ inputTokens: 20, outputTokens: 5, cacheReadTokens: 80 })
+  })
+
   it('空 candidates → 空 content + end_turn + 零 usage', () => {
     const ir = geminiResponseToIR({
       candidates: [],

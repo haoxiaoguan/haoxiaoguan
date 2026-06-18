@@ -172,13 +172,6 @@ export const SYNC_CHANNELS = {
   fetchRemoteInfo: 'webdav_fetch_remote_info',
 } as const
 
-// WebSocket push-server context. Command names get_ws_status /
-// toggle_ws.
-export const WS_CHANNELS = {
-  getWsStatus: 'get_ws_status',
-  toggleWs: 'toggle_ws',
-} as const
-
 // Proxy context — outbound proxy IP management (new feature, no Tauri origin).
 // Channels are "proxy:<method>" since there is no source command name to mirror.
 export const PROXY_CHANNELS = {

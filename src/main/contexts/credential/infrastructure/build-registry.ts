@@ -66,8 +66,10 @@ const VSCODE_SECRET_CONFIGS: VsCodeSecretScanConfig[] = [
 
 export function buildCredentialRegistry(
   crypto?: CryptoService,
-  // Live resolver for the allow_stale_kiro_import setting (read at scan time).
-  allowStaleKiroImport?: () => boolean,
+  // Live resolver for the per-platform require_online_check_kiro setting (read at
+  // scan/import time): true → confirm Kiro identity online (abort on failure),
+  // false (default) → skip the online check and import with a placeholder.
+  requireOnlineKiroIdentity?: () => boolean,
 ): ProviderRegistry {
   const registry = new ProviderRegistry()
 
@@ -89,7 +91,7 @@ export function buildCredentialRegistry(
   // --- Local import ---
   registry.registerLocalImport(new CursorLocalImportCapability())
   registry.registerLocalImport(new CodexLocalImportCapability())
-  registry.registerLocalImport(new KiroLocalImportCapability(undefined, undefined, undefined, allowStaleKiroImport ?? false))
+  registry.registerLocalImport(new KiroLocalImportCapability(undefined, undefined, undefined, requireOnlineKiroIdentity ?? false))
   for (const config of VSCODE_SECRET_CONFIGS) {
     registry.registerLocalImport(new VsCodeSecretLocalImportCapability(config))
   }
@@ -101,10 +103,11 @@ export function buildCredentialRegistry(
   }
 
   // Kiro overrides the generic token-JSON parser: pasted enterprise (IdC) tokens
-  // carry no real identity in the blob, so confirm it online (enrichKiroMaterial)
-  // exactly as the local-scan path does. Registered AFTER the loop so it replaces
-  // the generic entry for 'kiro' (the registry maps by provider id).
-  registry.registerFileImport(new KiroTokenJsonImportCapability(allowStaleKiroImport ?? false))
+  // carry no real identity in the blob, so it runs the same identity enrichment
+  // (default: skip online + placeholder; require_online_check_kiro on: confirm
+  // online). Registered AFTER the loop so it replaces the generic entry for
+  // 'kiro' (the registry maps by provider id).
+  registry.registerFileImport(new KiroTokenJsonImportCapability(requireOnlineKiroIdentity ?? false))
 
   return registry
 }

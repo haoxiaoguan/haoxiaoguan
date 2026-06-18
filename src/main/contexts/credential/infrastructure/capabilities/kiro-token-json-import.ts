@@ -11,30 +11,30 @@ import { enrichKiroMaterial } from './kiro-identity-enrichment'
 // NOT in the token blob (the access token is an opaque, non-JWT string). The
 // authoritative source is a live getUsageLimits call.
 //
-// This wraps the generic parser and runs the SAME online identity enrichment
-// the local-scan path uses (KiroLocalImportCapability), so pasted-JSON import
-// behaves identically: confirm identity online, void any stale local profile,
-// and — on failure — abort by default (or degrade to a placeholder when the
-// allow_stale_kiro_import setting is on), never importing a leftover identity.
+// This wraps the generic parser and runs the SAME identity enrichment the
+// local-scan path uses (KiroLocalImportCapability), so pasted-JSON import
+// behaves identically: by default skip the online check and import with a
+// placeholder identity (stale local profile still voided); when the per-platform
+// 「必须联网检查身份」toggle is on, confirm identity online and abort on failure.
 export class KiroTokenJsonImportCapability implements FileImportCapability {
   // Kiro tolerates a refreshToken-only paste (no accessToken): the access token
   // is obtained by a refresh during enrichment. requireAccessToken=false.
   private readonly base = new TokenJsonFileImportCapability('kiro', false)
 
   constructor(
-    // When false (default), a failed live identity confirmation aborts the
-    // import; when true, import proceeds with a placeholder identity. Accepts a
-    // resolver so the live app setting (allow_stale_kiro_import) is read at
-    // import time; tests pass a plain boolean.
-    private readonly allowStaleOption: boolean | (() => boolean) = false,
+    // When false (default), the import skips the online identity check and uses a
+    // placeholder identity; when true, identity is confirmed live and a failure
+    // aborts the import. Accepts a resolver so the live per-platform app setting
+    // (require_online_check_kiro) is read at import time; tests pass a plain boolean.
+    private readonly requireOnlineOption: boolean | (() => boolean) = false,
     // Injectable transport for the identity enrichment call (tests only).
     private readonly fetchImpl?: FetchImpl,
   ) {}
 
-  private get allowStale(): boolean {
-    return typeof this.allowStaleOption === 'function'
-      ? this.allowStaleOption()
-      : this.allowStaleOption
+  private get requireOnline(): boolean {
+    return typeof this.requireOnlineOption === 'function'
+      ? this.requireOnlineOption()
+      : this.requireOnlineOption
   }
 
   provider(): PlatformId {
@@ -43,9 +43,11 @@ export class KiroTokenJsonImportCapability implements FileImportCapability {
 
   async importFromJson(payload: string): Promise<ImportedCredentialMaterial> {
     const material = await this.base.importFromJson(payload)
-    return enrichKiroMaterial(material, {
-      allowStale: this.allowStale,
-      fetchImpl: this.fetchImpl,
-    })
+    return enrichKiroMaterial(
+      material,
+      this.requireOnline
+        ? { allowStale: false, fetchImpl: this.fetchImpl }
+        : { skipOnline: true, fetchImpl: this.fetchImpl },
+    )
   }
 }

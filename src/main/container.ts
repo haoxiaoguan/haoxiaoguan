@@ -85,10 +85,6 @@ import { KeychainMasterKeyStore } from './contexts/sync/infrastructure/keychain-
 import { SafeStorageSecretStore } from './contexts/sync/infrastructure/secret-store'
 import { defaultSsotRoot } from './contexts/skill/application/skill-application-service'
 
-// WebSocket push-server context.
-import { WsServer } from './platform/websocket/ws-server'
-import { WebSocketApplicationService } from './contexts/websocket/application/websocket-service'
-
 // apiProxy context — local AI API reverse-proxy HTTP service
 // (M2b: 中间件链 + 三协议路由 + Echo 占位上游)。
 import { ApiHttpServer } from './contexts/apiProxy/infrastructure/http/api-http-server'
@@ -259,7 +255,7 @@ export async function buildContainer(): Promise<Container> {
   //     registered in buildCredentialRegistry; validation reuses the credential
   //     store's envelopes. credentialStore (above) doubles as its repository.
   const credentialRegistry = buildCredentialRegistry(cryptoService, () =>
-    settings.getAllowStaleKiroImport(),
+    settings.getRequireOnlineIdentityCheck('kiro'),
   )
   const pendingOAuthRepo = new MikroOrmPendingOAuthRepository()
   const pendingImportRepo = new MikroOrmPendingImportRepository()
@@ -401,12 +397,6 @@ export async function buildContainer(): Promise<Container> {
     ),
     ssotRoot: defaultSsotRoot(),
   })
-
-  // 10. WebSocket push-server context. Bound to the configured ws_port (source
-  //     default 9876). Not auto-started — the renderer toggles it via toggle_ws;
-  //     status reports 'stopped' until then.
-  const wsServer = new WsServer({ port: settings.getWsPort() })
-  const websocket = new WebSocketApplicationService(wsServer)
 
   // 11. apiProxy 上下文。监听器绑定 settings 的 apiProxyPort（默认 28788），
   //     端口被占时 ApiHttpServer 自动回退 +1。不在此自启——main.ts 依据
@@ -930,7 +920,6 @@ export async function buildContainer(): Promise<Container> {
     localBackup,
     mcp,
     sync,
-    websocket,
     proxyService,
     proxyResolver,
     accountGroupService,

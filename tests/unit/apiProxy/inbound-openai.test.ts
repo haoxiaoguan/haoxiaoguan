@@ -178,6 +178,8 @@ describe('irToOpenAIResponse', () => {
       { model: 'm', content: [{ type: 'text', text: 'x' }], stopReason: 'end_turn', usage: { inputTokens: 100, outputTokens: 5, cacheReadTokens: 80 } },
       { id: 'x', created: 0 },
     )
+    // prompt_tokens 为总输入（含 cache）：inputTokens(100) + cacheRead(80) = 180。
+    expect(r.usage.prompt_tokens).toBe(180)
     expect(r.usage.prompt_tokens_details?.cached_tokens).toBe(80)
   })
 })

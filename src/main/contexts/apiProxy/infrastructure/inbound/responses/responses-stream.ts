@@ -162,12 +162,14 @@ export async function* serializeResponsesStream(
     }
     yield* closeMessage()
     yield* closeTool()
+    // input_tokens 为总输入（含 cache 读写）；cached_tokens 仅命中读取部分（对齐 Responses/OpenAI 语义）。
+    const completedInputTotal = finalUsage.inputTokens + (finalUsage.cacheReadTokens ?? 0) + (finalUsage.cacheWriteTokens ?? 0)
     yield frame('response.completed', {
       type: 'response.completed',
       sequence_number: next(),
       response: {
         id: opts.id, object: 'response', created_at: opts.createdAt, status: 'completed', model: opts.model,
-        usage: { input_tokens: finalUsage.inputTokens, output_tokens: finalUsage.outputTokens, total_tokens: finalUsage.inputTokens + finalUsage.outputTokens, ...(finalUsage.cacheReadTokens !== undefined ? { input_tokens_details: { cached_tokens: finalUsage.cacheReadTokens } } : {}) },
+        usage: { input_tokens: completedInputTotal, output_tokens: finalUsage.outputTokens, total_tokens: completedInputTotal + finalUsage.outputTokens, ...(finalUsage.cacheReadTokens !== undefined ? { input_tokens_details: { cached_tokens: finalUsage.cacheReadTokens } } : {}) },
       },
     })
     yield 'data: [DONE]\n\n'

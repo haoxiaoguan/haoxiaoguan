@@ -220,7 +220,6 @@ export interface Settings {
   theme: ThemeMode;
   language: string;
   closeBehavior: CloseWindowBehavior;
-  wsPort: number;
   refreshIntervals: Record<string, number>;
   platformRefreshIntervals: Record<string, number>;
   idePaths: Record<string, string>;
@@ -228,7 +227,8 @@ export interface Settings {
   silentStart: boolean;
   autostart: boolean;
   utilityButtons: string;
-  allowStaleKiroImport: boolean;
+  /** Per-platform「必须联网检查身份」：platform → 导入时是否联网核对身份（默认 false=不联网）。 */
+  requireOnlineIdentityCheck: Record<string, boolean>;
   terminalLaunchTemplate: string;
   /** 「路由」开关（按客户端）：clientId → 是否经号小管反代转发该客户端第三方供应商。 */
   routingEnabled: Record<string, boolean>;
@@ -237,16 +237,6 @@ export interface Settings {
 
 export interface UpdateSettingsRequest {
   settings: Record<string, string>;
-}
-
-// ============================================================================
-// WebSocket Types
-// ============================================================================
-
-export interface WsStatus {
-  running: boolean;
-  port?: number;
-  connectionCount: number;
 }
 
 /** 应用关键目录路径（关于页展示用）。 */

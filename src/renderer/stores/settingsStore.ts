@@ -17,16 +17,14 @@ interface SettingsState {
   quotaRefreshConcurrency: number;
   /** Window close behavior */
   closeBehavior: CloseWindowBehavior;
-  /** WebSocket port */
-  wsPort: number;
   /** Silent start (launch hidden to tray) */
   silentStart: boolean;
   /** Launch on system startup */
   autostart: boolean;
   /** Comma-separated enabled top utility buttons */
   utilityButtons: string;
-  /** Allow Kiro import when identity cannot be confirmed online */
-  allowStaleKiroImport: boolean;
+  /** Per-platform「必须联网检查身份」：platform → 导入时是否联网核对身份（默认 false=不联网） */
+  requireOnlineIdentityCheck: Record<string, boolean>;
   /** 「会话」恢复用的终端启动命令模板，占位符 {cwd}/{command}。空串=未配置（前端降级为复制）。 */
   terminalLaunchTemplate: string;
   /** 「路由」开关（按客户端）：clientId → 是否经号小管反代转发该客户端第三方供应商。 */
@@ -54,16 +52,14 @@ interface SettingsState {
   setQuotaRefreshConcurrency: (count: number) => Promise<void>;
   /** Update close behavior */
   setCloseBehavior: (behavior: CloseWindowBehavior) => Promise<void>;
-  /** Update WebSocket port */
-  setWsPort: (port: number) => Promise<void>;
   /** Update silent start */
   setSilentStart: (enabled: boolean) => Promise<void>;
   /** Update autostart */
   setAutostart: (enabled: boolean) => Promise<void>;
   /** Update utility buttons */
   setUtilityButtons: (value: string) => Promise<void>;
-  /** Update allow-stale-Kiro-import toggle */
-  setAllowStaleKiroImport: (enabled: boolean) => Promise<void>;
+  /** Update per-platform「必须联网检查身份」toggle */
+  setRequireOnlineIdentityCheck: (platform: PlatformId, enabled: boolean) => Promise<void>;
   /** Update terminal launch template (for session resume) */
   setTerminalLaunchTemplate: (template: string) => Promise<void>;
   /** Update 「路由」toggle for a client（clientId → 是否经反代转发其第三方供应商）。 */
@@ -80,11 +76,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   idePaths: {},
   quotaRefreshConcurrency: 3,
   closeBehavior: 'minimize',
-  wsPort: 19528,
   silentStart: false,
   autostart: false,
   utilityButtons: 'device,support,docs,notification',
-  allowStaleKiroImport: false,
+  requireOnlineIdentityCheck: {},
   terminalLaunchTemplate: '',
   routingEnabled: {},
   codexLaunchOnSwitch: true,
@@ -107,7 +102,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         theme: settings.theme as ThemeMode,
         language: settings.language,
         closeBehavior: settings.closeBehavior as CloseWindowBehavior,
-        wsPort: settings.wsPort,
         refreshIntervals,
         platformRefreshIntervals,
         idePaths: settings.idePaths ?? {},
@@ -115,7 +109,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         silentStart: settings.silentStart,
         autostart: settings.autostart,
         utilityButtons: settings.utilityButtons,
-        allowStaleKiroImport: settings.allowStaleKiroImport,
+        requireOnlineIdentityCheck: settings.requireOnlineIdentityCheck ?? {},
         terminalLaunchTemplate: settings.terminalLaunchTemplate ?? '',
         routingEnabled: settings.routingEnabled ?? {},
         codexLaunchOnSwitch: settings.codexLaunchOnSwitch ?? true,
@@ -205,15 +199,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
 
-  setWsPort: async (port: number) => {
-    try {
-      await settingsService.updateSettings({ settings: { ws_port: String(port) } });
-      set({ wsPort: port });
-    } catch (err) {
-      set({ error: String(err) });
-    }
-  },
-
   setSilentStart: async (enabled: boolean) => {
     try {
       await settingsService.updateSettings({ settings: { silent_start: enabled ? 'true' : 'false' } });
@@ -241,12 +226,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
 
-  setAllowStaleKiroImport: async (enabled: boolean) => {
+  setRequireOnlineIdentityCheck: async (platform: PlatformId, enabled: boolean) => {
     try {
       await settingsService.updateSettings({
-        settings: { allow_stale_kiro_import: enabled ? 'true' : 'false' },
+        settings: { [`require_online_check_${platform}`]: enabled ? 'true' : 'false' },
       });
-      set({ allowStaleKiroImport: enabled });
+      set({ requireOnlineIdentityCheck: { ...get().requireOnlineIdentityCheck, [platform]: enabled } });
     } catch (err) {
       set({ error: String(err) });
     }

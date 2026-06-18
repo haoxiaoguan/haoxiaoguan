@@ -21,7 +21,6 @@ import type {
   QuotaRefreshResult,
   Settings,
   UpdateSettingsRequest,
-  WsStatus,
   AppDirs,
   AppPathInfo,
   ActiveDetectionResult,
@@ -116,18 +115,6 @@ export const settingsService = {
     bridge().settings.updateSettings(request as unknown as { settings: Record<string, string> }),
 
   setAutostart: (enabled: boolean) => bridge().settings.setAutostart(enabled),
-};
-
-// ============================================================================
-// WebSocket Commands
-// ============================================================================
-
-export const wsService = {
-  getWsStatus: () =>
-    bridge().ws.getWsStatus() as Promise<WsStatus>,
-
-  toggleWs: (enabled: boolean) =>
-    bridge().ws.toggleWs(enabled),
 };
 
 // ============================================================================

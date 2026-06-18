@@ -148,10 +148,14 @@ export function geminiResponseToIR(raw: GeminiGenerateContentResponse): Canonica
     }
   }
 
+  // Gemini promptTokenCount 含命中缓存；IR inputTokens 约定为非缓存新增，故扣去 cachedContentTokenCount。
+  const promptCount = raw.usageMetadata?.promptTokenCount ?? 0
+  const cachedCount = raw.usageMetadata?.cachedContentTokenCount
   const usage: Usage = {
-    inputTokens: raw.usageMetadata?.promptTokenCount ?? 0,
+    inputTokens: typeof cachedCount === 'number' ? Math.max(promptCount - cachedCount, 0) : promptCount,
     outputTokens: raw.usageMetadata?.candidatesTokenCount ?? 0,
   }
+  if (typeof cachedCount === 'number') usage.cacheReadTokens = cachedCount
 
   return {
     model: '',
@@ -174,7 +178,7 @@ interface GeminiStreamCandidate {
 }
 interface GeminiStreamChunk {
   candidates?: GeminiStreamCandidate[]
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number }
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number }
 }
 
 /**
@@ -231,10 +235,13 @@ export function createGeminiSseToEventsParser(): RelayStreamParser {
     }
 
     if (chunk.usageMetadata !== undefined) {
+      const promptCount = chunk.usageMetadata.promptTokenCount ?? 0
+      const cachedCount = chunk.usageMetadata.cachedContentTokenCount
       const usage: Usage = {
-        inputTokens: chunk.usageMetadata.promptTokenCount ?? 0,
+        inputTokens: typeof cachedCount === 'number' ? Math.max(promptCount - cachedCount, 0) : promptCount,
         outputTokens: chunk.usageMetadata.candidatesTokenCount ?? 0,
       }
+      if (typeof cachedCount === 'number') usage.cacheReadTokens = cachedCount
       events.push({ type: 'usage', usage })
     }
 

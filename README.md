@@ -47,7 +47,7 @@ src/
 │  ├─ contexts/<域>/          # 业务上下文，按 application/domain/infrastructure/ipc 分层
 │  │   account · accountGroup · credential · quota · proxy · apiProxy ·
 │  │   clientConfig · sessions · activity · usage · skill · mcp · sync ·
-│  │   localBackup · websocket · updater · settings
+│  │   localBackup · updater · settings
 │  ├─ agents/                 # AI 客户端适配器（claude / codex / gemini-cli / kiro / qoder …）
 │  └─ platform/               # 基础设施：crypto / net / oauth / persistence / fs / log …
 ├─ preload/                   # contextBridge 暴露安全 IPC

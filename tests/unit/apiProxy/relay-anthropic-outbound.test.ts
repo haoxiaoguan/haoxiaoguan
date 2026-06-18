@@ -285,6 +285,40 @@ describe('createAnthropicSseToEventsParser', () => {
     expect(events).toContainEqual({ type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } })
   })
 
+  it('流式 usage：message_start 的 cache_read/cache_creation → usage 事件带 cacheReadTokens/cacheWriteTokens', () => {
+    const sse =
+      frame('message_start', {
+        type: 'message_start',
+        message: { usage: { input_tokens: 10, cache_read_input_tokens: 200, cache_creation_input_tokens: 50 } },
+      }) +
+      frame('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hi' } }) +
+      frame('message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 7 } }) +
+      frame('message_stop', { type: 'message_stop' })
+
+    const events = parseAnthropicSse(sse)
+    // inputTokens 维持「非缓存新增」口径（10，不含 cache）；cache 读写单列，供出站层补回总输入。
+    expect(events).toContainEqual({
+      type: 'usage',
+      usage: { inputTokens: 10, outputTokens: 7, cacheReadTokens: 200, cacheWriteTokens: 50 },
+    })
+  })
+
+  it('流式 usage：cache 仅在 message_delta 重申时也能被采集', () => {
+    const sse =
+      frame('message_start', { type: 'message_start', message: { usage: { input_tokens: 8 } } }) +
+      frame('message_delta', {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 4, cache_read_input_tokens: 100 },
+      })
+
+    const events = parseAnthropicSse(sse)
+    expect(events).toContainEqual({
+      type: 'usage',
+      usage: { inputTokens: 8, outputTokens: 4, cacheReadTokens: 100 },
+    })
+  })
+
   it('tool_use 流：content_block_start(tool_use) → tool_use_start；input_json_delta → tool_use_delta', () => {
     const sse =
       frame('message_start', { type: 'message_start', message: { usage: { input_tokens: 20 } } }) +

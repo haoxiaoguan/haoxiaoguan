@@ -43,13 +43,18 @@ function finishReasonToIR(reason: string | null | undefined): StopReason {
   }
 }
 
-/** OpenAI usage → IR Usage。 */
+/**
+ * OpenAI usage → IR Usage。
+ * OpenAI 的 prompt_tokens 是「总输入（含命中缓存）」；IR 约定 inputTokens 为「非缓存新增输入」，
+ * 故扣去 cached_tokens 单列到 cacheReadTokens，保证各上游进 IR 后 inputTokens 口径一致。
+ */
 function usageFromOpenAI(u: OpenAIUsage | undefined): Usage {
+  const prompt = u?.prompt_tokens ?? 0
+  const cached = u?.prompt_tokens_details?.cached_tokens
   const usage: Usage = {
-    inputTokens: u?.prompt_tokens ?? 0,
+    inputTokens: typeof cached === 'number' ? Math.max(prompt - cached, 0) : prompt,
     outputTokens: u?.completion_tokens ?? 0,
   }
-  const cached = u?.prompt_tokens_details?.cached_tokens
   if (typeof cached === 'number') usage.cacheReadTokens = cached
   return usage
 }

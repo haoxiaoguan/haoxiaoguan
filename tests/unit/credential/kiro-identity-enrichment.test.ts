@@ -117,6 +117,25 @@ describe('enrichKiroMaterial', () => {
     expect(profile.displayIdentifier).not.toContain('OLD')
   })
 
+  it('skipOnline: 不联网，直接占位导入并 void 掉本地残留身份', async () => {
+    let called = false
+    const impl = async (): Promise<Response> => {
+      called = true
+      throw new Error('should not be called')
+    }
+    const out = await enrichKiroMaterial(baseMaterial(), { skipOnline: true, fetchImpl: impl })
+    expect(called).toBe(false) // 完全不发起网络请求
+    expect(out.email).toBe('kiro-user')
+    const meta = out.rawMetadata as Record<string, JsonValue>
+    expect(meta.identity_source).toBe('local_stale')
+    expect(meta.kiro_profile_raw).toBeNull()
+    expect(meta.kiro_usage_raw).toBeNull()
+    expect(meta.identity_enrichment_error).toBeUndefined() // 没尝试联网，无错误
+    // 下游派生不得使用残留的 galardo 身份。
+    const profile = profileFromImportMaterial('kiro', out.email, out.rawMetadata, out.accessToken)
+    expect(profile.displayIdentifier).not.toContain('OLD')
+  })
+
   it('keeps clientSecret out of the plaintext profilePayload but in raw metadata', async () => {
     const f = scriptedFetch([{ match: '/getUsageLimits', status: 200, body: LIVE_USAGE }])
     const out = await enrichKiroMaterial(baseMaterial(), { fetchImpl: f.impl })

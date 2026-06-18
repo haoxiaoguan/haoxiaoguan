@@ -190,11 +190,14 @@ function irBlockToGeminiPart(block: ContentBlock): GeminiPart | null {
   return null
 }
 
+// Gemini promptTokenCount 是「总输入（含命中缓存）」；IR inputTokens 仅非缓存新增，
+// 故把 cache 读写补回总输入，cachedContentTokenCount 仅取命中读取部分。
 function usageToGemini(usage: CanonicalResponse['usage']): GeminiUsageMetadata {
+  const promptTotal = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
   const out: GeminiUsageMetadata = {
-    promptTokenCount: usage.inputTokens,
+    promptTokenCount: promptTotal,
     candidatesTokenCount: usage.outputTokens,
-    totalTokenCount: usage.inputTokens + usage.outputTokens,
+    totalTokenCount: promptTotal + usage.outputTokens,
   }
   if (usage.cacheReadTokens !== undefined) out.cachedContentTokenCount = usage.cacheReadTokens
   return out

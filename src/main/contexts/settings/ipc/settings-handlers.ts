@@ -18,6 +18,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
       const platformRefreshIntervals: Record<string, number> = {}
       const idePaths: Record<string, string> = {}
       const routingEnabled: Record<string, boolean> = {}
+      const requireOnlineIdentityCheck: Record<string, boolean> = {}
       for (const [k, v] of Object.entries(kv)) {
         if (k.startsWith('platform_refresh_interval_')) {
           platformRefreshIntervals[k.slice('platform_refresh_interval_'.length)] = Number(v)
@@ -25,6 +26,8 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
           refreshIntervals[k.slice('refresh_interval_'.length)] = Number(v)
         } else if (k.startsWith('ide_path_')) {
           idePaths[k.slice('ide_path_'.length)] = v
+        } else if (k.startsWith('require_online_check_')) {
+          requireOnlineIdentityCheck[k.slice('require_online_check_'.length)] = v === 'true'
         } else if (k.startsWith('routing_enabled_')) {
           routingEnabled[k.slice('routing_enabled_'.length)] = v === 'true'
         }
@@ -37,7 +40,6 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         theme: kv.theme,
         language: kv.language,
         closeBehavior: kv.close_behavior,
-        wsPort: Number(kv.ws_port),
         refreshIntervals,
         platformRefreshIntervals,
         idePaths,
@@ -45,7 +47,7 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
         silentStart: kv.silent_start === 'true',
         autostart: kv.autostart === 'true',
         utilityButtons: kv.utility_buttons,
-        allowStaleKiroImport: kv.allow_stale_kiro_import === 'true',
+        requireOnlineIdentityCheck,
         terminalLaunchTemplate: kv.terminal_launch_template,
         routingEnabled,
         codexLaunchOnSwitch: kv.codex_launch_on_switch === 'true',

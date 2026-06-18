@@ -115,18 +115,9 @@
     "closeBehavior": "关闭窗口行为",
     "closeBehaviorQuit": "退出应用",
     "closeBehaviorMinimize": "最小化到托盘",
-    "websocket": "WebSocket 服务",
-    "wsPort": "端口",
-    "wsEnabled": "已启用",
-    "wsDisabled": "已禁用",
     "advanced": {
       "title": "高级",
-      "desc": "WebSocket 服务与开发者选项。",
-      "kiroImport": {
-        "title": "Kiro 账号导入",
-        "allowStale": "允许在无法联网确认身份时导入",
-        "allowStaleDesc": "默认关闭：导入 Kiro 账号时必须联网确认真实身份，否则阻止导入以免使用本地残留的旧账号信息。开启后将以占位身份导入，可稍后在账号详情刷新。"
-      }
+      "desc": "开发者选项。"
     },
     "idePath": "IDE 路径",
     "idePathPlaceholder": "/path/to/ide",

@@ -9,7 +9,6 @@ export interface UiSettings {
 }
 
 export interface RuntimeSettings {
-  wsPort: number
   silentStart: boolean
   autostart: boolean
   // Active-account quota refresh interval per platform, in minutes (2–30). The
@@ -24,10 +23,12 @@ export interface RuntimeSettings {
   // Max number of accounts refreshed in parallel during a whole-platform batch
   // sweep. Global (shared across platforms). Default 3, range 1–100.
   quotaRefreshConcurrency: number
-  // When true, Kiro accounts import even when their identity cannot be confirmed
-  // online (degraded to a placeholder, never the stale local identity). Default
-  // false: import is blocked until a live getUsageLimits succeeds.
-  allowStaleKiroImport: boolean
+  // Per-platform「必须联网检查身份」, keyed by platform id. When true, importing
+  // that platform's account confirms identity online and aborts on failure; when
+  // false (default / missing key), the import skips the online check and proceeds
+  // directly (placeholder identity for Kiro, voiding any stale local profile).
+  // Currently only Kiro acts on it at import time; other platforms reserve it.
+  requireOnlineIdentityCheck: Record<string, boolean>
   // 本地 AI API 反代服务（apiProxy 上下文）是否随应用就绪自启。默认 false：
   // 尊重用户在「API 服务」页的开关，不强制自启。
   apiProxyEnabled: boolean
@@ -85,14 +86,13 @@ const UI_DEFAULTS: UiSettings = {
 }
 
 const RUNTIME_DEFAULTS: RuntimeSettings = {
-  wsPort: 9876,
   silentStart: false,
   autostart: false,
   refreshIntervals: {},
   platformRefreshIntervals: {},
   idePaths: {},
   quotaRefreshConcurrency: 3,
-  allowStaleKiroImport: false,
+  requireOnlineIdentityCheck: {},
   apiProxyEnabled: false,
   apiProxyPort: 28788,
   apiProxyClientKeys: [],
@@ -143,6 +143,7 @@ export class AppSettings {
     runtime.refreshIntervals = { ...(raw.runtime?.refreshIntervals ?? {}) }
     runtime.platformRefreshIntervals = { ...(raw.runtime?.platformRefreshIntervals ?? {}) }
     runtime.idePaths = { ...(raw.runtime?.idePaths ?? {}) }
+    runtime.requireOnlineIdentityCheck = { ...(raw.runtime?.requireOnlineIdentityCheck ?? {}) }
     runtime.routingEnabled = { ...(raw.runtime?.routingEnabled ?? {}) }
     // 迁移：旧单一开关 codexRelayInjectionEnabled === true → routingEnabled.codex（仅当未显式设过）。
     if (raw.runtime?.codexRelayInjectionEnabled === true && runtime.routingEnabled.codex === undefined) {
@@ -174,11 +175,9 @@ export class AppSettings {
       language: this.ui.language,
       close_behavior: this.ui.closeBehavior,
       utility_buttons: this.ui.utilityButtons,
-      ws_port: String(this.runtime.wsPort),
       silent_start: String(this.runtime.silentStart),
       autostart: String(this.runtime.autostart),
       quota_refresh_concurrency: String(this.runtime.quotaRefreshConcurrency),
-      allow_stale_kiro_import: String(this.runtime.allowStaleKiroImport),
       api_proxy_enabled: String(this.runtime.apiProxyEnabled),
       api_proxy_port: String(this.runtime.apiProxyPort),
       api_proxy_client_keys: this.runtime.apiProxyClientKeys.join('\n'),
@@ -215,6 +214,9 @@ export class AppSettings {
     for (const [platform, path] of Object.entries(this.runtime.idePaths)) {
       kv[`ide_path_${platform}`] = path
     }
+    for (const [platform, on] of Object.entries(this.runtime.requireOnlineIdentityCheck)) {
+      kv[`require_online_check_${platform}`] = String(on)
+    }
     return kv
   }
 
@@ -225,16 +227,12 @@ export class AppSettings {
       else if (k === 'language' && v.trim().length > 0) this.ui.language = v
       else if (k === 'close_behavior' && (v === 'quit' || v === 'minimize')) this.ui.closeBehavior = v
       else if (k === 'utility_buttons') this.ui.utilityButtons = v
-      else if (k === 'ws_port') {
-        const n = Number(v)
-        if (Number.isInteger(n) && n >= 1024) this.runtime.wsPort = n
-      } else if (k === 'silent_start') this.runtime.silentStart = v === 'true'
+      else if (k === 'silent_start') this.runtime.silentStart = v === 'true'
       else if (k === 'autostart') this.runtime.autostart = v === 'true'
       else if (k === 'quota_refresh_concurrency') {
         const n = Number(v)
         if (Number.isInteger(n) && n >= 1 && n <= 100) this.runtime.quotaRefreshConcurrency = n
-      } else if (k === 'allow_stale_kiro_import') this.runtime.allowStaleKiroImport = v === 'true'
-      else if (k === 'api_proxy_enabled') this.runtime.apiProxyEnabled = v === 'true'
+      } else if (k === 'api_proxy_enabled') this.runtime.apiProxyEnabled = v === 'true'
       else if (k === 'api_proxy_port') {
         const n = Number(v)
         if (Number.isInteger(n) && n >= 1024 && n <= 65535) this.runtime.apiProxyPort = n
@@ -327,6 +325,9 @@ export class AppSettings {
         // Empty clears the path; non-empty stores it.
         if (path.length > 0) this.runtime.idePaths[platform] = path
         else delete this.runtime.idePaths[platform]
+      } else if (k.startsWith('require_online_check_')) {
+        const platform = k.slice('require_online_check_'.length)
+        this.runtime.requireOnlineIdentityCheck[platform] = v === 'true'
       }
     }
   }

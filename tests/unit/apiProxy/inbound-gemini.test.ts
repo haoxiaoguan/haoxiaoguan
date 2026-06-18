@@ -134,6 +134,8 @@ describe('irToGeminiResponse', () => {
       stopReason: 'end_turn',
       usage: { inputTokens: 100, outputTokens: 5, cacheReadTokens: 80 },
     })
+    // promptTokenCount 为总输入（含 cache）：inputTokens(100) + cacheRead(80) = 180。
+    expect(r.usageMetadata.promptTokenCount).toBe(180)
     expect(r.usageMetadata.cachedContentTokenCount).toBe(80)
   })
 })

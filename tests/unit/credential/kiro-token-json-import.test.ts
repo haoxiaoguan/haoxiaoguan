@@ -37,9 +37,9 @@ describe('KiroTokenJsonImportCapability', () => {
     expect(new KiroTokenJsonImportCapability().provider()).toBe('kiro')
   })
 
-  it('confirms identity online and derives the live identity + plan (IdC)', async () => {
+  it('confirms identity online and derives the live identity + plan (IdC) when requireOnline=true', async () => {
     const f = scriptedFetch([{ match: '/getUsageLimits', status: 200, body: LIVE_USAGE }])
-    const cap = new KiroTokenJsonImportCapability(false, f.impl)
+    const cap = new KiroTokenJsonImportCapability(true, f.impl)
     const material = await cap.importFromJson(PAYLOAD)
 
     expect(material.email).toBe('wash.in.at.te+5hv4@example.com')
@@ -56,7 +56,7 @@ describe('KiroTokenJsonImportCapability', () => {
 
   it('keeps clientSecret in encrypted rawMetadata but out of the plaintext profilePayload', async () => {
     const f = scriptedFetch([{ match: '/getUsageLimits', status: 200, body: LIVE_USAGE }])
-    const cap = new KiroTokenJsonImportCapability(false, f.impl)
+    const cap = new KiroTokenJsonImportCapability(true, f.impl)
     const material = await cap.importFromJson(PAYLOAD)
 
     expect((material.rawMetadata as Record<string, unknown>).clientSecret).toBe(
@@ -68,19 +68,21 @@ describe('KiroTokenJsonImportCapability', () => {
     expect(payload.client_secret).toBeUndefined()
   })
 
-  it('aborts with a clear error when identity cannot be confirmed (allowStale=false)', async () => {
+  it('aborts with a clear error when requireOnline=true and identity cannot be confirmed', async () => {
     const impl = async (): Promise<Response> => { throw new Error('offline') }
-    const cap = new KiroTokenJsonImportCapability(false, impl)
+    const cap = new KiroTokenJsonImportCapability(true, impl)
     await expect(cap.importFromJson(PAYLOAD)).rejects.toMatchObject({
       kind: 'provider_error',
       data: { code: 'kiro_identity_unconfirmed' },
     })
   })
 
-  it('degrades to a placeholder identity when allowStale=true (resolver form)', async () => {
-    const impl = async (): Promise<Response> => { throw new Error('offline') }
-    const cap = new KiroTokenJsonImportCapability(() => true, impl)
+  it('skips the online check entirely and imports a placeholder when requireOnline=false (default)', async () => {
+    let called = false
+    const impl = async (): Promise<Response> => { called = true; throw new Error('offline') }
+    const cap = new KiroTokenJsonImportCapability(() => false, impl)
     const material = await cap.importFromJson(PAYLOAD)
+    expect(called).toBe(false) // 默认不联网：根本不发起请求
     expect(material.email).toBe('kiro-user')
     const meta = material.rawMetadata as Record<string, JsonValue>
     expect(meta.identity_source).toBe('local_stale')
@@ -107,7 +109,7 @@ describe('KiroTokenJsonImportCapability', () => {
       }
       throw new Error(`no route ${url}`)
     }
-    const cap = new KiroTokenJsonImportCapability(false, impl)
+    const cap = new KiroTokenJsonImportCapability(true, impl)
     const material = await cap.importFromJson(refreshOnly)
 
     expect(tokenCalls).toBe(1) // refreshed up-front
@@ -131,7 +133,7 @@ describe('KiroTokenJsonImportCapability', () => {
       }
       throw new Error(`no route ${url}`)
     }
-    const cap = new KiroTokenJsonImportCapability(false, impl)
+    const cap = new KiroTokenJsonImportCapability(true, impl)
     const material = await cap.importFromJson(social)
     expect(material.accessToken).toBe('SOCIAL-FRESH')
     // provider=Github → social endpoint, not the IdC oidc /token.

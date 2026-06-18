@@ -136,12 +136,6 @@ export interface ClientConfigConnTest {
   message?: string
 }
 
-export interface WsStatus {
-  running: boolean
-  port?: number
-  connectionCount: number
-}
-
 // 单条反代请求日志记录（G3）——与 main 的 ProxyRequestRecord 保持同形。
 export interface ProxyRequestRecord {
   seq: number

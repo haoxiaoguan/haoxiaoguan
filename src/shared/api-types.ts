@@ -74,7 +74,6 @@ import type {
   CodexRepairProgressDto,
 } from './api/integrations'
 import type {
-  WsStatus,
   ProxyDto,
   CreateProxyRequest,
   UpdateProxyRequest,
@@ -318,10 +317,6 @@ export interface HxgApi {
     syncUpload(): Promise<{ status: 'uploaded' }>
     syncDownload(): Promise<DownloadResult>
     fetchRemoteInfo(): Promise<RemoteInfo>
-  }
-  ws: {
-    getWsStatus(): Promise<WsStatus>
-    toggleWs(enabled: boolean): Promise<void>
   }
   proxy: {
     listProxies(): Promise<ProxyDto[]>

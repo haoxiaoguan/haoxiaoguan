@@ -33,6 +33,10 @@ interface RawMeta {
 export interface EnrichOptions {
   /** When false (default), a failed live identity fetch aborts the import. */
   allowStale?: boolean | undefined
+  /** When true, skip the online identity check entirely and import with a
+   *  placeholder identity. The stale local profile is still voided so a previous
+   *  account's email/userId is never adopted. Takes precedence over allowStale. */
+  skipOnline?: boolean | undefined
   /** Injectable transport for tests. */
   fetchImpl?: FetchImpl | undefined
 }
@@ -48,6 +52,13 @@ export async function enrichKiroMaterial(
   const allowStale = options.allowStale ?? false
   const meta: RawMeta = isObject(material.rawMetadata) ? { ...material.rawMetadata } : {}
 
+  // skipOnline：完全不联网，直接以占位身份导入。仍 void 掉本地可能残留的旧身份，
+  // 避免把上一个账号的 email/userId/plan 当成本账号（见文件头 CRITICAL 说明）。
+  if (options.skipOnline === true) {
+    voidLocalIdentity(meta)
+    return { ...material, email: 'kiro-user', rawMetadata: meta as JsonValue }
+  }
+
   const authMethod = resolveKiroAuthMethod(meta)
   const profileArn = asString(meta.profileArn) ?? asString(meta.profile_arn)
   const region = normalizeRegion(
@@ -58,24 +69,18 @@ export async function enrichKiroMaterial(
     const live = await fetchLiveIdentity(material, meta, authMethod, region, profileArn, options.fetchImpl)
     return applyLiveIdentity(material, meta, live)
   } catch (err) {
-    // Failure → never import the stale identity. Void EVERY local identity
-    // source (profile.json, usage telemetry, and the scan-derived fields) so
-    // derivation falls back to a neutral placeholder (kiro-<hash>) rather than a
-    // previous account's email/userId/plan. A later quota refresh repopulates
+    // Failure → never import the stale identity. Void EVERY local identity source
+    // so derivation falls back to a neutral placeholder (kiro-<hash>) rather than
+    // a previous account's email/userId/plan. A later quota refresh repopulates
     // kiro_usage_raw with live data and corrects the display.
-    meta.kiro_profile_raw = null
-    meta.kiro_usage_raw = null
-    meta.email = null
-    meta.user_id = null
-    meta.login_provider = null
-    meta.identity_source = 'local_stale'
+    voidLocalIdentity(meta)
     meta.identity_enrichment_error = errorReason(err)
 
     if (!allowStale) {
       throw CredentialError.providerError(
         `无法联网确认 Kiro 账号身份（${errorReason(err)}）。`
-          + '本地缓存可能是其它账号的残留，已阻止导入以免身份错误。'
-          + '请检查网络后重试，或在「设置 → 高级」开启「允许在无法联网确认身份时导入」。',
+          + '已阻止导入以免使用本地残留的旧账号信息。'
+          + '请检查网络后重试，或在该平台设置里关闭「必须联网检查身份」以直接导入。',
         'kiro_identity_unconfirmed',
       )
     }
@@ -206,6 +211,18 @@ function errorReason(err: unknown): string {
   if (err instanceof KiroAuthError) return err.code
   if (err instanceof Error) return err.message
   return String(err)
+}
+
+/** Void every local identity source so derivation uses a neutral placeholder
+ *  (kiro-<hash>) instead of a possibly-stale previous account's identity. Shared
+ *  by the skip-online path and the live-failure path. */
+function voidLocalIdentity(meta: RawMeta): void {
+  meta.kiro_profile_raw = null
+  meta.kiro_usage_raw = null
+  meta.email = null
+  meta.user_id = null
+  meta.login_provider = null
+  meta.identity_source = 'local_stale'
 }
 
 function isObject(value: unknown): value is RawMeta {

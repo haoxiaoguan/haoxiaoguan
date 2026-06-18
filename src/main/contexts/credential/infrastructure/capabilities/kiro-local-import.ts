@@ -48,19 +48,19 @@ export class KiroLocalImportCapability implements LocalImportCapability {
     private readonly authTokenPathOverride?: string,
     private readonly profilePathOverride?: string,
     private readonly stateDbPathOverride?: string,
-    // When false (default), a failed live identity confirmation aborts the
-    // import; when true, import proceeds with a placeholder identity. Accepts a
-    // resolver so the live app setting (allow_stale_kiro_import) is read at scan
-    // time; tests pass a plain boolean.
-    private readonly allowStaleOption: boolean | (() => boolean) = false,
+    // When false (default), the import skips the online identity check and uses a
+    // placeholder identity; when true, identity is confirmed live and a failure
+    // aborts the import. Accepts a resolver so the live per-platform app setting
+    // (require_online_check_kiro) is read at scan time; tests pass a plain boolean.
+    private readonly requireOnlineOption: boolean | (() => boolean) = false,
     // Injectable transport for the identity enrichment call (tests only).
     private readonly fetchImpl?: FetchImpl,
   ) {}
 
-  private get allowStale(): boolean {
-    return typeof this.allowStaleOption === 'function'
-      ? this.allowStaleOption()
-      : this.allowStaleOption
+  private get requireOnline(): boolean {
+    return typeof this.requireOnlineOption === 'function'
+      ? this.requireOnlineOption()
+      : this.requireOnlineOption
   }
 
   provider(): PlatformId {
@@ -208,10 +208,18 @@ export class KiroLocalImportCapability implements LocalImportCapability {
     }
 
     // Enterprise (IdC) identity is not reliably on disk (local state can be a
-    // stale leftover from a prior account). Confirm it live via getUsageLimits
-    // before the material is used to derive the account identity. Voids the
-    // stale local profile; aborts on failure unless allowStale is set.
-    return [await enrichKiroMaterial(material, { allowStale: this.allowStale, fetchImpl: this.fetchImpl })]
+    // stale leftover from a prior account). When the per-platform「必须联网检查身份」
+    // toggle is on, confirm identity live via getUsageLimits (aborting on failure);
+    // otherwise (default) skip the online check and import with a placeholder
+    // identity. Either way the stale local profile is voided to avoid a wrong id.
+    return [
+      await enrichKiroMaterial(
+        material,
+        this.requireOnline
+          ? { allowStale: false, fetchImpl: this.fetchImpl }
+          : { skipOnline: true, fetchImpl: this.fetchImpl },
+      ),
+    ]
   }
 }
 

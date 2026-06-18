@@ -4,7 +4,16 @@ import type { ContentBlock } from './content-block'
 /** 停止原因（中立四值枚举）。各协议出站时各自翻译到其线格式。 */
 export type StopReason = 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence'
 
-/** token 用量。inputTokens/outputTokens 必填；缓存读写可选。 */
+/**
+ * token 用量（统一口径）。
+ * - inputTokens：**非缓存的新增输入** token（不含 cache 读/写）。各上游适配器入站解析时统一按此口径填充
+ *   （Anthropic input_tokens 天然不含 cache；OpenAI prompt_tokens / Gemini promptTokenCount 含 cache，
+ *   入站时已扣去 cached 单列）。
+ * - cacheReadTokens：命中缓存读取的输入 token；cacheWriteTokens：写入缓存的输入 token。均可选。
+ * 出站到 responses/openai/gemini 等「总输入」语义协议时，由序列化层补回缓存：
+ *   总输入 = inputTokens + cacheReadTokens + cacheWriteTokens，cached 仅取 cacheReadTokens。
+ * Anthropic 出站则直接用 inputTokens 作 input_tokens、cache 读写单列（无需补回）。
+ */
 export interface Usage {
   inputTokens: number
   outputTokens: number

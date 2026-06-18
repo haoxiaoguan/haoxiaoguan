@@ -25,10 +25,6 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.silentStart
   }
 
-  getWsPort(): number {
-    return this.file.loadSync().runtime.wsPort
-  }
-
   /** 反代服务是否随应用就绪自启（默认 false）。 */
   getApiProxyEnabled(): boolean {
     return this.file.loadSync().runtime.apiProxyEnabled
@@ -60,8 +56,9 @@ export class SettingsApplicationService {
     return this.file.loadSync().runtime.apiProxyAllowAnonymousLoopback
   }
 
-  getAllowStaleKiroImport(): boolean {
-    return this.file.loadSync().runtime.allowStaleKiroImport
+  /** Per-platform「必须联网检查身份」（默认 false = 导入不联网、直接导入）。 */
+  getRequireOnlineIdentityCheck(platform: string): boolean {
+    return this.file.loadSync().runtime.requireOnlineIdentityCheck[platform] === true
   }
 
   /** Active-account refresh intervals (minutes) keyed by platform. */

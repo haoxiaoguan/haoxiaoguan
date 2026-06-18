@@ -22,10 +22,10 @@ describe('SettingsApplicationService', () => {
     const before = svc.getAllSettings()
     expect(before.theme).toBe('system')
 
-    await svc.updateSettings({ theme: 'dark', ws_port: '5000' })
+    await svc.updateSettings({ theme: 'dark', api_proxy_port: '9090' })
     const after = svc.getAllSettings()
     expect(after.theme).toBe('dark')
-    expect(after.ws_port).toBe('5000')
+    expect(after.api_proxy_port).toBe('9090')
 
     // a fresh service over the same file sees the persisted values
     const file2 = new SettingsFileService(join(dir, 'settings.json'))

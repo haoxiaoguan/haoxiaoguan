@@ -130,7 +130,9 @@ describe('KiroLocalImportCapability', () => {
     usageDb: string,
     fetchImpl: (url: string) => Promise<Response>,
   ): KiroLocalImportCapability {
-    return new KiroLocalImportCapability(authPath, profilePath, usageDb, false, fetchImpl)
+    // requireOnline=true：这些提取测试注入 live 响应，走「联网确认身份」路径，
+    // 使 enrich 成为身份保真的 passthrough，从而可断言 live 身份字段。
+    return new KiroLocalImportCapability(authPath, profilePath, usageDb, true, fetchImpl)
   }
 
   it('reads accessToken/refreshToken/expiresAt from the AWS SSO token file', async () => {
@@ -267,15 +269,28 @@ describe('KiroLocalImportCapability', () => {
     expect(m.refreshToken).toBeUndefined()
   })
 
-  it('aborts import (default) when identity cannot be confirmed online', async () => {
-    // allowStale defaults to false → a failed live confirmation throws rather
-    // than importing the (possibly stale) local identity.
+  it('aborts import when requireOnline=true and identity cannot be confirmed online', async () => {
+    // requireOnline=true → a failed live confirmation throws rather than
+    // importing the (possibly stale) local identity.
     const offlineFetch = async (): Promise<Response> => {
       throw new Error('offline')
     }
     const authPath = writeAuthToken({ accessToken: 'a', refreshToken: 'r', email: 'x@y.com' })
-    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'), false, offlineFetch)
+    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'), true, offlineFetch)
     await expect(cap.scanLocal()).rejects.toMatchObject({ kind: 'provider_error' })
+  })
+
+  it('default (requireOnline=false) skips the online check and imports a placeholder', async () => {
+    let called = false
+    const offlineFetch = async (): Promise<Response> => { called = true; throw new Error('offline') }
+    const authPath = writeAuthToken({ accessToken: 'a', refreshToken: 'r', email: 'x@y.com' })
+    // 第 4 参数 false → 默认不联网，直接占位导入（即使 fetch 会 throw 也不触发）。
+    const cap = new KiroLocalImportCapability(authPath, join(tmp, 'no-profile.json'), join(tmp, 'no.vscdb'), false, offlineFetch)
+    const m = (await cap.scanLocal())[0]
+    expect(called).toBe(false) // 默认不联网：不发起请求
+    expect(m.email).toBe('kiro-user') // 占位身份
+    const meta = m.rawMetadata as Record<string, unknown>
+    expect(meta.identity_source).toBe('local_stale')
   })
 })
 
