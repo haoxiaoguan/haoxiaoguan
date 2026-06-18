@@ -176,7 +176,13 @@
     "copyFailed": "复制失败",
     "conflictTitle": "检测到多处安装（升级只作用于命令行默认那处）",
     "pathDefault": "默认",
-    "notRunnable": "无法运行"
+    "notRunnable": "无法运行",
+    "cancel": "取消",
+    "upgradeConfirmTitle": "确认升级位置",
+    "upgradeConfirmHint": "检测到多处安装。本次升级只作用于命令行默认那处（标「默认」），不会更新全部。请确认后继续。",
+    "upgradeWillRun": "将执行：",
+    "upgradeConfirmBtn": "确认升级",
+    "upgradeUnanchoredHint": "无法确定命令行实际使用哪处，将执行默认升级命令（可能装到 PATH 上第一个 npm）。"
   },
   "copy": "复制",
   "service": {

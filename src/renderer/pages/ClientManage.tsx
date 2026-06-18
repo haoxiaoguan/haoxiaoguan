@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
+import { ClientUpgradeConfirmDialog } from '@/components/clientConfig/ClientUpgradeConfirmDialog';
 import { useClientConfigStore } from '../stores/clientConfigStore';
-import type { ClientConfigClientId, ClientConfigInstallation } from '@shared/api-types';
+import type { ClientConfigClientId, ClientConfigInstallation, ClientConfigUpgradePlan } from '@shared/api-types';
 
 /**
  * 客户端管理页（客户端接入下的子 tab）：探测各 AI 客户端 CLI 的安装版本，
@@ -23,12 +24,23 @@ export default function ClientManage() {
     diagnosing,
     init,
     loadVersions,
+    planUpgrade,
     upgrade,
     install,
     batchUpgrade,
     diagnose,
   } = useClientConfigStore();
   const [batching, setBatching] = useState(false);
+  // 升级前规划进行中（probe 阶段，禁用按钮避免并发触发）。
+  const [preparing, setPreparing] = useState(false);
+  // 待确认的多处安装升级：plans=需确认的客户端规划，run=确认后实际执行的动作。
+  const [pendingUpgrade, setPendingUpgrade] = useState<{
+    plans: ClientConfigUpgradePlan[];
+    run: () => Promise<void>;
+  } | null>(null);
+
+  const displayNameOf = (clientId: ClientConfigClientId): string =>
+    clients.find((c) => c.clientId === clientId)?.displayName ?? clientId;
 
   useEffect(() => {
     if (clients.length === 0) void init();
@@ -40,10 +52,54 @@ export default function ClientManage() {
   const versionsPending = versionsLoading && Object.keys(versions).length === 0;
   const upgradableCount = clients.filter((c) => versions[c.clientId]?.upgradable === true).length;
 
-  const onUpgradeOne = async (clientId: ClientConfigClientId, name: string) => {
+  // 实际执行单个升级（已通过任何必要的确认后才调用）。
+  const doUpgradeOne = async (clientId: ClientConfigClientId, name: string) => {
     const r = await upgrade(clientId);
     if (r.ok) toast.success(t('clientManage.upgradeSuccess', { client: name }));
     else toast.error(t('clientManage.upgradeFailed', { client: name }), { description: r.detail });
+  };
+
+  // 实际执行批量升级（已确认后才调用）。
+  const doBatch = async () => {
+    setBatching(true);
+    try {
+      const { done, failed } = await batchUpgrade();
+      if (failed === 0) toast.success(t('clientManage.batchDone', { done, failed }));
+      else toast.error(t('clientManage.batchDone', { done, failed }));
+    } finally {
+      setBatching(false);
+    }
+  };
+
+  /**
+   * 升级前先规划（对称 cc-switch）：对每个目标客户端探测安装分布；任一存在多处安装（needsConfirmation）
+   * 就弹窗让用户知情「升级只动命令行默认那处」后再执行；否则直接执行。规划失败不阻断，退回直接执行。
+   */
+  const requestUpgrade = async (ids: ClientConfigClientId[], run: () => Promise<void>) => {
+    if (ids.length === 0 || preparing || batching) return;
+    setPreparing(true);
+    try {
+      const plans = await Promise.all(ids.map((id) => planUpgrade(id)));
+      const needConfirm = plans.filter((p) => p.needsConfirmation);
+      if (needConfirm.length === 0) {
+        await run();
+        return;
+      }
+      setPendingUpgrade({ plans: needConfirm, run });
+    } catch {
+      await run();
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const onUpgradeOne = (clientId: ClientConfigClientId, name: string) =>
+    requestUpgrade([clientId], () => doUpgradeOne(clientId, name));
+
+  const onConfirmUpgrade = async () => {
+    const p = pendingUpgrade;
+    setPendingUpgrade(null);
+    if (p) await p.run();
   };
 
   const onInstallOne = async (clientId: ClientConfigClientId, name: string) => {
@@ -61,15 +117,9 @@ export default function ClientManage() {
     }
   };
 
-  const onBatch = async () => {
-    setBatching(true);
-    try {
-      const { done, failed } = await batchUpgrade();
-      if (failed === 0) toast.success(t('clientManage.batchDone', { done, failed }));
-      else toast.error(t('clientManage.batchDone', { done, failed }));
-    } finally {
-      setBatching(false);
-    }
+  const onBatch = () => {
+    const ids = clients.filter((c) => versions[c.clientId]?.upgradable === true).map((c) => c.clientId);
+    return requestUpgrade(ids, doBatch);
   };
 
   const onDiagnose = async () => {
@@ -103,10 +153,10 @@ export default function ClientManage() {
         <Button
           size="sm"
           className="h-8 gap-1.5 text-[12px]"
-          disabled={batching || versionsPending || upgradableCount === 0}
+          disabled={batching || preparing || versionsPending || upgradableCount === 0}
           onClick={() => void onBatch()}
         >
-          {batching || versionsPending ? (
+          {batching || preparing || versionsPending ? (
             <Loader2 className="size-3.5 animate-spin" aria-hidden />
           ) : (
             <ArrowUpCircle className="size-3.5" aria-hidden />
@@ -186,7 +236,7 @@ export default function ClientManage() {
                     <Button
                       size="sm"
                       className="h-8 gap-1.5 text-[12px]"
-                      disabled={isBusy || batching}
+                      disabled={isBusy || batching || preparing}
                       onClick={() => void onInstallOne(c.clientId, c.displayName)}
                     >
                       {isBusy ? (
@@ -221,7 +271,7 @@ export default function ClientManage() {
                     size="sm"
                     variant="outline"
                     className="h-8 shrink-0 gap-1.5 border-amber-500/50 text-[12px] text-amber-600 hover:border-amber-500 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-                    disabled={isBusy || batching}
+                    disabled={isBusy || batching || preparing}
                     onClick={() => void onUpgradeOne(c.clientId, c.displayName)}
                   >
                     {isBusy ? (
@@ -263,6 +313,14 @@ export default function ClientManage() {
           );
         })}
       </div>
+
+      <ClientUpgradeConfirmDialog
+        open={pendingUpgrade !== null}
+        plans={pendingUpgrade?.plans ?? []}
+        displayName={displayNameOf}
+        onConfirm={() => void onConfirmUpgrade()}
+        onCancel={() => setPendingUpgrade(null)}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type {
   ClientConfigClientId,
   ClientConfigClientInfo,
   ClientConfigVersionInfo,
+  ClientConfigUpgradePlan,
   ClientConfigInstallReport,
   ClientConfigProfileDto,
   ClientConfigDiffFile,
@@ -37,6 +38,8 @@ interface ClientConfigState {
   init: () => Promise<void>
   /** 异步拉取版本/可升级信息（慢，独立于列表；失败静默）。 */
   loadVersions: () => Promise<void>
+  /** 升级前规划：锚定命令 + 是否需确认（≥2 处安装）+ 全部安装（供确认弹窗）。 */
+  planUpgrade: (clientId: ClientConfigClientId) => Promise<ClientConfigUpgradePlan>
   /** 一键升级某客户端（后台静默跑）；返回 {ok, detail} 供页面 toast。 */
   upgrade: (clientId: ClientConfigClientId) => Promise<{ ok: boolean; detail?: string }>
   /** 一键安装某客户端（未安装时，后台静默跑）；返回 {ok, detail} 供页面 toast。 */
@@ -132,6 +135,8 @@ export const useClientConfigStore = create<ClientConfigState>((set, get) => ({
       set({ versionsLoading: false })
     }
   },
+
+  planUpgrade: async (clientId) => bridge().clientConfig.planUpgrade(clientId),
 
   upgrade: async (clientId) => {
     set({ upgradingClient: clientId })

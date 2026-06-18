@@ -176,7 +176,13 @@
     "copyFailed": "Copy failed",
     "conflictTitle": "Multiple installations detected (update only affects the PATH-default one)",
     "pathDefault": "Default",
-    "notRunnable": "Not runnable"
+    "notRunnable": "Not runnable",
+    "cancel": "Cancel",
+    "upgradeConfirmTitle": "Confirm update target",
+    "upgradeConfirmHint": "Multiple installations detected. This update only affects the one your command line uses (marked Default), not all of them. Review below and confirm.",
+    "upgradeWillRun": "Will run:",
+    "upgradeConfirmBtn": "Confirm update",
+    "upgradeUnanchoredHint": "Can't determine which install your command line uses; will run the default update command (may install to the first npm on PATH)."
   },
   "copy": "Copy",
   "service": {

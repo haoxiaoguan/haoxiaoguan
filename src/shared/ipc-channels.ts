@@ -285,6 +285,7 @@ export const UPDATE_EVENTS = {
 export const CLIENT_CONFIG_CHANNELS = {
   clients: 'clientConfig:clients',
   versions: 'clientConfig:versions',
+  planUpgrade: 'clientConfig:planUpgrade',
   upgrade: 'clientConfig:upgrade',
   install: 'clientConfig:install',
   diagnose: 'clientConfig:diagnose',

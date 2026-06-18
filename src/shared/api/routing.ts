@@ -53,6 +53,17 @@ export interface ClientConfigInstallReport {
   /** ≥2 处且（版本分歧或运行态混合）。 */
   isConflict: boolean
 }
+/** 升级前规划：将执行的锚定命令 + 是否需确认（≥2 处安装）+ 全部安装（供确认弹窗）。 */
+export interface ClientConfigUpgradePlan {
+  clientId: ClientConfigClientId
+  /** 锚定后将执行的升级命令（仅展示；真正执行时后端重新生成）。 */
+  command: string
+  /** 是否成功锚定到具体安装（false=无法确定 PATH 默认那处，退回静态命令）。 */
+  anchored: boolean
+  /** 是否需要弹窗确认（≥2 处安装）。 */
+  needsConfirmation: boolean
+  installs: ClientConfigInstallation[]
+}
 export interface ClientConfigProfileDto {
   id: string
   clientId: ClientConfigClientId

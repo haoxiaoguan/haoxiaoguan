@@ -42,6 +42,22 @@ export interface ClientInstallationReport {
   isConflict: boolean
 }
 
+/**
+ * 升级前规划（对称移植 cc-switch probe_tool_installations 的升级确认路径）。
+ * 升级只作用于「命令行默认那处」；≥2 处安装时应弹窗让用户知情后再执行。
+ */
+export interface ClientUpgradePlan {
+  clientId: ClientId
+  /** 锚定后将执行的升级命令（仅展示；真正执行时后端重新生成，不信任前端回传）。 */
+  command: string
+  /** 是否成功锚定到具体安装。false=退回静态命令（无法确定 PATH 默认那处）。 */
+  anchored: boolean
+  /** 是否需要弹窗确认（≥2 处安装：升级只动一处，应让用户知情）。 */
+  needsConfirmation: boolean
+  /** 枚举到的所有安装（供确认弹窗展示哪处是默认 / 各处版本）。 */
+  installs: ClientInstallation[]
+}
+
 /** clientId → 实际 CLI 命令名（注意 gemini_cli 的命令是 `gemini`）。 */
 export const CLI_COMMAND: Record<ClientId, string> = {
   claude: 'claude',

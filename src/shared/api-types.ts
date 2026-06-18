@@ -106,6 +106,7 @@ import type {
   ClientConfigClientInfo,
   ClientConfigVersionInfo,
   ClientConfigUpgradeResult,
+  ClientConfigUpgradePlan,
   ClientConfigClientId,
   ClientConfigInstallReport,
   ClientConfigProfileDto,
@@ -455,6 +456,8 @@ export interface HxgApi {
     clients(): Promise<ClientConfigClientInfo[]>
     /** 各客户端 CLI 已装版本 + 最新版 + 可升级（慢，主进程 TTL 缓存）。 */
     versions(): Promise<ClientConfigVersionInfo[]>
+    /** 升级前规划：将执行的锚定命令 + 是否需确认（≥2 处安装）+ 全部安装（供确认弹窗）。 */
+    planUpgrade(clientId: ClientConfigClientId): Promise<ClientConfigUpgradePlan>
     /** 一键升级某客户端 CLI（后台静默跑），返回结果 + 升级后重探的版本信息。 */
     upgrade(clientId: ClientConfigClientId): Promise<ClientConfigUpgradeResult>
     /** 一键安装某客户端 CLI（未安装时，后台静默跑），返回结果 + 安装后重探的版本信息。 */

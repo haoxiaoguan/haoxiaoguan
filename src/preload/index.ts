@@ -320,6 +320,7 @@ const api: HxgApi = {
   clientConfig: {
     clients: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.clients),
     versions: () => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.versions),
+    planUpgrade: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.planUpgrade, clientId),
     upgrade: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.upgrade, clientId),
     install: (clientId) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.install, clientId),
     diagnose: (clientIds) => ipcRenderer.invoke(CLIENT_CONFIG_CHANNELS.diagnose, clientIds),

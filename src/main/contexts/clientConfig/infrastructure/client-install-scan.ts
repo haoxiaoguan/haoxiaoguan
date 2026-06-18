@@ -34,7 +34,7 @@ function lastLines(text: string, n: number): string {
 }
 
 /** 由路径前缀推断安装来源（顺序敏感：Homebrew 的 Cellar 真身先于通用规则）。 */
-function inferSource(path: string): string {
+export function inferInstallSource(path: string): string {
   const s = path.replace(/\\/g, '/').toLowerCase()
   if (s.includes('/.nvm/')) return 'nvm'
   if (s.includes('/homebrew/') || s.includes('/cellar/')) return 'homebrew'
@@ -106,12 +106,18 @@ async function probeAt(exe: string, dir: string): Promise<{ version?: string | u
   }
 }
 
-/** 枚举某客户端 CLI 的所有安装（去重软链；PATH 默认那处排最前）。 */
-export async function enumerateInstallations(clientId: ClientId): Promise<ClientInstallation[]> {
+/** 枚举结果（内部）：公开的 ClientInstallation + canonicalize 后的真身路径，供锚定升级用。 */
+export interface RawInstallation extends ClientInstallation {
+  /** canonicalize 后的真身路径（去软链）。锚定升级据此区分 brew formula / claude 原生安装器。 */
+  real: string
+}
+
+/** 枚举某客户端 CLI 的所有安装（含 real 真身路径；去重软链；PATH 默认那处排最前）。 */
+export async function enumerateInstallationsRaw(clientId: ClientId): Promise<RawInstallation[]> {
   const cmd = CLI_COMMAND[clientId]
   const [defaultReal, loginDirs] = await Promise.all([pathDefaultReal(cmd), loginShellPathDirs()])
   const seen = new Set<string>()
-  const installs: ClientInstallation[] = []
+  const installs: RawInstallation[] = []
 
   // 登录 shell PATH 目录在前（命令行实际命中范围），常见安装目录兜底；去重。
   const dirs = Array.from(new Set([...loginDirs, ...searchDirs(clientId)]))
@@ -127,13 +133,30 @@ export async function enumerateInstallations(clientId: ClientId): Promise<Client
       version,
       runnable,
       error,
-      source: inferSource(exe),
+      source: inferInstallSource(exe),
       isPathDefault: defaultReal !== undefined && defaultReal === real,
+      real,
     })
   }
 
   installs.sort((a, b) => Number(b.isPathDefault) - Number(a.isPathDefault))
   return installs
+}
+
+/** 枚举某客户端 CLI 的所有安装（去重软链；PATH 默认那处排最前）。 */
+export async function enumerateInstallations(clientId: ClientId): Promise<ClientInstallation[]> {
+  const raw = await enumerateInstallationsRaw(clientId)
+  // 剥掉内部 real 字段，保持 IPC 边界的 ClientInstallation 形态不变。
+  return raw.map(({ real: _real, ...rest }) => rest)
+}
+
+/**
+ * 取「命令行实际命中的那处」安装（升级锚定目标）：优先 PATH 默认那处；否则若仅一处取唯一那处；
+ * 多处且无默认标记 → undefined（无从锚定，调用方回退静态命令）。对称移植 cc-switch default_install。
+ */
+export async function findDefaultInstall(clientId: ClientId): Promise<RawInstallation | undefined> {
+  const installs = await enumerateInstallationsRaw(clientId)
+  return installs.find((i) => i.isPathDefault) ?? (installs.length === 1 ? installs[0] : undefined)
 }
 
 /** ≥2 处且（版本分歧或运行态混合）→ 判定冲突。 */

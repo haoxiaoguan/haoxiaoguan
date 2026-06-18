@@ -2,25 +2,19 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ClientId } from '../domain/client-profile'
 import { INSTALL_COMMAND } from '../domain/client-version'
+import { findDefaultInstall } from './client-install-scan'
+import { planUpgradeCommand, type UpgradeTarget } from './cli-upgrade-planner'
 
-// 客户端 CLI 一键安装/升级（对称移植 cc-switch run_tool_lifecycle_silently）：
+// 客户端 CLI 一键安装/升级（对称移植 cc-switch run_tool_lifecycle_silently + anchored upgrade）：
 // 经用户登录 shell 静默跑命令（与版本探测同一 PATH 解析路径，确保 npm/node 在 PATH），
-// 阻塞到命令结束，无可见终端。升级优先官方自更新子命令、`||` 回退 npm/pip 全局安装
-// （官方子命令能正确处理「非 npm 装」的情形，如 claude 的原生安装器）；安装用纯包管理器。
+// 阻塞到命令结束，无可见终端。
+// 升级：先定位 PATH 默认那处安装，按其「来源」生成锚定到该处的升级命令（绝对路径），
+//   写回命令行实际命中那处——避免「升级写入 A 处、PATH 用 B 处」导致的「升级了但版本没变」。
+//   定位不到则回退静态命令。安装：用纯包管理器命令（与「复制手动安装命令」同源）。
 // 失败回传 stderr/stdout 末尾若干行供 toast，绝不宽泛杀进程（只 spawn 我们起的子进程）。
 
 const execFileAsync = promisify(execFile)
 const LIFECYCLE_TIMEOUT_MS = 180_000 // 全局安装可能拉包数十秒~数分钟
-
-/** 各客户端升级 shell 命令（POSIX；官方 update 子命令 `||` 包管理器兜底）。 */
-const UPGRADE_SHELL_COMMAND: Record<ClientId, string> = {
-  claude: 'claude update || npm i -g @anthropic-ai/claude-code@latest',
-  codex: 'codex update || npm i -g @openai/codex@latest',
-  gemini_cli: 'npm i -g @google/gemini-cli@latest',
-  opencode: 'opencode upgrade || npm i -g opencode-ai@latest',
-  openclaw: 'openclaw update --yes || npm i -g openclaw@latest',
-  hermes: 'hermes update || pip install -U hermes-agent',
-}
 
 export interface UpgradeResult {
   ok: boolean
@@ -66,9 +60,16 @@ async function runShellLifecycle(command: string, action: '安装' | '升级'): 
   }
 }
 
-/** 升级某客户端 CLI。 */
+/** 升级某客户端 CLI（锚定到 PATH 默认那处安装的来源；定位不到回退静态命令）。 */
 export async function runUpgrade(clientId: ClientId): Promise<UpgradeResult> {
-  return runShellLifecycle(UPGRADE_SHELL_COMMAND[clientId], '升级')
+  if (process.platform === 'win32') {
+    return { ok: false, detail: 'Windows 暂不支持一键升级，请手动执行升级命令' }
+  }
+  const def = await findDefaultInstall(clientId)
+  const target: UpgradeTarget | undefined =
+    def === undefined ? undefined : { path: def.path, real: def.real, source: def.source, runnable: def.runnable }
+  const { command } = planUpgradeCommand(clientId, target)
+  return runShellLifecycle(command, '升级')
 }
 
 /** 安装某客户端 CLI（未安装时；纯包管理器，命令与「复制手动安装命令」同源）。 */

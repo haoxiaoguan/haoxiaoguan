@@ -26,6 +26,14 @@ export function registerClientConfigHandlers(
       throw new Error(toIpcError(e))
     }
   })
+  // 升级前规划：枚举所有安装 + 锚定升级命令 + 是否需确认（≥2 处）。只读，供 UI 升级前弹窗确认。
+  ipcMain.handle(CLIENT_CONFIG_CHANNELS.planUpgrade, async (_e, clientId: ClientId) => {
+    try {
+      return await versionSvc.planUpgrade(clientId)
+    } catch (e) {
+      throw new Error(toIpcError(e))
+    }
+  })
   // 一键升级：登录 shell 静默跑升级命令 + 升级后重新探测版本（返回结果 + 新版本信息）。
   ipcMain.handle(CLIENT_CONFIG_CHANNELS.upgrade, async (_e, clientId: ClientId) => {
     try {
