@@ -8,11 +8,13 @@ import {
   QUOTA_EVENTS,
   USAGE_EVENTS,
   UPDATE_EVENTS,
-  API_PROXY_EVENTS,
+  ROUTING_OBS_EVENTS,
   WINDOW_CHANNELS,
   WINDOW_EVENTS,
 } from '../shared/ipc-channels'
 import { isOfficialTokenizerAvailable } from './contexts/apiProxy/domain/usage/token-estimator'
+import { routingEventFromRecord } from './contexts/apiProxy/domain/observability/routing-event'
+import { RoutingEventBatcher } from './contexts/apiProxy/infrastructure/observability/routing-event-batcher'
 import { UpdaterService } from './contexts/updater/updater-service'
 import { registerUpdaterHandlers } from './contexts/updater/ipc/updater-handlers'
 
@@ -53,6 +55,9 @@ let usageSyncRunning = false
 // 15s 一次平衡「实时性」与「写放大」；退出前再 flush 一次避免丢最后一批。
 const ROUTING_LOG_FLUSH_INTERVAL_MS = 15 * 1000
 let routingLogFlushTimer: ReturnType<typeof setInterval> | null = null
+
+// 路由日志重构 observability v2：实时事件 200ms 合并推送器（统一实时出口 routingObs:event）。
+let routingEventBatcher: RoutingEventBatcher | null = null
 
 // Deep-link URL captured before the renderer/container is ready (macOS can emit
 // open-url before whenReady resolves). Flushed once the window exists.
@@ -303,9 +308,13 @@ if (!gotLock) {
     updater.setStatusListener((s) => mainWindow?.webContents.send(UPDATE_EVENTS.status, s))
     registerUpdaterHandlers(updater)
     // 反代请求日志（G3）→ 渲染层日志页（闭包惰性读 mainWindow，窗口存在时才推）。
-    services.apiProxyRequestLog.setListener((rec) =>
-      mainWindow?.webContents.send(API_PROXY_EVENTS.requestLog, rec),
+    // 统一实时出口：每条记录（已延迟到流末、带完整 token）喂 200ms 合并器 → routingObs:event。
+    routingEventBatcher = new RoutingEventBatcher((batch) =>
+      mainWindow?.webContents.send(ROUTING_OBS_EVENTS.event, batch),
     )
+    services.apiProxyRequestLog.setListener((rec) => {
+      routingEventBatcher?.push(routingEventFromRecord(rec))
+    })
     // 启动后延迟检查（仅用户启用时；autoDownload 会在发现新版后自动下载）。
     if (services.settings.getAutoUpdateEnabled()) {
       setTimeout(() => {
@@ -416,8 +425,8 @@ if (!gotLock) {
 
     // 路由日志定时落库（非阻塞；flush 内部有重入保护，空缓冲直接返回）。
     routingLogFlushTimer = setInterval(() => {
-      services?.routingLogService.flush().catch((e) => {
-        console.error('[routingLog] periodic flush failed:', e)
+      services?.routingObservabilityService.flush().catch((e) => {
+        console.error('[routingObs] periodic flush failed:', e)
       })
     }, ROUTING_LOG_FLUSH_INTERVAL_MS)
 
@@ -451,9 +460,13 @@ app.on('before-quit', () => {
     clearInterval(routingLogFlushTimer)
     routingLogFlushTimer = null
   }
+  if (routingEventBatcher) {
+    routingEventBatcher.dispose()
+    routingEventBatcher = null
+  }
   // 退出前最后落库一次（best-effort；异步不阻塞退出，最坏丢极少量未落库样本）。
-  services?.routingLogService.flush().catch((e) => {
-    console.error('[routingLog] flush on quit failed:', e)
+  services?.routingObservabilityService.flush().catch((e) => {
+    console.error('[routingObs] flush on quit failed:', e)
   })
   services?.tokenRefreshScheduler.stop()
   services?.platformQuotaScheduler.stop()

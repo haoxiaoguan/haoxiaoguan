@@ -8,12 +8,11 @@ import type { KiroAccountPort } from '../infrastructure/adapters/kiro/kiro-ports
 import { makeClearSuspensionHandler } from '../application/clear-suspension-handler'
 import { makeAccountPoolHealthHandler } from '../application/account-pool-health-handler'
 import type { ApiProxyKeyService } from '../application/api-proxy-key-service'
-import type { ProxyRequestLog } from '../domain/observability/proxy-request-log'
 import type { ComboService } from '../application/combo-service'
 import type { RouteComboInput } from '../infrastructure/route-combo.repository'
 import type { ProxyPoolService } from '../application/proxy-pool-service'
-import type { RoutingLogService } from '../application/routing-log-service'
-import type { RoutingWindow } from '../domain/observability/routing-log-record'
+import type { RoutingObservabilityService } from '../application/routing-observability-service'
+import type { RoutingWindow } from '../domain/observability/routing-query'
 
 // 注册 apiProxy 的 IPC handlers：start / stop / getStatus / clearAccountSuspension。
 // start/stop 均返回最新状态投影，方便 renderer 一次拿到结果免再查。
@@ -23,10 +22,9 @@ export function registerApiProxyHandlers(
   accounts?: KiroAccountPort,
   keyService?: ApiProxyKeyService,
   quotaResetMs?: number,
-  requestLog?: ProxyRequestLog,
   combos?: ComboService,
   pool?: ProxyPoolService,
-  routingLog?: RoutingLogService,
+  routingObs?: RoutingObservabilityService,
   refreshModels?: () => Promise<void>,
 ): void {
   ipcMain.handle(API_PROXY_CHANNELS.start, async (): Promise<ApiProxyStatus> => {
@@ -73,7 +71,7 @@ export function registerApiProxyHandlers(
       accounts,
       quotaResetMs: quotaResetMs ?? 3_600_000,
       ...(pool ? { pool } : {}),
-      ...(routingLog ? { routingLog } : {}),
+      ...(routingObs ? { routingObs } : {}),
     })
     ipcMain.handle(API_PROXY_CHANNELS.getAccountPoolHealth, async (_e, window?: RoutingWindow) => {
       try {
@@ -167,23 +165,6 @@ export function registerApiProxyHandlers(
     ipcMain.handle(API_PROXY_CHANNELS.deleteClientKey, async (_e, id: string) => {
       try {
         await keyService.delete(id)
-      } catch (e) {
-        throw new Error(toIpcError(e))
-      }
-    })
-  }
-
-  if (requestLog) {
-    ipcMain.handle(API_PROXY_CHANNELS.getRequestLog, async (_e, limit?: number) => {
-      try {
-        return requestLog.listRecent(limit)
-      } catch (e) {
-        throw new Error(toIpcError(e))
-      }
-    })
-    ipcMain.handle(API_PROXY_CHANNELS.clearRequestLog, async (): Promise<void> => {
-      try {
-        requestLog.clear()
       } catch (e) {
         throw new Error(toIpcError(e))
       }

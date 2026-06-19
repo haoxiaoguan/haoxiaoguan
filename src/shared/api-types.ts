@@ -84,18 +84,21 @@ import type {
   ApiProxyKeyMeta,
   ApiProxySelectionConfigDto,
   AccountPoolHealthRow,
-  ProxyRequestRecord,
   RouteComboDto,
   RouteComboInputDto,
-  RoutingWindowDto,
-  RoutingGranularityDto,
-  RoutingBreakdownDimDto,
-  RoutingSummaryDto,
-  RoutingTrendPointDto,
-  RoutingBreakdownRowDto,
-  RoutingErrorRowDto,
-  RoutingRecentFilterDto,
-  RoutingRecentRowDto,
+  RoutingObsWindowDto,
+  RoutingObsGranularityDto,
+  RoutingObsBreakdownDimDto,
+  RoutingObsSummaryDto,
+  RoutingObsTrendPointDto,
+  RoutingObsBreakdownRowDto,
+  RoutingObsErrorRowDto,
+  RoutingObsAccountStatDto,
+  RoutingObsSearchFilterDto,
+  RoutingObsCursorDto,
+  RoutingObsEventDto,
+  RoutingObsSearchPageDto,
+  RoutingObsLiveEventDto,
   AccountGroupDto,
   CreateAccountGroupRequest,
   UpdateAccountGroupRequest,
@@ -349,7 +352,7 @@ export interface HxgApi {
     /** 删除客户端 Key。 */
     deleteClientKey(id: string): Promise<void>
     /** 查询账号池运行态健康（合并持久化 meta + 内存运行态 + 入池标识 + 窗口内请求统计）。 */
-    getAccountPoolHealth(window?: RoutingWindowDto): Promise<AccountPoolHealthRow[]>
+    getAccountPoolHealth(window?: RoutingObsWindowDto): Promise<AccountPoolHealthRow[]>
     /** 设置账号是否在反代池内（加入/移出池标识）。 */
     setAccountPooled(accountId: string, pooled: boolean): Promise<void>
     /** 设置账号选号权重优先级（仅对在池账号生效）。 */
@@ -364,12 +367,6 @@ export interface HxgApi {
     getSelectionConfig(): Promise<ApiProxySelectionConfigDto>
     /** 保存反代池全局选号配置（持久化 + 运行时热更选号器）。 */
     setSelectionConfig(config: ApiProxySelectionConfigDto): Promise<void>
-    /** 拉取最近 N 条请求日志（G3）；省略 limit 返回环形缓冲全部。 */
-    getRequestLog(limit?: number): Promise<ProxyRequestRecord[]>
-    /** 清空请求日志环形缓冲（计数器保持单调，不影响 /metrics）。 */
-    clearRequestLog(): Promise<void>
-    /** 订阅请求日志推送（G3）。返回取消订阅函数。 */
-    onRequestLog(cb: (record: ProxyRequestRecord) => void): () => void
     /** 列出所有路由组合。 */
     listCombos(): Promise<RouteComboDto[]>
     /** 新建路由组合（名字非法/撞模型或组合/空步骤会 reject）。 */
@@ -383,26 +380,31 @@ export interface HxgApi {
     /** 手动刷新 kiro 模型快照（按「会员最高」可用账号重拉 ListAvailableModels 重建）。 */
     refreshModels(): Promise<void>
   }
-  /** 路由日志分析（持久化反代请求日志的多维聚合查询）。 */
-  routingLog: {
-    /** 窗口内汇总（请求/成功率/延迟 P95/Token/降级与组合占比）。 */
-    summary(window: RoutingWindowDto): Promise<RoutingSummaryDto>
-    /** 趋势序列：hour 走明细秒桶，day 走日桶 rollup。 */
+  /** 路由日志重构 observability v2：统一明细 routing_events 多维查询 + 实时事件。 */
+  routingObs: {
+    summary(window: RoutingObsWindowDto): Promise<RoutingObsSummaryDto>
     trend(
-      window: RoutingWindowDto,
-      granularity: RoutingGranularityDto,
-    ): Promise<RoutingTrendPointDto[]>
-    /** 维度下钻（平台/组合/模型/状态/账号）。 */
+      window: RoutingObsWindowDto,
+      granularity: RoutingObsGranularityDto,
+    ): Promise<RoutingObsTrendPointDto[]>
     breakdown(
-      window: RoutingWindowDto,
-      dimension: RoutingBreakdownDimDto,
-    ): Promise<RoutingBreakdownRowDto[]>
-    /** Top 错误（按脱敏消息归并）。 */
-    topErrors(window: RoutingWindowDto, limit?: number): Promise<RoutingErrorRowDto[]>
-    /** 最近请求明细（可按成功/失败/平台/组合过滤）。 */
-    recent(limit?: number, filter?: RoutingRecentFilterDto): Promise<RoutingRecentRowDto[]>
-    /** 清空持久化日志（明细 + 日桶）。 */
+      window: RoutingObsWindowDto,
+      dimension: RoutingObsBreakdownDimDto,
+    ): Promise<RoutingObsBreakdownRowDto[]>
+    topErrors(window: RoutingObsWindowDto, limit?: number): Promise<RoutingObsErrorRowDto[]>
+    accountStats(window: RoutingObsWindowDto): Promise<RoutingObsAccountStatDto[]>
+    /** 明细检索：窗口 + 全维度过滤 + 关键字 + keyset 分页。 */
+    search(
+      window: RoutingObsWindowDto,
+      filter?: RoutingObsSearchFilterDto,
+      cursor?: RoutingObsCursorDto,
+      limit?: number,
+    ): Promise<RoutingObsSearchPageDto>
+    /** 单条明细详情（按主键 id）。 */
+    detail(id: number): Promise<RoutingObsEventDto | undefined>
     clear(): Promise<void>
+    /** 订阅实时事件（200ms 合并的一批未落库记录）；返回取消订阅函数。 */
+    onEvent(callback: (batch: RoutingObsLiveEventDto[]) => void): () => void
   }
   accountGroup: {
     listGroups(): Promise<AccountGroupDto[]>

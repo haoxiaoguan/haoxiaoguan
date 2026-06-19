@@ -2,8 +2,8 @@ import type { AccountHealthTracker } from '../domain/account-selection/account-h
 import type { KiroAccountPort } from '../infrastructure/adapters/kiro/kiro-ports'
 import type { AccountPoolHealthRow } from '../../../../shared/api-types'
 import type { ProxyPoolService } from './proxy-pool-service'
-import type { RoutingLogService } from './routing-log-service'
-import type { RoutingWindow } from '../domain/observability/routing-log-record'
+import type { RoutingObservabilityService } from './routing-observability-service'
+import type { RoutingWindow } from '../domain/observability/routing-query'
 
 export type { AccountPoolHealthRow }
 
@@ -13,8 +13,8 @@ export interface PoolHealthDeps {
   quotaResetMs: number
   /** 池成员服务（判定 pooled 标识）。缺省视为全部未入池。 */
   pool?: ProxyPoolService
-  /** 路由日志服务（按账号聚合请求统计）。缺省视为统计全 0。 */
-  routingLog?: RoutingLogService
+  /** 路由观测服务 v2（按账号聚合请求统计）。缺省视为统计全 0。 */
+  routingObs?: RoutingObservabilityService
 }
 
 /**
@@ -22,11 +22,11 @@ export interface PoolHealthDeps {
  * 供 IPC 查询账号池健康（卡片/表格双视图）。window 缺省取「全部已保留」（0..now）。
  */
 export function makeAccountPoolHealthHandler(deps: PoolHealthDeps) {
-  const { health, accounts, quotaResetMs, pool, routingLog } = deps
+  const { health, accounts, quotaResetMs, pool, routingObs } = deps
   return async (window?: RoutingWindow): Promise<AccountPoolHealthRow[]> => {
     const win: RoutingWindow = window ?? { startSec: 0, endSec: Math.floor(Date.now() / 1000) }
     const list = await accounts.listByPlatform()
-    const stats = routingLog ? await routingLog.accountStats(win) : []
+    const stats = routingObs ? await routingObs.accountStats(win) : []
     const statById = new Map(stats.map((s) => [s.accountId, s]))
     return list.map((a) => {
       const snap = health.snapshot(a.id)

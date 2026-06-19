@@ -161,6 +161,17 @@ export function classifyToHttp(err: unknown, format: RequestFormat): ApiProxyHtt
       if (s === 400 || s === 422) return new ApiProxyHttpError(s, msg, format)
       return new ApiProxyHttpError(502, msg, format)
     }
+    case 'RelayHttpError': {
+      // relay（第三方中转）上游错误：保留原始 msg（含真实状态+上游响应体），
+      // 4xx 原状态透传（401/402/403/404/422/429…），5xx → 502 网关错误。
+      // 修掉「relay 错误全落 500 + 丢失上游真实状态/消息」——与透传路径的 classifyCodexNativeError 对齐。
+      const s = e.status
+      if (typeof s === 'number') {
+        if (s >= 400 && s < 500) return new ApiProxyHttpError(s, msg, format)
+        if (s >= 500) return new ApiProxyHttpError(502, msg, format)
+      }
+      return new ApiProxyHttpError(502, msg, format)
+    }
     default:
       return new ApiProxyHttpError(500, 'Internal server error', format)
   }
@@ -264,6 +275,95 @@ function captureUsage(
   if (usage.inputTokens !== undefined && usage.inputTokens > 0) obs.inputTokens = usage.inputTokens
   if (usage.cacheReadTokens !== undefined) obs.cacheReadTokens = usage.cacheReadTokens
   if (usage.cacheWriteTokens !== undefined) obs.cacheWriteTokens = usage.cacheWriteTokens
+}
+
+/**
+ * 旁路捕获流式 usage 事件回填观测对象（透传所有事件、不改变流内容）。
+ * 供 chat 类流式：配合「record 延迟到流末」，使记录时 obs 已带上游真实输出/缓存 token，
+ * 修掉「流构造后立即 record → 输出 token 恒为 0」的统计缺陷。
+ */
+async function* tapUsageEvents(
+  events: AsyncIterable<CanonicalStreamEvent>,
+  obs: RequestObservation,
+): AsyncIterable<CanonicalStreamEvent> {
+  for await (const ev of events) {
+    if (ev.type === 'usage') captureUsage(obs, ev.usage)
+    yield ev
+  }
+}
+
+/**
+ * 解析 responses 协议 usage 对象 → captureUsage 入参。
+ * responses 的 input_tokens 是「总输入（含命中缓存）」；统一拆成「非缓存新增 inputTokens + cacheRead」，
+ * 与 IR 路径口径一致。全 0 视为无有效 usage（返回 undefined）。
+ */
+export function responsesUsageToCapture(
+  usage: unknown,
+): { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | undefined {
+  if (usage === null || typeof usage !== 'object') return undefined
+  const u = usage as Record<string, unknown>
+  const input = Number(u.input_tokens ?? 0)
+  const output = Number(u.output_tokens ?? 0)
+  const details = u.input_tokens_details as Record<string, unknown> | undefined
+  const cachedRaw = Number(details?.cached_tokens ?? 0)
+  if (!Number.isFinite(input) || !Number.isFinite(output)) return undefined
+  if (input === 0 && output === 0) return undefined
+  const cached = Number.isFinite(cachedRaw) ? cachedRaw : 0
+  const out: { inputTokens: number; outputTokens: number; cacheReadTokens?: number } = {
+    inputTokens: Math.max(input - cached, 0),
+    outputTokens: output,
+  }
+  if (cached > 0) out.cacheReadTokens = cached
+  return out
+}
+
+/** 从一个 SSE 帧文本里提取 responses usage（usage 可能在 data.response.usage 或 data.usage）。 */
+export function extractUsageFromSseFrame(
+  frame: string,
+): { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | undefined {
+  for (const line of frame.split('\n')) {
+    const t = line.trimStart()
+    if (!t.startsWith('data:')) continue
+    const payload = t.slice(t.indexOf(':') + 1).trim()
+    if (payload === '' || payload === '[DONE]') continue
+    let obj: unknown
+    try {
+      obj = JSON.parse(payload)
+    } catch {
+      continue
+    }
+    const o = obj as Record<string, unknown>
+    const resp = o.response as Record<string, unknown> | undefined
+    const cap = responsesUsageToCapture(resp?.usage) ?? responsesUsageToCapture(o.usage)
+    if (cap) return cap
+  }
+  return undefined
+}
+
+/**
+ * 旁路透传 responses SSE：原样转发每个 chunk（不缓冲、不改写），同时按 \n\n 切帧解析
+ * response.completed 的 usage 回填 obs，使透传请求也能统计 token + 缓存。
+ */
+async function* tapResponsesPassthroughUsage(
+  frames: AsyncIterable<string>,
+  obs: RequestObservation,
+): AsyncIterable<string> {
+  let buffer = ''
+  for await (const chunk of frames) {
+    yield chunk
+    buffer += chunk
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      const cap = extractUsageFromSseFrame(frame)
+      if (cap) captureUsage(obs, cap)
+    }
+  }
+  if (buffer.length > 0) {
+    const cap = extractUsageFromSseFrame(buffer)
+    if (cap) captureUsage(obs, cap)
+  }
 }
 
 // apiProxy 上下文的 application 服务。包装 ApiHttpServer 提供 start/stop + 状态投影（M1），
@@ -405,15 +505,17 @@ export class ApiProxyService {
         ? await this.dispatchCombo(combo, input, obs)
         : await this.dispatch(input, obs)
       this.finalizeRouteObs(input, obs)
+      // 流式：token/usage 要等整段流传完才知道（chat 经 tapUsageEvents 旁路、responses 经
+      // onComplete 回填 obs）。故把记录延迟到流末——包装 frames，在其结束/中断时再 record；
+      // 否则会像旧实现那样在流构造后立即记录、输出 token 永远为 0。
+      if (result.kind === 'stream') {
+        return {
+          ...result,
+          frames: this.recordOnStreamEnd(result.frames, input, obs, result.status, t0),
+        }
+      }
       this.observability?.record(
-        this.buildRecord(
-          input,
-          obs,
-          result.status,
-          result.kind === 'stream',
-          this.clock() - t0,
-          true,
-        ),
+        this.buildRecord(input, obs, result.status, false, this.clock() - t0, true),
       )
       return result
     } catch (err) {
@@ -424,6 +526,33 @@ export class ApiProxyService {
         this.buildRecord(input, obs, status, false, this.clock() - t0, false, message),
       )
       throw err
+    }
+  }
+
+  /**
+   * 流式记录收尾：透传出站帧，在流自然结束或客户端中断（generator return → finally）时落一条
+   * 记录——此时 obs 已被 usage 旁路 / onComplete 回填，输出 token 与缓存可正确统计。
+   * 流中途出错则以 ok=false 记录（status 仍是开流时已发出的 200）。
+   */
+  private async *recordOnStreamEnd(
+    frames: AsyncIterable<string>,
+    input: HandleRequestInput,
+    obs: RequestObservation,
+    status: number,
+    t0: number,
+  ): AsyncGenerator<string> {
+    let ok = true
+    let errorMessage: string | undefined
+    try {
+      yield* frames
+    } catch (e) {
+      ok = false
+      errorMessage = e instanceof Error ? e.message : String(e)
+      throw e
+    } finally {
+      this.observability?.record(
+        this.buildRecord(input, obs, status, true, this.clock() - t0, ok, errorMessage),
+      )
     }
   }
 
@@ -563,7 +692,7 @@ export class ApiProxyService {
     if (intent.format === 'openai-responses') {
       // 原生（ChatGPT 登录账号）模型：HTTP 级原始透传到 ChatGPT 后端，不转 IR、不动 store。
       if (this.codexNative !== undefined && this.codexNative.isNativeModel(intent.model)) {
-        return this.proxyCodexNative(body, requestId, intent.stream, signal, input.headers)
+        return this.proxyCodexNative(body, requestId, intent.stream, obs, signal, input.headers)
       }
       // 第三方 responses 上游：HTTP 级透传到对应第三方端点（alias→real 映射 + Bearer 替换）。
       if (intent.model !== undefined) {
@@ -574,12 +703,14 @@ export class ApiProxyService {
               body,
               requestId,
               intent.stream,
+              obs,
               signal,
               input.headers,
             )
           }
         }
       }
+
       return this.handleResponses(
         intent,
         body,
@@ -625,7 +756,8 @@ export class ApiProxyService {
       } catch (e) {
         throw classifyToHttp(e, intent.format)
       }
-      const events = prependFirst(first, it)
+      // 旁路捕获 usage 回填 obs（配合流末 record 即可统计输出/缓存 token）。
+      const events = tapUsageEvents(prependFirst(first, it), obs)
       return this.serializeStreamLazy(intent, ir, events, requestId)
     }
     let resp
@@ -773,6 +905,7 @@ export class ApiProxyService {
     body: unknown,
     requestId: string,
     stream: boolean,
+    obs: RequestObservation,
     signal?: AbortSignal,
     headers?: Record<string, string>,
   ): Promise<HandleResult> {
@@ -783,6 +916,8 @@ export class ApiProxyService {
         'openai-responses',
       )
     }
+    // 平台归属：原生透传归一为 'codex-native'（否则裸 responses 请求 platform 为空、统计显示「—」）。
+    obs.finalPlatform = 'codex-native'
     try {
       const result = await this.codexNative.proxyResponses({
         body,
@@ -792,13 +927,17 @@ export class ApiProxyService {
         ...(headers ? { headers } : {}),
       })
       if (result.stream !== undefined) {
+        // 流式：旁路解析透传 SSE 的 usage 回填 obs（record 已延迟到流末，token 可统计）。
         return {
           kind: 'stream',
           status: result.status,
           contentType: 'text/event-stream',
-          frames: result.stream,
+          frames: tapResponsesPassthroughUsage(result.stream, obs),
         }
       }
+      // 非流式：从透传 JSON 的 usage 字段回填 obs。
+      const cap = responsesUsageToCapture((result.body as { usage?: unknown } | undefined)?.usage)
+      if (cap) captureUsage(obs, cap)
       return { kind: 'json', status: result.status, body: result.body }
     } catch (e) {
       throw classifyCodexNativeError(e)
@@ -815,9 +954,12 @@ export class ApiProxyService {
     body: unknown,
     requestId: string,
     stream: boolean,
+    obs: RequestObservation,
     signal?: AbortSignal,
     headers?: Record<string, string>,
   ): Promise<HandleResult> {
+    // 平台归属：用该透传上游的平台标识（否则统计显示「—」）。
+    obs.finalPlatform = pt.platform
     try {
       const result = await pt.proxyResponses({
         body,
@@ -827,13 +969,17 @@ export class ApiProxyService {
         ...(headers ? { headers } : {}),
       })
       if (result.stream !== undefined) {
+        // 流式：旁路解析透传 SSE 的 usage 回填 obs（record 已延迟到流末，token 可统计）。
         return {
           kind: 'stream',
           status: result.status,
           contentType: 'text/event-stream',
-          frames: result.stream,
+          frames: tapResponsesPassthroughUsage(result.stream, obs),
         }
       }
+      // 非流式：从透传 JSON 的 usage 字段回填 obs。
+      const cap = responsesUsageToCapture((result.body as { usage?: unknown } | undefined)?.usage)
+      if (cap) captureUsage(obs, cap)
       return { kind: 'json', status: result.status, body: result.body }
     } catch (e) {
       throw classifyCodexNativeError(e)

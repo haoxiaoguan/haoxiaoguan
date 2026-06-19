@@ -396,7 +396,11 @@
         "all": "All",
         "ok": "Success",
         "failed": "Failed"
-      }
+      },
+      "prevPage": "Prev",
+      "nextPage": "Next",
+      "pageInfo": "Page {{current}} / {{total}}",
+      "totalCount": "{{value}} total"
     }
   },
   "sessions": "Sessions",

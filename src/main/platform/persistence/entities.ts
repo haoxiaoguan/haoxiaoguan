@@ -53,8 +53,11 @@ import { AccountGroupProxyBindingEntity } from '../../contexts/accountGroup/infr
 import { ApiProxyKeyEntity } from '../../contexts/apiProxy/infrastructure/api-proxy-key.entity'
 import { RelayUpstreamEntity } from '../../contexts/apiProxy/infrastructure/relay/relay-upstream.entity'
 import { RouteComboEntity } from '../../contexts/apiProxy/infrastructure/route-combo.entity'
-import { RoutingRequestLogEntity } from '../../contexts/apiProxy/infrastructure/routing-log/routing-request-log.entity'
-import { RoutingDailyRollupEntity } from '../../contexts/apiProxy/infrastructure/routing-log/routing-daily-rollup.entity'
+import { RoutingEventEntity } from '../../contexts/apiProxy/infrastructure/observability/routing-event.entity'
+import { RoutingRollupDailyEntity } from '../../contexts/apiProxy/infrastructure/observability/routing-rollup-daily.entity'
+import { RoutingRollupModelDailyEntity } from '../../contexts/apiProxy/infrastructure/observability/routing-rollup-model-daily.entity'
+import { RoutingRollupAccountDailyEntity } from '../../contexts/apiProxy/infrastructure/observability/routing-rollup-account-daily.entity'
+import { RoutingRollupStatusDailyEntity } from '../../contexts/apiProxy/infrastructure/observability/routing-rollup-status-daily.entity'
 import { ProxyPoolMemberEntity } from '../../contexts/apiProxy/infrastructure/account-pool/proxy-pool-member.entity'
 
 import { ClientConfigProfileEntity } from '../../contexts/clientConfig/infrastructure/client-config-profile.entity'
@@ -97,9 +100,12 @@ export const ALL_ENTITIES: unknown[] = [
   ApiProxyKeyEntity,
   RelayUpstreamEntity,
   RouteComboEntity,
-  // api-proxy · routing-log analysis (2 tables: routing_request_logs, routing_daily_rollups)
-  RoutingRequestLogEntity,
-  RoutingDailyRollupEntity,
+  // api-proxy · routing-log observability v2 (5 tables: routing_events + 4 daily rollups)
+  RoutingEventEntity,
+  RoutingRollupDailyEntity,
+  RoutingRollupModelDailyEntity,
+  RoutingRollupAccountDailyEntity,
+  RoutingRollupStatusDailyEntity,
   // api-proxy · account pool membership (1 table: proxy_pool_members)
   ProxyPoolMemberEntity,
   // client-config context (1 table: client_config_profiles)

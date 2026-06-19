@@ -141,7 +141,7 @@ it('合并入池标识(pool.has) + 路由日志按账号统计', async () => {
     getConcurrency: (id: string) => (id === 'a1' ? 9 : 4),
     getRateLimitCooldownMs: (id: string) => (id === 'a1' ? 30000 : 0),
   } as any
-  const routingLog = {
+  const routingObs = {
     async accountStats() {
       return [
         {
@@ -165,7 +165,7 @@ it('合并入池标识(pool.has) + 路由日志按账号统计', async () => {
     accounts,
     quotaResetMs: 3_600_000,
     pool,
-    routingLog,
+    routingObs,
   })
   const rows = await handler({ startSec: 0, endSec: 1 })
   const a1 = rows.find((r) => r.accountId === 'a1')!

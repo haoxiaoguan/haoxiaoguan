@@ -222,8 +222,6 @@ export const API_PROXY_CHANNELS = {
   getPooledAccountIds: 'apiProxy:getPooledAccountIds',
   getSelectionConfig: 'apiProxy:getSelectionConfig',
   setSelectionConfig: 'apiProxy:setSelectionConfig',
-  getRequestLog: 'apiProxy:getRequestLog',
-  clearRequestLog: 'apiProxy:clearRequestLog',
   // 路由组合（命名的跨供应商降级链）CRUD + 可路由模型清单（组合步骤选择器用）。
   listCombos: 'apiProxy:listCombos',
   createCombo: 'apiProxy:createCombo',
@@ -234,19 +232,24 @@ export const API_PROXY_CHANNELS = {
   refreshModels: 'apiProxy:refreshModels',
 } as const
 
-// 主进程 → 渲染层推送：每条反代请求日志（G3 请求级可观测性）。
-export const API_PROXY_EVENTS = {
-  requestLog: 'apiProxy:requestLog',
+// 路由日志重构 observability v2（统一明细 routing_events + 4 日桶）。channel 取 "routingObs:<method>"。
+// 与旧 routingLog:* 并存（PR2b 接线，前端 PR4 切换，PR5 下线旧）。新增 search（keyset 分页 +
+// 全维度过滤 + 关键字，取代 recent）/ detail（单条）/ accountStats。
+export const ROUTING_OBS_CHANNELS = {
+  summary: 'routingObs:summary',
+  trend: 'routingObs:trend',
+  breakdown: 'routingObs:breakdown',
+  topErrors: 'routingObs:topErrors',
+  accountStats: 'routingObs:accountStats',
+  search: 'routingObs:search',
+  detail: 'routingObs:detail',
+  clear: 'routingObs:clear',
 } as const
 
-// 路由日志分析模块（routing-log）—— 持久化的反代请求日志聚合查询。channel 取 "routingLog:<method>"。
-export const ROUTING_LOG_CHANNELS = {
-  summary: 'routingLog:summary',
-  trend: 'routingLog:trend',
-  breakdown: 'routingLog:breakdown',
-  topErrors: 'routingLog:topErrors',
-  recent: 'routingLog:recent',
-  clear: 'routingLog:clear',
+// 主进程 → 渲染层推送：路由日志重构 observability v2 实时事件（200ms 合并的一批记录）。
+// 统一实时出口；前端 PR4 订阅做实时 tail。与旧 apiProxy:requestLog 并存（PR5 下线旧）。
+export const ROUTING_OBS_EVENTS = {
+  event: 'routingObs:event',
 } as const
 
 // 主进程 → 渲染层推送：修复会话进度（sessions:repairProgress）。

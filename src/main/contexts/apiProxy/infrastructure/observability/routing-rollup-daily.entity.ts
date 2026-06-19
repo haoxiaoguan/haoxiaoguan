@@ -1,13 +1,13 @@
 /**
- * MikroORM 实体：routing_daily_rollups（路由日志分析模块的日桶聚合）。
+ * MikroORM 实体：routing_rollup_daily（平台 / 组合日桶）。
  * 复合主键 (date, platform, comboName)；platform/comboName 用 '' 归一空值（主键不可 NULL）。
- * 由 RoutingLogService 在落库后按受影响日期增量重建（DELETE 那几天 + 从明细 GROUP BY 重插）。
+ * 由 RoutingObservabilityService 落库时按 batch 增量 UPSERT 累加（col = col + excluded.col）。
  * 保留期比明细更久，使天级趋势在明细被清理后仍可回看长期走势。
  */
 import { Entity, PrimaryKey, Property } from '@mikro-orm/core'
 
-@Entity({ tableName: 'routing_daily_rollups' })
-export class RoutingDailyRollupEntity {
+@Entity({ tableName: 'routing_rollup_daily' })
+export class RoutingRollupDailyEntity {
   /** YYYY-MM-DD（localtime）。 */
   @PrimaryKey({ type: 'text' })
   date!: string
@@ -31,11 +31,20 @@ export class RoutingDailyRollupEntity {
   @Property({ type: 'bigint', fieldName: 'sum_duration_ms' })
   sumDurationMs!: number
 
+  @Property({ type: 'bigint', fieldName: 'sum_ttfb_ms' })
+  sumTtfbMs!: number
+
   @Property({ type: 'bigint', fieldName: 'input_tokens' })
   inputTokens!: number
 
   @Property({ type: 'bigint', fieldName: 'output_tokens' })
   outputTokens!: number
+
+  @Property({ type: 'bigint', fieldName: 'cache_read_tokens' })
+  cacheReadTokens!: number
+
+  @Property({ type: 'bigint', fieldName: 'cache_write_tokens' })
+  cacheWriteTokens!: number
 
   @Property({ type: 'bigint', fieldName: 'updated_at' })
   updatedAt!: number

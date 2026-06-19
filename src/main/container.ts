@@ -127,8 +127,8 @@ import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/
 import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'
 import { ProxyRequestLog } from './contexts/apiProxy/domain/observability/proxy-request-log'
-import { MikroOrmRoutingLogRepository } from './contexts/apiProxy/infrastructure/routing-log/mikro-orm-routing-log.repository'
-import { RoutingLogService } from './contexts/apiProxy/application/routing-log-service'
+import { MikroOrmRoutingObservabilityRepository } from './contexts/apiProxy/infrastructure/observability/mikro-orm-routing-observability.repository'
+import { RoutingObservabilityService } from './contexts/apiProxy/application/routing-observability-service'
 import { ProxyPoolRepository } from './contexts/apiProxy/infrastructure/account-pool/proxy-pool.repository'
 import { ProxyPoolService } from './contexts/apiProxy/application/proxy-pool-service'
 import {
@@ -589,8 +589,14 @@ export async function buildContainer(): Promise<Container> {
   // webContents.send 推前端日志页（main.ts），并作为 /metrics（G10）的计数器源。
   const apiProxyRequestLog = new ProxyRequestLog({ capacity: 500 })
   // 路由日志分析（持久化）：仓储 + 应用服务。每条 G3 记录经 persistSink 入缓冲，由 main.ts 定时 flush 落库。
-  const routingLogService = new RoutingLogService(new MikroOrmRoutingLogRepository())
-  apiProxyRequestLog.setPersistSink((rec) => routingLogService.enqueue(rec))
+  // 路由日志重构（observability v2）：统一明细 routing_events + 4 张维度日桶（唯一历史/检索/聚合源）。
+  const routingObservabilityService = new RoutingObservabilityService(
+    new MikroOrmRoutingObservabilityRepository(),
+  )
+  // 每条 G3 记录经 persistSink 入观测缓冲，由 main.ts 定时 flush 落库（吞错不影响反代主流程）。
+  apiProxyRequestLog.setPersistSink((rec) => {
+    routingObservabilityService.enqueue(rec)
+  })
   // 模型别名解析器（kr→kiro / cx→codex-native / relay-<id> 平台名自身）。闭包到实时注册表，
   // relay 热重载后即时可用。service（组合每跳解析）与 hono（入站 model 前缀解析）共用一份。
   const apiProxyAliasResolver = makePlatformAliasResolver(
@@ -929,7 +935,7 @@ export async function buildContainer(): Promise<Container> {
     kiroModelCatalog,
     apiProxyKeyService,
     apiProxyRequestLog,
-    routingLogService,
+    routingObservabilityService,
     proxyPoolService,
     apiProxySelector,
     comboService,

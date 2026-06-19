@@ -16,8 +16,8 @@ import {
   SYNC_CHANNELS,
   PROXY_CHANNELS,
   API_PROXY_CHANNELS,
-  API_PROXY_EVENTS,
-  ROUTING_LOG_CHANNELS,
+  ROUTING_OBS_CHANNELS,
+  ROUTING_OBS_EVENTS,
   SESSIONS_CHANNELS,
   SESSIONS_EVENTS,
   ACTIVITY_CHANNELS,
@@ -30,7 +30,7 @@ import {
 import type {
   HxgApi,
   UpdateStatus,
-  ProxyRequestRecord,
+  RoutingObsLiveEventDto,
   CodexRepairProgressDto,
 } from '../shared/api-types'
 
@@ -231,13 +231,6 @@ const api: HxgApi = {
     getSelectionConfig: () => ipcRenderer.invoke(API_PROXY_CHANNELS.getSelectionConfig),
     setSelectionConfig: (config) =>
       ipcRenderer.invoke(API_PROXY_CHANNELS.setSelectionConfig, config),
-    getRequestLog: (limit?: number) => ipcRenderer.invoke(API_PROXY_CHANNELS.getRequestLog, limit),
-    clearRequestLog: () => ipcRenderer.invoke(API_PROXY_CHANNELS.clearRequestLog),
-    onRequestLog: (cb: (record: ProxyRequestRecord) => void) => {
-      const listener = (_e: unknown, record: ProxyRequestRecord) => cb(record)
-      ipcRenderer.on(API_PROXY_EVENTS.requestLog, listener)
-      return () => ipcRenderer.removeListener(API_PROXY_EVENTS.requestLog, listener)
-    },
     listCombos: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listCombos),
     createCombo: (input) => ipcRenderer.invoke(API_PROXY_CHANNELS.createCombo, input),
     updateCombo: (id, patch) => ipcRenderer.invoke(API_PROXY_CHANNELS.updateCombo, id, patch),
@@ -245,15 +238,23 @@ const api: HxgApi = {
     listRoutableModels: () => ipcRenderer.invoke(API_PROXY_CHANNELS.listRoutableModels),
     refreshModels: () => ipcRenderer.invoke(API_PROXY_CHANNELS.refreshModels),
   },
-  routingLog: {
-    summary: (window) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.summary, window),
+  routingObs: {
+    summary: (window) => ipcRenderer.invoke(ROUTING_OBS_CHANNELS.summary, window),
     trend: (window, granularity) =>
-      ipcRenderer.invoke(ROUTING_LOG_CHANNELS.trend, window, granularity),
+      ipcRenderer.invoke(ROUTING_OBS_CHANNELS.trend, window, granularity),
     breakdown: (window, dimension) =>
-      ipcRenderer.invoke(ROUTING_LOG_CHANNELS.breakdown, window, dimension),
-    topErrors: (window, limit) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.topErrors, window, limit),
-    recent: (limit, filter) => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.recent, limit, filter),
-    clear: () => ipcRenderer.invoke(ROUTING_LOG_CHANNELS.clear),
+      ipcRenderer.invoke(ROUTING_OBS_CHANNELS.breakdown, window, dimension),
+    topErrors: (window, limit) => ipcRenderer.invoke(ROUTING_OBS_CHANNELS.topErrors, window, limit),
+    accountStats: (window) => ipcRenderer.invoke(ROUTING_OBS_CHANNELS.accountStats, window),
+    search: (window, filter, cursor, limit) =>
+      ipcRenderer.invoke(ROUTING_OBS_CHANNELS.search, window, filter, cursor, limit),
+    detail: (id) => ipcRenderer.invoke(ROUTING_OBS_CHANNELS.detail, id),
+    clear: () => ipcRenderer.invoke(ROUTING_OBS_CHANNELS.clear),
+    onEvent: (cb: (batch: RoutingObsLiveEventDto[]) => void) => {
+      const listener = (_e: unknown, batch: RoutingObsLiveEventDto[]) => cb(batch)
+      ipcRenderer.on(ROUTING_OBS_EVENTS.event, listener)
+      return () => ipcRenderer.removeListener(ROUTING_OBS_EVENTS.event, listener)
+    },
   },
   accountGroup: {
     listGroups: () => ipcRenderer.invoke(ACCOUNT_GROUP_CHANNELS.listGroups),

@@ -136,120 +136,6 @@ export interface ClientConfigConnTest {
   message?: string
 }
 
-// 单条反代请求日志记录（G3）——与 main 的 ProxyRequestRecord 保持同形。
-export interface ProxyRequestRecord {
-  seq: number
-  tsMs: number
-  method: string
-  path: string
-  format: string
-  platform?: string
-  action: string
-  stream: boolean
-  status: number
-  ok: boolean
-  durationMs: number
-  attempts: number
-  accountId?: string
-  clientKeyId?: string
-  inputTokens?: number
-  outputTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-  errorMessage?: string
-  // ── 路由维度（路由日志分析模块）──
-  comboName?: string
-  requestedModel?: string
-  finalModel?: string
-  routeHops?: number
-  routePath?: string[]
-}
-
-// ── 路由日志分析 DTO（routing-log 模块；与 main domain 的 routing-log-record 同形）────────
-/** 查询窗口：epoch 秒闭区间。 */
-export interface RoutingWindowDto {
-  startSec: number
-  endSec: number
-}
-export type RoutingGranularityDto = 'hour' | 'day'
-export type RoutingBreakdownDimDto = 'platform' | 'combo' | 'model' | 'status' | 'account'
-export interface RoutingSummaryDto {
-  requests: number
-  success: number
-  failed: number
-  successRate: number
-  errorRate: number
-  avgDurationMs: number
-  p95DurationMs: number
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-  totalTokens: number
-  fallbackRequests: number
-  comboRequests: number
-  /** 峰值 RPM：窗口内单分钟最高请求数。 */
-  peakRpm: number
-}
-export interface RoutingTrendPointDto {
-  date: string
-  requests: number
-  success: number
-  failed: number
-  avgDurationMs: number
-  inputTokens: number
-  outputTokens: number
-}
-export interface RoutingBreakdownRowDto {
-  key: string
-  requests: number
-  success: number
-  failed: number
-  successRate: number
-  avgDurationMs: number
-  inputTokens: number
-  outputTokens: number
-  shareRatio: number
-}
-export interface RoutingErrorRowDto {
-  message: string
-  count: number
-  lastStatus: number
-  lastTsMs: number
-}
-export interface RoutingRecentFilterDto {
-  okOnly?: boolean
-  failedOnly?: boolean
-  platform?: string
-  comboName?: string
-}
-export interface RoutingRecentRowDto {
-  seq: number
-  tsMs: number
-  method: string
-  path: string
-  format: string
-  platform?: string
-  action: string
-  stream: boolean
-  status: number
-  ok: boolean
-  durationMs: number
-  attempts: number
-  accountId?: string
-  clientKeyId?: string
-  comboName?: string
-  requestedModel?: string
-  finalModel?: string
-  routeHops?: number
-  routePath?: string[]
-  inputTokens?: number
-  outputTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-  errorMessage?: string
-}
-
 // apiProxy 服务状态（与 main/contexts/apiProxy/application/api-proxy-service.ts
 // 的 ApiProxyStatus 保持同形：state + 可选 port）。
 export type ApiProxyState = 'stopped' | 'running' | 'failed'
@@ -477,3 +363,136 @@ export interface UpdateAccountGroupRequest {
   color?: string | null
   description?: string | null
 }
+
+// ── 路由日志重构 observability v2 DTO（与 main domain routing-query 同形；PR2b 接线，前端 PR4 启用）──
+export interface RoutingObsWindowDto {
+  startSec: number
+  endSec: number
+}
+export type RoutingObsGranularityDto = 'hour' | 'day'
+export type RoutingObsBreakdownDimDto =
+  | 'platform'
+  | 'combo'
+  | 'model'
+  | 'status'
+  | 'account'
+  | 'clientKey'
+export type RoutingObsStatusClassDto = '2xx' | '3xx' | '4xx' | '5xx' | 'other'
+export interface RoutingObsSummaryDto {
+  requests: number
+  success: number
+  failed: number
+  successRate: number
+  errorRate: number
+  avgDurationMs: number
+  p95DurationMs: number
+  /** 平均首字节延迟（仅统计有 ttfb 的请求）。 */
+  avgTtfbMs: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  fallbackRequests: number
+  comboRequests: number
+  peakRpm: number
+}
+export interface RoutingObsTrendPointDto {
+  date: string
+  requests: number
+  success: number
+  failed: number
+  avgDurationMs: number
+  inputTokens: number
+  outputTokens: number
+}
+export interface RoutingObsBreakdownRowDto {
+  key: string
+  requests: number
+  success: number
+  failed: number
+  successRate: number
+  avgDurationMs: number
+  inputTokens: number
+  outputTokens: number
+  shareRatio: number
+}
+export interface RoutingObsErrorRowDto {
+  errorKind: string
+  message: string
+  count: number
+  lastStatus: number
+  lastTsMs: number
+}
+export interface RoutingObsAccountStatDto {
+  accountId: string
+  requests: number
+  success: number
+  failed: number
+  rateLimited: number
+  avgDurationMs: number
+  peakRpm: number
+  inputTokens: number
+  outputTokens: number
+  cacheTokens: number
+  lastTsMs: number
+}
+export interface RoutingObsSearchFilterDto {
+  okOnly?: boolean
+  failedOnly?: boolean
+  platform?: string
+  comboName?: string
+  model?: string
+  accountId?: string
+  clientKeyId?: string
+  statusClass?: RoutingObsStatusClassDto
+  errorKind?: string
+  keyword?: string
+}
+export interface RoutingObsCursorDto {
+  tsMs: number
+  id: number
+}
+/** 明细行（含主键 id + 重构新增字段 ttfb/upstream/proxy/errorKind）。 */
+export interface RoutingObsEventDto {
+  id: number
+  seq: number
+  tsMs: number
+  method: string
+  path: string
+  format: string
+  platform?: string
+  action: string
+  stream: boolean
+  status: number
+  ok: boolean
+  errorKind: string
+  errorMessage?: string
+  durationMs: number
+  ttfbMs?: number
+  upstreamMs?: number
+  attempts: number
+  routeHops?: number
+  routePath?: string[]
+  comboName?: string
+  requestedModel?: string
+  finalModel?: string
+  accountId?: string
+  clientKeyId?: string
+  upstreamEndpoint?: string
+  proxyId?: string
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  reqBytes?: number
+  respBytes?: number
+  clientIp?: string
+  userAgent?: string
+}
+export interface RoutingObsSearchPageDto {
+  rows: RoutingObsEventDto[]
+  nextCursor?: RoutingObsCursorDto
+}
+/** 实时推送事件（尚未落库、无 db id；前端用 seq+tsMs 标识/去重）。 */
+export type RoutingObsLiveEventDto = Omit<RoutingObsEventDto, 'id'>

@@ -6,7 +6,7 @@ import type {
   AccountPoolHealthRow,
   RouteComboDto,
   RouteComboInputDto,
-  RoutingWindowDto,
+  RoutingObsWindowDto,
 } from '@shared/api-types'
 import { bridge } from '../services/bridge'
 
@@ -32,7 +32,7 @@ interface ApiProxyState {
   setKeyActive: (id: string, isActive: boolean) => Promise<void>
   deleteKey: (id: string) => Promise<void>
   clearNewPlaintext: () => void
-  fetchPoolHealth: (window?: RoutingWindowDto) => Promise<void>
+  fetchPoolHealth: (window?: RoutingObsWindowDto) => Promise<void>
   fetchPooledIds: () => Promise<void>
   setPooled: (accountId: string, pooled: boolean) => Promise<void>
   /** 设置账号选号优先级（乐观更新本地行；失败回滚）。 */
@@ -134,7 +134,7 @@ export const useApiProxyStore = create<ApiProxyState>((set, get) => ({
 
   clearNewPlaintext: () => set({ newPlaintext: null }),
 
-  fetchPoolHealth: async (window?: RoutingWindowDto) => {
+  fetchPoolHealth: async (window?: RoutingObsWindowDto) => {
     try {
       set({ poolHealth: await bridge().apiProxy.getAccountPoolHealth(window) })
     } catch (e) {
