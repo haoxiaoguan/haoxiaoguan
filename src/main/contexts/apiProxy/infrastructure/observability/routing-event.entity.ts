@@ -6,7 +6,7 @@
  * - stream/ok 以 0/1 存（SQLite 动态类型）；route_path 以 JSON 数组文本存。
  * - 相对旧 routing_request_logs 新增列（error_kind/ttfb_ms/upstream_ms/upstream_endpoint/
  *   proxy_id/req_bytes/resp_bytes/client_ip/user_agent）。error_kind 非空（'none' 表成功）；
- *   其余新列 nullable，过渡期可与旧表并行双写。
+ *   其余新列 nullable。
  * - 索引覆盖窗口过滤、下钻（platform/account/status）与 keyset 分页 (ts_ms,id)。
  */
 import { Entity, PrimaryKey, Property, Index } from '@mikro-orm/core'

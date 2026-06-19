@@ -1,8 +1,7 @@
-// 路由日志重构（observability v2）—— 统一的请求事件领域模型。
+// 路由日志（observability v2）—— 统一的请求事件领域模型。
 //
-// 取代 ProxyRequestRecord + RoutingRecentRow 的双份定义：record / 落库 / 查询投影共用一型。
-// 纯类型 + 纯函数，无 I/O。过渡期（PR1 双写）由 routingEventFromRecord() 从 G3 的
-// ProxyRequestRecord 映射而来；采集层接入后（PR2）新字段由来源直接产出。
+// 统一 record / 落库 / 查询投影一型。纯类型 + 纯函数，无 I/O。
+// 由 routingEventFromRecord() 从 G3 的 ProxyRequestRecord（内存环形缓冲模型）映射而来。
 
 import type { ProxyRequestRecord } from './proxy-request-log'
 
@@ -47,9 +46,9 @@ export interface RoutingEvent {
 
   // ── 时间线 ──
   durationMs: number
-  /** 流式首字节延迟（PR2 采集层接入；非流式/未采集为 undefined）。 */
+  /** 流式首字节延迟（采集层暂未产出；非流式/未采集为 undefined）。 */
   ttfbMs?: number
-  /** 选号完成 → 上游首字节耗时（PR2 采集层接入）。 */
+  /** 选号完成 → 上游首字节耗时（采集层暂未产出）。 */
   upstreamMs?: number
 
   // ── 路由维度 ──
@@ -64,9 +63,9 @@ export interface RoutingEvent {
   finalModel?: string
   accountId?: string
   clientKeyId?: string
-  /** 上游真实 host（脱敏；PR2 采集层接入）。 */
+  /** 上游真实 host（脱敏；采集层暂未产出）。 */
   upstreamEndpoint?: string
-  /** 出站代理 id（PR2 采集层接入）。 */
+  /** 出站代理 id（采集层暂未产出）。 */
   proxyId?: string
 
   // ── 用量 ──
@@ -77,7 +76,7 @@ export interface RoutingEvent {
   reqBytes?: number
   respBytes?: number
 
-  // ── 隐私（默认不采集，受设置开关；PR2+）──
+  // ── 隐私（默认不采集，受设置开关）──
   clientIp?: string
   userAgent?: string
 }
@@ -96,8 +95,7 @@ export function statusClassOf(status: number): StatusClass {
 
 /**
  * 从 HTTP 状态 + 错误消息推导错误分类。
- * 过渡期（PR1）用：采集层尚未直接产出 errorKind 前，从既有 status/ok/message 推导，
- * 使新表 error_kind 立即可用。采集层接入后（PR2）由来源精确覆盖 timeout/parse/canceled。
+ * 采集层未直接产出 errorKind，故从 status/ok/message 推导，使 error_kind 落库即可用。
  */
 export function classifyErrorKind(status: number, ok: boolean, message?: string): ErrorKind {
   if (ok) return 'none'
@@ -116,8 +114,8 @@ export function classifyErrorKind(status: number, ok: boolean, message?: string)
 }
 
 /**
- * 过渡期映射：把 G3 的 ProxyRequestRecord 投影为统一 RoutingEvent。
- * 新字段（ttfb/upstream/endpoint/proxy/bytes/ip/ua）缺省；errorKind 由 status/message 推导。
+ * 把 G3 的 ProxyRequestRecord 投影为统一 RoutingEvent（持久化/实时共用）。
+ * 采集层未产出的字段（ttfb/upstream/endpoint/proxy/bytes/ip/ua）缺省；errorKind 由 status/message 推导。
  * exactOptionalPropertyTypes 下用条件赋值，不写入 undefined。
  */
 export function routingEventFromRecord(rec: ProxyRequestRecord): RoutingEvent {

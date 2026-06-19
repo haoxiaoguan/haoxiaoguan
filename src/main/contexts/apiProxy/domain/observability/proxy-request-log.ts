@@ -82,7 +82,7 @@ export class ProxyRequestLog {
   // 单订阅推送（容器把它接到 webContents.send；无注解箭头初始化以避开 bytecode 限制——
   // 这里是 null 字面量初始化，安全）。
   private listener: ((r: ProxyRequestRecord) => void) | null = null
-  // 持久化 sink（容器把它接到 RoutingLogService.enqueue；与 listener 独立，
+  // 持久化 sink（容器把它接到 RoutingObservabilityService.enqueue；与 listener 独立，
   // 一条记录同时推 UI（listener）+ 落库（persistSink），互不影响、各自吞错）。
   private persistSink: ((r: ProxyRequestRecord) => void) | null = null
   // 计数器（单调）。
@@ -161,7 +161,7 @@ export class ProxyRequestLog {
     this.listener = fn
   }
 
-  /** 设置/清除持久化 sink（null 取消）。容器注入后每条记录入 RoutingLogService 缓冲。 */
+  /** 设置/清除持久化 sink（null 取消）。容器注入后每条记录入 RoutingObservabilityService 缓冲。 */
   setPersistSink(fn: ((r: ProxyRequestRecord) => void) | null): void {
     this.persistSink = fn
   }

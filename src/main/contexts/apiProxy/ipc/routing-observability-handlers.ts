@@ -1,6 +1,5 @@
-// 路由日志重构（observability v2）IPC handlers。channel 名见 ROUTING_OBS_CHANNELS。
+// 路由日志（observability v2）IPC handlers。channel 名见 ROUTING_OBS_CHANNELS。
 // 全部委托 RoutingObservabilityService（其内部读前会先 flush 缓冲，保证拿到最新）。
-// 与旧 routing-log-handlers 并存（PR2b）；前端 PR4 切换、PR5 下线旧。
 import { ipcMain } from 'electron'
 import { toIpcError } from '../../../ipc/error'
 import { ROUTING_OBS_CHANNELS } from '../../../../shared/ipc-channels'

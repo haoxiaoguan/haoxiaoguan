@@ -364,7 +364,7 @@ export interface UpdateAccountGroupRequest {
   description?: string | null
 }
 
-// ── 路由日志重构 observability v2 DTO（与 main domain routing-query 同形；PR2b 接线，前端 PR4 启用）──
+// ── 路由日志 observability v2 DTO（与 main domain routing-query 同形）──
 export interface RoutingObsWindowDto {
   startSec: number
   endSec: number

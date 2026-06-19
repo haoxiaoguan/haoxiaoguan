@@ -10,7 +10,7 @@
  * 一致性：明细 INSERT 与日桶 UPSERT 在同一事务，失败整体 ROLLBACK（由上层丢批，不毒化重试），
  * 不会出现「明细写了、日桶没加」的偏差。
  *
- * 全部用原生 SQLite SQL（与 usage / 旧 routing-log 同口径）。查询在 PR2 接入。
+ * 全部用原生 SQLite SQL（与 usage 同口径）。读取查询见同类的 summary/trend/breakdown/search 等方法。
  */
 import type { EntityManager } from '@mikro-orm/better-sqlite'
 import { getEm as defaultGetEm } from '../../../../platform/persistence/database'

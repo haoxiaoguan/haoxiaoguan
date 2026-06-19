@@ -1,9 +1,7 @@
-// 路由日志重构（observability v2）· 应用服务（写入侧）。
+// 路由日志（observability v2）· 应用服务（写入侧）。
 //
-// 过渡期（PR1 双写）：与现有 RoutingLogService 并行存在。ProxyRequestLog.persistSink 同时喂
-// 本服务的 enqueue() 与旧 RoutingLogService.enqueue()，两套独立缓冲/落库，互不影响：
-//   - 旧表（routing_request_logs / routing_daily_rollups）继续给现有页面查询；
-//   - 新表（routing_events + 4 日桶）静默积累，供 PR2 查询切换后使用。
+// 持久化唯一源：ProxyRequestLog.persistSink → 本服务 enqueue()，落库到 routing_events + 4 张维度
+// 日桶（唯一历史/检索/聚合源）。
 //
 // 写路径：enqueue（同步入缓冲，映射为 RoutingEvent）→ flush（批量 ingestBatch 单事务落库）。
 // flush 由 main.ts 定时 ~15s 调一次 + 退出前调一次。落库失败丢该批（不重入队、不毒化）。
@@ -68,17 +66,9 @@ export class RoutingObservabilityService {
     this.clock = opts.clock ?? Date.now
   }
 
-  /** 入队一条 G3 记录（同步、非阻塞，过渡期映射为 RoutingEvent）。超 cap 丢最旧。 */
+  /** 入队一条 G3 记录（同步、非阻塞，映射为 RoutingEvent）。超 cap 丢最旧。 */
   enqueue(rec: ProxyRequestRecord): void {
     this.buffer.push(routingEventFromRecord(rec))
-    if (this.buffer.length > this.bufferCap) {
-      this.buffer.splice(0, this.buffer.length - this.bufferCap)
-    }
-  }
-
-  /** 直接入队一个已构造的 RoutingEvent（PR2 采集层接入后用）。超 cap 丢最旧。 */
-  enqueueEvent(ev: RoutingEvent): void {
-    this.buffer.push(ev)
     if (this.buffer.length > this.bufferCap) {
       this.buffer.splice(0, this.buffer.length - this.bufferCap)
     }

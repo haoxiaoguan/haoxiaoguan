@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | Draft v1 |
+| 状态 | 已落地（observability v2，随 0.3.0 发布；旧 routing-log 三出口已统一并下线） |
 | 日期 | 2026-06-18 |
 | 模块 | `apiProxy` · 路由日志分析（routing-log / observability） |
 | 范围 | 全维度（检索 / 实时 / 可观测 / 长期维度 / 性能 / 导出 / UI） |

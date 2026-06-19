@@ -169,10 +169,9 @@ describe('Accounts empty state layout', () => {
     const headerActions = screen.getByTestId('accounts-header-actions');
     const pageShell = screen.getByTestId('accounts-page-shell');
     const platformScroll = screen.getByTestId('accounts-platform-scroll');
-    const dataScroll = screen.getByTestId('accounts-data-scroll');
     const platformNav = screen.getByRole('navigation', { name: '账号平台' });
     const accountSearch = screen.getByTestId('accounts-search');
-    const tagFilter = screen.getByTestId('accounts-tag-filter');
+    const planFilter = screen.getByTestId('accounts-plan-filter');
     const statusFilter = screen.getByTestId('accounts-status-filter');
     const quotaFilter = screen.getByTestId('accounts-quota-filter');
     const sortFilter = screen.getByTestId('accounts-sort-filter');
@@ -180,13 +179,12 @@ describe('Accounts empty state layout', () => {
 
     expect(pageShell).toHaveClass('overflow-hidden', 'w-full', 'min-w-0');
     expect(platformScroll).toHaveClass('min-h-0', 'flex-1');
-    expect(dataScroll).toHaveClass('min-h-0', 'min-w-0', 'flex-1');
     expect(toolbar).toHaveClass('min-w-0', '2xl:flex-nowrap');
     expect(platformNav).toHaveTextContent('cursor');
     expect(platformNav).not.toHaveTextContent('filter.allPlatforms');
     expect(accountSearch.compareDocumentPosition(statusFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(statusFilter.compareDocumentPosition(tagFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(tagFilter.compareDocumentPosition(quotaFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(statusFilter.compareDocumentPosition(planFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(planFilter.compareDocumentPosition(quotaFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(quotaFilter.compareDocumentPosition(sortFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(viewToggle.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(toolbar).not.toContainElement(viewToggle);
@@ -195,7 +193,7 @@ describe('Accounts empty state layout', () => {
     expect(accountSearch).toHaveClass('min-w-[180px]', 'flex-1');
     expect(accountSearch.querySelector('input')).toHaveClass('h-8');
     expect(statusFilter).toHaveClass('h-8');
-    expect(tagFilter).toHaveClass('h-8');
+    expect(planFilter).toHaveClass('h-8');
     expect(quotaFilter).toHaveClass('h-8');
     expect(sortFilter).toHaveClass('h-8');
     expect(viewToggle).toHaveClass('h-8');
@@ -289,9 +287,11 @@ describe('Accounts empty state layout', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /cursor/i }));
+    const dataScroll = screen.getByTestId('accounts-data-scroll');
     const cardGrid = screen.getByRole('button', { name: /Cursor Pro/ }).parentElement;
     const cardRegion = cardGrid?.parentElement;
 
+    expect(dataScroll).toHaveClass('min-h-0', 'min-w-0', 'flex-1');
     expect(cardRegion).toHaveClass('accounts-card-region');
     expect(cardGrid).toHaveClass('accounts-card-grid');
     expect(cardGrid?.style.gridTemplateColumns).toBe('');
