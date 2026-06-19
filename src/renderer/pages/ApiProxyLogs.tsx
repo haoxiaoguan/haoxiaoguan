@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ResponsiveContainer,
@@ -84,6 +84,12 @@ type RecentFilterMode = (typeof RECENT_FILTERS)[number]
 
 /** 最近请求列表每页条数。 */
 const PAGE_SIZE = 10
+
+/**
+ * 实时模式下统计重拉的节流间隔（ms）。实时事件只把明细注入 tail，KPI/趋势/下钻需另行重拉才能
+ * 跟上（否则「统计与日志不同步」）。高 QPS 下按此间隔最多重拉一次，避免刷爆查询。
+ */
+const LIVE_AGG_REFRESH_MS = 2500
 
 /** 维度下钻的 key → 检索过滤字段映射（点下钻行注入过滤）。 */
 function filterFromBreakdown(
@@ -299,11 +305,38 @@ export default function ApiProxyLogs() {
     setPageIndex((p) => (p > maxPage ? maxPage : p))
   }, [rows.length])
 
-  // 实时模式：订阅 onEvent 把新批次注入列表头部。
+  // 实时重拉用：始终读到最新的 range/dimension（订阅只随 live 重建，避免高频 resub）。
+  const rangeRef = useRef(range)
+  const dimensionRef = useRef(dimension)
+  useEffect(() => {
+    rangeRef.current = range
+  }, [range])
+  useEffect(() => {
+    dimensionRef.current = dimension
+  }, [dimension])
+
+  // 实时模式：订阅 onEvent。明细 tail 立即注入（pushLive），并节流重拉概览/下钻，让 KPI/趋势/下钻
+  // 跟随 DB（修「实时模式下统计与日志不同步」：旧实现只更新 tail，统计停在上次拉取的旧值）。
   useEffect(() => {
     if (!live) return
-    const unsub = bridge().routingObs.onEvent((batch) => pushLive(batch))
-    return unsub
+    let aggTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleAggRefresh = () => {
+      if (aggTimer !== null) return // 节流：窗口内合并，最多每 LIVE_AGG_REFRESH_MS 重拉一次
+      aggTimer = setTimeout(() => {
+        aggTimer = null
+        const w = toWindow(rangeRef.current)
+        void fetchOverview(w, granularityFor(rangeRef.current))
+        void fetchBreakdown(w, dimensionRef.current)
+      }, LIVE_AGG_REFRESH_MS)
+    }
+    const unsub = bridge().routingObs.onEvent((batch) => {
+      pushLive(batch)
+      scheduleAggRefresh()
+    })
+    return () => {
+      if (aggTimer !== null) clearTimeout(aggTimer)
+      unsub()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
 
