@@ -23,6 +23,7 @@ import type {
   RoutingWindow,
 } from '../domain/observability/routing-query'
 import type { MikroOrmRoutingObservabilityRepository } from '../infrastructure/observability/mikro-orm-routing-observability.repository'
+import type { UsageEventIngestService } from '../../analytics/application/usage-event-ingest-service'
 
 export interface RoutingObservabilityServiceOpts {
   /** 明细保留天数（默认 90）。 */
@@ -50,6 +51,7 @@ export class RoutingObservabilityService {
   private readonly rollupRetentionDays: number
   private readonly bufferCap: number
   private readonly clock: () => number
+  private readonly ingestService: UsageEventIngestService | undefined
 
   private buffer: RoutingEvent[] = []
   private flushing = false
@@ -58,12 +60,14 @@ export class RoutingObservabilityService {
   constructor(
     repo: MikroOrmRoutingObservabilityRepository,
     opts: RoutingObservabilityServiceOpts = {},
+    ingestService?: UsageEventIngestService,
   ) {
     this.repo = repo
     this.detailRetentionDays = Math.max(1, opts.detailRetentionDays ?? 90)
     this.rollupRetentionDays = Math.max(1, opts.rollupRetentionDays ?? 400)
     this.bufferCap = Math.max(100, opts.bufferCap ?? 5000)
     this.clock = opts.clock ?? Date.now
+    this.ingestService = ingestService
   }
 
   /** 入队一条 G3 记录（同步、非阻塞，映射为 RoutingEvent）。超 cap 丢最旧。 */
@@ -71,6 +75,12 @@ export class RoutingObservabilityService {
     this.buffer.push(routingEventFromRecord(rec))
     if (this.buffer.length > this.bufferCap) {
       this.buffer.splice(0, this.buffer.length - this.bufferCap)
+    }
+    // 追加写入 analytics usage_events（吞错，不阻断主流程）
+    if (this.ingestService) {
+      this.ingestService.ingestProxyEvent(rec, rec.userAgent ?? '').catch(() => {
+        // 吞错：analytics 写入失败不影响路由日志主流程
+      })
     }
   }
 

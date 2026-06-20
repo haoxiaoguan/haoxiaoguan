@@ -50,6 +50,8 @@ export interface ProxyRequestRecord {
   /** 组合降级链尝试的跳数（直连=1；组合按实际尝试到第几跳）。 */
   routeHops?: number
   /** 依次尝试的跳模型（保序；直连=[finalModel]；用于「降级链路径」展示）。 */
+  /** 入站 User-Agent（analytics agent 识别用；匿名回环为 undefined）。 */
+  userAgent?: string
   routePath?: string[]
 }
 
