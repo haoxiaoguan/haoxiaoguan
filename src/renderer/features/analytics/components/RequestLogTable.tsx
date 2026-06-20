@@ -2,10 +2,17 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ColumnDef } from '@tanstack/react-table'
 import { DataTable } from '@/components/ui/data-table'
-import { DataWallCard } from '@/features/dashboard/datawall/DataWallCard'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useUsageEvents } from '../hooks/useUsageEvents'
+import { useModelBreakdown } from '../hooks/useModelBreakdown'
 import { formatTokens, formatCost } from '../utils/format'
 import { RequestDetailDialog } from './RequestDetailDialog'
 import type { AnalyticsWindowDto, UsageEventSearchFilterDto, UsageEventRowDto } from '@shared/api-types'
@@ -19,11 +26,32 @@ export function RequestLogTable({ window, agentId }: RequestLogTableProps) {
   const { t } = useTranslation('analytics')
   const [cursor, setCursor] = useState<{ occurredAt: number; id: number } | undefined>(undefined)
   const [selectedRow, setSelectedRow] = useState<UsageEventRowDto | null>(null)
+  const [modelFilter, setModelFilter] = useState<string>('all')
 
-  const filter: UsageEventSearchFilterDto = useMemo(() => (agentId ? { agentId } : {}), [agentId])
+  // 从模型统计拿可选模型列表（与当前 agent 筛选联动）
+  const { data: modelRows } = useModelBreakdown(window, agentId)
+  const modelOptions = useMemo(() => {
+    const models = (modelRows ?? []).map((r) => r.model).filter((m) => m && m !== '—')
+    return [...new Set(models)].sort()
+  }, [modelRows])
+
+  const filter: UsageEventSearchFilterDto = useMemo(
+    () => ({
+      ...(agentId ? { agentId } : {}),
+      ...(modelFilter !== 'all' ? { model: modelFilter } : {}),
+    }),
+    [agentId, modelFilter],
+  )
   const { data, loading } = useUsageEvents(window, filter, cursor, 20)
   const rows = data?.rows ?? []
   const nextCursor = data?.nextCursor
+
+  // filter 变化时重置分页游标
+  const filterKey = `${agentId ?? 'all'}:${modelFilter}`
+  const lastFilterKey = useMemo(() => filterKey, [filterKey])
+  if (cursor && lastFilterKey !== filterKey) {
+    setCursor(undefined)
+  }
 
   const columns = useMemo<ColumnDef<UsageEventRowDto>[]>(
     () => [
@@ -75,11 +103,41 @@ export function RequestLogTable({ window, agentId }: RequestLogTableProps) {
   )
 
   return (
-    <DataWallCard
-      title={t('requestLog.title')}
-      className="h-full"
-      headerRight={
-        <div className="flex items-center gap-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* 筛选栏 */}
+      <div className="flex items-center gap-2">
+        <Select value={modelFilter} onValueChange={setModelFilter}>
+          <SelectTrigger className="h-8 w-[180px] rounded-[8px] bg-card text-[12px]">
+            <SelectValue placeholder={t('requestLog.modelFilter')} />
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value="all">{t('requestLog.allModels')}</SelectItem>
+            {modelOptions.map((m) => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* 表格占满剩余空间 */}
+      <div className="min-h-0 flex-1">
+        {loading && !data ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t('loading', { ns: 'common' })}</div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={rows}
+            getRowId={(r) => String(r.id)}
+            className="h-full"
+            rowProps={(row) => ({ className: 'cursor-pointer hover:bg-muted/50', onDoubleClick: () => setSelectedRow(row.original) })}
+            emptyState={<span className="text-sm text-muted-foreground">{t('noData')}</span>}
+          />
+        )}
+      </div>
+
+      {/* 分页 */}
+      {rows.length > 0 && (
+        <div className="flex items-center justify-end gap-1 py-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!cursor || loading} onClick={() => setCursor(undefined)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -87,20 +145,9 @@ export function RequestLogTable({ window, agentId }: RequestLogTableProps) {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-      }
-    >
-      {loading && !data ? (
-        <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">{t('loading', { ns: 'common' })}</div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={rows}
-          getRowId={(r) => String(r.id)}
-          rowProps={(row) => ({ className: 'cursor-pointer hover:bg-muted/50', onDoubleClick: () => setSelectedRow(row.original) })}
-          emptyState={<span className="text-sm text-muted-foreground">{t('noData')}</span>}
-        />
       )}
+
       {selectedRow && <RequestDetailDialog row={selectedRow} onClose={() => setSelectedRow(null)} />}
-    </DataWallCard>
+    </div>
   )
 }

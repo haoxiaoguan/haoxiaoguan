@@ -65,7 +65,9 @@
     "source": "Source",
     "tokens": "Tokens",
     "cost": "Cost",
-    "status": "Status"
+    "status": "Status",
+    "modelFilter": "Filter model",
+    "allModels": "All models"
   },
   "requestDetail": {
     "title": "Request Detail",

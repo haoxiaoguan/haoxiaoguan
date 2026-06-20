@@ -77,6 +77,7 @@ export function PricingConfigPanel() {
 
   return (
     <DataWallCard
+      className="h-full"
       title={t('pricing.title')}
       headerRight={
         <Button variant="outline" size="sm" onClick={() => setIsAdding(true)}>
@@ -86,12 +87,13 @@ export function PricingConfigPanel() {
       }
     >
       {loading && !pricing ? (
-        <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">{t('loading', { ns: 'common' })}</div>
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t('loading', { ns: 'common' })}</div>
       ) : (
         <DataTable
           columns={columns}
           data={rows}
           getRowId={(r) => r.modelId}
+          className="h-full"
           emptyState={<span className="text-sm text-muted-foreground">{t('noData')}</span>}
         />
       )}

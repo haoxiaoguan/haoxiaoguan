@@ -65,7 +65,9 @@
     "source": "来源",
     "tokens": "Token",
     "cost": "花费",
-    "status": "状态"
+    "status": "状态",
+    "modelFilter": "筛选模型",
+    "allModels": "全部模型"
   },
   "requestDetail": {
     "title": "请求详情",
