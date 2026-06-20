@@ -421,8 +421,15 @@ if (!gotLock) {
 
     // 路由日志定时落库（非阻塞；flush 内部有重入保护，空缓冲直接返回）。
     routingLogFlushTimer = setInterval(() => {
-      services?.routingObservabilityService.flush().catch((e) => {
+      services?.analyticsIngest?.flush().catch((e) => {
+    console.error('[analytics] exit flush failed:', e)
+  })
+  services?.routingObservabilityService.flush().catch((e) => {
         console.error('[routingObs] periodic flush failed:', e)
+      })
+      // analytics 用量事件定时批量写入（缓冲→DB，避免每条请求同步写阻塞主线程）
+      services?.analyticsIngest?.flush().catch((e) => {
+        console.error('[analytics] periodic flush failed:', e)
       })
     }, ROUTING_LOG_FLUSH_INTERVAL_MS)
 

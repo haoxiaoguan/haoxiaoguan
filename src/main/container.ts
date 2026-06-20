@@ -951,6 +951,7 @@ export async function buildContainer(): Promise<Container> {
     usageSync,
     analyticsQuery,
     analyticsPricing,
+    analyticsIngest,
     localBackup,
     mcp,
     sync,

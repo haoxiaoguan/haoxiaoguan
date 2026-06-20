@@ -11,12 +11,12 @@
  * 索引覆盖：窗口过滤 (occurred_at)、agent 维度下钻 (agent_id, occurred_at)、
  * 去重查询 (dedup_id)、模型维度聚合 (model, occurred_at)。
  */
-import { Entity, PrimaryKey, Property, Index } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Index, Unique } from '@mikro-orm/core'
 
 @Entity({ tableName: 'usage_events' })
 @Index({ properties: ['occurredAt'] })
 @Index({ properties: ['agentId', 'occurredAt'] })
-@Index({ properties: ['dedupId'] })
+@Unique({ properties: ['dedupId'] })
 @Index({ properties: ['model', 'occurredAt'] })
 export class UsageEventEntity {
   @PrimaryKey({ type: 'integer', autoincrement: true })

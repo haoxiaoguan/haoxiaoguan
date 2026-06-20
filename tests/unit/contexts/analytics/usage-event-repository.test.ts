@@ -33,34 +33,13 @@ function makeProxyEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
   }
 }
 
-function makeSessionEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
-  return {
-    dedupId: 'session:msg_001',
-    source: 'session',
-    agentId: 'claude',
-    model: 'claude-sonnet-4-20250514',
-    inputTokens: 1000,
-    outputTokens: 500,
-    cacheReadTokens: 200,
-    cacheCreationTokens: 100,
-    inputCostUsd: 0.003,
-    outputCostUsd: 0.0075,
-    cacheReadCostUsd: 0.00006,
-    cacheCreationCostUsd: 0.000375,
-    totalCostUsd: 0.010935,
-    occurredAt: 1700000000,
-    createdAt: 1700000200,
-    ...overrides,
-  }
-}
-
 describe('MikroOrmUsageEventRepository', () => {
   it('insertProxyEvent 后 search 能查到', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hxg-repo-'))
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
-    await repo.insertProxyEvent(makeProxyEvent())
+    await repo.batchInsertEvents([makeProxyEvent()])
     const page = await repo.search(
       { startSec: 1699999000, endSec: 1700001000 },
       {},
@@ -72,50 +51,33 @@ describe('MikroOrmUsageEventRepository', () => {
     expect(page.rows[0].model).toBe('claude-sonnet-4-20250514')
   })
 
-  it('session 事件与已有 proxy 事件 dedup_id 相同 → 跳过', async () => {
+  it('相同 dedup_id 的 INSERT OR IGNORE 跳过', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hxg-repo-dedup1-'))
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
-    // proxy 事件用 dedupId = 'session:msg_001'（模拟代理已记录了同 message_id）
-    await repo.insertProxyEvent(makeProxyEvent({ dedupId: 'session:msg_001', source: 'proxy' }))
-    const inserted = await repo.insertSessionEvents([makeSessionEvent({ dedupId: 'session:msg_001' })])
-    expect(inserted).toBe(0)
+    // 第一次写入
+    await repo.batchInsertEvents([makeProxyEvent({ dedupId: 'dup-001' })])
+    // 第二次写入相同 dedupId → INSERT OR IGNORE 跳过
+    await repo.batchInsertEvents([makeProxyEvent({ dedupId: 'dup-001', agentId: 'codex' })])
 
     const page = await repo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
-    expect(page.rows).toHaveLength(1) // 仍是 proxy 那条
+    expect(page.rows).toHaveLength(1) // 只有第一条
+    expect(page.rows[0].agentId).toBe('claude') // 第一次的
   })
 
-  it('session 事件指纹匹配 proxy 事件 → 跳过', async () => {
+  it('不同 dedup_id 都写入', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hxg-repo-dedup2-'))
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
-    // proxy 事件 dedupId 不同，但 token + model + 时间窗口匹配
-    await repo.insertProxyEvent(
-      makeProxyEvent({ dedupId: 'proxy-uuid-abc', source: 'proxy', occurredAt: 1700000000 }),
-    )
-    // session 事件 dedupId 不同（session:msg_002），但指纹匹配
-    const inserted = await repo.insertSessionEvents([
-      makeSessionEvent({ dedupId: 'session:msg_002', occurredAt: 1700000100 }),
+    await repo.batchInsertEvents([
+      makeProxyEvent({ dedupId: 'proxy-1' }),
+      makeProxyEvent({ dedupId: 'session-1', source: 'session' }),
     ])
-    expect(inserted).toBe(0)
 
     const page = await repo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
-    expect(page.rows).toHaveLength(1)
-  })
-
-  it('session 事件无匹配 → 插入', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hxg-repo-dedup3-'))
-    await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
-    const repo = new MikroOrmUsageEventRepository(() => getEm())
-
-    const inserted = await repo.insertSessionEvents([makeSessionEvent()])
-    expect(inserted).toBe(1)
-
-    const page = await repo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
-    expect(page.rows).toHaveLength(1)
-    expect(page.rows[0].source).toBe('session')
+    expect(page.rows).toHaveLength(2)
   })
 
   it('summary 聚合数值正确', async () => {
@@ -123,10 +85,10 @@ describe('MikroOrmUsageEventRepository', () => {
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
-    await repo.insertProxyEvent(makeProxyEvent({ inputTokens: 1000, outputTokens: 500, totalCostUsd: 0.01 }))
-    await repo.insertProxyEvent(
+    await repo.batchInsertEvents([
+      makeProxyEvent({ inputTokens: 1000, outputTokens: 500, totalCostUsd: 0.01 }),
       makeProxyEvent({ dedupId: 'proxy-2', inputTokens: 200, outputTokens: 100, totalCostUsd: 0.005 }),
-    )
+    ])
 
     const s = await repo.summary({ startSec: 0, endSec: 2000000000 })
     expect(s.requests).toBe(2)
@@ -140,10 +102,10 @@ describe('MikroOrmUsageEventRepository', () => {
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
-    await repo.insertProxyEvent(makeProxyEvent({ model: 'claude-sonnet-4-20250514' }))
-    await repo.insertProxyEvent(
+    await repo.batchInsertEvents([
+      makeProxyEvent({ model: 'claude-sonnet-4-20250514' }),
       makeProxyEvent({ dedupId: 'p2', model: 'gpt-5-codex', inputTokens: 500, outputTokens: 200 }),
-    )
+    ])
 
     const rows = await repo.modelBreakdown({ startSec: 0, endSec: 2000000000 })
     expect(rows).toHaveLength(2)
@@ -157,8 +119,10 @@ describe('MikroOrmUsageEventRepository', () => {
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
-    await repo.insertProxyEvent(makeProxyEvent({ agentId: 'claude' }))
-    await repo.insertProxyEvent(makeProxyEvent({ dedupId: 'p2', agentId: 'codex' }))
+    await repo.batchInsertEvents([
+      makeProxyEvent({ agentId: 'claude' }),
+      makeProxyEvent({ dedupId: 'p2', agentId: 'codex' }),
+    ])
 
     const rows = await repo.agentBreakdown({ startSec: 0, endSec: 2000000000 })
     expect(rows).toHaveLength(2)
@@ -170,11 +134,11 @@ describe('MikroOrmUsageEventRepository', () => {
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
+    const batch = []
     for (let i = 0; i < 5; i++) {
-      await repo.insertProxyEvent(
-        makeProxyEvent({ dedupId: `p-${i}`, occurredAt: 1700000000 + i }),
-      )
+      batch.push(makeProxyEvent({ dedupId: `p-${i}`, occurredAt: 1700000000 + i }))
     }
+    await repo.batchInsertEvents(batch)
 
     const page1 = await repo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 2)
     expect(page1.rows).toHaveLength(2)

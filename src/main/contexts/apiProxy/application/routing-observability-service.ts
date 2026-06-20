@@ -76,11 +76,9 @@ export class RoutingObservabilityService {
     if (this.buffer.length > this.bufferCap) {
       this.buffer.splice(0, this.buffer.length - this.bufferCap)
     }
-    // 追加写入 analytics usage_events（吞错，不阻断主流程）
+    // 追加写入 analytics 缓冲（同步入内存，不阻塞；定时 flush 批量写 DB）
     if (this.ingestService) {
-      this.ingestService.ingestProxyEvent(rec, rec.userAgent ?? '').catch(() => {
-        // 吞错：analytics 写入失败不影响路由日志主流程
-      })
+      this.ingestService.ingestProxyEvent(rec, rec.userAgent ?? '')
     }
   }
 

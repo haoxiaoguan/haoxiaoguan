@@ -19,6 +19,7 @@ import { registerSkillHandlers } from '../contexts/skill/ipc/skill-handlers'
 
 import type { UsageSyncService } from '../contexts/usage/application/usage-sync-service'
 import type { UsageEventQueryService } from '../contexts/analytics/application/usage-event-query-service'
+import type { UsageEventIngestService } from '../contexts/analytics/application/usage-event-ingest-service'
 import type { PricingService } from '../contexts/analytics/application/pricing-service'
 import { registerAnalyticsHandlers } from '../contexts/analytics/ipc/analytics-handlers'
 
@@ -103,6 +104,7 @@ export interface Services {
   usageSync: UsageSyncService
   analyticsQuery: UsageEventQueryService
   analyticsPricing: PricingService
+  analyticsIngest: UsageEventIngestService
 
   // localBackup context
   localBackup: LocalBackupApplicationService

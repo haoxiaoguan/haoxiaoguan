@@ -37,106 +37,49 @@ export class MikroOrmUsageEventRepository {
     this.getEm = getEmFn ?? defaultGetEm
   }
 
-  /** 代理源写入：直接 INSERT（第一手数据，不去重）。 */
-  async insertProxyEvent(event: UsageEvent): Promise<void> {
-    const conn = this.getEm().getConnection()
-    await conn.execute(
-      `INSERT INTO usage_events (
-        dedup_id, source, agent_id, model, requested_model,
-        input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
-        status, duration_ms, ttfb_ms, error_kind,
-        account_id, client_key_id, combo_name, session_id,
-        occurred_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        event.dedupId,
-        event.source,
-        event.agentId,
-        event.model ?? null,
-        event.requestedModel ?? null,
-        event.inputTokens,
-        event.outputTokens,
-        event.cacheReadTokens,
-        event.cacheCreationTokens,
-        event.inputCostUsd,
-        event.outputCostUsd,
-        event.cacheReadCostUsd,
-        event.cacheCreationCostUsd,
-        event.totalCostUsd,
-        event.status ?? null,
-        event.durationMs ?? null,
-        event.ttfbMs ?? null,
-        event.errorKind ?? null,
-        event.accountId ?? null,
-        event.clientKeyId ?? null,
-        event.comboName ?? null,
-        event.sessionId ?? null,
-        event.occurredAt,
-        event.createdAt,
-      ],
-    )
-  }
-
-  /**
-   * session 源去重查询：同 agent_id 下是否存在
-   *   (a) dedup_id 精确匹配，或
-   *   (b) 指纹匹配（同 model + token 四项一致 + occurred_at ±300s）的 source='proxy' 记录。
-   */
-  async findDuplicateForSession(
-    agentId: string,
-    dedupId: string,
-    model: string | undefined,
-    tokenSums: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number },
-    occurredAt: number,
-  ): Promise<boolean> {
-    const conn = this.getEm().getConnection()
-    const window = 300 // ±5min
-    const row = (await conn.execute(
-      `SELECT 1 FROM usage_events WHERE agent_id = ? AND (
-        dedup_id = ?
-        OR (source = 'proxy' AND model IS ? AND input_tokens = ? AND output_tokens = ? AND cache_read_tokens = ? AND cache_creation_tokens = ?
-            AND occurred_at BETWEEN ? AND ?)
-      ) LIMIT 1`,
-      [
-        agentId,
-        dedupId,
-        model ?? null,
-        tokenSums.inputTokens,
-        tokenSums.outputTokens,
-        tokenSums.cacheReadTokens,
-        tokenSums.cacheCreationTokens,
-        occurredAt - window,
-        occurredAt + window,
-      ],
-      'get',
-    )) as { '1': number } | undefined
-    return row !== undefined
-  }
-
-  /** session 源批量写入：逐条去重后插入，返回实际插入数。 */
-  async insertSessionEvents(events: UsageEvent[]): Promise<number> {
+  /** 批量写入（INSERT OR IGNORE，dedup_id 唯一约束保证去重）。单事务。 */
+  async batchInsertEvents(events: UsageEvent[]): Promise<number> {
     if (events.length === 0) return 0
     const conn = this.getEm().getConnection()
+    const CHUNK = 200
     let inserted = 0
 
-    for (const event of events) {
-      const isDup = await this.findDuplicateForSession(
-        event.agentId,
-        event.dedupId,
-        event.model,
-        {
-          inputTokens: event.inputTokens,
-          outputTokens: event.outputTokens,
-          cacheReadTokens: event.cacheReadTokens,
-          cacheCreationTokens: event.cacheCreationTokens,
-        },
-        event.occurredAt,
-      )
-      if (isDup) continue
-
-      await this.insertProxyEvent(event)
-      inserted++
+    for (let i = 0; i < events.length; i += CHUNK) {
+      const chunk = events.slice(i, i + CHUNK)
+      const placeholders: string[] = []
+      const values: unknown[] = []
+      for (const e of chunk) {
+        placeholders.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        values.push(
+          e.dedupId, e.source, e.agentId, e.model ?? null, e.requestedModel ?? null,
+          e.inputTokens, e.outputTokens, e.cacheReadTokens, e.cacheCreationTokens,
+          e.inputCostUsd, e.outputCostUsd, e.cacheReadCostUsd, e.cacheCreationCostUsd, e.totalCostUsd,
+          e.status ?? null, e.durationMs ?? null, e.ttfbMs ?? null, e.errorKind ?? null,
+          e.accountId ?? null, e.clientKeyId ?? null, e.comboName ?? null, e.sessionId ?? null,
+          e.occurredAt, e.createdAt,
+        )
+      }
+      await conn.execute('BEGIN')
+      try {
+        const sql = `INSERT OR IGNORE INTO usage_events (
+          dedup_id, source, agent_id, model, requested_model,
+          input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+          input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
+          status, duration_ms, ttfb_ms, error_kind,
+          account_id, client_key_id, combo_name, session_id,
+          occurred_at, created_at
+        ) VALUES ${placeholders.join(', ')}`
+        await conn.execute(sql, values)
+        // 统计实际插入数（changes 减去被忽略的）
+        const changesRow = (await conn.execute('SELECT changes() AS n', [], 'get')) as { n: number }
+        inserted += Number(changesRow.n)
+        await conn.execute('COMMIT')
+      } catch (err) {
+        await conn.execute('ROLLBACK')
+        throw err
+      }
+      // 让出事件循环，避免长时间阻塞
+      await new Promise((resolve) => setImmediate(resolve))
     }
     return inserted
   }

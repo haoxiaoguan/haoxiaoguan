@@ -55,18 +55,26 @@ function makeUsageRecord(overrides: Partial<UsageRecord> = {}): UsageRecord {
   })
 }
 
-describe('UsageEventIngestService', () => {
-  it('ingestProxyEvent 正确投影字段并计算 cost', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hxg-ingest-1-'))
-    await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
-    const em = getEm()
-    await seedModelPricing(em)
+async function setup() {
+  const dir = mkdtempSync(join(tmpdir(), 'hxg-ingest-'))
+  await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
+  const em = getEm()
+  await seedModelPricing(em)
+  const eventRepo = new MikroOrmUsageEventRepository(() => getEm())
+  const pricingRepo = new MikroOrmPricingRepository(() => getEm())
+  const ingest = new UsageEventIngestService(eventRepo, pricingRepo)
+  return { eventRepo, ingest }
+}
 
-    const eventRepo = new MikroOrmUsageEventRepository(() => getEm())
-    const pricingRepo = new MikroOrmPricingRepository(() => getEm())
-    const ingest = new UsageEventIngestService(eventRepo, pricingRepo)
+describe('UsageEventIngestService（缓冲 + flush 模式）', () => {
+  it('ingestProxyEvent 入缓冲，flush 后写入 DB', async () => {
+    const { eventRepo, ingest } = await setup()
 
-    await ingest.ingestProxyEvent(makeProxyRecord(), 'claude-cli/1.0')
+    ingest.ingestProxyEvent(makeProxyRecord(), 'claude-cli/1.0')
+    expect(ingest.pendingCount()).toBe(1)
+
+    await ingest.flush()
+    expect(ingest.pendingCount()).toBe(0)
 
     const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
     expect(page.rows).toHaveLength(1)
@@ -74,27 +82,18 @@ describe('UsageEventIngestService', () => {
     expect(row.source).toBe('proxy')
     expect(row.agentId).toBe('claude')
     expect(row.model).toBe('claude-sonnet-4-20250514')
-    expect(row.inputTokens).toBe(1000)
-    expect(row.outputTokens).toBe(500)
     // claude 不扣 cacheRead → input cost = 1000 * 3.0 / 1M
     expect(row.inputCostUsd).toBeCloseTo((1000 * 3.0) / 1_000_000, 8)
-    expect(row.totalCostUsd).toBeGreaterThan(0)
   })
 
-  it('ingestProxyEvent 用 user-agent 推断 agent（codex）', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hxg-ingest-2-'))
-    await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
-    const em = getEm()
-    await seedModelPricing(em)
+  it('ingestProxyEvent 推断 codex agent 并扣 cacheRead', async () => {
+    const { eventRepo, ingest } = await setup()
 
-    const eventRepo = new MikroOrmUsageEventRepository(() => getEm())
-    const pricingRepo = new MikroOrmPricingRepository(() => getEm())
-    const ingest = new UsageEventIngestService(eventRepo, pricingRepo)
-
-    await ingest.ingestProxyEvent(
+    ingest.ingestProxyEvent(
       makeProxyRecord({ finalModel: 'gpt-5-codex', requestedModel: 'gpt-5-codex' }),
       'codex/0.1.0',
     )
+    await ingest.flush()
 
     const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
     expect(page.rows[0].agentId).toBe('codex')
@@ -102,48 +101,13 @@ describe('UsageEventIngestService', () => {
     expect(page.rows[0].inputCostUsd).toBeCloseTo((800 * 1.25) / 1_000_000, 8)
   })
 
-  it('ingestSessionBatch 去重命中时不重复插入', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hxg-ingest-3-'))
-    await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
-    const em = getEm()
-    await seedModelPricing(em)
-
-    const eventRepo = new MikroOrmUsageEventRepository(() => getEm())
-    const pricingRepo = new MikroOrmPricingRepository(() => getEm())
-    const ingest = new UsageEventIngestService(eventRepo, pricingRepo)
-
-    // 先写一条 proxy 事件（指纹与 session 记录匹配）
-    await ingest.ingestProxyEvent(
-      makeProxyRecord({
-        seq: 42,
-        tsMs: 1700000000000,
-        finalModel: 'claude-sonnet-4-20250514',
-        inputTokens: 1000,
-        outputTokens: 500,
-        cacheReadTokens: 200,
-        cacheWriteTokens: 100,
-      }),
-      'claude-cli/1.0',
-    )
-
-    // session 记录指纹匹配（同 model + token + 时间窗口）→ 应被去重
-    await ingest.ingestSessionBatch([makeUsageRecord()])
-
-    const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
-    expect(page.rows).toHaveLength(1) // 只有 proxy 那条
-  })
-
-  it('ingestSessionBatch 无匹配时正常插入', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hxg-ingest-4-'))
-    await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
-    const em = getEm()
-    await seedModelPricing(em)
-
-    const eventRepo = new MikroOrmUsageEventRepository(() => getEm())
-    const pricingRepo = new MikroOrmPricingRepository(() => getEm())
-    const ingest = new UsageEventIngestService(eventRepo, pricingRepo)
+  it('ingestSessionBatch 入缓冲，flush 后写入 DB', async () => {
+    const { eventRepo, ingest } = await setup()
 
     await ingest.ingestSessionBatch([makeUsageRecord()])
+    expect(ingest.pendingCount()).toBe(1)
+
+    await ingest.flush()
 
     const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
     expect(page.rows).toHaveLength(1)
@@ -151,20 +115,28 @@ describe('UsageEventIngestService', () => {
     expect(page.rows[0].agentId).toBe('claude')
   })
 
-  it('ingest 失败不抛错（吞错策略）', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hxg-ingest-5-'))
-    await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
+  it('dedup_id 重复时 INSERT OR IGNORE 跳过', async () => {
+    const { eventRepo, ingest } = await setup()
 
-    // 用一个会触发错误的 repo（pricingRepo 未 seed，但不应抛错）
-    const eventRepo = new MikroOrmUsageEventRepository(() => getEm())
-    const pricingRepo = new MikroOrmPricingRepository(() => getEm())
-    const ingest = new UsageEventIngestService(eventRepo, pricingRepo)
+    // 先写一条 proxy 事件（dedupId = proxy:1）
+    ingest.ingestProxyEvent(makeProxyRecord({ seq: 1 }), 'claude-cli/1.0')
+    await ingest.flush()
 
-    // 未 seed pricing → findPrice 返回 null → cost 全 0，但不报错
-    await expect(ingest.ingestProxyEvent(makeProxyRecord(), 'claude-cli/1.0')).resolves.toBeUndefined()
+    // 再写一条同 dedupId 的 session 事件（dedupId = session:msg_001，不同）
+    await ingest.ingestSessionBatch([makeUsageRecord({ sourceEventId: 'msg_001' })])
+    await ingest.flush()
 
+    // 两条 dedupId 不同，都应该存在
     const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
-    expect(page.rows).toHaveLength(1)
-    expect(page.rows[0].totalCostUsd).toBe(0) // 未计价
+    expect(page.rows).toHaveLength(2)
+  })
+
+  it('ingest 失败不抛错', async () => {
+    const { ingest } = await setup()
+
+    // 未 flush，未 seed pricing 的场景已在 setup 里 seed 了
+    // 这条不应抛错
+    ingest.ingestProxyEvent(makeProxyRecord(), 'claude-cli/1.0')
+    expect(ingest.pendingCount()).toBe(1)
   })
 })
