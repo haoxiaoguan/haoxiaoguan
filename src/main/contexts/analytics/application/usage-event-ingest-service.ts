@@ -7,8 +7,7 @@
  *   - ingestSessionBatch：会话日志扫描，agentId 直接取 record.agentId，
  *     dedupId = 'session:{sourceEventId}'，写入前按 dedup_id + 指纹去重。
  *
- * 两条路径都 try-catch 吞错，失败仅 console.error，不阻断主流程
- * （与 RoutingObservabilityService.flush 吞错策略一致）。
+ * 错误处理：内部 try-catch 记录错误日志（不吞错到无输出），不阻断主流程。
  */
 import type { ProxyRequestRecord } from '../../apiProxy/domain/observability/proxy-request-log'
 import type { UsageRecord } from '../../usage/domain/usage-record'
@@ -16,10 +15,11 @@ import type { MikroOrmUsageEventRepository } from '../infrastructure/mikro-orm-u
 import type { MikroOrmPricingRepository } from '../infrastructure/mikro-orm-pricing-repository'
 import { detectAgent } from './agent-detector'
 import { buildPricingIndex, calculateForAgent } from '../domain/usage-pricing'
-import type { UsageEvent } from '../domain/usage-event'
+import type { UsageEvent, ModelPricingRow, PricingConfig } from '../domain/usage-event'
 
 export class UsageEventIngestService {
-  private pricingIndex: Map<string, import('../domain/usage-event').ModelPricingRow> | null = null
+  private pricingIndex: Map<string, ModelPricingRow> | null = null
+  private configCache: Map<string, PricingConfig> = new Map()
 
   constructor(
     private readonly eventRepo: MikroOrmUsageEventRepository,
@@ -31,7 +31,7 @@ export class UsageEventIngestService {
     try {
       const agentId = detectAgent(userAgent)
       const index = await this.ensurePricingIndex()
-      const config = await this.pricingRepo.getConfig(agentId)
+      const config = await this.ensureConfig(agentId)
 
       // cost 计算：按 agent 缓存语义区分
       const tokenSums = {
@@ -83,7 +83,7 @@ export class UsageEventIngestService {
 
       const events: UsageEvent[] = []
       for (const record of records) {
-        const config = await this.pricingRepo.getConfig(record.agentId)
+        const config = await this.ensureConfig(record.agentId)
         const tokenSums = {
           inputTokens: record.inputTokens,
           outputTokens: record.outputTokens,
@@ -114,18 +114,30 @@ export class UsageEventIngestService {
         events.push(evt)
       }
 
-      await this.eventRepo.insertSessionEvents(events)
+      const inserted = await this.eventRepo.insertSessionEvents(events)
+      console.log(`[analytics] ingestSessionBatch: ${inserted}/${events.length} inserted`)
     } catch (err) {
       console.error('[analytics] ingestSessionBatch failed:', err)
     }
   }
 
   /** 懒加载定价索引（首次调用时从 DB 读取，后续缓存）。 */
-  private async ensurePricingIndex(): Promise<Map<string, import('../domain/usage-event').ModelPricingRow>> {
+  private async ensurePricingIndex(): Promise<Map<string, ModelPricingRow>> {
     if (this.pricingIndex === null) {
       const rows = await this.pricingRepo.listPricing()
       this.pricingIndex = buildPricingIndex(rows)
+      console.log(`[analytics] pricing index loaded: ${rows.length} rows`)
     }
     return this.pricingIndex
+  }
+
+  /** 懒加载 per-agent 配置（缓存，避免每次请求查 DB）。 */
+  private async ensureConfig(agentId: string): Promise<PricingConfig> {
+    let config = this.configCache.get(agentId)
+    if (config === undefined) {
+      config = await this.pricingRepo.getConfig(agentId)
+      this.configCache.set(agentId, config)
+    }
+    return config
   }
 }
