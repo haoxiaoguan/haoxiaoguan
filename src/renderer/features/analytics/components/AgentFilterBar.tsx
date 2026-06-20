@@ -1,19 +1,8 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
+import { SegmentedOptions } from '@/components/ui/segmented-options'
 
 export type AgentFilter = 'all' | 'claude' | 'codex' | 'gemini-cli' | 'kiro' | 'qoder'
-
-const AGENT_OPTIONS: AgentFilter[] = ['all', 'claude', 'codex', 'gemini-cli', 'kiro', 'qoder']
-
-const AGENT_LABEL_KEYS: Record<AgentFilter, string> = {
-  all: 'analytics:agent.all',
-  claude: 'analytics:agent.claude',
-  codex: 'analytics:agent.codex',
-  'gemini-cli': 'analytics:agent.geminiCli',
-  kiro: 'analytics:agent.kiro',
-  qoder: 'analytics:agent.qoder',
-}
 
 interface AgentFilterBarProps {
   value: AgentFilter
@@ -21,21 +10,17 @@ interface AgentFilterBarProps {
 }
 
 export function AgentFilterBar({ value, onChange }: AgentFilterBarProps) {
-  const { t } = useTranslation()
-  return (
-    <ToggleGroup
-      type="single"
-      value={value}
-      onValueChange={(v) => {
-        if (v) onChange(v as AgentFilter)
-      }}
-      className="justify-start"
-    >
-      {AGENT_OPTIONS.map((agent) => (
-        <ToggleGroupItem key={agent} value={agent} className={cn('text-xs')}>
-          {t(AGENT_LABEL_KEYS[agent])}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
+  const { t } = useTranslation('analytics')
+  const items = useMemo(
+    () => [
+      { value: 'all', label: t('agent.all') },
+      { value: 'claude', label: t('agent.claude') },
+      { value: 'codex', label: t('agent.codex') },
+      { value: 'gemini-cli', label: t('agent.geminiCli') },
+      { value: 'kiro', label: t('agent.kiro') },
+      { value: 'qoder', label: t('agent.qoder') },
+    ],
+    [t],
   )
+  return <SegmentedOptions items={items} value={value} onChange={(v) => onChange(v as AgentFilter)} />
 }

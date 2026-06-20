@@ -1,10 +1,14 @@
 {
+  "title": "Analytics",
   "tab": {
-    "overview": "Overview",
-    "agentDetail": "Agent Detail",
-    "modelStats": "Model Stats",
+    "stats": "Stats",
     "requestLog": "Request Log",
     "pricing": "Pricing"
+  },
+  "subTab": {
+    "trend": "Trend",
+    "agent": "Agent",
+    "model": "Model"
   },
   "range": {
     "1d": "1 day",
@@ -23,7 +27,11 @@
     "totalTokens": "Total Tokens",
     "totalCost": "Total Cost",
     "requests": "Requests",
-    "cacheHitRate": "Cache Hit Rate"
+    "cacheHitRate": "Cache Hit Rate",
+    "tokensHint": "Input {{input}} · Output {{output}}",
+    "costHint": "Estimated by model pricing",
+    "requestsHint": "All requests in window",
+    "cacheHint": "Cache read {{read}}"
   },
   "trend": {
     "title": "Trend",

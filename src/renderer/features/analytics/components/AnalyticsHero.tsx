@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, CardContent } from '@/components/ui/card'
-import { Activity, DollarSign, Zap, Database } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useAnalyticsSummary } from '../hooks/useAnalyticsSummary'
 import { formatTokens, formatCost, formatNumber, formatPercent } from '../utils/format'
 import type { AnalyticsWindowDto } from '@shared/api-types'
@@ -10,21 +9,50 @@ interface AnalyticsHeroProps {
   agentId?: string
 }
 
+interface KpiCellProps {
+  accent: string
+  gradient: string
+  label: string
+  value: string
+  hint: string
+}
+
+function KpiCell({ accent, gradient, label, value, hint }: KpiCellProps) {
+  return (
+    <div
+      className={cn(
+        'relative min-w-0 overflow-hidden rounded-[14px] border border-border bg-card px-5 py-4 shadow-bento-light dark:shadow-bento',
+        gradient,
+      )}
+    >
+      <span className={cn('absolute left-5 top-0 h-[3px] w-10 rounded-b-full', accent)} aria-hidden />
+      <p className="truncate text-[11px] font-medium leading-4 text-muted-foreground">{label}</p>
+      <p
+        className="mt-1 truncate text-[26px] font-extrabold leading-8 tracking-tight text-foreground"
+        style={{ fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </p>
+      <p className="mt-1 truncate text-[12px] leading-4 text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
+
 export function AnalyticsHero({ window, agentId }: AnalyticsHeroProps) {
-  const { t } = useTranslation()
+  const { t } = useTranslation('analytics')
   const { data, loading } = useAnalyticsSummary(window, agentId)
 
-  if (loading) {
+  if (loading && !data) {
     return (
-      <Card className="border border-border/50 bg-card/40">
-        <CardContent className="flex h-[120px] items-center justify-center">
-          <span className="text-sm text-muted-foreground">{t('common:loading')}</span>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-4 gap-2.5">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-[88px] animate-pulse rounded-[14px] border border-border bg-card" />
+        ))}
+      </div>
     )
   }
 
-  const summary = data ?? {
+  const s = data ?? {
     totalTokens: 0,
     inputTokens: 0,
     outputTokens: 0,
@@ -36,43 +64,35 @@ export function AnalyticsHero({ window, agentId }: AnalyticsHeroProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <Card className="border border-border/50 bg-card/40">
-        <CardContent className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Zap className="h-3.5 w-3.5 text-primary" />
-            {t('analytics:kpi.totalTokens')}
-          </div>
-          <span className="text-xl font-bold tabular-nums">{formatTokens(summary.totalTokens)}</span>
-        </CardContent>
-      </Card>
-      <Card className="border border-border/50 bg-card/40">
-        <CardContent className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <DollarSign className="h-3.5 w-3.5 text-green-500" />
-            {t('analytics:kpi.totalCost')}
-          </div>
-          <span className="text-xl font-bold tabular-nums text-green-500">{formatCost(summary.totalCostUsd)}</span>
-        </CardContent>
-      </Card>
-      <Card className="border border-border/50 bg-card/40">
-        <CardContent className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Activity className="h-3.5 w-3.5 text-blue-500" />
-            {t('analytics:kpi.requests')}
-          </div>
-          <span className="text-xl font-bold tabular-nums">{formatNumber(summary.requests)}</span>
-        </CardContent>
-      </Card>
-      <Card className="border border-border/50 bg-card/40">
-        <CardContent className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Database className="h-3.5 w-3.5 text-emerald-500" />
-            {t('analytics:kpi.cacheHitRate')}
-          </div>
-          <span className="text-xl font-bold tabular-nums text-emerald-500">{formatPercent(summary.cacheHitRate)}</span>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-4 gap-2.5">
+      <KpiCell
+        accent="bg-blue-500"
+        gradient="bg-gradient-to-br from-blue-500/[0.09] to-transparent"
+        label={t('kpi.totalTokens')}
+        value={formatTokens(s.totalTokens)}
+        hint={t('kpi.tokensHint', { input: formatTokens(s.inputTokens), output: formatTokens(s.outputTokens) })}
+      />
+      <KpiCell
+        accent="bg-emerald-500"
+        gradient="bg-gradient-to-br from-emerald-500/[0.09] to-transparent"
+        label={t('kpi.totalCost')}
+        value={formatCost(s.totalCostUsd)}
+        hint={t('kpi.costHint')}
+      />
+      <KpiCell
+        accent="bg-orange-400"
+        gradient="bg-gradient-to-br from-orange-400/[0.09] to-transparent"
+        label={t('kpi.requests')}
+        value={formatNumber(s.requests)}
+        hint={t('kpi.requestsHint')}
+      />
+      <KpiCell
+        accent="bg-violet-500"
+        gradient="bg-gradient-to-br from-violet-500/[0.09] to-transparent"
+        label={t('kpi.cacheHitRate')}
+        value={formatPercent(s.cacheHitRate)}
+        hint={t('kpi.cacheHint', { read: formatTokens(s.cacheReadTokens) })}
+      />
     </div>
   )
 }

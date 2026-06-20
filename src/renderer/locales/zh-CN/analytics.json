@@ -1,10 +1,14 @@
 {
+  "title": "数据统计",
   "tab": {
-    "overview": "概览",
-    "agentDetail": "Agent 明细",
-    "modelStats": "模型统计",
+    "stats": "数据统计",
     "requestLog": "请求日志",
     "pricing": "定价配置"
+  },
+  "subTab": {
+    "trend": "趋势",
+    "agent": "Agent",
+    "model": "模型"
   },
   "range": {
     "1d": "近 1 天",
@@ -23,7 +27,11 @@
     "totalTokens": "总 Token",
     "totalCost": "总花费",
     "requests": "请求数",
-    "cacheHitRate": "缓存命中率"
+    "cacheHitRate": "缓存命中率",
+    "tokensHint": "输入 {{input}} · 输出 {{output}}",
+    "costHint": "按模型定价估算",
+    "requestsHint": "窗口内全部请求",
+    "cacheHint": "缓存读 {{read}}"
   },
   "trend": {
     "title": "趋势",
