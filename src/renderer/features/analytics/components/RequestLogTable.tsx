@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,7 +19,7 @@ export function RequestLogTable({ window, agentId }: RequestLogTableProps) {
   const [cursor, setCursor] = useState<{ occurredAt: number; id: number } | undefined>(undefined)
   const [selectedRow, setSelectedRow] = useState<UsageEventRowDto | null>(null)
 
-  const filter: UsageEventSearchFilterDto = agentId ? { agentId } : {}
+  const filter: UsageEventSearchFilterDto = useMemo(() => (agentId ? { agentId } : {}), [agentId])
   const { data, loading } = useUsageEvents(window, filter, cursor, 20)
   const rows = data?.rows ?? []
   const nextCursor = data?.nextCursor
