@@ -66,7 +66,6 @@ import { UsageEventIngestService } from './contexts/analytics/application/usage-
 import { UsageEventQueryService } from './contexts/analytics/application/usage-event-query-service'
 import { PricingService } from './contexts/analytics/application/pricing-service'
 import { seedModelPricing } from './contexts/analytics/infrastructure/pricing-seed'
-import { migrateUsageRecords } from './contexts/analytics/infrastructure/migrate-usage-records'
 import { InMemoryAgentRegistry } from './agents/shared/agent-registry'
 import { ClaudeAgentClient } from './agents/claude/claude-agent'
 import { CodexAgentClient } from './agents/codex/codex-agent'
@@ -373,8 +372,21 @@ export async function buildContainer(): Promise<Container> {
   const analyticsPricing = new PricingService(analyticsPricingRepo)
   // seed 定价表（幂等：已存在则跳过）
   seedModelPricing(getEm()).catch((e) => console.error('[analytics] seed pricing failed:', e))
-  // 一次性迁移：把 usage_records 历史数据导入 usage_events（幂等，已迁移则跳过）
-  migrateUsageRecords(analyticsPricingRepo).catch((e) => console.error('[analytics] migrate usage_records failed:', e))
+  // 一次性重置 per-file 游标：让首次 syncAll 做全量扫描，从原始日志文件重新读取历史数据
+  // 写入 usage_events（ingestSessionBatch 的去重机制保证不重复写入）
+  // 用 analytics_meta 标志位防止重复执行
+  {
+    const conn = getEm().getConnection()
+    conn.execute(`CREATE TABLE IF NOT EXISTS analytics_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+      .then(() => conn.execute(`SELECT value FROM analytics_meta WHERE key = 'cursors_reset'`, [], 'get'))
+      .then((row) => {
+        if (row && (row as unknown as { value: string }).value === '1') return
+        return conn.execute(`DELETE FROM usage_sync_state WHERE source_path NOT IN ('__usage_sync_result_status__', '__usage_sync_result_success_at__')`)
+          .then(() => conn.execute(`INSERT OR REPLACE INTO analytics_meta (key, value) VALUES ('cursors_reset', '1')`))
+          .then(() => console.log('[analytics] per-file cursors reset, next syncAll will do full scan'))
+      })
+      .catch((e) => console.error('[analytics] reset cursors failed:', e))
+  }
   const usageSync = new UsageSyncService(usageAgentRegistry, analyticsIngest, usageFileCursorStore)
 
   // 7. LocalBackup context.
