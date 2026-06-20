@@ -50,7 +50,11 @@ export function AppRouter() {
           {/* /client-config 默认进「客户端管理」（版本/升级/诊断）；接入配置移到 /access。 */}
           <Route path="client-config" element={<ClientManage />} />
           <Route path="client-config/access" element={<ClientConfig />} />
-          <Route path="analytics" element={<Analytics />} />
+          <Route path="analytics">
+            <Route index element={<Analytics />} />
+            <Route path="requests" element={<Analytics />} />
+            <Route path="pricing" element={<Analytics />} />
+          </Route>
           <Route path="sessions" element={<Sessions />} />
           <Route path="settings" element={<Settings />}>
             <Route index element={<Navigate to="general" replace />} />

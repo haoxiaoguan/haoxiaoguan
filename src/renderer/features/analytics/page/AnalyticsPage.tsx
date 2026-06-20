@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { PageHeader } from '@/components/ui/page-header'
 import { SegmentedOptions } from '@/components/ui/segmented-options'
 import { DateRangePicker } from '@/features/dashboard/components/DateRangePicker'
 import { presetRange, toWindow, type TimeRange } from '@/features/dashboard/utils/time-range'
@@ -12,27 +12,22 @@ import { ModelStatsTable } from '../components/ModelStatsTable'
 import { RequestLogTable } from '../components/RequestLogTable'
 import { PricingConfigPanel } from '../components/PricingConfigPanel'
 
-type TopTab = 'stats' | 'requestLog' | 'pricing'
 type StatsSubTab = 'trend' | 'agent' | 'model'
 
 export default function AnalyticsPage() {
   const { t } = useTranslation('analytics')
+  const location = useLocation()
   const [range, setRange] = useState<TimeRange>(() => presetRange('7d', Date.now()))
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all')
-  const [topTab, setTopTab] = useState<TopTab>('stats')
   const [statsSub, setStatsSub] = useState<StatsSubTab>('trend')
 
   const window = useMemo(() => toWindow(range), [range])
   const agentId = agentFilter === 'all' ? undefined : agentFilter
 
-  const topTabItems = useMemo(
-    () => [
-      { value: 'stats', label: t('tab.stats') },
-      { value: 'requestLog', label: t('tab.requestLog') },
-      { value: 'pricing', label: t('tab.pricing') },
-    ],
-    [t],
-  )
+  // 路由决定当前 tab
+  const isRequests = location.pathname.startsWith('/analytics/requests')
+  const isPricing = location.pathname.startsWith('/analytics/pricing')
+  const isStats = !isRequests && !isPricing
 
   const statsSubItems = useMemo(
     () => [
@@ -45,21 +40,21 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
-      <PageHeader title={t('title')} actions={<DateRangePicker value={range} onChange={setRange} />} />
+      {/* 顶部工具栏：时间范围 + Agent 筛选（请求日志/数据统计共享） */}
+      {!isPricing && (
+        <div className="flex items-center justify-between gap-3">
+          <AgentFilterBar value={agentFilter} onChange={setAgentFilter} />
+          <DateRangePicker value={range} onChange={setRange} />
+        </div>
+      )}
 
-      {/* 顶部 3 tab */}
-      <SegmentedOptions items={topTabItems} value={topTab} onChange={(v) => setTopTab(v as TopTab)} />
-
-      {/* 数据统计 tab：KPI + 子维度切换 */}
-      {topTab === 'stats' && (
+      {/* 数据统计 */}
+      {isStats && (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
-            <AgentFilterBar value={agentFilter} onChange={setAgentFilter} />
+          <AnalyticsHero window={window} agentId={agentId} />
+          <div className="flex items-center justify-end">
             <SegmentedOptions items={statsSubItems} value={statsSub} onChange={(v) => setStatsSub(v as StatsSubTab)} />
           </div>
-
-          <AnalyticsHero window={window} agentId={agentId} />
-
           <div className="min-h-0 flex-1">
             {statsSub === 'trend' && <AnalyticsTrendChart window={window} agentId={agentId} />}
             {statsSub === 'agent' && (
@@ -70,18 +65,15 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* 请求日志 tab */}
-      {topTab === 'requestLog' && (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <AgentFilterBar value={agentFilter} onChange={setAgentFilter} />
-          <div className="min-h-0 flex-1">
-            <RequestLogTable window={window} agentId={agentId} />
-          </div>
+      {/* 请求日志 */}
+      {isRequests && (
+        <div className="min-h-0 flex-1">
+          <RequestLogTable window={window} agentId={agentId} />
         </div>
       )}
 
-      {/* 定价配置 tab */}
-      {topTab === 'pricing' && (
+      {/* 定价配置 */}
+      {isPricing && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <PricingConfigPanel />
         </div>
