@@ -304,6 +304,20 @@ export const CLIENT_CONFIG_CHANNELS = {
   setCodexProviderEnabled: 'clientConfig:setCodexProviderEnabled',
 } as const
 
+// analytics 上下文：统一用量统计（usage_events 单表查询）。
+export const ANALYTICS_CHANNELS = {
+  summary: 'analytics:summary',
+  trend: 'analytics:trend',
+  agentBreakdown: 'analytics:agentBreakdown',
+  modelBreakdown: 'analytics:modelBreakdown',
+  search: 'analytics:search',
+  listPricing: 'analytics:listPricing',
+  upsertPricing: 'analytics:upsertPricing',
+  deletePricing: 'analytics:deletePricing',
+  getPricingConfig: 'analytics:getPricingConfig',
+  setPricingConfig: 'analytics:setPricingConfig',
+} as const
+
 // 自绘窗口控制（Linux 无原生标题栏时，渲染层画 min/max/close 调这些）。
 // Windows 改用系统原生覆盖按钮（titleBarOverlay），仅需 setOverlayTheme 同步图标颜色。
 export const WINDOW_CHANNELS = {

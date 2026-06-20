@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { SettingsFileService } from './contexts/settings/infrastructure/settings-file-service'
 import { SettingsApplicationService } from './contexts/settings/application/settings-service'
 import { appDataDir, dotDir, xdgConfigDir } from './platform/persistence/paths'
-import { initDatabase } from './platform/persistence/database'
+import { initDatabase, getEm } from './platform/persistence/database'
 import type { Services } from './ipc/registry'
 
 // Agents shared layer — the full 17-adapter registry, built once and injected
@@ -62,6 +62,14 @@ import { MikroOrmUsageSyncStateRepository } from './contexts/usage/infrastructur
 import { MikroOrmUsageFileCursorStore } from './contexts/usage/infrastructure/mikro-orm-usage-file-cursor-store'
 import { UsageSyncService } from './contexts/usage/application/usage-sync-service'
 import { UsageQueryService } from './contexts/usage/application/usage-query-service'
+
+// analytics context — unified usage statistics (usage_events single table).
+import { MikroOrmUsageEventRepository } from './contexts/analytics/infrastructure/mikro-orm-usage-event-repository'
+import { MikroOrmPricingRepository } from './contexts/analytics/infrastructure/mikro-orm-pricing-repository'
+import { UsageEventIngestService } from './contexts/analytics/application/usage-event-ingest-service'
+import { UsageEventQueryService } from './contexts/analytics/application/usage-event-query-service'
+import { PricingService } from './contexts/analytics/application/pricing-service'
+import { seedModelPricing } from './contexts/analytics/infrastructure/pricing-seed'
 import { InMemoryAgentRegistry } from './agents/shared/agent-registry'
 import { ClaudeAgentClient } from './agents/claude/claude-agent'
 import { CodexAgentClient } from './agents/codex/codex-agent'
@@ -361,8 +369,18 @@ export async function buildContainer(): Promise<Container> {
   const usageRecordRepo = new MikroOrmUsageRecordRepository()
   const usageRollupRepo = new MikroOrmUsageRollupRepository()
   const usageSyncStateRepo = new MikroOrmUsageSyncStateRepository()
-  const usageSync = new UsageSyncService(usageAgentRegistry, usageRecordRepo, usageFileCursorStore)
   const usageQuery = new UsageQueryService(usageRollupRepo, usageSyncStateRepo)
+
+  // 6b. analytics context — 统一用量统计（usage_events 单表，双源 ingest + 去重）。
+  // 先于 usageSync 装配：UsageSyncService 构造注入 analyticsIngest。
+  const analyticsEventRepo = new MikroOrmUsageEventRepository()
+  const analyticsPricingRepo = new MikroOrmPricingRepository()
+  const analyticsIngest = new UsageEventIngestService(analyticsEventRepo, analyticsPricingRepo)
+  const analyticsQuery = new UsageEventQueryService(analyticsEventRepo)
+  const analyticsPricing = new PricingService(analyticsPricingRepo)
+  // seed 定价表（幂等：已存在则跳过）
+  seedModelPricing(getEm()).catch((e) => console.error('[analytics] seed pricing failed:', e))
+  const usageSync = new UsageSyncService(usageAgentRegistry, usageRecordRepo, usageFileCursorStore, analyticsIngest)
 
   // 7. LocalBackup context.
   const backupDir = join(homedir(), '.haoxiaoguan', 'backups')
@@ -592,6 +610,8 @@ export async function buildContainer(): Promise<Container> {
   // 路由日志重构（observability v2）：统一明细 routing_events + 4 张维度日桶（唯一历史/检索/聚合源）。
   const routingObservabilityService = new RoutingObservabilityService(
     new MikroOrmRoutingObservabilityRepository(),
+    {},
+    analyticsIngest,
   )
   // 每条 G3 记录经 persistSink 入观测缓冲，由 main.ts 定时 flush 落库（吞错不影响反代主流程）。
   apiProxyRequestLog.setPersistSink((rec) => {
@@ -923,6 +943,8 @@ export async function buildContainer(): Promise<Container> {
     storageService,
     usageSync,
     usageQuery,
+    analyticsQuery,
+    analyticsPricing,
     localBackup,
     mcp,
     sync,

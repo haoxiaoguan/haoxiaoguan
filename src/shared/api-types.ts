@@ -10,6 +10,7 @@ export * from './api/skill'
 export * from './api/usage'
 export * from './api/integrations'
 export * from './api/routing'
+export * from './api/analytics'
 
 import type {
   SettingsResponse,
@@ -50,6 +51,18 @@ import type {
   BackupEntryDto,
   LocalBackupConfigDto,
 } from './api/usage'
+import type {
+  AnalyticsWindowDto,
+  AnalyticsSummaryDto,
+  AnalyticsTrendPointDto,
+  AgentBreakdownDto,
+  ModelBreakdownDto,
+  UsageEventSearchFilterDto,
+  UsageEventCursorDto,
+  UsageEventSearchPageDto,
+  ModelPricingDto,
+  PricingConfigDto,
+} from './api/analytics'
 import type {
   McpServerDto,
   McpServerSpec,
@@ -281,6 +294,28 @@ export interface HxgApi {
     ): Promise<UsageTrendPointResponse[]>
     getUsagePlatformBreakdown(window: TimeWindowDto): Promise<PlatformUsageBreakdownResponse[]>
     getUsageSyncStatus(): Promise<UsageSyncStatusResponse>
+  }
+  analytics: {
+    summary(window: AnalyticsWindowDto, agentId?: string): Promise<AnalyticsSummaryDto>
+    trend(
+      window: AnalyticsWindowDto,
+      granularity: 'hour' | 'day',
+      metric: 'tokens' | 'cost' | 'requests',
+      agentId?: string,
+    ): Promise<AnalyticsTrendPointDto[]>
+    agentBreakdown(window: AnalyticsWindowDto): Promise<AgentBreakdownDto[]>
+    modelBreakdown(window: AnalyticsWindowDto, agentId?: string): Promise<ModelBreakdownDto[]>
+    search(
+      window: AnalyticsWindowDto,
+      filter: UsageEventSearchFilterDto,
+      cursor?: UsageEventCursorDto,
+      limit?: number,
+    ): Promise<UsageEventSearchPageDto>
+    listPricing(): Promise<ModelPricingDto[]>
+    upsertPricing(row: ModelPricingDto): Promise<void>
+    deletePricing(modelId: string): Promise<void>
+    getPricingConfig(agentId: string): Promise<PricingConfigDto>
+    setPricingConfig(agentId: string, multiplier: number, source: 'request' | 'response'): Promise<void>
   }
   activity: {
     syncActivity(): Promise<ActivitySyncSummaryResponse>

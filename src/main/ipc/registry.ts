@@ -19,7 +19,10 @@ import { registerSkillHandlers } from '../contexts/skill/ipc/skill-handlers'
 
 import type { UsageSyncService } from '../contexts/usage/application/usage-sync-service'
 import type { UsageQueryService } from '../contexts/usage/application/usage-query-service'
+import type { UsageEventQueryService } from '../contexts/analytics/application/usage-event-query-service'
+import type { PricingService } from '../contexts/analytics/application/pricing-service'
 import { registerUsageHandlers } from '../contexts/usage/ipc/usage-handlers'
+import { registerAnalyticsHandlers } from '../contexts/analytics/ipc/analytics-handlers'
 
 import type { LocalBackupApplicationService } from '../contexts/localBackup/application/local-backup-service'
 import { registerLocalBackupHandlers } from '../contexts/localBackup/ipc/local-backup-handlers'
@@ -101,6 +104,8 @@ export interface Services {
   // usage context
   usageSync: UsageSyncService
   usageQuery: UsageQueryService
+  analyticsQuery: UsageEventQueryService
+  analyticsPricing: PricingService
 
   // localBackup context
   localBackup: LocalBackupApplicationService
@@ -179,6 +184,7 @@ export function registerAllHandlers(services: Services): void {
     storageService: services.storageService,
   })
   registerUsageHandlers(services.usageSync, services.usageQuery)
+  registerAnalyticsHandlers(services.analyticsQuery, services.analyticsPricing)
   registerLocalBackupHandlers(services.localBackup)
   registerMcpHandlers(services.mcp)
   registerSyncHandlers(services.sync)
