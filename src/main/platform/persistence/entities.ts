@@ -66,6 +66,9 @@ import { ActivityEventEntity } from '../../contexts/activity/infrastructure/acti
 import { ActivityDailyRollupEntity } from '../../contexts/activity/infrastructure/activity-daily-rollup.entity'
 import { ActivityScanStateEntity } from '../../contexts/activity/infrastructure/activity-scan-state.entity'
 
+// analytics context
+import { UsageEventEntity } from '../../contexts/analytics/infrastructure/usage-event.entity'
+
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
   // account context
@@ -114,4 +117,6 @@ export const ALL_ENTITIES: unknown[] = [
   ActivityEventEntity,
   ActivityDailyRollupEntity,
   ActivityScanStateEntity,
+  // analytics context
+  UsageEventEntity,
 ]
