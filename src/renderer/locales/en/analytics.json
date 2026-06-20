@@ -1,0 +1,91 @@
+{
+  "tab": {
+    "overview": "Overview",
+    "agentDetail": "Agent Detail",
+    "modelStats": "Model Stats",
+    "requestLog": "Request Log",
+    "pricing": "Pricing"
+  },
+  "range": {
+    "1d": "1 day",
+    "7d": "7 days",
+    "30d": "30 days"
+  },
+  "agent": {
+    "all": "All",
+    "claude": "Claude",
+    "codex": "Codex",
+    "geminiCli": "Gemini CLI",
+    "kiro": "Kiro",
+    "qoder": "Qoder"
+  },
+  "kpi": {
+    "totalTokens": "Total Tokens",
+    "totalCost": "Total Cost",
+    "requests": "Requests",
+    "cacheHitRate": "Cache Hit Rate"
+  },
+  "trend": {
+    "title": "Trend",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "requests": "Requests"
+  },
+  "agentStats": {
+    "title": "Agent Stats",
+    "agent": "Agent",
+    "requests": "Requests",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "share": "Share",
+    "cacheHit": "Cache Hit"
+  },
+  "modelStats": {
+    "title": "Model Stats",
+    "model": "Model",
+    "requests": "Requests",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "avgCost": "Avg Cost",
+    "share": "Share"
+  },
+  "requestLog": {
+    "title": "Request Log",
+    "time": "Time",
+    "agent": "Agent",
+    "model": "Model",
+    "source": "Source",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "status": "Status"
+  },
+  "requestDetail": {
+    "title": "Request Detail",
+    "time": "Time",
+    "agent": "Agent",
+    "source": "Source",
+    "model": "Model",
+    "inputTokens": "Input Tokens",
+    "outputTokens": "Output Tokens",
+    "cacheRead": "Cache Read",
+    "cacheCreation": "Cache Creation",
+    "totalCost": "Total Cost",
+    "status": "Status",
+    "duration": "Duration",
+    "errorKind": "Error Kind",
+    "account": "Account",
+    "combo": "Combo"
+  },
+  "pricing": {
+    "title": "Pricing Config",
+    "add": "Add",
+    "edit": "Edit",
+    "modelId": "Model ID",
+    "displayName": "Display Name",
+    "input": "Input Price",
+    "output": "Output Price",
+    "cacheRead": "Cache Read Price",
+    "cacheCreation": "Cache Creation Price"
+  },
+  "noData": "No data"
+}
