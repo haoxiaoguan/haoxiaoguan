@@ -16,42 +16,6 @@ export interface UsageSyncSummaryResponse {
   failed: number
   platforms: string[]
 }
-export interface UsageSummaryResponse {
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
-  requests: number
-  totalCostUsd: number
-  lastSyncedAt: number | null
-}
-export interface UsageTrendPointResponse {
-  date: string
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
-  requests: number
-  costUsd: number
-}
-export interface PlatformUsageBreakdownResponse {
-  platform: string
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheTokens: number
-  requests: number
-  shareRatio: number
-}
-export interface UsageSyncStatusResponse {
-  supportedPlatforms: string[]
-  pendingPlatforms: string[]
-  failedPlatforms: string[]
-  lastSyncedAt: number | null
-  healthStatus: string
-}
 
 // ── LocalBackup DTOs (localBackup manifest §6) ───────────────────────────────
 export interface BackupEntryDto {

@@ -57,11 +57,8 @@ import { StorageService } from './contexts/skill/application/storage-service'
 
 // Usage context.
 import { MikroOrmUsageRecordRepository } from './contexts/usage/infrastructure/mikro-orm-usage-record-repository'
-import { MikroOrmUsageRollupRepository } from './contexts/usage/infrastructure/mikro-orm-usage-rollup-repository'
-import { MikroOrmUsageSyncStateRepository } from './contexts/usage/infrastructure/mikro-orm-usage-sync-state-repository'
 import { MikroOrmUsageFileCursorStore } from './contexts/usage/infrastructure/mikro-orm-usage-file-cursor-store'
 import { UsageSyncService } from './contexts/usage/application/usage-sync-service'
-import { UsageQueryService } from './contexts/usage/application/usage-query-service'
 
 // analytics context — unified usage statistics (usage_events single table).
 import { MikroOrmUsageEventRepository } from './contexts/analytics/infrastructure/mikro-orm-usage-event-repository'
@@ -367,9 +364,6 @@ export async function buildContainer(): Promise<Container> {
     new QoderAgentClient(),
   ])
   const usageRecordRepo = new MikroOrmUsageRecordRepository()
-  const usageRollupRepo = new MikroOrmUsageRollupRepository()
-  const usageSyncStateRepo = new MikroOrmUsageSyncStateRepository()
-  const usageQuery = new UsageQueryService(usageRollupRepo, usageSyncStateRepo)
 
   // 6b. analytics context — 统一用量统计（usage_events 单表，双源 ingest + 去重）。
   // 先于 usageSync 装配：UsageSyncService 构造注入 analyticsIngest。
@@ -942,7 +936,6 @@ export async function buildContainer(): Promise<Container> {
     backupService,
     storageService,
     usageSync,
-    usageQuery,
     analyticsQuery,
     analyticsPricing,
     localBackup,

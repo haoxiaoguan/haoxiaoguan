@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { usageService, activityService } from '@/services/tauri'
-import type { UsageSummaryResponse } from '@/types'
+import { activityService } from '@/services/tauri'
+import { bridge } from '@/services/bridge'
+import type { AnalyticsSummaryDto } from '@shared/api-types'
 import type { FilledTrendPoint } from '../utils/trend-fill'
 import { fillTrendGaps } from '../utils/trend-fill'
 import type { TimeRange } from '../utils/time-range'
@@ -57,7 +58,7 @@ export function useTrendSeries(
         let rawPoints: Array<{ date: string; value: number; extra?: Record<string, number> }>
 
         if (dimension === 'tokens') {
-          const data = await usageService.getUsageTrend(window, granularity, 'tokens')
+          const data = await bridge().analytics.trend(window, granularity, 'tokens')
           // Use the four-way sum (input + output + cacheCreation + cacheRead) so
           // cache tokens are included, and carry per-category breakdown as extra.
           rawPoints = data.map((p) => ({
@@ -72,7 +73,7 @@ export function useTrendSeries(
           }))
         } else if (dimension === 'cost') {
           // 费用维度：取后端按模型定价算出的每桶 costUsd（美元）。
-          const data = await usageService.getUsageTrend(window, granularity, 'cost')
+          const data = await bridge().analytics.trend(window, granularity, 'cost')
           rawPoints = data.map((p) => ({ date: p.date, value: p.costUsd ?? 0 }))
         } else {
           const data = await activityService.getActivityTrend(window, granularity, dimension)
@@ -156,8 +157,8 @@ export function useActivityHeatmapData(
 export function useUsageSummaryRange(
   range: TimeRange,
   refreshNonce?: number,
-): { summary: UsageSummaryResponse | null } {
-  const [summary, setSummary] = useState<UsageSummaryResponse | null>(null)
+): { summary: AnalyticsSummaryDto | null } {
+  const [summary, setSummary] = useState<AnalyticsSummaryDto | null>(null)
   const queryKeyRef = useRef('')
 
   useEffect(() => {
@@ -165,10 +166,10 @@ export function useUsageSummaryRange(
     const queryKey = `${range.startMs}:${range.endMs}`
     const soft = queryKeyRef.current === queryKey
     queryKeyRef.current = queryKey
-    usageService
-      .getUsageSummary(toWindow(range))
+    bridge()
+      .analytics.summary(toWindow(range))
       .then((data) => {
-        if (!cancelled) setSummary((prev) => keepIfSame<UsageSummaryResponse | null>(prev, data))
+        if (!cancelled) setSummary((prev) => keepIfSame<AnalyticsSummaryDto | null>(prev, data))
       })
       .catch(() => {
         // 软刷新失败保留旧汇总（统计行不闪「—」）；范围切换失败如实置空。

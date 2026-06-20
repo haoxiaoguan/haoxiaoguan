@@ -58,10 +58,6 @@ export const SKILL_CHANNELS = {
 // (snake_case, no service prefix) per the usage manifest §3.
 export const USAGE_CHANNELS = {
   syncUsageSources: 'sync_usage_sources',
-  getUsageSummary: 'get_usage_summary',
-  getUsageTrend: 'get_usage_trend',
-  getUsagePlatformBreakdown: 'get_usage_platform_breakdown',
-  getUsageSyncStatus: 'get_usage_sync_status',
 } as const
 
 // Agents shared-layer registry (read-only). Values are fixed per the agents

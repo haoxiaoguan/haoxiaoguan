@@ -42,10 +42,6 @@ import type {
 } from './api/skill'
 import type {
   UsageSyncSummaryResponse,
-  UsageSummaryResponse,
-  UsageTrendPointResponse,
-  PlatformUsageBreakdownResponse,
-  UsageSyncStatusResponse,
   ActivitySyncSummaryResponse,
   ActivityTrendPointResponse,
   BackupEntryDto,
@@ -286,14 +282,6 @@ export interface HxgApi {
   }
   usage: {
     syncUsageSources(): Promise<UsageSyncSummaryResponse>
-    getUsageSummary(window: TimeWindowDto): Promise<UsageSummaryResponse>
-    getUsageTrend(
-      window: TimeWindowDto,
-      granularity: TrendGranularityDto,
-      metric: string,
-    ): Promise<UsageTrendPointResponse[]>
-    getUsagePlatformBreakdown(window: TimeWindowDto): Promise<PlatformUsageBreakdownResponse[]>
-    getUsageSyncStatus(): Promise<UsageSyncStatusResponse>
   }
   analytics: {
     summary(window: AnalyticsWindowDto, agentId?: string): Promise<AnalyticsSummaryDto>

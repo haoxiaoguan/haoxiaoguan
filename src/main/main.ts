@@ -399,13 +399,9 @@ if (!gotLock) {
       usageSyncRunning = true
       try {
         try {
-          const summary = await svc.usageSync.syncAll()
-          const failed = svc.usageSync
-            .lastErrors()
-            .map((e) => e.split(':')[0].trim())
-            .filter(Boolean)
-          await svc.usageQuery.recordSyncResult(summary.platforms, failed)
-          await svc.usageQuery.rebuildRollups()
+          // syncAll 扫描各 agent 本地日志写入 usage_records，
+          // 同时经 UsageSyncService 注入的 analyticsIngest 追加写入 usage_events。
+          await svc.usageSync.syncAll()
         } catch (e) {
           console.error('[usage] periodic sync failed:', e)
         }

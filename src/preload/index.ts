@@ -151,12 +151,6 @@ const api: HxgApi = {
   },
   usage: {
     syncUsageSources: () => ipcRenderer.invoke(USAGE_CHANNELS.syncUsageSources),
-    getUsageSummary: (window) => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSummary, window),
-    getUsageTrend: (window, granularity, metric) =>
-      ipcRenderer.invoke(USAGE_CHANNELS.getUsageTrend, window, granularity, metric),
-    getUsagePlatformBreakdown: (window) =>
-      ipcRenderer.invoke(USAGE_CHANNELS.getUsagePlatformBreakdown, window),
-    getUsageSyncStatus: () => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSyncStatus),
   },
   analytics: {
     summary: (window, agentId) => ipcRenderer.invoke(ANALYTICS_CHANNELS.summary, window, agentId),
