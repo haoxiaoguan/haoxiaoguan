@@ -66,6 +66,7 @@ import { UsageEventIngestService } from './contexts/analytics/application/usage-
 import { UsageEventQueryService } from './contexts/analytics/application/usage-event-query-service'
 import { PricingService } from './contexts/analytics/application/pricing-service'
 import { seedModelPricing } from './contexts/analytics/infrastructure/pricing-seed'
+import { migrateUsageRecords } from './contexts/analytics/infrastructure/migrate-usage-records'
 import { InMemoryAgentRegistry } from './agents/shared/agent-registry'
 import { ClaudeAgentClient } from './agents/claude/claude-agent'
 import { CodexAgentClient } from './agents/codex/codex-agent'
@@ -372,6 +373,8 @@ export async function buildContainer(): Promise<Container> {
   const analyticsPricing = new PricingService(analyticsPricingRepo)
   // seed 定价表（幂等：已存在则跳过）
   seedModelPricing(getEm()).catch((e) => console.error('[analytics] seed pricing failed:', e))
+  // 一次性迁移：把 usage_records 历史数据导入 usage_events（幂等，已迁移则跳过）
+  migrateUsageRecords(analyticsPricingRepo).catch((e) => console.error('[analytics] migrate usage_records failed:', e))
   const usageSync = new UsageSyncService(usageAgentRegistry, analyticsIngest, usageFileCursorStore)
 
   // 7. LocalBackup context.
