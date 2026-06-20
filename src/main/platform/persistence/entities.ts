@@ -68,6 +68,8 @@ import { ActivityScanStateEntity } from '../../contexts/activity/infrastructure/
 
 // analytics context
 import { UsageEventEntity } from '../../contexts/analytics/infrastructure/usage-event.entity'
+import { ModelPricingEntity } from '../../contexts/analytics/infrastructure/model-pricing.entity'
+import { PricingConfigEntity } from '../../contexts/analytics/infrastructure/pricing-config.entity'
 
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
@@ -119,4 +121,6 @@ export const ALL_ENTITIES: unknown[] = [
   ActivityScanStateEntity,
   // analytics context
   UsageEventEntity,
+  ModelPricingEntity,
+  PricingConfigEntity,
 ]
