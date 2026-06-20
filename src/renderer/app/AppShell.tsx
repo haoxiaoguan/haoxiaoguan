@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  BarChart3,
   Bell,
   BookOpen,
   Cable,
@@ -76,6 +77,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/sessions', labelKey: 'nav:sessions', icon: History },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
+  { to: '/analytics', labelKey: 'nav:analytics', icon: BarChart3 },
 ];
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [
