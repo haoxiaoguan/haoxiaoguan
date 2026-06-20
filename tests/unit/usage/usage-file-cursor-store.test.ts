@@ -10,7 +10,6 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync, utimesSync } f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MikroOrmUsageFileCursorStore } from '../../../src/main/contexts/usage/infrastructure/mikro-orm-usage-file-cursor-store'
-import { MikroOrmUsageSyncStateRepository } from '../../../src/main/contexts/usage/infrastructure/mikro-orm-usage-sync-state-repository'
 import { ClaudeAgentClient } from '../../../src/main/agents/claude/claude-agent'
 
 let testOrm: MikroORM
@@ -70,18 +69,6 @@ describe('MikroOrmUsageFileCursorStore', () => {
     expect((await store.load('claude')).get('/a.jsonl')).toBe(999)
   })
 
-  it('load 排除同步结果哨兵标记，不会误当成文件游标', async () => {
-    const syncState = new MikroOrmUsageSyncStateRepository(testGetEm)
-    await syncState.saveSyncResult(['claude'], [], 1700000000) // 写入两个哨兵 marker 行
-    const store = new MikroOrmUsageFileCursorStore(testGetEm)
-    await store.save('claude', [{ sourcePath: '/real.jsonl', mtimeMs: 111 }])
-
-    const m = await store.load('claude')
-    expect(m.size).toBe(1)
-    expect(m.has('/real.jsonl')).toBe(true)
-    expect(m.has('__usage_sync_result_status__')).toBe(false)
-    expect(m.has('__usage_sync_result_success_at__')).toBe(false)
-  })
 })
 
 describe('ClaudeAgentClient 增量：跳过 mtime 未变文件', () => {

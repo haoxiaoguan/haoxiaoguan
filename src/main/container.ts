@@ -56,7 +56,6 @@ import { BackupService } from './contexts/skill/application/backup-service'
 import { StorageService } from './contexts/skill/application/storage-service'
 
 // Usage context.
-import { MikroOrmUsageRecordRepository } from './contexts/usage/infrastructure/mikro-orm-usage-record-repository'
 import { MikroOrmUsageFileCursorStore } from './contexts/usage/infrastructure/mikro-orm-usage-file-cursor-store'
 import { UsageSyncService } from './contexts/usage/application/usage-sync-service'
 
@@ -363,7 +362,6 @@ export async function buildContainer(): Promise<Container> {
     new KiroAgentClient(),
     new QoderAgentClient(),
   ])
-  const usageRecordRepo = new MikroOrmUsageRecordRepository()
 
   // 6b. analytics context — 统一用量统计（usage_events 单表，双源 ingest + 去重）。
   // 先于 usageSync 装配：UsageSyncService 构造注入 analyticsIngest。
@@ -374,7 +372,7 @@ export async function buildContainer(): Promise<Container> {
   const analyticsPricing = new PricingService(analyticsPricingRepo)
   // seed 定价表（幂等：已存在则跳过）
   seedModelPricing(getEm()).catch((e) => console.error('[analytics] seed pricing failed:', e))
-  const usageSync = new UsageSyncService(usageAgentRegistry, usageRecordRepo, usageFileCursorStore, analyticsIngest)
+  const usageSync = new UsageSyncService(usageAgentRegistry, analyticsIngest, usageFileCursorStore)
 
   // 7. LocalBackup context.
   const backupDir = join(homedir(), '.haoxiaoguan', 'backups')
