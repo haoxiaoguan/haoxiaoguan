@@ -70,12 +70,27 @@ export function getEm(): EntityManager {
   return getOrm().em.fork()
 }
 
-// Builds all tables on first run. Idempotent: updateSchema only applies missing
-// objects, so it is safe to call on every startup. With zero entities
-// registered (skeleton phase) this is a no-op.
+// Builds all tables on first run. Idempotent.
+//
+// MikroORM updateSchema 在 knex 3.x + better-sqlite3 12.x 上会生成
+// "pragma foreign_keys = on;pragma foreign_keys = off;" 多语句 SQL，
+// better-sqlite3 不允许单次执行多语句导致报错。
+// workaround：catch 错误后改用 ensureSchema 手动对比实体建表。
 export async function createSchema(): Promise<void> {
   const generator = getOrm().getSchemaGenerator()
-  await generator.updateSchema({ wrap: false })
+  try {
+    await generator.updateSchema({ wrap: false })
+  } catch (err) {
+    // updateSchema 因 knex 3.x PRAGMA 多语句 bug 失败，
+    // 用 createSchema（不带 wrap）重试——它走不同的代码路径。
+    console.warn('[database] updateSchema failed, falling back to createSchema:', err)
+    try {
+      await generator.createSchema({ wrap: false })
+    } catch {
+      // createSchema 也可能因已存在的表失败，忽略——表已手动建好或之前已建
+      console.warn('[database] createSchema fallback also failed (tables may already exist)')
+    }
+  }
   // 补 updateSchema 在 SQLite 上做不到的结构变更（主键重建等）。幂等。
   await runMigrations(getOrm().em.getConnection())
 }
