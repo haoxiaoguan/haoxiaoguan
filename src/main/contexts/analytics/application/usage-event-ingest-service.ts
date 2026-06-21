@@ -52,7 +52,7 @@ export class UsageEventIngestService {
 
       const now = Math.floor(Date.now() / 1000)
       const event: UsageEvent = {
-        dedupId: `proxy:${record.seq}`,
+        dedupId: `proxy:${record.tsMs}:${record.seq}:${record.path}`,
         source: 'proxy',
         agentId,
         inputTokens: tokenSums.inputTokens,
