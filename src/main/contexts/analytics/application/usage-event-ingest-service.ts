@@ -36,6 +36,8 @@ export class UsageEventIngestService {
   ingestProxyEvent(record: ProxyRequestRecord, userAgent: string): void {
     try {
       const agentId = detectAgent(userAgent)
+      // 诊断日志：确认 proxy 事件入缓冲
+      console.log(`[analytics] ingestProxyEvent: agent=${agentId} ua=${userAgent.slice(0, 50)} model=${record.finalModel ?? record.requestedModel ?? 'none'}`)
       const tokenSums = {
         inputTokens: record.inputTokens ?? 0,
         outputTokens: record.outputTokens ?? 0,
@@ -152,8 +154,10 @@ export class UsageEventIngestService {
         }
       }
       const inserted = await this.eventRepo.batchInsertEvents(batch)
+      const proxyCount = batch.filter((e) => e.source === 'proxy').length
+      const sessionCount = batch.length - proxyCount
       if (inserted > 0) {
-        console.log(`[analytics] flush: ${inserted}/${batch.length} inserted`)
+        console.log(`[analytics] flush: ${inserted}/${batch.length} inserted (proxy:${proxyCount} session:${sessionCount})`)
       }
     } catch (err) {
       console.error('[analytics] flush failed, dropping', batch.length, 'events:', err)
