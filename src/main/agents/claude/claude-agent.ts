@@ -92,11 +92,18 @@ class ClaudeSessionLogReader implements SessionLogReader {
           if (shouldReplace(frame, byMsgId.get(msgId))) byMsgId.set(msgId, frame)
         }
 
-        // 仅发出「有 stop_reason 且 output_tokens>0」的最终条目。
+        // 对齐 cc-switch：任一计费维度 >0 即导入，不再强求 stop_reason 和 output>0。
+        // Anthropic 在受理请求时即对 input + cache_read + cache_creation 计费；
+        // Workflow / 子 agent 的并行短命请求经常只写了 message_start 快照（output=1、
+        // stop_reason=None），但 cache/input 成本已被真实计费。旧的双重过滤会把
+        // 这类请求整条丢弃，实测系统性低估约 4.1%，92% 集中在 workflow/subagent。
+        // request_id = session:msg_id 主键 + INSERT OR IGNORE 保证一个 message 仍只落库一次。
         const fileMtimeSec = Math.floor(mtimeMs / 1000)
         for (const [msgId, f] of byMsgId) {
-          if (f.stopReason === null) continue
-          if (f.outputTokens === 0) continue
+          const hasBillable =
+            f.inputTokens > 0 || f.outputTokens > 0 ||
+            f.cacheReadTokens > 0 || f.cacheCreationTokens > 0
+          if (!hasBillable) continue
           const occurredAt = f.tsStr ? parseRfc3339Timestamp(f.tsStr) : fileMtimeSec
           records.push(
             UsageRecord.create({
