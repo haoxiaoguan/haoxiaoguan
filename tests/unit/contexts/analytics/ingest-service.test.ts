@@ -115,18 +115,18 @@ describe('UsageEventIngestService（缓冲 + flush 模式）', () => {
     expect(page.rows[0].agentId).toBe('claude')
   })
 
-  it('dedup_id 重复时 INSERT OR IGNORE 跳过', async () => {
+  it('request_id 重复时 INSERT OR IGNORE 跳过', async () => {
     const { eventRepo, ingest } = await setup()
 
-    // 先写一条 proxy 事件（dedupId = proxy:1）
+    // 先写一条 proxy 事件（requestId = proxy:1）
     ingest.ingestProxyEvent(makeProxyRecord({ seq: 1 }), 'claude-cli/1.0')
     await ingest.flush()
 
-    // 再写一条同 dedupId 的 session 事件（dedupId = session:msg_001，不同）
+    // 再写一条同 requestId 的 session 事件（requestId = session:msg_001，不同）
     await ingest.ingestSessionBatch([makeUsageRecord({ sourceEventId: 'msg_001' })])
     await ingest.flush()
 
-    // 两条 dedupId 不同，都应该存在
+    // 两条 requestId 不同，都应该存在
     const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
     expect(page.rows).toHaveLength(2)
   })

@@ -11,6 +11,7 @@
  * session 源去重改为批量 INSERT OR IGNORE（dedup_id 唯一索引保证），
  * 不再逐条 SELECT 查重——全量扫描几千条记录时逐条查询会卡死主线程。
  */
+import { randomUUID } from 'node:crypto'
 import type { ProxyRequestRecord } from '../../apiProxy/domain/observability/proxy-request-log'
 import type { UsageRecord } from '../../usage/domain/usage-record'
 import type { MikroOrmUsageEventRepository } from '../infrastructure/mikro-orm-usage-event-repository'
@@ -36,8 +37,6 @@ export class UsageEventIngestService {
   ingestProxyEvent(record: ProxyRequestRecord, userAgent: string): void {
     try {
       const agentId = detectAgent(userAgent)
-      // 诊断日志：确认 proxy 事件入缓冲
-      console.log(`[analytics] ingestProxyEvent: agent=${agentId} ua=${userAgent.slice(0, 50)} model=${record.finalModel ?? record.requestedModel ?? 'none'}`)
       const tokenSums = {
         inputTokens: record.inputTokens ?? 0,
         outputTokens: record.outputTokens ?? 0,
@@ -54,7 +53,7 @@ export class UsageEventIngestService {
 
       const now = Math.floor(Date.now() / 1000)
       const event: UsageEvent = {
-        dedupId: `proxy:${record.tsMs}:${record.seq}:${record.path}`,
+        requestId: randomUUID(),
         source: 'proxy',
         agentId,
         inputTokens: tokenSums.inputTokens,
@@ -102,7 +101,7 @@ export class UsageEventIngestService {
         const cost = calculateForAgent(record.agentId, model, tokenSums, index, config)
 
         const evt: UsageEvent = {
-          dedupId: `session:${record.sourceEventId}`,
+          requestId: `session:${record.sourceEventId}`,
           source: 'session',
           agentId: record.agentId,
           inputTokens: tokenSums.inputTokens,

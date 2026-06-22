@@ -24,7 +24,7 @@ interface RequestLogTableProps {
 
 export function RequestLogTable({ window, agentId }: RequestLogTableProps) {
   const { t } = useTranslation('analytics')
-  const [cursor, setCursor] = useState<{ occurredAt: number; id: number } | undefined>(undefined)
+  const [cursor, setCursor] = useState<{ occurredAt: number; requestId: string } | undefined>(undefined)
   const [selectedRow, setSelectedRow] = useState<UsageEventRowDto | null>(null)
   const [modelFilter, setModelFilter] = useState<string>('all')
 
@@ -127,7 +127,7 @@ export function RequestLogTable({ window, agentId }: RequestLogTableProps) {
           <DataTable
             columns={columns}
             data={rows}
-            getRowId={(r) => String(r.id)}
+            getRowId={(r) => r.requestId}
             className="h-full"
             rowProps={(row) => ({ className: 'cursor-pointer hover:bg-muted/50', onDoubleClick: () => setSelectedRow(row.original) })}
             emptyState={<span className="text-sm text-muted-foreground">{t('noData')}</span>}

@@ -6,7 +6,7 @@
 /** 统一用量事件（对应 usage_events 单行）。 */
 export interface UsageEvent {
   id?: number
-  dedupId: string
+  requestId: string
   source: 'proxy' | 'session'
   agentId: string
   model?: string
@@ -113,12 +113,12 @@ export interface UsageEventSearchFilter {
 /** keyset 分页游标（按 (occurred_at, id) 降序）。 */
 export interface UsageEventCursor {
   occurredAt: number
-  id: number
+  requestId: string
 }
 
 /** 明细行（落库投影 + 主键 id）。 */
 export interface UsageEventRow extends UsageEvent {
-  id: number
+  requestId: string
 }
 
 /** 检索分页结果。 */

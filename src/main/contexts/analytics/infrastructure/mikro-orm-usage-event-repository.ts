@@ -37,7 +37,7 @@ export class MikroOrmUsageEventRepository {
     this.getEm = getEmFn ?? defaultGetEm
   }
 
-  /** 批量写入（INSERT OR IGNORE，dedup_id 唯一约束保证去重）。单事务。 */
+  /** 批量写入（INSERT OR IGNORE，request_id 唯一约束保证去重）。单事务。 */
   async batchInsertEvents(events: UsageEvent[]): Promise<number> {
     if (events.length === 0) return 0
     const conn = this.getEm().getConnection()
@@ -51,7 +51,7 @@ export class MikroOrmUsageEventRepository {
       for (const e of chunk) {
         placeholders.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         values.push(
-          e.dedupId, e.source, e.agentId, e.model ?? null, e.requestedModel ?? null,
+          e.requestId, e.source, e.agentId, e.model ?? null, e.requestedModel ?? null,
           e.inputTokens, e.outputTokens, e.cacheReadTokens, e.cacheCreationTokens,
           e.inputCostUsd, e.outputCostUsd, e.cacheReadCostUsd, e.cacheCreationCostUsd, e.totalCostUsd,
           e.status ?? null, e.durationMs ?? null, e.ttfbMs ?? null, e.errorKind ?? null,
@@ -62,7 +62,7 @@ export class MikroOrmUsageEventRepository {
       await conn.execute('BEGIN')
       try {
         const sql = `INSERT OR IGNORE INTO usage_events (
-          dedup_id, source, agent_id, model, requested_model,
+          request_id, source, agent_id, model, requested_model,
           input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
           input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
           status, duration_ms, ttfb_ms, error_kind,
@@ -286,13 +286,13 @@ export class MikroOrmUsageEventRepository {
       params.push(kw, kw)
     }
     if (cursor) {
-      conditions.push('(occurred_at < ? OR (occurred_at = ? AND id < ?))')
-      params.push(cursor.occurredAt, cursor.occurredAt, cursor.id)
+      conditions.push('(occurred_at < ? OR (occurred_at = ? AND request_id < ?))')
+      params.push(cursor.occurredAt, cursor.occurredAt, cursor.requestId)
     }
 
     const whereClause = conditions.join(' AND ')
     const rows = (await conn.execute(
-      `SELECT * FROM usage_events WHERE ${whereClause} ORDER BY occurred_at DESC, id DESC LIMIT ?`,
+      `SELECT * FROM usage_events WHERE ${whereClause} ORDER BY occurred_at DESC, request_id DESC LIMIT ?`,
       [...params, limit + 1],
       'all',
     )) as Array<Record<string, unknown>>
@@ -304,7 +304,7 @@ export class MikroOrmUsageEventRepository {
     let nextCursor: UsageEventCursor | undefined
     if (hasNext && mapped.length > 0) {
       const last = mapped[mapped.length - 1]
-      nextCursor = { occurredAt: last.occurredAt, id: last.id }
+      nextCursor = { occurredAt: last.occurredAt, requestId: last.requestId }
     }
 
     if (nextCursor) {
@@ -314,11 +314,11 @@ export class MikroOrmUsageEventRepository {
   }
 
   /** 获取单条明细。 */
-  async findById(id: number): Promise<UsageEventRow | null> {
+  async findByRequestId(requestId: string): Promise<UsageEventRow | null> {
     const conn = this.getEm().getConnection()
     const row = (await conn.execute(
-      `SELECT * FROM usage_events WHERE id = ? LIMIT 1`,
-      [id],
+      `SELECT * FROM usage_events WHERE request_id = ? LIMIT 1`,
+      [requestId],
       'get',
     )) as Record<string, unknown> | undefined
     return row ? this.mapRow(row) : null
@@ -326,8 +326,7 @@ export class MikroOrmUsageEventRepository {
 
   private mapRow(r: Record<string, unknown>): UsageEventRow {
     const row: UsageEventRow = {
-      id: Number(r.id),
-      dedupId: String(r.dedup_id),
+      requestId: String(r.request_id),
       source: String(r.source) as 'proxy' | 'session',
       agentId: String(r.agent_id),
       inputTokens: Number(r.input_tokens),

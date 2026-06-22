@@ -12,7 +12,7 @@ afterEach(async () => {
 
 function makeProxyEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
   return {
-    dedupId: 'proxy-req-001',
+    requestId: 'proxy-req-001',
     source: 'proxy',
     agentId: 'claude',
     model: 'claude-sonnet-4-20250514',
@@ -51,29 +51,29 @@ describe('MikroOrmUsageEventRepository', () => {
     expect(page.rows[0].model).toBe('claude-sonnet-4-20250514')
   })
 
-  it('相同 dedup_id 的 INSERT OR IGNORE 跳过', async () => {
+  it('相同 request_id 的 INSERT OR IGNORE 跳过', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hxg-repo-dedup1-'))
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
     // 第一次写入
-    await repo.batchInsertEvents([makeProxyEvent({ dedupId: 'dup-001' })])
-    // 第二次写入相同 dedupId → INSERT OR IGNORE 跳过
-    await repo.batchInsertEvents([makeProxyEvent({ dedupId: 'dup-001', agentId: 'codex' })])
+    await repo.batchInsertEvents([makeProxyEvent({ requestId: 'dup-001' })])
+    // 第二次写入相同 requestId → INSERT OR IGNORE 跳过
+    await repo.batchInsertEvents([makeProxyEvent({ requestId: 'dup-001', agentId: 'codex' })])
 
     const page = await repo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
     expect(page.rows).toHaveLength(1) // 只有第一条
     expect(page.rows[0].agentId).toBe('claude') // 第一次的
   })
 
-  it('不同 dedup_id 都写入', async () => {
+  it('不同 request_id 都写入', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hxg-repo-dedup2-'))
     await initDatabase({ dbName: join(dir, 't.db'), createSchemaOnInit: true })
     const repo = new MikroOrmUsageEventRepository(() => getEm())
 
     await repo.batchInsertEvents([
-      makeProxyEvent({ dedupId: 'proxy-1' }),
-      makeProxyEvent({ dedupId: 'session-1', source: 'session' }),
+      makeProxyEvent({ requestId: 'proxy-1' }),
+      makeProxyEvent({ requestId: 'session-1', source: 'session' }),
     ])
 
     const page = await repo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
@@ -87,7 +87,7 @@ describe('MikroOrmUsageEventRepository', () => {
 
     await repo.batchInsertEvents([
       makeProxyEvent({ inputTokens: 1000, outputTokens: 500, totalCostUsd: 0.01 }),
-      makeProxyEvent({ dedupId: 'proxy-2', inputTokens: 200, outputTokens: 100, totalCostUsd: 0.005 }),
+      makeProxyEvent({ requestId: 'proxy-2', inputTokens: 200, outputTokens: 100, totalCostUsd: 0.005 }),
     ])
 
     const s = await repo.summary({ startSec: 0, endSec: 2000000000 })
@@ -104,7 +104,7 @@ describe('MikroOrmUsageEventRepository', () => {
 
     await repo.batchInsertEvents([
       makeProxyEvent({ model: 'claude-sonnet-4-20250514' }),
-      makeProxyEvent({ dedupId: 'p2', model: 'gpt-5-codex', inputTokens: 500, outputTokens: 200 }),
+      makeProxyEvent({ requestId: 'p2', model: 'gpt-5-codex', inputTokens: 500, outputTokens: 200 }),
     ])
 
     const rows = await repo.modelBreakdown({ startSec: 0, endSec: 2000000000 })
@@ -121,7 +121,7 @@ describe('MikroOrmUsageEventRepository', () => {
 
     await repo.batchInsertEvents([
       makeProxyEvent({ agentId: 'claude' }),
-      makeProxyEvent({ dedupId: 'p2', agentId: 'codex' }),
+      makeProxyEvent({ requestId: 'p2', agentId: 'codex' }),
     ])
 
     const rows = await repo.agentBreakdown({ startSec: 0, endSec: 2000000000 })
@@ -136,7 +136,7 @@ describe('MikroOrmUsageEventRepository', () => {
 
     const batch = []
     for (let i = 0; i < 5; i++) {
-      batch.push(makeProxyEvent({ dedupId: `p-${i}`, occurredAt: 1700000000 + i }))
+      batch.push(makeProxyEvent({ requestId: `p-${i}`, occurredAt: 1700000000 + i }))
     }
     await repo.batchInsertEvents(batch)
 

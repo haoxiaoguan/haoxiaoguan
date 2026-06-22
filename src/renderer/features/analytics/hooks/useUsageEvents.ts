@@ -6,7 +6,7 @@ import type { AnalyticsWindowDto, UsageEventSearchFilterDto, UsageEventSearchPag
 export function useUsageEvents(
   window: AnalyticsWindowDto,
   filter: UsageEventSearchFilterDto,
-  cursor?: { occurredAt: number; id: number },
+  cursor?: { occurredAt: number; requestId: string },
   limit?: number,
 ) {
   const fetcher = useMemo(

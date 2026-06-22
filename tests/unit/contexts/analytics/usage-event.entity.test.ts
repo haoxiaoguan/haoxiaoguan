@@ -23,8 +23,8 @@ describe('usage_events 实体建表', () => {
     }>
     const colNames = cols.map((c) => c.name)
     // 标识字段
-    expect(colNames).toContain('id')
-    expect(colNames).toContain('dedup_id')
+    expect(colNames).toContain('request_id')
+    expect(colNames).toContain('request_id')
     expect(colNames).toContain('source')
     expect(colNames).toContain('agent_id')
     // token 字段
@@ -54,7 +54,7 @@ describe('usage_events 实体建表', () => {
 
     // id 是主键
     const pk = cols.filter((c) => c.pk > 0).map((c) => c.name)
-    expect(pk).toEqual(['id'])
+    expect(pk).toEqual(['request_id'])
   })
 
   it('索引存在', async () => {

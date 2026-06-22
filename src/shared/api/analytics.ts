@@ -68,13 +68,12 @@ export interface UsageEventSearchFilterDto {
 /** keyset 分页游标。 */
 export interface UsageEventCursorDto {
   occurredAt: number
-  id: number
+  requestId: string
 }
 
 /** 明细行。 */
 export interface UsageEventRowDto {
-  id: number
-  dedupId: string
+  requestId: string
   source: 'proxy' | 'session'
   agentId: string
   model?: string
