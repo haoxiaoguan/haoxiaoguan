@@ -69,20 +69,24 @@ describe('ClaudeAgentClient usage reader — message.id 去重（对齐 cc-switc
     expect(batch.records[0].outputTokens).toBe(26)
   })
 
-  it('丢弃 output_tokens=0 的无意义条目', async () => {
+  it('output_tokens=0 但有 input/cache_read 计费的条目仍计入（对齐 cc-switch）', async () => {
     write(join(projects(), 'proj', 'c.jsonl'), [
       assistant('msg_C', { input_tokens: 999, output_tokens: 0, cache_read_input_tokens: 999 }, 'end_turn'),
     ])
     const batch = await run()
-    expect(batch.records.length).toBe(0)
+    expect(batch.records.length).toBe(1)
+    expect(batch.records[0].inputTokens).toBe(999)
+    expect(batch.records[0].cacheReadTokens).toBe(999)
   })
 
-  it('完全没有 stop_reason 的 message.id 不计入', async () => {
+  it('无 stop_reason 但有计费 token 的 message.id 计入（workflow/subagent 场景，对齐 cc-switch）', async () => {
     write(join(projects(), 'proj', 'd.jsonl'), [
       assistant('msg_D', { input_tokens: 1, output_tokens: 5 }, null),
     ])
     const batch = await run()
-    expect(batch.records.length).toBe(0)
+    expect(batch.records.length).toBe(1)
+    expect(batch.records[0].inputTokens).toBe(1)
+    expect(batch.records[0].outputTokens).toBe(5)
   })
 
   it('subagent 文件里的独立 message.id 计入（真实子调用），且各自去重', async () => {

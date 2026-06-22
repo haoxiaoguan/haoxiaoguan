@@ -58,10 +58,6 @@ export const SKILL_CHANNELS = {
 // (snake_case, no service prefix) per the usage manifest §3.
 export const USAGE_CHANNELS = {
   syncUsageSources: 'sync_usage_sources',
-  getUsageSummary: 'get_usage_summary',
-  getUsageTrend: 'get_usage_trend',
-  getUsagePlatformBreakdown: 'get_usage_platform_breakdown',
-  getUsageSyncStatus: 'get_usage_sync_status',
 } as const
 
 // Agents shared-layer registry (read-only). Values are fixed per the agents
@@ -302,6 +298,20 @@ export const CLIENT_CONFIG_CHANNELS = {
   testConnectivity: 'clientConfig:testConnectivity',
   setRouting: 'clientConfig:setRouting',
   setCodexProviderEnabled: 'clientConfig:setCodexProviderEnabled',
+} as const
+
+// analytics 上下文：统一用量统计（usage_events 单表查询）。
+export const ANALYTICS_CHANNELS = {
+  summary: 'analytics:summary',
+  trend: 'analytics:trend',
+  agentBreakdown: 'analytics:agentBreakdown',
+  modelBreakdown: 'analytics:modelBreakdown',
+  search: 'analytics:search',
+  listPricing: 'analytics:listPricing',
+  upsertPricing: 'analytics:upsertPricing',
+  deletePricing: 'analytics:deletePricing',
+  getPricingConfig: 'analytics:getPricingConfig',
+  setPricingConfig: 'analytics:setPricingConfig',
 } as const
 
 // 自绘窗口控制（Linux 无原生标题栏时，渲染层画 min/max/close 调这些）。

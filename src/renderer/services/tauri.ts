@@ -27,11 +27,7 @@ import type {
   ExportAccountsRequest,
   ImportAccountsRequest,
   ImportResultResponse,
-  PlatformUsageBreakdownResponse,
-  UsageSummaryResponse,
-  UsageSyncStatusResponse,
   UsageSyncSummaryResponse,
-  UsageTrendPointResponse,
 } from '../types';
 
 export const accountService = {
@@ -154,18 +150,6 @@ export const agentService = {
 export const usageService = {
   syncUsageSources: () =>
     bridge().usage.syncUsageSources() as Promise<UsageSyncSummaryResponse>,
-
-  getUsageSummary: (window: TimeWindowDto) =>
-    bridge().usage.getUsageSummary(window) as Promise<UsageSummaryResponse>,
-
-  getUsageTrend: (window: TimeWindowDto, granularity: TrendGranularityDto, metric: string) =>
-    bridge().usage.getUsageTrend(window, granularity, metric) as Promise<UsageTrendPointResponse[]>,
-
-  getUsagePlatformBreakdown: (window: TimeWindowDto) =>
-    bridge().usage.getUsagePlatformBreakdown(window) as Promise<PlatformUsageBreakdownResponse[]>,
-
-  getUsageSyncStatus: () =>
-    bridge().usage.getUsageSyncStatus() as Promise<UsageSyncStatusResponse>,
 };
 
 // ============================================================================

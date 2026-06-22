@@ -1,0 +1,101 @@
+{
+  "title": "数据统计",
+  "tab": {
+    "stats": "数据统计",
+    "requestLog": "请求日志",
+    "pricing": "定价配置"
+  },
+  "subTab": {
+    "trend": "趋势",
+    "agent": "Agent",
+    "model": "模型"
+  },
+  "range": {
+    "1d": "近 1 天",
+    "7d": "近 7 天",
+    "30d": "近 30 天"
+  },
+  "agent": {
+    "all": "全部",
+    "claude": "Claude",
+    "codex": "Codex",
+    "geminiCli": "Gemini CLI",
+    "kiro": "Kiro",
+    "qoder": "Qoder"
+  },
+  "kpi": {
+    "totalTokens": "总 Token",
+    "totalCost": "总花费",
+    "requests": "请求数",
+    "cacheHitRate": "缓存命中率",
+    "tokensHint": "输入 {{input}} · 输出 {{output}}",
+    "costHint": "按模型定价估算",
+    "requestsHint": "窗口内全部请求",
+    "cacheHint": "缓存读 {{read}}"
+  },
+  "trend": {
+    "title": "趋势",
+    "tokens": "Token",
+    "cost": "花费",
+    "requests": "请求"
+  },
+  "agentStats": {
+    "title": "Agent 统计",
+    "agent": "Agent",
+    "requests": "请求数",
+    "tokens": "Token",
+    "cost": "花费",
+    "share": "占比",
+    "cacheHit": "缓存命中"
+  },
+  "modelStats": {
+    "title": "模型统计",
+    "model": "模型",
+    "requests": "请求数",
+    "tokens": "Token",
+    "cost": "花费",
+    "avgCost": "平均成本",
+    "share": "占比"
+  },
+  "requestLog": {
+    "title": "请求日志",
+    "time": "时间",
+    "agent": "Agent",
+    "model": "模型",
+    "source": "来源",
+    "tokens": "Token",
+    "cost": "花费",
+    "status": "状态",
+    "modelFilter": "筛选模型",
+    "allModels": "全部模型"
+  },
+  "requestDetail": {
+    "title": "请求详情",
+    "time": "时间",
+    "agent": "Agent",
+    "source": "来源",
+    "model": "模型",
+    "inputTokens": "输入 Token",
+    "outputTokens": "输出 Token",
+    "cacheRead": "缓存读",
+    "cacheCreation": "缓存写",
+    "totalCost": "总花费",
+    "status": "状态",
+    "duration": "耗时",
+    "errorKind": "错误类型",
+    "account": "账号",
+    "combo": "路由组合"
+  },
+  "pricing": {
+    "title": "定价配置",
+    "add": "新增",
+    "edit": "编辑",
+    "modelId": "模型 ID",
+    "displayName": "显示名",
+    "input": "输入单价",
+    "output": "输出单价",
+    "cacheRead": "缓存读单价",
+    "cacheCreation": "缓存写单价"
+  },
+  "noData": "暂无数据"
+}

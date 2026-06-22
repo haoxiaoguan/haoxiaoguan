@@ -66,6 +66,12 @@ import { ActivityEventEntity } from '../../contexts/activity/infrastructure/acti
 import { ActivityDailyRollupEntity } from '../../contexts/activity/infrastructure/activity-daily-rollup.entity'
 import { ActivityScanStateEntity } from '../../contexts/activity/infrastructure/activity-scan-state.entity'
 
+// analytics context
+import { UsageEventEntity } from '../../contexts/analytics/infrastructure/usage-event.entity'
+import { ModelPricingEntity } from '../../contexts/analytics/infrastructure/model-pricing.entity'
+import { PricingConfigEntity } from '../../contexts/analytics/infrastructure/pricing-config.entity'
+import { AnalyticsMetaEntity } from '../../contexts/analytics/infrastructure/analytics-meta.entity'
+
 /** All decorator entity classes registered for schema generation. */
 export const ALL_ENTITIES: unknown[] = [
   // account context
@@ -114,4 +120,9 @@ export const ALL_ENTITIES: unknown[] = [
   ActivityEventEntity,
   ActivityDailyRollupEntity,
   ActivityScanStateEntity,
+  // analytics context
+  UsageEventEntity,
+  ModelPricingEntity,
+  PricingConfigEntity,
+  AnalyticsMetaEntity,
 ]

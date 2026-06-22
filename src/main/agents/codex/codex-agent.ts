@@ -20,7 +20,7 @@ import {
   isJsonlFile,
   parseRfc3339Timestamp,
   rawHash,
-  readJsonLinesAsync,
+  readJsonLinesIter,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -51,7 +51,7 @@ class CodexSessionLogReader implements SessionLogReader {
       if (mtimeMs !== 0 && known.get(filePath) === mtimeMs) continue
 
       try {
-        const lines = await readJsonLinesAsync(filePath)
+        // 流式逐行读：codex 历史 rollout 有 600MB+ 文件，整文件 readFile 会超 V8 字符串上限。
         // Delta-encoding state per file
         let prevIn = 0
         let prevOut = 0
@@ -61,7 +61,7 @@ class CodexSessionLogReader implements SessionLogReader {
         // Track best-effort model name: updated whenever a line carries payload.model
         let model = 'unknown-model'
 
-        for (const [index, raw] of lines) {
+        for await (const [index, raw] of readJsonLinesIter(filePath)) {
           let value: Record<string, any>
           try {
             value = JSON.parse(raw)

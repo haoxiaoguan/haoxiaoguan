@@ -8,6 +8,7 @@ import zhCNTranslation from '../locales/zh-CN/translation.json';
 import zhCNAccounts from '../locales/zh-CN/accounts.json';
 import zhCNOnboarding from '../locales/zh-CN/onboarding.json';
 import zhCNProxy from '../locales/zh-CN/proxy.json';
+import zhCNAnalytics from '../locales/zh-CN/analytics.json';
 
 import enCommon from '../locales/en/common.json';
 import enNav from '../locales/en/nav.json';
@@ -16,6 +17,7 @@ import enTranslation from '../locales/en/translation.json';
 import enAccounts from '../locales/en/accounts.json';
 import enOnboarding from '../locales/en/onboarding.json';
 import enProxy from '../locales/en/proxy.json';
+import enAnalytics from '../locales/en/analytics.json';
 
 import ja from '../locales/ja.json';
 import ko from '../locales/ko.json';
@@ -67,6 +69,7 @@ i18n.use(initReactI18next).init({
       accounts: zhCNAccounts,
       onboarding: zhCNOnboarding,
       proxy: zhCNProxy,
+      analytics: zhCNAnalytics,
     },
     en: {
       translation: enTranslation,
@@ -76,6 +79,7 @@ i18n.use(initReactI18next).init({
       accounts: enAccounts,
       onboarding: enOnboarding,
       proxy: enProxy,
+      analytics: enAnalytics,
     },
     ja: { translation: ja },
     ko: { translation: ko },

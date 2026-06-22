@@ -183,13 +183,6 @@ export function TrendChartCard({
   const tickColor   = theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(15,23,42,0.35)'
   const gradId      = `trend-area-grad-${theme}`
 
-  // 最后同步时间（HH:mm）——来自范围汇总的 lastSyncedAt（Unix 秒）。
-  const syncLabel = useMemo(() => {
-    if (summary?.lastSyncedAt == null) return null
-    const d = new Date(summary.lastSyncedAt * 1000)
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-  }, [summary?.lastSyncedAt])
-
   const cycleRefresh = () => {
     const idx = REFRESH_STEPS.indexOf(refreshInterval)
     onRefreshIntervalChange(REFRESH_STEPS[(idx + 1) % REFRESH_STEPS.length] ?? 0)
@@ -243,15 +236,6 @@ export function TrendChartCard({
           {t('trend.title')}
         </span>
         <div className="flex items-center gap-2">
-          {syncLabel != null && (
-            <span
-              className="flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground"
-              title={t('datawall.lastSynced')}
-            >
-              <RefreshCw className="size-3" strokeWidth={1.8} aria-hidden />
-              {syncLabel}
-            </span>
-          )}
           <button
             type="button"
             onClick={cycleRefresh}

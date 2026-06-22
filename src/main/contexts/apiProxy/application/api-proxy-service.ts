@@ -1137,6 +1137,7 @@ export class ApiProxyService {
     const { intent } = input
     // platform：直连取 intent.platform；组合裸名 intent.platform 为空，回退到最终命中跳的平台。
     const platform = intent.platform ?? obs.finalPlatform
+    const ua = input.headers?.['user-agent']
     return {
       method: input.method ?? (intent.action === 'models' ? 'GET' : 'POST'),
       path: input.path ?? '',
@@ -1160,6 +1161,7 @@ export class ApiProxyService {
       ...(obs.finalModel !== undefined ? { finalModel: obs.finalModel } : {}),
       ...(obs.routeHops !== undefined ? { routeHops: obs.routeHops } : {}),
       ...(obs.routePath !== undefined ? { routePath: obs.routePath } : {}),
+      ...(ua !== undefined ? { userAgent: ua } : {}),
     }
   }
 

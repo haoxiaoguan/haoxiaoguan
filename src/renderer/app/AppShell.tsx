@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  BarChart3,
   Bell,
   BookOpen,
   Cable,
@@ -76,6 +77,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { to: '/sessions', labelKey: 'nav:sessions', icon: History },
   { to: '/skills', labelKey: 'nav:skills', icon: Puzzle },
   { to: '/mcp', labelKey: 'nav:mcp', icon: Server },
+  { to: '/analytics', labelKey: 'nav:analytics', icon: BarChart3 },
 ];
 
 const SETTINGS_NAV_ITEMS: NavItem[] = [
@@ -93,6 +95,7 @@ const navButtonClassName =
 
 type SkillsHeaderTab = 'installed' | 'discover';
 type AccountsHeaderTab = 'accounts' | 'groups' | 'proxies';
+type AnalyticsHeaderTab = 'stats' | 'requests' | 'pricing';
 type ClientConfigHeaderTab = 'manage' | 'access';
 type RouteServiceHeaderTab = 'service' | 'combos' | 'keys' | 'health' | 'logs';
 
@@ -248,6 +251,13 @@ export function AppShell({ shell }: AppShellProps) {
   const activeClientConfigTab: ClientConfigHeaderTab = location.pathname.startsWith('/client-config/access')
     ? 'access'
     : 'manage'; // /client-config 默认进客户端管理
+  // analytics（/analytics：数据统计/请求日志/定价配置）一组顶部 tabs。
+  const isAnalyticsRoute = location.pathname.startsWith('/analytics');
+  const activeAnalyticsTab: AnalyticsHeaderTab = location.pathname.startsWith('/analytics/requests')
+    ? 'requests'
+    : location.pathname.startsWith('/analytics/pricing')
+      ? 'pricing'
+      : 'stats';
 
   return (
     <div
@@ -378,6 +388,16 @@ export function AppShell({ shell }: AppShellProps) {
                 tabs={[
                   { value: 'manage', label: t('nav:clientManage.title'), to: '/client-config' },
                   { value: 'access', label: t('nav:clientConfig'), to: '/client-config/access' },
+                ]}
+              />
+            ) : isAnalyticsRoute ? (
+              <ManagementHeaderTabs
+                ariaLabel={t('nav:analytics')}
+                value={activeAnalyticsTab}
+                tabs={[
+                  { value: 'stats', label: t('analytics:tab.stats'), to: '/analytics' },
+                  { value: 'requests', label: t('analytics:tab.requestLog'), to: '/analytics/requests' },
+                  { value: 'pricing', label: t('analytics:tab.pricing'), to: '/analytics/pricing' },
                 ]}
               />
             ) : (

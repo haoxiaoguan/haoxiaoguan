@@ -11,6 +11,7 @@ import {
   QUOTA_CHANNELS,
   SKILL_CHANNELS,
   USAGE_CHANNELS,
+  ANALYTICS_CHANNELS,
   LOCAL_BACKUP_CHANNELS,
   MCP_CHANNELS,
   SYNC_CHANNELS,
@@ -150,12 +151,22 @@ const api: HxgApi = {
   },
   usage: {
     syncUsageSources: () => ipcRenderer.invoke(USAGE_CHANNELS.syncUsageSources),
-    getUsageSummary: (window) => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSummary, window),
-    getUsageTrend: (window, granularity, metric) =>
-      ipcRenderer.invoke(USAGE_CHANNELS.getUsageTrend, window, granularity, metric),
-    getUsagePlatformBreakdown: (window) =>
-      ipcRenderer.invoke(USAGE_CHANNELS.getUsagePlatformBreakdown, window),
-    getUsageSyncStatus: () => ipcRenderer.invoke(USAGE_CHANNELS.getUsageSyncStatus),
+  },
+  analytics: {
+    summary: (window, agentId) => ipcRenderer.invoke(ANALYTICS_CHANNELS.summary, window, agentId),
+    trend: (window, granularity, metric, agentId) =>
+      ipcRenderer.invoke(ANALYTICS_CHANNELS.trend, window, granularity, metric, agentId),
+    agentBreakdown: (window) => ipcRenderer.invoke(ANALYTICS_CHANNELS.agentBreakdown, window),
+    modelBreakdown: (window, agentId) =>
+      ipcRenderer.invoke(ANALYTICS_CHANNELS.modelBreakdown, window, agentId),
+    search: (window, filter, cursor, limit) =>
+      ipcRenderer.invoke(ANALYTICS_CHANNELS.search, window, filter, cursor, limit),
+    listPricing: () => ipcRenderer.invoke(ANALYTICS_CHANNELS.listPricing),
+    upsertPricing: (row) => ipcRenderer.invoke(ANALYTICS_CHANNELS.upsertPricing, row),
+    deletePricing: (modelId) => ipcRenderer.invoke(ANALYTICS_CHANNELS.deletePricing, modelId),
+    getPricingConfig: (agentId) => ipcRenderer.invoke(ANALYTICS_CHANNELS.getPricingConfig, agentId),
+    setPricingConfig: (agentId, multiplier, source) =>
+      ipcRenderer.invoke(ANALYTICS_CHANNELS.setPricingConfig, agentId, multiplier, source),
   },
   localBackup: {
     create: () => ipcRenderer.invoke(LOCAL_BACKUP_CHANNELS.create),

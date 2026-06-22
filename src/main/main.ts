@@ -399,13 +399,9 @@ if (!gotLock) {
       usageSyncRunning = true
       try {
         try {
-          const summary = await svc.usageSync.syncAll()
-          const failed = svc.usageSync
-            .lastErrors()
-            .map((e) => e.split(':')[0].trim())
-            .filter(Boolean)
-          await svc.usageQuery.recordSyncResult(summary.platforms, failed)
-          await svc.usageQuery.rebuildRollups()
+          // syncAll 扫描各 agent 本地日志写入 usage_records，
+          // 同时经 UsageSyncService 注入的 analyticsIngest 追加写入 usage_events。
+          await svc.usageSync.syncAll()
         } catch (e) {
           console.error('[usage] periodic sync failed:', e)
         }
@@ -425,8 +421,15 @@ if (!gotLock) {
 
     // 路由日志定时落库（非阻塞；flush 内部有重入保护，空缓冲直接返回）。
     routingLogFlushTimer = setInterval(() => {
-      services?.routingObservabilityService.flush().catch((e) => {
+      services?.analyticsIngest?.flush().catch((e) => {
+    console.error('[analytics] exit flush failed:', e)
+  })
+  services?.routingObservabilityService.flush().catch((e) => {
         console.error('[routingObs] periodic flush failed:', e)
+      })
+      // analytics 用量事件定时批量写入（缓冲→DB，避免每条请求同步写阻塞主线程）
+      services?.analyticsIngest?.flush().catch((e) => {
+        console.error('[analytics] periodic flush failed:', e)
       })
     }, ROUTING_LOG_FLUSH_INTERVAL_MS)
 

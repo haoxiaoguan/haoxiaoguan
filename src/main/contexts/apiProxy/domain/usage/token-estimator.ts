@@ -61,17 +61,27 @@ function blockText(block: ContentBlock): string {
   return ''
 }
 
+/**
+ * 估算请求输入 token。
+ *
+ * ⚠️ 刻意走**字符分类近似**（approxTokens），不走官方 BPE tokenizer：
+ * 本函数在代理热路径上对**每个请求**同步调用（api-proxy-service handleMessages/handleResponses），
+ * 火山方舟/GLM 等大上下文请求 input 可达数十万 token，官方 tokenizer 同步 BPE 编码整段请求会
+ * 阻塞 Electron 主进程上百毫秒 → 整个 app 卡顿。而此处估值仅作"上游未回传 usage 时的兜底"，
+ * 成功请求会被上游真实 usage 覆盖；且对非 Claude 上游，Claude BPE 估值本就不准。故用 O(n)
+ * 字符近似（中文友好、无 WASM、无逐块调用开销），既快又够用。
+ */
 export function estimateRequestInputTokens(req: CanonicalRequest): number {
   let total = 0
-  if (req.system !== undefined) total += countTextTokens(req.system)
+  if (req.system !== undefined) total += approxTokens(req.system)
   for (const msg of req.messages) {
-    for (const block of msg.content) total += countTextTokens(blockText(block))
+    for (const block of msg.content) total += approxTokens(blockText(block))
   }
   if (req.tools !== undefined) {
     for (const t of req.tools) {
-      total += countTextTokens(t.name)
-      if (t.description !== undefined) total += countTextTokens(t.description)
-      total += countTextTokens(JSON.stringify(t.inputSchema))
+      total += approxTokens(t.name)
+      if (t.description !== undefined) total += approxTokens(t.description)
+      total += approxTokens(JSON.stringify(t.inputSchema))
     }
   }
   return Math.max(total, 1)

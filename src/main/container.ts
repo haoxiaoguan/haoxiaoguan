@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { SettingsFileService } from './contexts/settings/infrastructure/settings-file-service'
 import { SettingsApplicationService } from './contexts/settings/application/settings-service'
 import { appDataDir, dotDir, xdgConfigDir } from './platform/persistence/paths'
-import { initDatabase } from './platform/persistence/database'
+import { initDatabase, getEm } from './platform/persistence/database'
 import type { Services } from './ipc/registry'
 
 // Agents shared layer — the full 17-adapter registry, built once and injected
@@ -56,12 +56,16 @@ import { BackupService } from './contexts/skill/application/backup-service'
 import { StorageService } from './contexts/skill/application/storage-service'
 
 // Usage context.
-import { MikroOrmUsageRecordRepository } from './contexts/usage/infrastructure/mikro-orm-usage-record-repository'
-import { MikroOrmUsageRollupRepository } from './contexts/usage/infrastructure/mikro-orm-usage-rollup-repository'
-import { MikroOrmUsageSyncStateRepository } from './contexts/usage/infrastructure/mikro-orm-usage-sync-state-repository'
 import { MikroOrmUsageFileCursorStore } from './contexts/usage/infrastructure/mikro-orm-usage-file-cursor-store'
 import { UsageSyncService } from './contexts/usage/application/usage-sync-service'
-import { UsageQueryService } from './contexts/usage/application/usage-query-service'
+
+// analytics context — unified usage statistics (usage_events single table).
+import { MikroOrmUsageEventRepository } from './contexts/analytics/infrastructure/mikro-orm-usage-event-repository'
+import { MikroOrmPricingRepository } from './contexts/analytics/infrastructure/mikro-orm-pricing-repository'
+import { UsageEventIngestService } from './contexts/analytics/application/usage-event-ingest-service'
+import { UsageEventQueryService } from './contexts/analytics/application/usage-event-query-service'
+import { PricingService } from './contexts/analytics/application/pricing-service'
+import { seedModelPricing } from './contexts/analytics/infrastructure/pricing-seed'
 import { InMemoryAgentRegistry } from './agents/shared/agent-registry'
 import { ClaudeAgentClient } from './agents/claude/claude-agent'
 import { CodexAgentClient } from './agents/codex/codex-agent'
@@ -127,6 +131,7 @@ import { KiroUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/
 import { AccountHealthTracker } from './contexts/apiProxy/domain/account-selection/account-health-tracker'
 import { AccountPoolSelector } from './contexts/apiProxy/domain/account-selection/account-pool-selector'
 import { ProxyRequestLog } from './contexts/apiProxy/domain/observability/proxy-request-log'
+import type { ProxyRequestRecord } from './contexts/apiProxy/domain/observability/proxy-request-log'
 import { MikroOrmRoutingObservabilityRepository } from './contexts/apiProxy/infrastructure/observability/mikro-orm-routing-observability.repository'
 import { RoutingObservabilityService } from './contexts/apiProxy/application/routing-observability-service'
 import { ProxyPoolRepository } from './contexts/apiProxy/infrastructure/account-pool/proxy-pool.repository'
@@ -358,11 +363,86 @@ export async function buildContainer(): Promise<Container> {
     new KiroAgentClient(),
     new QoderAgentClient(),
   ])
-  const usageRecordRepo = new MikroOrmUsageRecordRepository()
-  const usageRollupRepo = new MikroOrmUsageRollupRepository()
-  const usageSyncStateRepo = new MikroOrmUsageSyncStateRepository()
-  const usageSync = new UsageSyncService(usageAgentRegistry, usageRecordRepo, usageFileCursorStore)
-  const usageQuery = new UsageQueryService(usageRollupRepo, usageSyncStateRepo)
+
+  // 6b. analytics context — 统一用量统计（usage_events 单表，双源 ingest + 去重）。
+  // 先于 usageSync 装配：UsageSyncService 构造注入 analyticsIngest。
+  const analyticsEventRepo = new MikroOrmUsageEventRepository()
+  const analyticsPricingRepo = new MikroOrmPricingRepository()
+  const analyticsIngest = new UsageEventIngestService(analyticsEventRepo, analyticsPricingRepo)
+  const analyticsQuery = new UsageEventQueryService(analyticsEventRepo)
+  const analyticsPricing = new PricingService(analyticsPricingRepo)
+  // seed 定价表（幂等：已存在则跳过）。await：proxy 回填/成本重算依赖定价已入库（如 glm-5.2）。
+  try {
+    await seedModelPricing(getEm())
+  } catch (e) {
+    console.error('[analytics] seed pricing failed:', e)
+  }
+  // 一次性维护（analytics_meta 标志位防重复）：
+  //  (a) 重置 per-file 游标 → 让首次 syncAll 全量重读历史日志写入 usage_events
+  //      （配合无损分块直写 + 流式读大文件，彻底修复历史用量大面积缺失）。
+  //  (b) 从本机 routing_events 回填 proxy 历史（此前与 session 全量重读共用缓冲被冲掉只剩 5 条）；
+  //      用确定性 requestId(proxy:tsMs:seq) 幂等重建——读的是本机自己的代理日志，非 cc-switch 数据。
+  try {
+    const conn = getEm().getConnection()
+    await conn.execute(`CREATE TABLE IF NOT EXISTS analytics_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+
+    // (a) 触发一次真正的全量重读（随"无损直写 + 流式读大文件"上线）。
+    //     用独立 key `lossless_reread_done` 记完成态，并把旧 key `cursors_reset` 保持为 '1'：
+    //     旧版本启动时只认 cursors_reset==='1' 即跳过它那套**会丢数据的缓冲式**全量重读，
+    //     这样万一回退/误启旧 build，也不会把已修复的历史数据重新截断。
+    const rereadDone = (await conn.execute(
+      `SELECT value FROM analytics_meta WHERE key = 'lossless_reread_done'`, [], 'get',
+    )) as { value?: string } | undefined
+    if (rereadDone?.value !== '1') {
+      await conn.execute(`DELETE FROM usage_sync_state WHERE source_path NOT IN ('__usage_sync_result_status__', '__usage_sync_result_success_at__')`)
+      await conn.execute(`INSERT OR REPLACE INTO analytics_meta (key, value) VALUES ('lossless_reread_done', '1')`)
+      await conn.execute(`INSERT OR REPLACE INTO analytics_meta (key, value) VALUES ('cursors_reset', '1')`)
+      console.log('[analytics] full lossless re-read triggered; next syncAll will re-read all logs')
+    }
+
+    // (b) proxy 历史回填
+    const backfillRow = (await conn.execute(
+      `SELECT value FROM analytics_meta WHERE key = 'proxy_backfilled'`, [], 'get',
+    )) as { value?: string } | undefined
+    if (backfillRow?.value !== '1') {
+      await conn.execute(`DELETE FROM usage_events WHERE source = 'proxy'`)
+      const rows = (await conn.execute(
+        `SELECT seq, ts_ms, status, ok, duration_ms, account_id, client_key_id, combo_name,
+                requested_model, final_model, input_tokens, output_tokens,
+                cache_read_tokens, cache_write_tokens, user_agent
+         FROM routing_events`, [], 'all',
+      )) as Array<Record<string, unknown>>
+      for (const r of rows) {
+        const ua = (r.user_agent as string) ?? ''
+        const rec: ProxyRequestRecord = {
+          seq: Number(r.seq),
+          tsMs: Number(r.ts_ms),
+          method: 'POST', path: '', format: '', action: '', stream: false,
+          status: Number(r.status ?? 0),
+          ok: r.ok === 1 || r.ok === true,
+          durationMs: Number(r.duration_ms ?? 0),
+          attempts: 1,
+        }
+        if (r.account_id != null) rec.accountId = String(r.account_id)
+        if (r.client_key_id != null) rec.clientKeyId = String(r.client_key_id)
+        if (r.combo_name != null) rec.comboName = String(r.combo_name)
+        if (r.requested_model != null) rec.requestedModel = String(r.requested_model)
+        if (r.final_model != null) rec.finalModel = String(r.final_model)
+        if (r.input_tokens != null) rec.inputTokens = Number(r.input_tokens)
+        if (r.output_tokens != null) rec.outputTokens = Number(r.output_tokens)
+        if (r.cache_read_tokens != null) rec.cacheReadTokens = Number(r.cache_read_tokens)
+        if (r.cache_write_tokens != null) rec.cacheWriteTokens = Number(r.cache_write_tokens)
+        if (ua) rec.userAgent = ua
+        analyticsIngest.ingestProxyEvent(rec, ua)
+      }
+      await analyticsIngest.flush()
+      await conn.execute(`INSERT OR REPLACE INTO analytics_meta (key, value) VALUES ('proxy_backfilled', '1')`)
+      console.log(`[analytics] proxy backfill from routing_events: ${rows.length} rows`)
+    }
+  } catch (e) {
+    console.error('[analytics] analytics one-time maintenance failed:', e)
+  }
+  const usageSync = new UsageSyncService(usageAgentRegistry, analyticsIngest, usageFileCursorStore)
 
   // 7. LocalBackup context.
   const backupDir = join(homedir(), '.haoxiaoguan', 'backups')
@@ -592,6 +672,8 @@ export async function buildContainer(): Promise<Container> {
   // 路由日志重构（observability v2）：统一明细 routing_events + 4 张维度日桶（唯一历史/检索/聚合源）。
   const routingObservabilityService = new RoutingObservabilityService(
     new MikroOrmRoutingObservabilityRepository(),
+    {},
+    analyticsIngest,
   )
   // 每条 G3 记录经 persistSink 入观测缓冲，由 main.ts 定时 flush 落库（吞错不影响反代主流程）。
   apiProxyRequestLog.setPersistSink((rec) => {
@@ -922,7 +1004,9 @@ export async function buildContainer(): Promise<Container> {
     backupService,
     storageService,
     usageSync,
-    usageQuery,
+    analyticsQuery,
+    analyticsPricing,
+    analyticsIngest,
     localBackup,
     mcp,
     sync,
