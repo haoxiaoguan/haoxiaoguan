@@ -1,4 +1,4 @@
-// 生成文件——模型定价数据（USD / 每百万 token），从 cc-switch model_pricing 表导出（147 条）。
+// 生成文件——模型定价数据（USD / 每百万 token），从 cc-switch model_pricing 表导出（148 条）。
 // 口径与 cc-switch 一致；如需调整价格直接改这里（纯数据，无副作用）。
 // inP=input, outP=output, crP=cache_read, ccP=cache_creation（单位：美元/百万 token）。
 
@@ -58,6 +58,7 @@ export const MODEL_PRICING: ReadonlyArray<ModelPriceRow> = [
   { id: "glm-4.7", inP: 0.39, outP: 1.75, crP: 0.04, ccP: 0.0 },
   { id: "glm-5", inP: 1.0, outP: 3.2, crP: 0.2, ccP: 0.0 },
   { id: "glm-5.1", inP: 1.4, outP: 4.4, crP: 0.26, ccP: 0.0 },
+  { id: "glm-5.2", inP: 1.4, outP: 4.4, crP: 0.26, ccP: 0.0 },
   { id: "gpt-4.1", inP: 2.0, outP: 8.0, crP: 0.5, ccP: 0.0 },
   { id: "gpt-4.1-mini", inP: 0.4, outP: 1.6, crP: 0.1, ccP: 0.0 },
   { id: "gpt-4.1-nano", inP: 0.1, outP: 0.4, crP: 0.025, ccP: 0.0 },

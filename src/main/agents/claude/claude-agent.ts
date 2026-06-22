@@ -23,7 +23,7 @@ import {
   isJsonlFile,
   parseRfc3339Timestamp,
   rawHash,
-  readJsonLinesAsync,
+  readJsonLinesIter,
   sourcePathStr,
 } from '../shared/file-utils'
 
@@ -60,11 +60,10 @@ class ClaudeSessionLogReader implements SessionLogReader {
       if (mtimeMs !== 0 && known.get(filePath) === mtimeMs) continue
 
       try {
-        const lines = await readJsonLinesAsync(filePath)
-
+        // 流式逐行读：避免把整个 transcript 读进单个字符串（超大会话文件防 OOM/超字符串上限）。
         // 单文件内按 message.id 去重（对齐 cc-switch sync_single_file 的 per-file HashMap）。
         const byMsgId = new Map<string, AssistantFrame>()
-        for (const [, raw] of lines) {
+        for await (const [, raw] of readJsonLinesIter(filePath)) {
           let value: Record<string, any>
           try {
             value = JSON.parse(raw)

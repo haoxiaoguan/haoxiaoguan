@@ -11,7 +11,6 @@
  * session 源去重改为批量 INSERT OR IGNORE（dedup_id 唯一索引保证），
  * 不再逐条 SELECT 查重——全量扫描几千条记录时逐条查询会卡死主线程。
  */
-import { randomUUID } from 'node:crypto'
 import type { ProxyRequestRecord } from '../../apiProxy/domain/observability/proxy-request-log'
 import type { UsageRecord } from '../../usage/domain/usage-record'
 import type { MikroOrmUsageEventRepository } from '../infrastructure/mikro-orm-usage-event-repository'
@@ -52,8 +51,10 @@ export class UsageEventIngestService {
         : { inputCostUsd: 0, outputCostUsd: 0, cacheReadCostUsd: 0, cacheCreationCostUsd: 0, totalCostUsd: 0 }
 
       const now = Math.floor(Date.now() / 1000)
+      // 确定性 requestId（tsMs+seq）：同一请求重复 ingest / 从 routing_events 回填时幂等去重，
+      // 不再用 randomUUID（否则回填与实时会重复计数）。seq 进程内单调、tsMs 跨重启唯一。
       const event: UsageEvent = {
-        requestId: randomUUID(),
+        requestId: `proxy:${record.tsMs}:${record.seq}`,
         source: 'proxy',
         agentId,
         inputTokens: tokenSums.inputTokens,
@@ -82,13 +83,20 @@ export class UsageEventIngestService {
     }
   }
 
-  /** 会话日志扫描批量 ingest：投影成 UsageEvent 入缓冲，不写 DB。 */
+  /**
+   * 会话日志扫描批量 ingest：投影成 UsageEvent 后**分块直写 DB**（INSERT OR IGNORE 幂等去重）。
+   *
+   * ⚠️ 不再走环形缓冲：历史全量重读可达数十万条，一次性灌入 5000 槽缓冲会触发"丢最旧"，
+   * 是用量统计大面积缺失（实测 37.8 万 → 1 万）的根因。直写按 SLICE 分块、块间让出事件循环，
+   * 既无损也不长时间阻塞主进程。
+   */
   async ingestSessionBatch(records: UsageRecord[]): Promise<void> {
     if (records.length === 0) return
     try {
       const index = await this.ensurePricingIndex()
       const now = Math.floor(Date.now() / 1000)
 
+      const events: UsageEvent[] = []
       for (const record of records) {
         const config = await this.ensureConfig(record.agentId)
         const tokenSums = {
@@ -118,7 +126,13 @@ export class UsageEventIngestService {
         }
         if (model) evt.model = model
         if (record.sessionId) evt.sessionId = record.sessionId
-        this.pushToBuffer(evt)
+        events.push(evt)
+      }
+
+      const SLICE = 2000
+      for (let i = 0; i < events.length; i += SLICE) {
+        await this.eventRepo.batchInsertEvents(events.slice(i, i + SLICE))
+        if (i + SLICE < events.length) await new Promise((r) => setImmediate(r))
       }
     } catch (err) {
       console.error('[analytics] ingestSessionBatch failed:', err)
@@ -173,7 +187,9 @@ export class UsageEventIngestService {
   private pushToBuffer(event: UsageEvent): void {
     this.buffer.push(event)
     if (this.buffer.length > BUFFER_CAP) {
-      this.buffer.splice(0, this.buffer.length - BUFFER_CAP)
+      // 溢出不再静默丢最旧（会丢数据）；触发一次异步 flush 落库。
+      // realtime proxy 量小，正常不会触顶；触顶也只是临时多占内存，绝不丢。
+      void this.flush()
     }
   }
 

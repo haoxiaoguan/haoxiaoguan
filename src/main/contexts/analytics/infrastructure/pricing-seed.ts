@@ -1,5 +1,5 @@
 /**
- * 定价表 seed：从硬编码的 model-pricing-data.ts 导入 147 条到 DB。
+ * 定价表 seed：从硬编码的 model-pricing-data.ts 导入 148 条到 DB。
  * 幂等——model_id 已存在则跳过（INSERT OR IGNORE 语义）。
  */
 import type { EntityManager } from '@mikro-orm/better-sqlite'
@@ -7,7 +7,7 @@ import { MODEL_PRICING } from '../../usage/domain/model-pricing-data'
 import { ModelPricingEntity } from './model-pricing.entity'
 
 /**
- * 把 MODEL_PRICING（147 条）seed 到 model_pricing 表。
+ * 把 MODEL_PRICING（148 条）seed 到 model_pricing 表。
  * 已存在的 model_id 跳过，不覆盖用户自定义价格。
  */
 export async function seedModelPricing(em: EntityManager): Promise<number> {

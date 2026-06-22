@@ -101,18 +101,51 @@ describe('UsageEventIngestService（缓冲 + flush 模式）', () => {
     expect(page.rows[0].inputCostUsd).toBeCloseTo((800 * 1.25) / 1_000_000, 8)
   })
 
-  it('ingestSessionBatch 入缓冲，flush 后写入 DB', async () => {
+  it('ingestSessionBatch 直写 DB（不经缓冲）', async () => {
     const { eventRepo, ingest } = await setup()
 
     await ingest.ingestSessionBatch([makeUsageRecord()])
-    expect(ingest.pendingCount()).toBe(1)
-
-    await ingest.flush()
+    // 直写：无需 flush，pending 始终为 0
+    expect(ingest.pendingCount()).toBe(0)
 
     const page = await eventRepo.search({ startSec: 0, endSec: 2000000000 }, {}, undefined, 10)
     expect(page.rows).toHaveLength(1)
     expect(page.rows[0].source).toBe('session')
     expect(page.rows[0].agentId).toBe('claude')
+  })
+
+  it('ingestSessionBatch 大批量无损（>5000 不丢数据）', async () => {
+    const { ingest } = await setup()
+
+    // 回归测试：历史全量重读曾因 5000 槽环形缓冲"丢最旧"，37.8 万 → 1 万。直写后必须无损。
+    const N = 6000
+    const records = Array.from({ length: N }, (_, i) =>
+      makeUsageRecord({ sourceEventId: `msg_${i}`, occurredAt: 1700000000 + i }),
+    )
+    await ingest.ingestSessionBatch(records)
+
+    const row = (await getEm()
+      .getConnection()
+      .execute('SELECT count(*) AS n FROM usage_events', [], 'get')) as { n: number }
+    expect(Number(row.n)).toBe(N)
+  })
+
+  it('ingestProxyEvent 同 tsMs+seq 幂等去重（回填与实时不重复计数）', async () => {
+    const { ingest } = await setup()
+
+    ingest.ingestProxyEvent(makeProxyRecord({ seq: 7, tsMs: 1700000000000 }), 'claude-cli/1.0')
+    await ingest.flush()
+    // 同 tsMs+seq 再 ingest 一次（模拟回填撞上实时）→ requestId 相同 → INSERT OR IGNORE
+    ingest.ingestProxyEvent(
+      makeProxyRecord({ seq: 7, tsMs: 1700000000000, outputTokens: 999 }),
+      'claude-cli/1.0',
+    )
+    await ingest.flush()
+
+    const row = (await getEm()
+      .getConnection()
+      .execute('SELECT count(*) AS n FROM usage_events', [], 'get')) as { n: number }
+    expect(Number(row.n)).toBe(1)
   })
 
   it('request_id 重复时 INSERT OR IGNORE 跳过', async () => {
