@@ -27,10 +27,11 @@ const RE_BEARER = /\bBearer\s+\S+/gi
 const RE_BASIC = /\bBasic\s+[A-Za-z0-9+/]+=*/gi
 
 // inline 键值对：key=value（值到空白/逗号/引号/大括号截止，至少 1 字符）。
-// 匹配 accessToken / refreshToken / password / secret（大小写不敏感）。
+// 匹配 accessToken/access_token、refreshToken/refresh_token、apiKey/api_key、
+// clientSecret/client_secret、idToken/id_token、password、secret（大小写不敏感）。
 // 格式：key=value 或 "key":"value" 或 key: value（松散匹配，不破坏键名）。
 const RE_INLINE_KV =
-  /\b(accessToken|refreshToken|password|secret)(["']?\s*[=:]\s*["']?)([^\s,}"']+)/gi
+  /\b(access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|id[_-]?token|password|secret)(["']?\s*[=:]\s*["']?)([^\s,}"']+)/gi
 
 /**
  * 对单个字符串进行脱敏：匹配已知凭据模式并替换占位符。
@@ -65,10 +66,11 @@ const SENSITIVE_KEYS = new Set([
   'authorization',
   'apikey',
   'clientsecret',
+  'idtoken',
 ])
 
 function isSensitiveKey(key: string): boolean {
-  return SENSITIVE_KEYS.has(key.toLowerCase())
+  return SENSITIVE_KEYS.has(key.toLowerCase().replace(/[_-]/g, ''))
 }
 
 const MAX_DEPTH = 6

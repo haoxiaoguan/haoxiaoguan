@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { dotDir } from '../../../platform/persistence/paths'
-import { collectMatchingFilesAsync, readTextAsync } from '../../../agents/shared/file-utils'
+import { collectMatchingFilesAsync, readJsonLinesIter } from '../../../agents/shared/file-utils'
 import {
   SUMMARY_MAX_CHARS,
   type SessionMessage,
@@ -144,10 +144,8 @@ export class CodexSessionSource implements SessionSource {
   }
 
   async readMessages(sourcePath: string): Promise<SessionMessage[]> {
-    const text = await readTextAsync(sourcePath)
     const out: SessionMessage[] = []
-    for (const line of text.split('\n')) {
-      if (line.trim().length === 0) continue
+    for await (const [, line] of readJsonLinesIter(sourcePath)) {
       const v = parse(line)
       if (!v || v.type !== 'response_item') continue
       const payload = isObject(v.payload) ? v.payload : undefined
@@ -192,9 +190,42 @@ export class CodexSessionSource implements SessionSource {
     const events: RawLogEvent[] = []
     for (const { f, m } of withMtime) {
       if (m < since) continue
-      let text: string
+      let sessionTs: number | undefined
+      let isSubagent = false
+      const fileToolEvents: RawLogEvent[] = []
       try {
-        text = await readTextAsync(f)
+        for await (const [, line] of readJsonLinesIter(f)) {
+          const v = parse(line)
+          if (!v) continue
+          const ts = typeof v.timestamp === 'string' ? parseTimestampToMs(v.timestamp) : undefined
+          if (sessionTs === undefined && ts !== undefined) sessionTs = ts
+          const payload = isObject(v.payload) ? v.payload : undefined
+          if (
+            v.type === 'session_meta' && payload && this.skipSubagents &&
+            isObject(payload.source) && 'subagent' in payload.source
+          ) {
+            isSubagent = true
+            break
+          }
+          if (
+            v.type === 'response_item' && payload && ts !== undefined &&
+            (payload.type === 'function_call' || payload.type === 'custom_tool_call')
+          ) {
+            const callId =
+              typeof payload.call_id === 'string' && payload.call_id
+                ? payload.call_id
+                : `${f}#${fileToolEvents.length}#${ts}`
+            const name = typeof payload.name === 'string' ? payload.name : undefined
+            fileToolEvents.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey: callId, name })
+            if (name === 'apply_patch') {
+              const input = typeof payload.input === 'string' ? payload.input : undefined
+              const churn = input ? patchChurn(input) : 0
+              if (churn > 0) {
+                fileToolEvents.push({ tool: this.tool, kind: 'code_edit', ts, sourceKey: callId, name, amount: churn })
+              }
+            }
+          }
+        }
       } catch {
         // 读失败：不推进 watermark，记录最早失败 mtime 供下轮重试（避免永久漏计该文件事件）。
         console.warn(`[activity] ${this.tool} 读取会话日志失败，跳过且不推进 watermark: ${f}`)
@@ -202,42 +233,6 @@ export class CodexSessionSource implements SessionSource {
         continue
       }
       if (m > latestMtime) latestMtime = m
-      let sessionTs: number | undefined
-      let isSubagent = false
-      const fileToolEvents: RawLogEvent[] = []
-      for (const line of text.split('\n')) {
-        if (line.trim().length === 0) continue
-        const v = parse(line)
-        if (!v) continue
-        const ts = typeof v.timestamp === 'string' ? parseTimestampToMs(v.timestamp) : undefined
-        if (sessionTs === undefined && ts !== undefined) sessionTs = ts
-        const payload = isObject(v.payload) ? v.payload : undefined
-        if (
-          v.type === 'session_meta' && payload && this.skipSubagents &&
-          isObject(payload.source) && 'subagent' in payload.source
-        ) {
-          isSubagent = true
-          break
-        }
-        if (
-          v.type === 'response_item' && payload && ts !== undefined &&
-          (payload.type === 'function_call' || payload.type === 'custom_tool_call')
-        ) {
-          const callId =
-            typeof payload.call_id === 'string' && payload.call_id
-              ? payload.call_id
-              : `${f}#${fileToolEvents.length}#${ts}`
-          const name = typeof payload.name === 'string' ? payload.name : undefined
-          fileToolEvents.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey: callId, name })
-          if (name === 'apply_patch') {
-            const input = typeof payload.input === 'string' ? payload.input : undefined
-            const churn = input ? patchChurn(input) : 0
-            if (churn > 0) {
-              fileToolEvents.push({ tool: this.tool, kind: 'code_edit', ts, sourceKey: callId, name, amount: churn })
-            }
-          }
-        }
-      }
       if (isSubagent) continue
       if (sessionTs !== undefined) events.push({ tool: this.tool, kind: 'session', ts: sessionTs, sourceKey: f })
       events.push(...fileToolEvents)

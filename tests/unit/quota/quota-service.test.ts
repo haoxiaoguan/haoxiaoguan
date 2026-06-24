@@ -102,6 +102,19 @@ class FailingFetcher implements LiveQuotaFetcher {
   }
 }
 
+class SlowTrackingFetcher implements LiveQuotaFetcher {
+  active = 0
+  maxActive = 0
+
+  async fetch(): Promise<QuotaFetchResult> {
+    this.active++
+    this.maxActive = Math.max(this.maxActive, this.active)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    this.active--
+    return legacyModelsResult()
+  }
+}
+
 function makeAccount(platform: PlatformId = 'cursor'): Account {
   return Account.create(platform, 'test@example.com', undefined, [], undefined)
 }
@@ -403,6 +416,23 @@ describe('QuotaApplicationService.refreshAll', () => {
     expect(results.length).toBe(1)
     expect(results[0].success).toBe(false)
     expect(results[0].error).toContain('boom')
+  })
+
+  it('limits concurrent account refreshes', async () => {
+    const accounts = Array.from({ length: 8 }, () => makeAccount('cursor'))
+    const fetcher = new SlowTrackingFetcher()
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo(accounts),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      fetcher,
+      ['cursor'],
+    )
+    const results = await svc.refreshAll()
+    expect(results).toHaveLength(8)
+    expect(results.every((result) => result.success)).toBe(true)
+    expect(fetcher.maxActive).toBeLessThanOrEqual(4)
   })
 })
 
