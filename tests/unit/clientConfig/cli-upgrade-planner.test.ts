@@ -5,6 +5,7 @@ import {
   brewFormulaFromPath,
   type UpgradeTarget,
 } from '../../../src/main/contexts/clientConfig/infrastructure/cli-upgrade-planner'
+import { INSTALL_COMMAND } from '../../../src/main/contexts/clientConfig/domain/client-version'
 
 const target = (p: Partial<UpgradeTarget>): UpgradeTarget => ({
   path: '/Users/me/.nvm/versions/node/v22.0.0/bin/claude',
@@ -31,8 +32,24 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
 
   it('claude on nvm → 纯 `<同目录 npm> i -g`（不走 `claude update`）', () => {
     const { command } = planUpgradeCommand('claude', target({ source: 'nvm' }))
-    expect(command).toBe('/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g @anthropic-ai/claude-code@latest')
+    expect(command).toBe(
+      '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g --prefix /Users/me/.nvm/versions/node/v22.0.0 @anthropic-ai/claude-code@latest',
+    )
     expect(command).not.toContain('claude update')
+  })
+
+  it('claude on mise → 同目录 npm + --prefix 锚到该 Node 安装，避免用户 npm prefix 写去别处', () => {
+    const { command } = planUpgradeCommand(
+      'claude',
+      target({
+        path: '/Users/me/.local/share/mise/installs/node/22.15.1/bin/claude',
+        real: '/Users/me/.local/share/mise/installs/node/22.15.1/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe',
+        source: 'mise',
+      }),
+    )
+    expect(command).toBe(
+      '/Users/me/.local/share/mise/installs/node/22.15.1/bin/npm i -g --prefix /Users/me/.local/share/mise/installs/node/22.15.1 @anthropic-ai/claude-code@latest',
+    )
   })
 
   it('claude 原生安装器（真身在 ~/.local/share/claude/）→ 仅 `<bin> update`，不接 npm', () => {
@@ -53,7 +70,9 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
       'gemini_cli',
       target({ path: '/Users/me/.nvm/versions/node/v22.0.0/bin/gemini' }),
     )
-    expect(command).toBe('/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g @google/gemini-cli@latest')
+    expect(command).toBe(
+      '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g --prefix /Users/me/.nvm/versions/node/v22.0.0 @google/gemini-cli@latest',
+    )
   })
 
   it('codex runnable on nvm → 纯 npm 锚定（刻意不跑 `codex update` 以免假成功）', () => {
@@ -61,7 +80,9 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
       'codex',
       target({ path: '/Users/me/.nvm/versions/node/v22.0.0/bin/codex', source: 'nvm' }),
     )
-    expect(command).toBe('/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g @openai/codex@latest')
+    expect(command).toBe(
+      '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g --prefix /Users/me/.nvm/versions/node/v22.0.0 @openai/codex@latest',
+    )
     expect(command).not.toContain('codex update')
   })
 
@@ -72,8 +93,8 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
     )
     expect(anchored).toBe(true)
     expect(command).toBe(
-      '/Users/me/.nvm/versions/node/v22.0.0/bin/npm uninstall -g @openai/codex || true; ' +
-        '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g @openai/codex@latest',
+      '/Users/me/.nvm/versions/node/v22.0.0/bin/npm uninstall -g --prefix /Users/me/.nvm/versions/node/v22.0.0 @openai/codex || true; ' +
+        '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g --prefix /Users/me/.nvm/versions/node/v22.0.0 @openai/codex@latest',
     )
   })
 
@@ -120,7 +141,7 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
     )
     expect(command).toBe(
       '/Users/me/.nvm/versions/node/v22.0.0/bin/openclaw update --yes || ' +
-        '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g openclaw@latest',
+        '/Users/me/.nvm/versions/node/v22.0.0/bin/npm i -g --prefix /Users/me/.nvm/versions/node/v22.0.0 openclaw@latest',
     )
   })
 
@@ -146,7 +167,9 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
       'gemini_cli',
       target({ path: '/Users/My Name/.nvm/bin/gemini', source: 'nvm' }),
     )
-    expect(command).toBe("'/Users/My Name/.nvm/bin/npm' i -g @google/gemini-cli@latest")
+    expect(command).toBe(
+      "'/Users/My Name/.nvm/bin/npm' i -g --prefix '/Users/My Name/.nvm' @google/gemini-cli@latest",
+    )
   })
 
   it('target 未定位（undefined）→ 静态兜底（claude 纯 npm，不走 self-update）', () => {
@@ -167,8 +190,21 @@ describe('staticUpgradeFallback', () => {
   it('gemini_cli → 裸 npm', () => {
     expect(staticUpgradeFallback('gemini_cli')).toBe('npm i -g @google/gemini-cli@latest')
   })
-  it('hermes → hermes update || pip', () => {
-    expect(staticUpgradeFallback('hermes')).toBe('hermes update || pip install -U hermes-agent')
+  it('hermes → hermes update || 官方 installer', () => {
+    const command = staticUpgradeFallback('hermes')
+    expect(command).toContain('hermes update || bash -c')
+    expect(command).toContain('https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh')
+    expect(command).not.toContain('pip')
+    expect(command).not.toContain('python')
+    expect(command.split('||')[1]).not.toContain('|')
+  })
+
+  it('hermes install → 官方 installer，不依赖系统 pip/python', () => {
+    expect(INSTALL_COMMAND.hermes).toContain('bash -c')
+    expect(INSTALL_COMMAND.hermes).toContain('https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh')
+    expect(INSTALL_COMMAND.hermes).not.toContain('pip')
+    expect(INSTALL_COMMAND.hermes).not.toContain('python')
+    expect(INSTALL_COMMAND.hermes).not.toContain('|')
   })
 })
 

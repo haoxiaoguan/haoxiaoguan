@@ -129,17 +129,20 @@ export interface CodexRepairPreviewDto {
   available: boolean
   dbPath?: string
   currentProvider?: string
+  currentModel?: string
   counts: CodexProviderCountDto[]
   repairable: number
   codexRunning: boolean
 }
 export interface CodexRepairRequestDto {
   targetProvider: string
+  targetModel?: string | null
   fromProviders?: string[]
   rewriteRollout: boolean
 }
 export interface CodexRepairResultDto {
   updatedThreads: number
+  modelRows: number
   userEventRows: number
   cwdRows: number
   globalStateKeys: number

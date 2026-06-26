@@ -84,6 +84,11 @@ export const LATEST_SOURCE: Record<ClientId, LatestSource> = {
   hermes: { kind: 'pypi', pkg: 'hermes-agent' },
 }
 
+export const HERMES_INSTALL_COMMAND =
+  'bash -c \'tmp=$(mktemp) && curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh -o "$tmp" && bash "$tmp"; status=$?; rm -f "$tmp"; exit $status\''
+
+export const HERMES_UPDATE_COMMAND = `hermes update || ${HERMES_INSTALL_COMMAND}`
+
 /** 升级命令（仅供 UI tooltip 展示，不自动执行）。 */
 export const UPGRADE_COMMAND: Record<ClientId, string> = {
   claude: 'npm i -g @anthropic-ai/claude-code@latest',
@@ -91,10 +96,10 @@ export const UPGRADE_COMMAND: Record<ClientId, string> = {
   gemini_cli: 'npm i -g @google/gemini-cli@latest',
   opencode: 'npm i -g opencode-ai@latest',
   openclaw: 'npm i -g openclaw@latest',
-  hermes: 'pip install -U hermes-agent',
+  hermes: HERMES_UPDATE_COMMAND,
 }
 
-/** 安装命令（未安装时用）：纯包管理器，CLI 尚未存在故不带官方自更新子命令。
+/** 安装命令（未安装时用）：多数客户端走包管理器；Hermes 走官方 installer，避免系统 pip/Python 版本陷阱。
  *  同时作为执行命令（runInstall）与「复制手动安装命令」的展示，单一来源避免漂移。 */
 export const INSTALL_COMMAND: Record<ClientId, string> = {
   claude: 'npm i -g @anthropic-ai/claude-code@latest',
@@ -102,5 +107,5 @@ export const INSTALL_COMMAND: Record<ClientId, string> = {
   gemini_cli: 'npm i -g @google/gemini-cli@latest',
   opencode: 'npm i -g opencode-ai@latest',
   openclaw: 'npm i -g openclaw@latest',
-  hermes: 'pip install hermes-agent',
+  hermes: HERMES_INSTALL_COMMAND,
 }

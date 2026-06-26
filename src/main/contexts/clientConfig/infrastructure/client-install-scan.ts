@@ -57,6 +57,13 @@ function canonical(path: string): string {
 }
 
 /** PATH 默认命中那处的真身路径（经登录 shell `command -v`），无则 undefined。 */
+export function firstAbsolutePathLine(raw: string): string | undefined {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('/'))
+}
+
 async function pathDefaultReal(cmd: string): Promise<string | undefined> {
   if (process.platform === 'win32') return undefined
   const shell = process.env.SHELL && process.env.SHELL.length > 0 ? process.env.SHELL : '/bin/zsh'
@@ -64,7 +71,7 @@ async function pathDefaultReal(cmd: string): Promise<string | undefined> {
     const { stdout } = await execFileAsync(shell, [defaultShellFlag(shell), `command -v ${cmd}`], {
       timeout: SCAN_TIMEOUT_MS,
     })
-    const p = stdout.trim().split('\n').pop()?.trim()
+    const p = firstAbsolutePathLine(stdout)
     return p && p.length > 0 && existsSync(p) ? canonical(p) : undefined
   } catch {
     return undefined

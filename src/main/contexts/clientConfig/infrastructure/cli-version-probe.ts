@@ -76,9 +76,8 @@ async function probeViaShell(cmd: string): Promise<Probe> {
   }
 }
 
-/** 常见安装目录（macOS/Linux），含 nvm 各 node 版本与 hermes 的 PyPI bin。 */
-export function searchDirs(clientId: ClientId): string[] {
-  const home = homedir()
+/** 常见安装目录（macOS/Linux），含 bun/mise/nvm 各 node 版本与 hermes 的 PyPI bin。 */
+export function searchDirs(clientId: ClientId, home = homedir()): string[] {
   const dirs: string[] = []
   const push = (d: string) => { if (d && !dirs.includes(d) && existsSync(d)) dirs.push(d) }
 
@@ -86,6 +85,14 @@ export function searchDirs(clientId: ClientId): string[] {
   push(join(home, '.npm-global/bin'))
   push(join(home, 'n/bin'))
   push(join(home, '.volta/bin'))
+  push(join(home, '.bun/bin'))
+  push(join(home, '.local/share/mise/shims'))
+  const miseNode = join(home, '.local/share/mise/installs/node')
+  if (existsSync(miseNode)) {
+    try {
+      for (const entry of readdirSync(miseNode)) push(join(miseNode, entry, 'bin'))
+    } catch { /* 读不到忽略 */ }
+  }
   // nvm：~/.nvm/versions/node/*/bin
   const nvm = join(home, '.nvm/versions/node')
   if (existsSync(nvm)) {

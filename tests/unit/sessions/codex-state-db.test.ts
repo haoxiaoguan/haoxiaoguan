@@ -25,19 +25,20 @@ function seedDb(path: string, rows: Array<{ id: string; provider: string; rollou
 /** 造含 has_user_event / cwd 列的 threads 表 */
 function seedDbFull(
   path: string,
-  rows: Array<{ id: string; provider: string; rollout: string; archived?: number; hasUserEvent?: number; cwd?: string }>
+  rows: Array<{ id: string; provider: string; rollout: string; archived?: number; hasUserEvent?: number; cwd?: string; model?: string }>
 ) {
   const db = new Database(path)
   db.exec(`CREATE TABLE threads (
     id TEXT PRIMARY KEY,
     rollout_path TEXT NOT NULL,
     model_provider TEXT,
+    model TEXT,
     archived INTEGER NOT NULL DEFAULT 0,
     has_user_event INTEGER,
     cwd TEXT
   )`)
-  const ins = db.prepare('INSERT INTO threads (id, rollout_path, model_provider, archived, has_user_event, cwd) VALUES (?,?,?,?,?,?)')
-  for (const r of rows) ins.run(r.id, r.rollout, r.provider, r.archived ?? 0, r.hasUserEvent ?? null, r.cwd ?? null)
+  const ins = db.prepare('INSERT INTO threads (id, rollout_path, model_provider, model, archived, has_user_event, cwd) VALUES (?,?,?,?,?,?,?)')
+  for (const r of rows) ins.run(r.id, r.rollout, r.provider, r.model ?? null, r.archived ?? 0, r.hasUserEvent ?? null, r.cwd ?? null)
   db.close()
 }
 
@@ -94,6 +95,7 @@ describe('CodexStateDb', () => {
     const db = new CodexStateDb(p)
     try {
       expect(db.hasColumn('threads', 'model_provider')).toBe(true)
+      expect(db.hasColumn('threads', 'model')).toBe(true)
       expect(db.hasColumn('threads', 'has_user_event')).toBe(true)
       expect(db.hasColumn('threads', 'cwd')).toBe(true)
       expect(db.hasColumn('threads', 'nonexistent')).toBe(false)
@@ -114,6 +116,7 @@ describe('CodexStateDb', () => {
     try {
       const result = db.applyUpdates(
         'hxg_x',
+        undefined,
         ['a', 'b'],                       // userEventThreadIds
         { a: '/new-cwd', b: '/cwd-b' },   // cwdByThreadId
       )
@@ -136,6 +139,25 @@ describe('CodexStateDb', () => {
     } finally { db.close() }
   })
 
+  it('applyUpdates: 有 model 列时同步目标模型', async () => {
+    const p = join(home, 'state_5.sqlite')
+    seedDbFull(p, [
+      { id: 'a', provider: 'openai', model: 'gpt-old', rollout: '/r/a.jsonl' },
+      { id: 'b', provider: 'hxg_x', model: 'glm-old', rollout: '/r/b.jsonl' },
+      { id: 'c', provider: 'hxg_x', model: 'glm-new', rollout: '/r/c.jsonl' },
+    ])
+    const db = new CodexStateDb(p)
+    try {
+      const result = db.applyUpdates('hxg_x', 'glm-new', [], {})
+      expect(result.modelRows).toBe(2)
+
+      const raw = new Database(p, { readonly: true })
+      const rows = raw.prepare('SELECT model FROM threads ORDER BY id').all() as { model: string }[]
+      raw.close()
+      expect(rows.map((r) => r.model)).toEqual(['glm-new', 'glm-new', 'glm-new'])
+    } finally { db.close() }
+  })
+
   it('applyUpdates: 无 has_user_event / cwd 列时不报错', async () => {
     const p = join(home, 'state_5.sqlite')
     seedDb(p, [
@@ -143,7 +165,7 @@ describe('CodexStateDb', () => {
     ])
     const db = new CodexStateDb(p)
     try {
-      const result = db.applyUpdates('hxg_x', ['a'], { a: '/cwd' })
+      const result = db.applyUpdates('hxg_x', undefined, ['a'], { a: '/cwd' })
       expect(result.providerRows).toBe(1)
       expect(result.userEventRows).toBe(0)
       expect(result.cwdRows).toBe(0)
@@ -163,7 +185,7 @@ describe('CodexStateDb', () => {
       // provider: a needs update (1)
       // has_user_event: a needs update (0→1) (1)
       // cwd: a needs update (/old→/new) (1)
-      const count = db.countUpdates('hxg_x', ['a'], { a: '/new' })
+      const count = db.countUpdates('hxg_x', undefined, ['a'], { a: '/new' })
       expect(count).toBe(3)
     } finally { db.close() }
   })

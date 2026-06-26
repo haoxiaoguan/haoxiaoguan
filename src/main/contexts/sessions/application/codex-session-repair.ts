@@ -6,7 +6,7 @@ import { rewriteRolloutLines } from '../infrastructure/codex-rollout-rewrite'
 import { streamScanRollout, streamRewriteRollout } from '../infrastructure/codex-rollout-stream'
 import { CodexRepairBackup, type SessionMetaBackupEntry } from '../infrastructure/codex-repair-backup'
 import { applyGlobalStateUpdate } from '../infrastructure/codex-global-state'
-import { parseCodexToml, getCodexDefaultProvider } from '../../clientConfig/infrastructure/codex-toml'
+import { parseCodexToml, getCodexDefaultProvider, getCodexDefaultModel } from '../../clientConfig/infrastructure/codex-toml'
 import type {
   CodexRepairPreview,
   CodexRepairProgress,
@@ -38,14 +38,18 @@ export class CodexSessionRepair {
   // Codex 用内置 OpenAI（隐式默认，不写盘），其会话在 threads 里 model_provider='openai'，
   // 故缺省回落 'openai' —— 否则内置 OpenAI 场景下「当前供应商」为空、修复目标无从确定、
   // 可修复恒 0，那些切到第三方时建的 hxg_* 会话永远归并不回 OpenAI。
-  private async currentProvider(): Promise<string> {
+  private async currentConfig(): Promise<{ provider: string; model: string | null }> {
     let raw: string | null = null
     try {
       raw = await readFile(this.configTomlPath, 'utf8')
     } catch {
-      return 'openai'
+      return { provider: 'openai', model: null }
     }
-    return getCodexDefaultProvider(parseCodexToml(raw, this.configTomlPath)) ?? 'openai'
+    const parsed = parseCodexToml(raw, this.configTomlPath)
+    return {
+      provider: getCodexDefaultProvider(parsed) ?? 'openai',
+      model: getCodexDefaultModel(parsed) ?? null,
+    }
   }
 
   async preview(): Promise<CodexRepairPreview> {
@@ -57,14 +61,15 @@ export class CodexSessionRepair {
         return { available: false, dbPath, counts: [], repairable: 0, codexRunning: await this.isCodexRunning() }
       }
       const counts = db.counts()
-      const currentProvider = await this.currentProvider() // 恒有值（缺省内置 openai）
+      const current = await this.currentConfig() // provider 恒有值（缺省内置 openai）
       const repairable = counts
-        .filter((c) => c.provider !== currentProvider)
+        .filter((c) => c.provider !== current.provider)
         .reduce((a, c) => a + c.count, 0)
       return {
         available: true,
         dbPath,
-        currentProvider,
+        currentProvider: current.provider,
+        ...(current.model !== null ? { currentModel: current.model } : {}),
         counts,
         repairable,
         codexRunning: await this.isCodexRunning(),
@@ -77,7 +82,11 @@ export class CodexSessionRepair {
   async repair(req: CodexRepairRequest, onProgress?: (p: CodexRepairProgress) => void): Promise<CodexRepairResult> {
     const token = await this.lifecycle.beforeWrite()
     try {
-      return await this.repairCore(req, onProgress)
+      const current = req.targetModel === undefined ? await this.currentConfig() : null
+      return await this.repairCore({
+        ...req,
+        targetModel: req.targetModel === undefined ? current?.model ?? null : req.targetModel,
+      }, onProgress)
     } finally {
       await this.lifecycle.afterWrite(token)
     }
@@ -97,8 +106,8 @@ export class CodexSessionRepair {
     try {
       await configMutation()
       if (!findCodexStateDb(this.codexHome)) return null
-      const targetProvider = await this.currentProvider()
-      return await this.repairCore({ targetProvider, rewriteRollout: true }, onProgress)
+      const target = await this.currentConfig()
+      return await this.repairCore({ targetProvider: target.provider, targetModel: target.model, rewriteRollout: true }, onProgress)
     } finally {
       await this.lifecycle.afterWrite(token)
     }
@@ -137,7 +146,7 @@ export class CodexSessionRepair {
           // 永远流式扫描：内存恒定（峰值 heap <100MB）。整文件 readFile+analyzeRollout 会为每个
           // 文件构建随即丢弃的 nextText+全行数组，7521 个文件累计把主进程堆顶到 ~929MB → V8 OOM
           // 崩溃（已实证；改流式后峰值 76MB）。流式元数据与 analyzeRollout 等价（见 stream 单测）。
-          analysis = await streamScanRollout(filePath, req.targetProvider)
+          analysis = await streamScanRollout(filePath, req.targetProvider, req.targetModel)
         } catch {
           continue // 读失败 → 跳过该文件
         }
@@ -196,6 +205,7 @@ export class CodexSessionRepair {
       let changedRollouts = 0
       let skippedRollouts = 0
       let providerRows = 0
+      let modelRows = 0
       let userEventRows = 0
       let cwdRows = 0
       let globalStateKeys = 0
@@ -212,7 +222,7 @@ export class CodexSessionRepair {
               // 永远流式逐行改写：内部原子替换(临时文件+rename)+还原 mtime，内存恒定（任意时刻只驻留
               // 一行）。与整文件 analyzeRollout 路径逐字节等价（见 codex-rollout-stream 单测），但不
               // 构建整文件字符串——避免 124MB 级文件 readFile+nextText 的 ~360MB 瞬时尖峰。
-              await streamRewriteRollout(c.path, req.targetProvider)
+              await streamRewriteRollout(c.path, req.targetProvider, req.targetModel)
               changedRollouts++
             } catch (err: unknown) {
               const code = (err as NodeJS.ErrnoException).code
@@ -244,8 +254,9 @@ export class CodexSessionRepair {
         // 4. SQLite(单事务:provider 全量 + has_user_event + cwd)
         const db = new CodexStateDb(dbPath)
         try {
-          const counts = db.applyUpdates(req.targetProvider, userEventThreadIds, cwdByThreadId)
+          const counts = db.applyUpdates(req.targetProvider, req.targetModel, userEventThreadIds, cwdByThreadId)
           providerRows = counts.providerRows
+          modelRows = counts.modelRows
           userEventRows = counts.userEventRows
           cwdRows = counts.cwdRows
         } finally {
@@ -267,6 +278,7 @@ export class CodexSessionRepair {
 
       return {
         updatedThreads: providerRows,
+        modelRows,
         userEventRows,
         cwdRows,
         globalStateKeys,

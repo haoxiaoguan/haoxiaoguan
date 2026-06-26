@@ -1,5 +1,5 @@
 import type { ClientId } from '../domain/client-profile'
-import { CLI_COMMAND, LATEST_SOURCE } from '../domain/client-version'
+import { CLI_COMMAND, HERMES_UPDATE_COMMAND, LATEST_SOURCE } from '../domain/client-version'
 
 // 升级命令规划（对称移植 cc-switch installs_anchored_command + anchored_command_from_paths）：
 // 纯函数，不碰 FS / 不 spawn——真身路径与来源由调用方（cli-upgrade-runner）从枚举结果给出，
@@ -84,6 +84,18 @@ function siblingBin(binPath: string, exe: string): string | undefined {
   return `${binPath.slice(0, i)}/${exe}`
 }
 
+/** `<path 父目录>`；无父目录返回 undefined。 */
+function parentDir(path: string): string | undefined {
+  const i = path.lastIndexOf('/')
+  return i <= 0 ? undefined : path.slice(0, i)
+}
+
+/** Node 安装 prefix：`<node-prefix>/bin/<tool>` → `<node-prefix>`。 */
+function nodePrefixFromBinPath(binPath: string): string | undefined {
+  const binDir = parentDir(binPath)
+  return binDir === undefined ? undefined : parentDir(binDir)
+}
+
 /**
  * 从 canonicalize 后的真身路径提取 Homebrew formula 名：
  * `/opt/homebrew/Cellar/gemini-cli/0.13.0/...` → `gemini-cli`。
@@ -136,7 +148,10 @@ function packageManagerAnchored(
   // 自带同级 npm 的来源（含 haoxiaoguan inferInstallSource 的 'npm'：node_modules 路径）。
   if (source === 'nvm' || source === 'fnm' || source === 'mise' || source === 'homebrew' || source === 'npm') {
     const npm = siblingBin(binPath, 'npm')
-    return npm === undefined ? undefined : `${quotePathIfSpaced(npm)} i -g ${pkg}@latest`
+    const prefix = nodePrefixFromBinPath(binPath)
+    return npm === undefined || prefix === undefined
+      ? undefined
+      : `${quotePathIfSpaced(npm)} i -g --prefix ${quotePathIfSpaced(prefix)} ${pkg}@latest`
   }
   // pip / pnpm / unknown：无可靠 sibling npm，交回静态兜底。
   return undefined
@@ -155,8 +170,11 @@ function codexRepairCommand(binPath: string, real: string, source: string): stri
   const npm = siblingBin(binPath, 'npm')
   if (npm === undefined) return undefined
   const q = quotePathIfSpaced(npm)
+  const prefix = nodePrefixFromBinPath(binPath)
+  if (prefix === undefined) return undefined
+  const qp = quotePathIfSpaced(prefix)
   const pkg = '@openai/codex'
-  return `${q} uninstall -g ${pkg} || true; ${q} i -g ${pkg}@latest`
+  return `${q} uninstall -g --prefix ${qp} ${pkg} || true; ${q} i -g --prefix ${qp} ${pkg}@latest`
 }
 
 /**
@@ -200,10 +218,11 @@ function anchoredCommandFromPaths(
 
 /**
  * 静态升级命令（锚定探不到 PATH 默认那处时回退）：等同旧 `<tool> update || npm i -g` 行为。
+ * Hermes 例外，按 cc-switch 走 `hermes update || 官方 installer`，不回退系统 pip。
  * codex 不走官方自升级优先（见文件头），故为裸 `npm i -g @openai/codex@latest`。
  */
 export function staticUpgradeFallback(clientId: ClientId): string {
-  if (clientId === 'hermes') return 'hermes update || pip install -U hermes-agent'
+  if (clientId === 'hermes') return HERMES_UPDATE_COMMAND
   const pkg = npmPackageFor(clientId)
   if (pkg === undefined) return `${CLI_COMMAND[clientId]} ${officialUpdateArgs(clientId) ?? 'update'}`
   const npm = `npm i -g ${pkg}@latest`
