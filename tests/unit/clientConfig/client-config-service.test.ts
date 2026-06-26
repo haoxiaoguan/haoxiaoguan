@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import TOML from '@iarna/toml'
-import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -138,6 +138,8 @@ class ThrowingWriter implements ClientConfigWriter {
 }
 
 let root: string
+let savedHome: string | undefined
+let savedUserProfile: string | undefined
 let settings: string
 let ocPath: string
 let codexCfg: string
@@ -161,11 +163,31 @@ let relayPlatformCounter: number
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'hxg-svc-'))
+  savedHome = process.env.HOME
+  savedUserProfile = process.env.USERPROFILE
+  process.env.HOME = root
+  process.env.USERPROFILE = root
   settings = join(root, 'claude', 'settings.json')
   ocPath = join(root, 'opencode', 'opencode.json')
   codexCfg = join(root, 'codex', 'config.toml')
   codexCat = join(root, 'codex-model-catalog.json')
   codexAuth = join(root, 'codex', 'auth.json')
+  await mkdir(join(root, '.codex'), { recursive: true })
+  await writeFile(
+    join(root, '.codex', 'models_cache.json'),
+    JSON.stringify({
+      models: [
+        {
+          slug: 'gpt-5.5',
+          display_name: 'GPT-5.5',
+          visibility: 'list',
+          supported_in_api: true,
+          context_window: 272000,
+          max_context_window: 272000,
+        },
+      ],
+    }),
+  )
   catalogModels = [
     { id: 'claude-sonnet-4.5', displayName: 'Claude Sonnet 4.5', contextLength: 200000 },
     { id: 'deepseek-chat', displayName: 'DeepSeek Chat' },
@@ -233,6 +255,10 @@ beforeEach(async () => {
   )
 })
 afterEach(async () => {
+  if (savedHome === undefined) delete process.env.HOME
+  else process.env.HOME = savedHome
+  if (savedUserProfile === undefined) delete process.env.USERPROFILE
+  else process.env.USERPROFILE = savedUserProfile
   await rm(root, { recursive: true, force: true })
 })
 
