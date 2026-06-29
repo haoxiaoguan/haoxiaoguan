@@ -92,8 +92,14 @@ function writeMeta(raw: string | null, path: string, applied: boolean): Record<s
   return obj
 }
 
-function removeEnterpriseConfig(raw: string | null, path: string): Record<string, unknown> {
-  const obj = writeDeployment(raw, path, '1p')
+function hasAppliedProfile(meta: Record<string, unknown>): boolean {
+  const appliedId = typeof meta.appliedId === 'string' ? meta.appliedId : undefined
+  if (appliedId === undefined || !Array.isArray(meta.entries)) return false
+  return meta.entries.some((entry) => isObject(entry) && entry.id === appliedId)
+}
+
+function removeEnterpriseConfig(raw: string | null, path: string, mode: '1p' | '3p'): Record<string, unknown> {
+  const obj = writeDeployment(raw, path, mode)
   if (isObject(obj.enterpriseConfig)) {
     const enterprise = { ...obj.enterpriseConfig }
     for (const key of [
@@ -142,11 +148,13 @@ export class ClaudeDesktopWriter implements ClientConfigWriter {
   }
 
   renderClear(current: FileBundle, _profileId: string): FileBundle {
+    const meta = writeMeta(current[this.metaPath] ?? null, this.metaPath, false)
+    const mode = hasAppliedProfile(meta) ? '3p' : '1p'
     return {
-      [this.normalConfigPath]: stringifyJson(writeDeployment(current[this.normalConfigPath] ?? null, this.normalConfigPath, '1p')),
-      [this.threepConfigPath]: stringifyJson(removeEnterpriseConfig(current[this.threepConfigPath] ?? null, this.threepConfigPath)),
+      [this.normalConfigPath]: stringifyJson(writeDeployment(current[this.normalConfigPath] ?? null, this.normalConfigPath, mode)),
+      [this.threepConfigPath]: stringifyJson(removeEnterpriseConfig(current[this.threepConfigPath] ?? null, this.threepConfigPath, mode)),
       [this.profilePath]: stringifyJson({}),
-      [this.metaPath]: stringifyJson(writeMeta(current[this.metaPath] ?? null, this.metaPath, false)),
+      [this.metaPath]: stringifyJson(meta),
     }
   }
 }

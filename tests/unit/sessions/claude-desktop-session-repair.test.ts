@@ -106,4 +106,24 @@ describe('ClaudeDesktopSessionRepair.repair', () => {
     expect(res.copied).toBe(1)
     expect(existsSync(copied)).toBe(true)
   })
+
+  it('拒绝包含路径穿越片段的 renderer supplied namespace', async () => {
+    await writeLocal('target-account/target-workspace', 'local_existing.json', 9_000)
+    await writeLocal('source-account/source-workspace', 'local_missing.json', 1_000)
+
+    const svc = repair()
+
+    await expect(svc.repair({
+      targetNamespace: '../escaped',
+      sourceNamespaces: ['source-account/source-workspace'],
+    })).rejects.toThrow('无效的 Claude Desktop 会话空间')
+    await expect(svc.repair({
+      targetNamespace: 'target-account/target-workspace',
+      sourceNamespaces: ['source-account/..'],
+    })).rejects.toThrow('无效的 Claude Desktop 会话空间')
+    await expect(svc.repair({
+      targetNamespace: 'target-account/work\\space',
+      sourceNamespaces: ['source-account/source-workspace'],
+    })).rejects.toThrow('无效的 Claude Desktop 会话空间')
+  })
 })

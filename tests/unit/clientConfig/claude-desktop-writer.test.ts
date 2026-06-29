@@ -79,4 +79,34 @@ describe('ClaudeDesktopWriter', () => {
     expect(parse(cleared, PROFILE)).toEqual({})
     expect(parse(cleared, META)).toEqual({ entries: [] })
   })
+
+  it('clear 后若 meta 仍指向其它 3P profile，则保留 Desktop 3P 模式', () => {
+    const cleared = writer.renderClear(
+      {
+        [NORMAL]: JSON.stringify({ deploymentMode: '3p', mcpServers: { git: {} } }),
+        [THREEP]: JSON.stringify({
+          deploymentMode: '3p',
+          enterpriseConfig: { inferenceProvider: 'gateway', custom: true },
+        }),
+        [PROFILE]: JSON.stringify({ inferenceProvider: 'gateway' }),
+        [META]: JSON.stringify({
+          appliedId: CLAUDE_DESKTOP_PROFILE_ID,
+          entries: [
+            { id: CLAUDE_DESKTOP_PROFILE_ID, name: '号小管' },
+            { id: 'other-profile', name: 'Other' },
+          ],
+        }),
+      },
+      'p1',
+    )
+
+    expect(parse(cleared, NORMAL).deploymentMode).toBe('3p')
+    expect(parse(cleared, THREEP).deploymentMode).toBe('3p')
+    expect(parse(cleared, THREEP).enterpriseConfig).toEqual({ custom: true })
+    expect(parse(cleared, PROFILE)).toEqual({})
+    expect(parse(cleared, META)).toEqual({
+      appliedId: 'other-profile',
+      entries: [{ id: 'other-profile', name: 'Other' }],
+    })
+  })
 })

@@ -320,9 +320,15 @@ function namespaceDir(root: string, key: string): string {
 }
 
 function splitNamespace(key: string): { key: string; accountId: string; workspaceId: string } {
-  const parts = key.split('/').filter((p) => p.length > 0)
-  if (parts.length !== 2) throw new Error(`无效的 Claude Desktop 会话空间: ${key}`)
+  const parts = key.split('/')
+  if (parts.length !== 2 || parts.some((p) => !isSafeNamespaceSegment(p))) {
+    throw new Error(`无效的 Claude Desktop 会话空间: ${key}`)
+  }
   return { key: parts.join('/'), accountId: parts[0], workspaceId: parts[1] }
+}
+
+function isSafeNamespaceSegment(segment: string): boolean {
+  return segment.length > 0 && segment !== '.' && segment !== '..' && !segment.includes('/') && !segment.includes('\\')
 }
 
 async function isDirectory(path: string): Promise<boolean> {
