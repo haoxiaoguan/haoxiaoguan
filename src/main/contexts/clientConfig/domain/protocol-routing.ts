@@ -16,6 +16,7 @@ export type ClientNativeProtocol = WireProtocol | 'flexible'
  */
 export const CLIENT_NATIVE_PROTOCOL: Record<ClientId, ClientNativeProtocol> = {
   claude: 'anthropic',
+  claude_desktop: 'anthropic',
   codex: 'openai-responses',
   gemini_cli: 'gemini',
   opencode: 'flexible',

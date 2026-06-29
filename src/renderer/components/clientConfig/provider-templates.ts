@@ -8,6 +8,7 @@ import { BRAND_PRESETS, brandToPreset, type DerivedBrandPreset } from './brand-p
 /** 固定协议客户端的原生协议值。flexible 客户端(opencode/openclaw/hermes)不在此表,不需要上游协议字段。 */
 export const CLIENT_NATIVE_PROTOCOL_UI: Partial<Record<ClientConfigClientId, 'anthropic' | 'openai-responses' | 'gemini'>> = {
   claude: 'anthropic',
+  claude_desktop: 'anthropic',
   codex: 'openai-responses',
   gemini_cli: 'gemini',
 };
@@ -116,6 +117,7 @@ function presetsFor(clientId: ClientConfigClientId, settings?: Record<string, st
 
 export const CLIENT_PRESETS: Record<ClientConfigClientId, ProviderPreset[]> = {
   claude: presetsFor('claude'),
+  claude_desktop: presetsFor('claude_desktop'),
   gemini_cli: presetsFor('gemini_cli'),
   codex: presetsFor('codex'),
   opencode: presetsFor('opencode', { npm: '@ai-sdk/openai-compatible' }),

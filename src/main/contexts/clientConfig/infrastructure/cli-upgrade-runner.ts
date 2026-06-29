@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { ClientId } from '../domain/client-profile'
-import { INSTALL_COMMAND } from '../domain/client-version'
+import { INSTALL_COMMAND, type CliClientId } from '../domain/client-version'
 import { findDefaultInstall } from './client-install-scan'
 import { planUpgradeCommand, type UpgradeTarget } from './cli-upgrade-planner'
 
@@ -61,7 +60,7 @@ async function runShellLifecycle(command: string, action: '安装' | '升级'): 
 }
 
 /** 升级某客户端 CLI（锚定到 PATH 默认那处安装的来源；定位不到回退静态命令）。 */
-export async function runUpgrade(clientId: ClientId): Promise<UpgradeResult> {
+export async function runUpgrade(clientId: CliClientId): Promise<UpgradeResult> {
   if (process.platform === 'win32') {
     return { ok: false, detail: 'Windows 暂不支持一键升级，请手动执行升级命令' }
   }
@@ -73,6 +72,6 @@ export async function runUpgrade(clientId: ClientId): Promise<UpgradeResult> {
 }
 
 /** 安装某客户端 CLI（未安装时；纯包管理器，命令与「复制手动安装命令」同源）。 */
-export async function runInstall(clientId: ClientId): Promise<UpgradeResult> {
+export async function runInstall(clientId: CliClientId): Promise<UpgradeResult> {
   return runShellLifecycle(INSTALL_COMMAND[clientId], '安装')
 }

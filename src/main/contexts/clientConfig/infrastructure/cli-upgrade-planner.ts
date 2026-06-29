@@ -1,5 +1,4 @@
-import type { ClientId } from '../domain/client-profile'
-import { CLI_COMMAND, HERMES_UPDATE_COMMAND, LATEST_SOURCE } from '../domain/client-version'
+import { CLI_COMMAND, HERMES_UPDATE_COMMAND, LATEST_SOURCE, type CliClientId } from '../domain/client-version'
 
 // 升级命令规划（对称移植 cc-switch installs_anchored_command + anchored_command_from_paths）：
 // 纯函数，不碰 FS / 不 spawn——真身路径与来源由调用方（cli-upgrade-runner）从枚举结果给出，
@@ -41,13 +40,13 @@ export interface UpgradePlan {
 }
 
 /** clientId → npm 包名（hermes 是 PyPI，无 npm 包，返回 undefined）。 */
-function npmPackageFor(clientId: ClientId): string | undefined {
+function npmPackageFor(clientId: CliClientId): string | undefined {
   const src = LATEST_SOURCE[clientId]
   return src.kind === 'npm' ? src.pkg : undefined
 }
 
 /** 官方自升级子命令参数；无官方自升级的工具（gemini_cli）返回 undefined。 */
-function officialUpdateArgs(clientId: ClientId): string | undefined {
+function officialUpdateArgs(clientId: CliClientId): string | undefined {
   switch (clientId) {
     case 'claude':
     case 'codex':
@@ -68,7 +67,7 @@ function officialUpdateArgs(clientId: ClientId): string | undefined {
  * claude 仅在「原生安装器」那一处用 `claude update`（anchoredCommandFromPaths 顶部单独处理），
  * 包管理器装的 claude 一律走包管理器锚定，避免 self-update 在 npm 安装 + 非 TTY 下假成功短路兜底。
  */
-function prefersOfficialUpdate(clientId: ClientId): boolean {
+function prefersOfficialUpdate(clientId: CliClientId): boolean {
   return clientId === 'opencode' || clientId === 'openclaw'
 }
 
@@ -113,7 +112,7 @@ export function brewFormulaFromPath(real: string): string | undefined {
 }
 
 /** `<bin_path 绝对> <update args>`；无官方自升级返回 undefined。 */
-function anchoredOfficialUpdate(clientId: ClientId, binPath: string): string | undefined {
+function anchoredOfficialUpdate(clientId: CliClientId, binPath: string): string | undefined {
   const args = officialUpdateArgs(clientId)
   return args === undefined ? undefined : `${quotePathIfSpaced(binPath)} ${args}`
 }
@@ -124,7 +123,7 @@ function anchoredOfficialUpdate(clientId: ClientId, binPath: string): string | u
  * nvm/fnm/mise/homebrew(非 formula)/npm → 同目录 npm i -g。其余（pip/pnpm/unknown）→ undefined。
  */
 function packageManagerAnchored(
-  clientId: ClientId,
+  clientId: CliClientId,
   binPath: string,
   real: string,
   source: string,
@@ -187,7 +186,7 @@ function codexRepairCommand(binPath: string, real: string, source: string): stri
  *  ⑤ 其余（gemini_cli/codex/包管理器装的 claude）→ 纯包管理器锚定命令。
  */
 function anchoredCommandFromPaths(
-  clientId: ClientId,
+  clientId: CliClientId,
   binPath: string,
   real: string,
   source: string,
@@ -221,7 +220,7 @@ function anchoredCommandFromPaths(
  * Hermes 例外，按 cc-switch 走 `hermes update || 官方 installer`，不回退系统 pip。
  * codex 不走官方自升级优先（见文件头），故为裸 `npm i -g @openai/codex@latest`。
  */
-export function staticUpgradeFallback(clientId: ClientId): string {
+export function staticUpgradeFallback(clientId: CliClientId): string {
   if (clientId === 'hermes') return HERMES_UPDATE_COMMAND
   const pkg = npmPackageFor(clientId)
   if (pkg === undefined) return `${CLI_COMMAND[clientId]} ${officialUpdateArgs(clientId) ?? 'update'}`
@@ -236,7 +235,7 @@ export function staticUpgradeFallback(clientId: ClientId): string {
  * 规划升级命令。target=PATH 默认那处的安装（undefined=未能定位→静态兜底）。
  * codex 且 runnable=false → 先尝试平台分发包自愈命令。
  */
-export function planUpgradeCommand(clientId: ClientId, target?: UpgradeTarget): UpgradePlan {
+export function planUpgradeCommand(clientId: CliClientId, target?: UpgradeTarget): UpgradePlan {
   if (target === undefined) {
     return { command: staticUpgradeFallback(clientId), anchored: false }
   }

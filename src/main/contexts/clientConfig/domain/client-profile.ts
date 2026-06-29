@@ -2,10 +2,11 @@
 // 一个客户端可存多份接入档，标记一份「当前生效」；切换=把选中那份按客户端格式写进真实配置文件。
 
 /** 已支持的客户端 id（与 agents/ 的 AgentId 对齐，便于复用 path-resolver 与适配器注册表）。 */
-export type ClientId = 'claude' | 'codex' | 'gemini_cli' | 'opencode' | 'openclaw' | 'hermes'
+export type ClientId = 'claude' | 'claude_desktop' | 'codex' | 'gemini_cli' | 'opencode' | 'openclaw' | 'hermes'
 
 export const CLIENT_IDS: readonly ClientId[] = [
   'claude',
+  'claude_desktop',
   'codex',
   'gemini_cli',
   'opencode',
@@ -15,6 +16,7 @@ export const CLIENT_IDS: readonly ClientId[] = [
 
 export const CLIENT_DISPLAY_NAMES: Record<ClientId, string> = {
   claude: 'Claude Code',
+  claude_desktop: 'Claude Desktop',
   codex: 'Codex',
   gemini_cli: 'Gemini CLI',
   opencode: 'OpenCode',
@@ -51,6 +53,7 @@ export type WriteMode = 'switch' | 'additive'
  *  Codex 为累加式:config.toml 可注入多段 model_providers + profiles 共存,顶层 model_provider 为默认。 */
 export const CLIENT_WRITE_MODE: Record<ClientId, WriteMode> = {
   claude: 'switch',
+  claude_desktop: 'switch',
   codex: 'additive',
   gemini_cli: 'switch',
   opencode: 'additive',

@@ -3,8 +3,7 @@ import { promisify } from 'node:util'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { ClientId } from '../domain/client-profile'
-import { CLI_COMMAND } from '../domain/client-version'
+import { CLI_COMMAND, type CliClientId } from '../domain/client-version'
 
 // 客户端 CLI 版本探测（对称移植 cc-switch try_get_version + scan_cli_version）。
 // macOS/Linux：用登录交互 shell 跑 `<cmd> --version` —— GUI 应用 PATH 极简，必须经用户
@@ -77,7 +76,7 @@ async function probeViaShell(cmd: string): Promise<Probe> {
 }
 
 /** 常见安装目录（macOS/Linux），含 bun/mise/nvm 各 node 版本与 hermes 的 PyPI bin。 */
-export function searchDirs(clientId: ClientId, home = homedir()): string[] {
+export function searchDirs(clientId: CliClientId, home = homedir()): string[] {
   const dirs: string[] = []
   const push = (d: string) => { if (d && !dirs.includes(d) && existsSync(d)) dirs.push(d) }
 
@@ -120,7 +119,7 @@ export function searchDirs(clientId: ClientId, home = homedir()): string[] {
 }
 
 /** PATH 未命中时，扫常见目录里的真实可执行文件并跑 `--version`。 */
-async function scanCommonDirs(clientId: ClientId, cmd: string): Promise<Probe> {
+async function scanCommonDirs(clientId: CliClientId, cmd: string): Promise<Probe> {
   let broken = false
   for (const dir of searchDirs(clientId)) {
     const exe = join(dir, cmd)
@@ -143,7 +142,7 @@ async function scanCommonDirs(clientId: ClientId, cmd: string): Promise<Probe> {
 }
 
 /** 探测某客户端 CLI 的已装版本。 */
-export async function probeInstalledVersion(clientId: ClientId): Promise<VersionProbe> {
+export async function probeInstalledVersion(clientId: CliClientId): Promise<VersionProbe> {
   const cmd = CLI_COMMAND[clientId]
   const viaShell = await probeViaShell(cmd)
   if (viaShell.kind === 'found') return { version: viaShell.version, broken: false }

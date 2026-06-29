@@ -1,7 +1,6 @@
 import { httpFetch } from '../../quota/infrastructure/http/common'
 import { compareSemver } from '../domain/semver'
-import type { ClientId } from '../domain/client-profile'
-import { LATEST_SOURCE } from '../domain/client-version'
+import { LATEST_SOURCE, type CliClientId } from '../domain/client-version'
 
 // 客户端最新版获取（对称移植 cc-switch fetch_npm_latest_for_tool / fetch_pypi /
 // fetch_github + pick_latest_version）。走项目的 httpFetch（代理上下文感知）。
@@ -65,7 +64,7 @@ async function pypiLatest(pkg: string): Promise<string | undefined> {
   return info ? str(info.version) : undefined
 }
 
-export async function fetchLatestVersion(clientId: ClientId, localVersion?: string): Promise<string | undefined> {
+export async function fetchLatestVersion(clientId: CliClientId, localVersion?: string): Promise<string | undefined> {
   const src = LATEST_SOURCE[clientId]
   if (src.kind === 'pypi') return pypiLatest(src.pkg)
   const tags = await npmDistTags(src.pkg)

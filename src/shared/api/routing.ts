@@ -4,6 +4,7 @@
 // ─── clientConfig DTO（与 main domain 同形）─────────────────────────────────
 export type ClientConfigClientId =
   | 'claude'
+  | 'claude_desktop'
   | 'codex'
   | 'gemini_cli'
   | 'opencode'

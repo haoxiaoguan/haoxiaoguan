@@ -77,6 +77,10 @@ export class ClaudeSessionSource implements SessionSource {
     return { items, total: withMtime.length, offset }
   }
 
+  async summarizeTranscript(path: string, mtime: number): Promise<SessionSummary | undefined> {
+    return this.parseSummary(path, mtime)
+  }
+
   private async parseSummary(path: string, mtime: number): Promise<SessionSummary | undefined> {
     let head: string[]
     let tail: string[]

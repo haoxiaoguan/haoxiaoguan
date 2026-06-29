@@ -16,11 +16,21 @@ import type {
 import { indexVersions } from '../components/clientConfig/clientStatus';
 
 const PAGE_LIMIT = 200;
-const TOOLS: SessionToolDto[] = ['claude', 'codex', 'gemini'];
+const TOOLS: SessionToolDto[] = ['claude', 'claude_desktop', 'codex', 'gemini'];
+
+export type SessionClientId = ClientConfigClientId;
+
+export interface SessionClientInfo {
+  clientId: SessionClientId;
+  displayName: string;
+  detected: boolean;
+  writeMode: ClientConfigClientInfo['writeMode'];
+}
 
 /** clientId → SessionToolDto 映射；无映射的客户端（opencode/openclaw/hermes）右侧显示「暂不支持」空态。 */
-export const CLIENT_TO_TOOL: Partial<Record<ClientConfigClientId, SessionToolDto>> = {
+export const CLIENT_TO_TOOL: Partial<Record<SessionClientId, SessionToolDto>> = {
   claude: 'claude',
+  claude_desktop: 'claude_desktop',
   codex: 'codex',
   gemini_cli: 'gemini',
 };
@@ -45,16 +55,16 @@ interface SessionsState {
   messages: SessionMessageDto[];
   loading: boolean;
   error: string | null;
-  // 左栏客户端列表（与「客户端接入」一致的 6 个）
-  clients: ClientConfigClientInfo[];
-  activeClient: ClientConfigClientId;
+// 左栏客户端列表（基于「客户端接入」列表）。
+  clients: SessionClientInfo[];
+  activeClient: SessionClientId;
   /** 各客户端版本/可升级信息（按 clientId 索引；异步补，不阻塞列表）。 */
   versions: Record<string, ClientConfigVersionInfo>;
   init: () => Promise<void>;
   /** 异步拉取版本/可升级信息（慢，独立于列表；失败静默）。 */
   loadVersions: () => Promise<void>;
   selectTool: (tool: SessionToolDto) => Promise<void>;
-  selectClient: (clientId: ClientConfigClientId) => Promise<void>;
+  selectClient: (clientId: SessionClientId) => Promise<void>;
   loadMore: () => Promise<void>;
   selectSession: (summary: SessionSummaryDto) => Promise<void>;
   deleteSession: (summary: SessionSummaryDto) => Promise<void>;
@@ -105,10 +115,11 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       ]);
       const activeTool = pickDefaultTool(probes);
       // 把 activeTool 映射回对应的 clientId，同步左栏高亮
+      const sessionClients = clients as SessionClientInfo[];
       const matchedClient = (Object.entries(CLIENT_TO_TOOL).find(
         ([, tool]) => tool === activeTool,
-      )?.[0] ?? 'claude') as ClientConfigClientId;
-      set({ probes, clients, activeTool, activeClient: matchedClient });
+      )?.[0] ?? 'claude') as SessionClientId;
+      set({ probes, clients: sessionClients, activeTool, activeClient: matchedClient });
       // 版本/可升级慢探测：不阻塞列表。
       void get().loadVersions();
       await get().selectTool(activeTool);

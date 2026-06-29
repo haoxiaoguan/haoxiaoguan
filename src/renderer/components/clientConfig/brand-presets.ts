@@ -199,13 +199,13 @@ export interface DerivedBrandPreset {
 
 /**
  * 按客户端把品牌转成可预填的预设。
- * claude 走 anthropic 兼容端点;其余客户端走 openai 兼容端点。无对应端点的品牌返回 null(该客户端下不展示)。
+ * Claude 家族走 anthropic 兼容端点;其余客户端走 openai 兼容端点。无对应端点的品牌返回 null(该客户端下不展示)。
  */
 export function brandToPreset(
   brand: BrandPreset,
   clientId: ClientConfigClientId,
 ): DerivedBrandPreset | null {
-  const baseUrl = clientId === 'claude' ? brand.endpoints.anthropic : brand.endpoints.openaiCompat;
+  const baseUrl = clientId === 'claude' || clientId === 'claude_desktop' ? brand.endpoints.anthropic : brand.endpoints.openaiCompat;
   if (!baseUrl) return null;
   return {
     brandId: brand.id,
