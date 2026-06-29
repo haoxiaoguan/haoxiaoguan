@@ -31,6 +31,15 @@ async function writeLocal(namespace: string, name: string, mtimeMs: number) {
   return p
 }
 
+async function writeLegacyLocal(namespace: string, name: string, mtimeMs: number) {
+  const p = join(root, 'local-agent-mode-sessions', namespace, name)
+  await mkdir(join(p, '..'), { recursive: true })
+  await writeFile(p, JSON.stringify({ sessionId: name, cliSessionId: name.replace(/^local_/, '').replace(/\.json$/, '') }))
+  const when = new Date(mtimeMs)
+  await utimes(p, when, when)
+  return p
+}
+
 describe('ClaudeDesktopSessionRepair.preview', () => {
   it('选择最新 code namespace 为当前空间，并统计缺失索引', async () => {
     await writeLocal('old-account/old-workspace', 'local_old.json', 1_000)
@@ -45,6 +54,17 @@ describe('ClaudeDesktopSessionRepair.preview', () => {
     expect(pv.sourceNamespaces.map((n) => n.key)).toEqual(['old-account/old-workspace'])
     expect(pv.repairable).toBe(1)
     expect(pv.namespaces.find((n) => n.key === 'old-account/old-workspace')?.codeSessionCount).toBe(2)
+  })
+
+  it('把旧版 local-agent 空间作为可修复来源', async () => {
+    await writeLegacyLocal('old-account/old-workspace', 'local_legacy.json', 1_000)
+    await writeLocal('new-account/new-workspace', 'local_new.json', 9_000)
+
+    const pv = await repair().preview()
+
+    expect(pv.currentNamespace?.key).toBe('new-account/new-workspace')
+    expect(pv.sourceNamespaces.map((n) => n.key)).toEqual(['old-account/old-workspace'])
+    expect(pv.repairable).toBe(1)
   })
 })
 
@@ -71,5 +91,19 @@ describe('ClaudeDesktopSessionRepair.repair', () => {
 
     expect(existsSync(copied)).toBe(false)
     expect(existsSync(existing)).toBe(true)
+  })
+
+  it('从旧版 local-agent 同空间复制缺失索引到 code sessions', async () => {
+    await writeLocal('same-account/same-workspace', 'local_existing.json', 9_000)
+    await writeLegacyLocal('same-account/same-workspace', 'local_missing.json', 1_000)
+
+    const svc = repair()
+    const res = await svc.repair()
+
+    const copied = join(root, 'claude-code-sessions', 'same-account/same-workspace', 'local_missing.json')
+    expect(res.targetNamespace).toBe('same-account/same-workspace')
+    expect(res.sourceNamespaces).toEqual(['same-account/same-workspace'])
+    expect(res.copied).toBe(1)
+    expect(existsSync(copied)).toBe(true)
   })
 })

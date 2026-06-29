@@ -179,6 +179,37 @@ export class CodexStateDb {
     return total
   }
 
+  countRepairableRows(target: string, targetModel: string | null | undefined): number {
+    if (!this.hasColumn('threads', 'model') || targetModel === undefined) {
+      const row = this.db
+        .prepare(`SELECT COUNT(*) AS n FROM threads WHERE COALESCE(model_provider, '') <> ?`)
+        .get(target) as { n: number }
+      return row.n
+    }
+
+    if (targetModel === null) {
+      const row = this.db
+        .prepare(`
+          SELECT COUNT(*) AS n
+          FROM threads
+          WHERE COALESCE(model_provider, '') <> ?
+             OR model IS NOT NULL
+        `)
+        .get(target) as { n: number }
+      return row.n
+    }
+
+    const row = this.db
+      .prepare(`
+        SELECT COUNT(*) AS n
+        FROM threads
+        WHERE COALESCE(model_provider, '') <> ?
+           OR COALESCE(model, '') <> ?
+      `)
+      .get(target, targetModel) as { n: number }
+    return row.n
+  }
+
   close(): void {
     this.db.close()
   }

@@ -57,10 +57,14 @@ export class ClaudeDesktopSessionRepair {
     ])
     const summaries = summarizeNamespaces(codeScans, localAgentTouchedAt)
     const currentNamespace = chooseCurrentNamespace(summaries)
-    const sourceNamespaces =
-      currentNamespace === undefined
-        ? []
-        : summaries.filter((n) => n.key !== currentNamespace.key && n.codeSessionCount > 0)
+    const sourceNamespaces: ClaudeDesktopNamespaceSummary[] = []
+    if (currentNamespace !== undefined) {
+      for (const ns of summaries) {
+        const hasCodeSource = ns.key !== currentNamespace.key && ns.codeSessionCount > 0
+        const hasLegacySource = (await listLocalFiles(namespaceDir(this.localAgentDir, ns.key))).length > 0
+        if (hasCodeSource || hasLegacySource) sourceNamespaces.push(ns)
+      }
+    }
     const repairable = currentNamespace === undefined
       ? 0
       : await this.countRepairable(currentNamespace.key, sourceNamespaces.map((n) => n.key))
@@ -100,7 +104,7 @@ export class ClaudeDesktopSessionRepair {
 
     try {
       for (const sourceNamespace of sourceNamespaces) {
-        const files = await listLocalFiles(namespaceDir(this.codeSessionsDir, sourceNamespace))
+        const files = await listRepairSourceFiles(this.codeSessionsDir, this.localAgentDir, sourceNamespace, targetNamespace)
         for (const file of files) {
           if (existing.has(file.name)) {
             skippedExisting++
@@ -138,7 +142,7 @@ export class ClaudeDesktopSessionRepair {
     const targetNames = new Set(await listLocalNames(namespaceDir(this.codeSessionsDir, targetNamespace)))
     const missing = new Set<string>()
     for (const ns of sourceNamespaces) {
-      const files = await listLocalFiles(namespaceDir(this.codeSessionsDir, ns))
+      const files = await listRepairSourceFiles(this.codeSessionsDir, this.localAgentDir, ns, targetNamespace)
       for (const file of files) {
         if (!targetNames.has(file.name)) missing.add(file.name)
       }
@@ -233,7 +237,7 @@ function summarizeNamespaces(
 function chooseCurrentNamespace(
   namespaces: ClaudeDesktopNamespaceSummary[],
 ): ClaudeDesktopNamespaceSummary | undefined {
-  return namespaces[0]
+  return namespaces.find((ns) => ns.codeSessionCount > 0) ?? namespaces[0]
 }
 
 function namespaceTime(ns: ClaudeDesktopNamespaceSummary): number {
@@ -289,6 +293,25 @@ async function listLocalFiles(dir: string): Promise<LocalFile[]> {
 
 async function listLocalNames(dir: string): Promise<string[]> {
   return (await listLocalFiles(dir)).map((f) => f.name)
+}
+
+async function listRepairSourceFiles(
+  codeSessionsDir: string,
+  localAgentDir: string,
+  sourceNamespace: string,
+  targetNamespace: string,
+): Promise<LocalFile[]> {
+  const byName = new Map<string, LocalFile>()
+  const roots = sourceNamespace === targetNamespace
+    ? [localAgentDir]
+    : [codeSessionsDir, localAgentDir]
+  for (const root of roots) {
+    const files = await listLocalFiles(namespaceDir(root, sourceNamespace))
+    for (const file of files) {
+      if (!byName.has(file.name)) byName.set(file.name, file)
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function namespaceDir(root: string, key: string): string {

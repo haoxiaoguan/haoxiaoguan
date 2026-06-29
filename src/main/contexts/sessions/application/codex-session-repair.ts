@@ -62,9 +62,7 @@ export class CodexSessionRepair {
       }
       const counts = db.counts()
       const current = await this.currentConfig() // provider 恒有值（缺省内置 openai）
-      const repairable = counts
-        .filter((c) => c.provider !== current.provider)
-        .reduce((a, c) => a + c.count, 0)
+      const repairable = db.countRepairableRows(current.provider, current.model)
       return {
         available: true,
         dbPath,

@@ -112,7 +112,7 @@ describe('CodexSessionRepair.preview', () => {
     await writeFile(join(home, 'config.toml'), 'model = "gpt-5"\n') // 有 config.toml 但无 model_provider 键
     const pv = await repair().preview()
     expect(pv.currentProvider).toBe('openai')
-    expect(pv.repairable).toBe(2) // 两条 hxg_x 看不见，可归并回 openai
+    expect(pv.repairable).toBe(3) // 两条 hxg_x + 一条 openai 旧 model
   })
 
   it('config.toml 不存在 → currentProvider 回落 openai', async () => {
@@ -122,6 +122,18 @@ describe('CodexSessionRepair.preview', () => {
     ])
     const pv = await repair().preview()
     expect(pv.currentProvider).toBe('openai')
+    expect(pv.repairable).toBe(1)
+  })
+
+  it('provider 相同但 model 过期时仍计入可修复', async () => {
+    seedDb([
+      { id: 'a', provider: 'hxg_x', model: 'glm-old' },
+      { id: 'b', provider: 'hxg_x', model: 'glm-new' },
+    ])
+    await writeFile(join(home, 'config.toml'), 'model_provider = "hxg_x"\nmodel = "glm-new"\n')
+    const pv = await repair().preview()
+    expect(pv.currentProvider).toBe('hxg_x')
+    expect(pv.currentModel).toBe('glm-new')
     expect(pv.repairable).toBe(1)
   })
 
