@@ -237,7 +237,7 @@ function summarizeNamespaces(
 function chooseCurrentNamespace(
   namespaces: ClaudeDesktopNamespaceSummary[],
 ): ClaudeDesktopNamespaceSummary | undefined {
-  return namespaces.find((ns) => ns.codeSessionCount > 0) ?? namespaces[0]
+  return namespaces[0]
 }
 
 function namespaceTime(ns: ClaudeDesktopNamespaceSummary): number {

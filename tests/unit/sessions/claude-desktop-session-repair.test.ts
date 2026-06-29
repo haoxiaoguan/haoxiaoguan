@@ -37,6 +37,7 @@ async function writeLegacyLocal(namespace: string, name: string, mtimeMs: number
   await writeFile(p, JSON.stringify({ sessionId: name, cliSessionId: name.replace(/^local_/, '').replace(/\.json$/, '') }))
   const when = new Date(mtimeMs)
   await utimes(p, when, when)
+  await utimes(join(p, '..'), when, when)
   return p
 }
 
@@ -65,6 +66,17 @@ describe('ClaudeDesktopSessionRepair.preview', () => {
     expect(pv.currentNamespace?.key).toBe('new-account/new-workspace')
     expect(pv.sourceNamespaces.map((n) => n.key)).toEqual(['old-account/old-workspace'])
     expect(pv.repairable).toBe(1)
+  })
+
+  it('最新空间只有 local-agent 索引时仍作为当前空间', async () => {
+    await writeLocal('old-account/old-workspace', 'local_old.json', 1_000)
+    await writeLegacyLocal('new-account/new-workspace', 'local_new.json', 9_000)
+
+    const pv = await repair().preview()
+
+    expect(pv.currentNamespace?.key).toBe('new-account/new-workspace')
+    expect(pv.sourceNamespaces.map((n) => n.key)).toEqual(['new-account/new-workspace', 'old-account/old-workspace'])
+    expect(pv.repairable).toBe(2)
   })
 })
 
