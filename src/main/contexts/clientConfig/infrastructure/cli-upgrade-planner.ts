@@ -108,9 +108,9 @@ function isShimLikeBinPath(binPath: string): boolean {
 }
 
 function npmAnchorFromPaths(binPath: string, real: string): { npm: string; prefix: string } | undefined {
-  const realPrefix = isShimLikeBinPath(binPath) ? nodePrefixFromPackageRealPath(real) : undefined
-  if (realPrefix !== undefined) {
-    return { npm: `${realPrefix}/bin/npm`, prefix: realPrefix }
+  if (isShimLikeBinPath(binPath)) {
+    const realPrefix = nodePrefixFromPackageRealPath(real)
+    return realPrefix === undefined ? undefined : { npm: `${realPrefix}/bin/npm`, prefix: realPrefix }
   }
   const npm = siblingBin(binPath, 'npm')
   const prefix = nodePrefixFromBinPath(binPath)

@@ -66,6 +66,21 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
     )
   })
 
+  it('claude on unresolved mise shim → 不从 shim 路径推导 npm prefix', () => {
+    const { command, anchored } = planUpgradeCommand(
+      'claude',
+      target({
+        path: '/Users/me/.local/share/mise/shims/claude',
+        real: '/Users/me/.local/share/mise/shims/claude',
+        source: 'mise',
+      }),
+    )
+    expect(anchored).toBe(false)
+    expect(command).toBe('npm i -g @anthropic-ai/claude-code@latest')
+    expect(command).not.toContain('/mise/shims/npm')
+    expect(command).not.toContain('--prefix /Users/me/.local/share/mise')
+  })
+
   it('codex on fnm multishell shim → 从真身 Node 安装推导 npm prefix', () => {
     const { command } = planUpgradeCommand(
       'codex',
