@@ -95,6 +95,28 @@ function nodePrefixFromBinPath(binPath: string): string | undefined {
   return binDir === undefined ? undefined : parentDir(binDir)
 }
 
+/** npm 全局包真身路径：`<node-prefix>/lib/node_modules/<pkg>/...` → `<node-prefix>`。 */
+function nodePrefixFromPackageRealPath(real: string): string | undefined {
+  const needle = '/lib/node_modules/'
+  const i = real.indexOf(needle)
+  return i > 0 ? real.slice(0, i) : undefined
+}
+
+function isShimLikeBinPath(binPath: string): boolean {
+  const lower = binPath.toLowerCase()
+  return lower.includes('/mise/shims/') || lower.includes('/fnm_multishells/')
+}
+
+function npmAnchorFromPaths(binPath: string, real: string): { npm: string; prefix: string } | undefined {
+  const realPrefix = isShimLikeBinPath(binPath) ? nodePrefixFromPackageRealPath(real) : undefined
+  if (realPrefix !== undefined) {
+    return { npm: `${realPrefix}/bin/npm`, prefix: realPrefix }
+  }
+  const npm = siblingBin(binPath, 'npm')
+  const prefix = nodePrefixFromBinPath(binPath)
+  return npm === undefined || prefix === undefined ? undefined : { npm, prefix }
+}
+
 /**
  * 从 canonicalize 后的真身路径提取 Homebrew formula 名：
  * `/opt/homebrew/Cellar/gemini-cli/0.13.0/...` → `gemini-cli`。
@@ -146,11 +168,10 @@ function packageManagerAnchored(
   }
   // 自带同级 npm 的来源（含 haoxiaoguan inferInstallSource 的 'npm'：node_modules 路径）。
   if (source === 'nvm' || source === 'fnm' || source === 'mise' || source === 'homebrew' || source === 'npm') {
-    const npm = siblingBin(binPath, 'npm')
-    const prefix = nodePrefixFromBinPath(binPath)
-    return npm === undefined || prefix === undefined
+    const anchor = npmAnchorFromPaths(binPath, real)
+    return anchor === undefined
       ? undefined
-      : `${quotePathIfSpaced(npm)} i -g --prefix ${quotePathIfSpaced(prefix)} ${pkg}@latest`
+      : `${quotePathIfSpaced(anchor.npm)} i -g --prefix ${quotePathIfSpaced(anchor.prefix)} ${pkg}@latest`
   }
   // pip / pnpm / unknown：无可靠 sibling npm，交回静态兜底。
   return undefined
@@ -166,12 +187,10 @@ function codexRepairCommand(binPath: string, real: string, source: string): stri
   if (source !== 'nvm' && source !== 'fnm' && source !== 'mise' && source !== 'homebrew' && source !== 'npm') {
     return undefined
   }
-  const npm = siblingBin(binPath, 'npm')
-  if (npm === undefined) return undefined
-  const q = quotePathIfSpaced(npm)
-  const prefix = nodePrefixFromBinPath(binPath)
-  if (prefix === undefined) return undefined
-  const qp = quotePathIfSpaced(prefix)
+  const anchor = npmAnchorFromPaths(binPath, real)
+  if (anchor === undefined) return undefined
+  const q = quotePathIfSpaced(anchor.npm)
+  const qp = quotePathIfSpaced(anchor.prefix)
   const pkg = '@openai/codex'
   return `${q} uninstall -g --prefix ${qp} ${pkg} || true; ${q} i -g --prefix ${qp} ${pkg}@latest`
 }

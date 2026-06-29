@@ -65,6 +65,9 @@ function buildProfile(input: ApplyInput): Record<string, unknown> {
     inferenceProvider: 'gateway',
   }
   const models = readModelMap(input.settings).map(inferenceModelJson).filter((v): v is string | Record<string, unknown> => v !== undefined)
+  if (models.length === 0 && input.model !== undefined && input.model.length > 0) {
+    models.push(input.model)
+  }
   if (models.length > 0) profile.inferenceModels = models
   return profile
 }

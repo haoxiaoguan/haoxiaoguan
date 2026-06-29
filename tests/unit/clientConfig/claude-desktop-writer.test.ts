@@ -61,6 +61,15 @@ describe('ClaudeDesktopWriter', () => {
     })
   })
 
+  it('没有分级映射时使用表单选择的模型写入 Desktop profile', () => {
+    const out = writer.renderApply(
+      { [NORMAL]: null, [THREEP]: null, [PROFILE]: null, [META]: null },
+      input({ model: 'deepseek-chat', settings: {} }),
+    )
+
+    expect(parse(out, PROFILE).inferenceModels).toEqual(['deepseek-chat'])
+  })
+
   it('clear 切回 1P、移除号小管 meta entry，并清空 profile 内容', () => {
     const applied = writer.renderApply({ [NORMAL]: null, [THREEP]: null, [PROFILE]: null, [META]: null }, input())
     const cleared = writer.renderClear(applied, 'p1')

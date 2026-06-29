@@ -52,6 +52,34 @@ describe('planUpgradeCommand（锚定升级，对称移植 cc-switch anchored_co
     )
   })
 
+  it('claude on mise shim → 从真身 Node 安装推导 npm prefix，不能写进 shims 目录', () => {
+    const { command } = planUpgradeCommand(
+      'claude',
+      target({
+        path: '/Users/me/.local/share/mise/shims/claude',
+        real: '/Users/me/.local/share/mise/installs/node/22.15.1/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe',
+        source: 'mise',
+      }),
+    )
+    expect(command).toBe(
+      '/Users/me/.local/share/mise/installs/node/22.15.1/bin/npm i -g --prefix /Users/me/.local/share/mise/installs/node/22.15.1 @anthropic-ai/claude-code@latest',
+    )
+  })
+
+  it('codex on fnm multishell shim → 从真身 Node 安装推导 npm prefix', () => {
+    const { command } = planUpgradeCommand(
+      'codex',
+      target({
+        path: '/var/folders/xx/fnm_multishells/123/bin/codex',
+        real: '/Users/me/.local/share/fnm/node-versions/v22.0.0/installation/lib/node_modules/@openai/codex/bin/codex.js',
+        source: 'fnm',
+      }),
+    )
+    expect(command).toBe(
+      '/Users/me/.local/share/fnm/node-versions/v22.0.0/installation/bin/npm i -g --prefix /Users/me/.local/share/fnm/node-versions/v22.0.0/installation @openai/codex@latest',
+    )
+  })
+
   it('claude 原生安装器（真身在 ~/.local/share/claude/）→ 仅 `<bin> update`，不接 npm', () => {
     const { command, anchored } = planUpgradeCommand(
       'claude',
