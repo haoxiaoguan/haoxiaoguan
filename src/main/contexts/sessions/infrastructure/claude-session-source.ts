@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { dotDir } from '../../../platform/persistence/paths'
-import { collectMatchingFilesAsync, readTextAsync } from '../../../agents/shared/file-utils'
+import { collectMatchingFilesAsync, readJsonLinesIter } from '../../../agents/shared/file-utils'
 import {
   SUMMARY_MAX_CHARS,
   type SessionMessage,
@@ -77,6 +77,10 @@ export class ClaudeSessionSource implements SessionSource {
     return { items, total: withMtime.length, offset }
   }
 
+  async summarizeTranscript(path: string, mtime: number): Promise<SessionSummary | undefined> {
+    return this.parseSummary(path, mtime)
+  }
+
   private async parseSummary(path: string, mtime: number): Promise<SessionSummary | undefined> {
     let head: string[]
     let tail: string[]
@@ -137,10 +141,8 @@ export class ClaudeSessionSource implements SessionSource {
   }
 
   async readMessages(sourcePath: string): Promise<SessionMessage[]> {
-    const text = await readTextAsync(sourcePath)
     const out: SessionMessage[] = []
-    for (const line of text.split('\n')) {
-      if (line.trim().length === 0) continue
+    for await (const [, line] of readJsonLinesIter(sourcePath)) {
       const v = parse(line)
       if (!v || v.isMeta === true) continue
       const msg = isObject(v.message) ? v.message : undefined
@@ -179,9 +181,34 @@ export class ClaudeSessionSource implements SessionSource {
     const events: RawLogEvent[] = []
     for (const { f, m } of withMtime) {
       if (m < since) continue
-      let text: string
+      let sessionEmitted = false
+      const fileEvents: RawLogEvent[] = []
       try {
-        text = await readTextAsync(f)
+        for await (const [, line] of readJsonLinesIter(f)) {
+          const v = parse(line)
+          if (!v || v.isMeta === true) continue
+          const ts = typeof v.timestamp === 'string' ? parseTimestampToMs(v.timestamp) : undefined
+          if (ts === undefined) continue
+          if (!sessionEmitted) {
+            fileEvents.push({ tool: this.tool, kind: 'session', ts, sourceKey: f })
+            sessionEmitted = true
+          }
+          const msg = isObject(v.message) ? v.message : undefined
+          if (v.type === 'assistant' && msg && Array.isArray(msg.content)) {
+            const uuid = typeof v.uuid === 'string' ? v.uuid : undefined
+            msg.content.forEach((it, idx) => {
+              if (isObject(it) && it.type === 'tool_use') {
+                const name = typeof it.name === 'string' ? it.name : undefined
+                const sourceKey = uuid ? `${uuid}#${idx}` : `${f}#${idx}#${ts}`
+                fileEvents.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey, name })
+                const churn = claudeEditChurn(name ?? '', it.input)
+                if (churn > 0) {
+                  fileEvents.push({ tool: this.tool, kind: 'code_edit', ts, sourceKey, name, amount: churn })
+                }
+              }
+            })
+          }
+        }
       } catch {
         // 读失败：不推进 watermark，记录最早失败 mtime 供下轮重试（避免永久漏计该文件事件）。
         console.warn(`[activity] ${this.tool} 读取会话日志失败，跳过且不推进 watermark: ${f}`)
@@ -189,33 +216,7 @@ export class ClaudeSessionSource implements SessionSource {
         continue
       }
       if (m > latestMtime) latestMtime = m
-      let sessionEmitted = false
-      for (const line of text.split('\n')) {
-        if (line.trim().length === 0) continue
-        const v = parse(line)
-        if (!v || v.isMeta === true) continue
-        const ts = typeof v.timestamp === 'string' ? parseTimestampToMs(v.timestamp) : undefined
-        if (ts === undefined) continue
-        if (!sessionEmitted) {
-          events.push({ tool: this.tool, kind: 'session', ts, sourceKey: f })
-          sessionEmitted = true
-        }
-        const msg = isObject(v.message) ? v.message : undefined
-        if (v.type === 'assistant' && msg && Array.isArray(msg.content)) {
-          const uuid = typeof v.uuid === 'string' ? v.uuid : undefined
-          msg.content.forEach((it, idx) => {
-            if (isObject(it) && it.type === 'tool_use') {
-              const name = typeof it.name === 'string' ? it.name : undefined
-              const sourceKey = uuid ? `${uuid}#${idx}` : `${f}#${idx}#${ts}`
-              events.push({ tool: this.tool, kind: 'tool_call', ts, sourceKey, name })
-              const churn = claudeEditChurn(name ?? '', it.input)
-              if (churn > 0) {
-                events.push({ tool: this.tool, kind: 'code_edit', ts, sourceKey, name, amount: churn })
-              }
-            }
-          })
-        }
-      }
+      events.push(...fileEvents)
     }
     return blockedMtime !== undefined ? { events, latestMtime, blockedMtime } : { events, latestMtime }
   }

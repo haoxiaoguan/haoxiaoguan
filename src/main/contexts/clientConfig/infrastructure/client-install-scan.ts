@@ -2,9 +2,8 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ClientId } from '../domain/client-profile'
 import type { ClientInstallation } from '../domain/client-version'
-import { CLI_COMMAND } from '../domain/client-version'
+import { CLI_COMMAND, type CliClientId } from '../domain/client-version'
 import { searchDirs } from './cli-version-probe'
 
 // 多处安装扫描（对称移植 cc-switch enumerate_tool_installations + is_conflicting）：
@@ -57,6 +56,13 @@ function canonical(path: string): string {
 }
 
 /** PATH 默认命中那处的真身路径（经登录 shell `command -v`），无则 undefined。 */
+export function firstAbsolutePathLine(raw: string): string | undefined {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('/'))
+}
+
 async function pathDefaultReal(cmd: string): Promise<string | undefined> {
   if (process.platform === 'win32') return undefined
   const shell = process.env.SHELL && process.env.SHELL.length > 0 ? process.env.SHELL : '/bin/zsh'
@@ -64,7 +70,7 @@ async function pathDefaultReal(cmd: string): Promise<string | undefined> {
     const { stdout } = await execFileAsync(shell, [defaultShellFlag(shell), `command -v ${cmd}`], {
       timeout: SCAN_TIMEOUT_MS,
     })
-    const p = stdout.trim().split('\n').pop()?.trim()
+    const p = firstAbsolutePathLine(stdout)
     return p && p.length > 0 && existsSync(p) ? canonical(p) : undefined
   } catch {
     return undefined
@@ -113,7 +119,7 @@ export interface RawInstallation extends ClientInstallation {
 }
 
 /** 枚举某客户端 CLI 的所有安装（含 real 真身路径；去重软链；PATH 默认那处排最前）。 */
-export async function enumerateInstallationsRaw(clientId: ClientId): Promise<RawInstallation[]> {
+export async function enumerateInstallationsRaw(clientId: CliClientId): Promise<RawInstallation[]> {
   const cmd = CLI_COMMAND[clientId]
   const [defaultReal, loginDirs] = await Promise.all([pathDefaultReal(cmd), loginShellPathDirs()])
   const seen = new Set<string>()
@@ -144,7 +150,7 @@ export async function enumerateInstallationsRaw(clientId: ClientId): Promise<Raw
 }
 
 /** 枚举某客户端 CLI 的所有安装（去重软链；PATH 默认那处排最前）。 */
-export async function enumerateInstallations(clientId: ClientId): Promise<ClientInstallation[]> {
+export async function enumerateInstallations(clientId: CliClientId): Promise<ClientInstallation[]> {
   const raw = await enumerateInstallationsRaw(clientId)
   // 剥掉内部 real 字段，保持 IPC 边界的 ClientInstallation 形态不变。
   return raw.map(({ real: _real, ...rest }) => rest)
@@ -154,7 +160,7 @@ export async function enumerateInstallations(clientId: ClientId): Promise<Client
  * 取「命令行实际命中的那处」安装（升级锚定目标）：优先 PATH 默认那处；否则若仅一处取唯一那处；
  * 多处且无默认标记 → undefined（无从锚定，调用方回退静态命令）。对称移植 cc-switch default_install。
  */
-export async function findDefaultInstall(clientId: ClientId): Promise<RawInstallation | undefined> {
+export async function findDefaultInstall(clientId: CliClientId): Promise<RawInstallation | undefined> {
   const installs = await enumerateInstallationsRaw(clientId)
   return installs.find((i) => i.isPathDefault) ?? (installs.length === 1 ? installs[0] : undefined)
 }

@@ -69,14 +69,18 @@ function decodeLine(buf: Buffer, hadNewline: boolean): { line: string | null; en
 }
 
 /** 流式扫描（只读）：等价 analyzeRollout 的元数据收集，不构造 nextText、内存恒定。 */
-export async function streamScanRollout(path: string, target: string): Promise<StreamRolloutResult> {
+export async function streamScanRollout(
+  path: string,
+  target: string,
+  targetModel?: string | null,
+): Promise<StreamRolloutResult> {
   const acc = newAccumulator()
   let hasUserEvent = false
   for await (const { buf, hadNewline } of iterateLineBuffers(path)) {
     const { line } = decodeLine(buf, hadNewline)
     if (line === null) continue // 超大行不可能是 session_meta
     if (!hasUserEvent && USER_EVENT_RE.test(line)) hasUserEvent = true
-    processRolloutLine(line, target, acc) // 仅累积，忽略返回（不写）
+    processRolloutLine(line, target, acc, targetModel) // 仅累积，忽略返回（不写）
   }
   return {
     rewriteNeeded: acc.rewriteNeeded,
@@ -93,7 +97,7 @@ async function writeChunk(out: NodeJS.WritableStream, data: string | Buffer): Pr
 }
 
 /** 流式改写：逐行重写 session_meta，写临时文件后原子替换并还原 mtime。内存恒定。 */
-export async function streamRewriteRollout(path: string, target: string): Promise<void> {
+export async function streamRewriteRollout(path: string, target: string, targetModel?: string | null): Promise<void> {
   let originalMtime: Date | undefined
   try {
     originalMtime = (await stat(path)).mtime
@@ -109,7 +113,7 @@ export async function streamRewriteRollout(path: string, target: string): Promis
       if (line === null) {
         await writeChunk(out, body) // 超大行原样透传
       } else {
-        await writeChunk(out, processRolloutLine(line, target, acc))
+        await writeChunk(out, processRolloutLine(line, target, acc, targetModel))
       }
       if (ending.length > 0) await writeChunk(out, ending)
     }

@@ -15,6 +15,9 @@
     "7d": "近 7 天",
     "30d": "近 30 天"
   },
+  "refresh": "刷新",
+  "autoRefresh": "自动刷新",
+  "refreshOff": "关闭",
   "agent": {
     "all": "全部",
     "claude": "Claude",

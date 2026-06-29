@@ -1,8 +1,8 @@
 // 会话历史浏览器的中性数据模型。DTO 经 IPC 传给渲染层。
 
-export type SessionTool = 'claude' | 'codex' | 'gemini'
+export type SessionTool = 'claude' | 'claude_desktop' | 'codex' | 'gemini'
 
-export const SESSION_TOOLS: readonly SessionTool[] = ['claude', 'codex', 'gemini']
+export const SESSION_TOOLS: readonly SessionTool[] = ['claude', 'claude_desktop', 'codex', 'gemini']
 
 export interface SessionSummary {
   tool: SessionTool

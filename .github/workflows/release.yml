@@ -28,8 +28,39 @@ permissions:
   contents: write # 创建 / 上传 Release 资产
 
 jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 不指定 version：以 package.json 的 packageManager(pnpm@10.32.1+sha512)为唯一来源，
+      # 否则 action-setup@v4 会因「两处都指定 pnpm 版本」报 ERR_PNPM_BAD_PM_VERSION。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm run test
+
   release:
     name: Package & publish (${{ matrix.label }})
+    needs: quality
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     # 三平台并行：各 runner 按本机原生架构编译原生模块(better-sqlite3) 并产出对应安装包，

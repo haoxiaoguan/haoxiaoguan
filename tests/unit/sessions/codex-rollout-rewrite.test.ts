@@ -46,10 +46,10 @@ function line(obj: Record<string, unknown>): string {
 
 describe('analyzeRollout', () => {
   it('单个 session_meta — 需要改写时 rewriteNeeded=true', () => {
-    const meta = { type: 'session_meta', payload: { id: 'tid1', cwd: '/home/u', model_provider: 'openai' } }
+    const meta = { type: 'session_meta', payload: { id: 'tid1', cwd: '/home/u', model_provider: 'openai', model: 'gpt-old' } }
     const other = { type: 'response_item', payload: { content: 'hi' } }
     const text = [line(meta), line(other)].join('\n')
-    const r = analyzeRollout(text, 'hxg_x')
+    const r = analyzeRollout(text, 'hxg_x', 'glm-new')
     expect(r.rewriteNeeded).toBe(true)
     expect(r.sessionMetaCount).toBe(1)
     expect(r.threadId).toBe('tid1')
@@ -61,8 +61,19 @@ describe('analyzeRollout', () => {
     // nextText 中 session_meta 行应有 hxg_x
     const outLines = r.nextText.split('\n')
     expect(JSON.parse(outLines[0]).payload.model_provider).toBe('hxg_x')
+    expect(JSON.parse(outLines[0]).payload.model).toBe('glm-new')
     // non-session_meta 行原样
     expect(outLines[1]).toBe(line(other))
+  })
+
+  it('provider 已是 target 但 model 不一致时也改写', () => {
+    const meta = { type: 'session_meta', payload: { id: 'tid1', cwd: '/a', model_provider: 'hxg_x', model: 'glm-old' } }
+    const text = line(meta)
+    const r = analyzeRollout(text, 'hxg_x', 'glm-new')
+    expect(r.rewriteNeeded).toBe(true)
+    const out = JSON.parse(r.nextText) as { payload: { model_provider: string; model: string } }
+    expect(out.payload.model_provider).toBe('hxg_x')
+    expect(out.payload.model).toBe('glm-new')
   })
 
   it('多个 session_meta 行 — 全部改写', () => {

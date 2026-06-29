@@ -228,7 +228,7 @@ export class ClientConfigService {
     }
     const url = `${resolveApiBaseUrl(input.baseUrl, input.fullUrl ?? false)}/models`
     const headers: Record<string, string> =
-      input.clientId === 'claude'
+      input.clientId === 'claude' || input.clientId === 'claude_desktop'
         ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
         : { Authorization: `Bearer ${key}` }
     const res = await undiciFetch(url, { headers })

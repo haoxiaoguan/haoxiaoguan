@@ -35,6 +35,7 @@ import type { SessionSummaryDto } from '@shared/api-types';
 import { TOOL_CONFIG, formatTime, shortDir, SessionListSkeleton, EmptyState } from '@/components/sessions/shared';
 import { SessionDetailDialog } from '@/components/sessions/SessionDetailDialog';
 import { RepairSessionsDialog } from '@/components/sessions/RepairSessionsDialog';
+import { ClaudeDesktopRepairDialog } from '@/components/sessions/ClaudeDesktopRepairDialog';
 import { ProviderTag, providerLabel, useCodexProviderNames } from '@/components/sessions/ProviderTag';
 import { StatusBadge } from '@/components/sessions/StatusBadge';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
@@ -224,6 +225,7 @@ export default function Sessions() {
   const [detailOpen, setDetailOpen] = useState(false);
   // 修复会话弹窗（Task 12 才实现，本任务保留 state 与按钮 onClick）
   const [repairOpen, setRepairOpen] = useState(false);
+  const [desktopRepairOpen, setDesktopRepairOpen] = useState(false);
   // hxg_<档id> → 接入档名，让会话供应商显示真名（如「测试第三方」）而非泛称「号小管接入」。
   const providerNames = useCodexProviderNames();
 
@@ -432,8 +434,8 @@ export default function Sessions() {
 
                   {/* 右侧 icon 按钮组 */}
                   <div className="ml-auto flex items-center gap-0.5">
-                    {/* 修复会话：仅 codex 显示 */}
-                    {activeClient === 'codex' && (
+                    {/* 修复会话：Codex 修 provider；Claude Desktop 修客户端索引 */}
+                    {(activeClient === 'codex' || activeClient === 'claude_desktop') && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -441,7 +443,10 @@ export default function Sessions() {
                             size="icon"
                             className="size-7 rounded-[7px] text-muted-foreground hover:text-foreground"
                             aria-label={t('sessionsView.repair')}
-                            onClick={() => setRepairOpen(true)}
+                            onClick={() => {
+                              if (activeClient === 'claude_desktop') setDesktopRepairOpen(true);
+                              else setRepairOpen(true);
+                            }}
                           >
                             <Wrench className="size-3.5" strokeWidth={1.9} />
                           </Button>
@@ -633,6 +638,7 @@ export default function Sessions() {
 
       {/* ── 修复会话对话框 ── */}
       <RepairSessionsDialog open={repairOpen} onOpenChange={setRepairOpen} />
+      <ClaudeDesktopRepairDialog open={desktopRepairOpen} onOpenChange={setDesktopRepairOpen} />
 
       {/* ── 单条删除确认 ── */}
       <AlertDialog

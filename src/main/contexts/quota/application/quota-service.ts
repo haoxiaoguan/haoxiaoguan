@@ -24,6 +24,7 @@ import type {
   QuotaStateRepository,
   AccountDispatcherResolver,
 } from '../domain/ports'
+import { createLimit } from '../../../platform/async/limit'
 import { runWithDispatcher } from '../../../platform/net/dispatcher-context'
 import {
   AccountQuotaState,
@@ -59,6 +60,7 @@ export const QUOTA_FETCH_PLATFORMS: readonly PlatformId[] = [
 ]
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
+const REFRESH_ALL_CONCURRENCY = 4
 
 export class QuotaApplicationService {
   constructor(
@@ -175,8 +177,9 @@ export class QuotaApplicationService {
       }
     }
 
+    const limit = createLimit(REFRESH_ALL_CONCURRENCY)
     const settled = await Promise.allSettled(
-      allAccounts.map(async (account): Promise<QuotaRefreshResult> => {
+      allAccounts.map((account) => limit(async (): Promise<QuotaRefreshResult> => {
         const accountId = account.id
         try {
           const quota = await this.refreshQuota(accountId)
@@ -184,7 +187,7 @@ export class QuotaApplicationService {
         } catch (e) {
           return { accountId, success: false, quota: undefined, error: errorMessage(e) }
         }
-      }),
+      })),
     )
 
     return settled.map((outcome) =>

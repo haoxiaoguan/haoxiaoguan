@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clientConfig/ClientLogo';
 import { ClientUpgradeConfirmDialog } from '@/components/clientConfig/ClientUpgradeConfirmDialog';
+import { clientManageVisibleClients } from '@/components/clientConfig/clientManageVisibility';
 import { useClientConfigStore } from '../stores/clientConfigStore';
 import type { ClientConfigClientId, ClientConfigInstallation, ClientConfigUpgradePlan } from '@shared/api-types';
 
@@ -49,8 +50,9 @@ export default function ClientManage() {
   }, []);
 
   // 版本尚未首次探测完成（避免顶部「全部升级」也先显示错计数再跳变）。
+  const visibleClients = clientManageVisibleClients(clients);
   const versionsPending = versionsLoading && Object.keys(versions).length === 0;
-  const upgradableCount = clients.filter((c) => versions[c.clientId]?.upgradable === true).length;
+  const upgradableCount = visibleClients.filter((c) => versions[c.clientId]?.upgradable === true).length;
 
   // 实际执行单个升级（已通过任何必要的确认后才调用）。
   const doUpgradeOne = async (clientId: ClientConfigClientId, name: string) => {
@@ -118,7 +120,7 @@ export default function ClientManage() {
   };
 
   const onBatch = () => {
-    const ids = clients.filter((c) => versions[c.clientId]?.upgradable === true).map((c) => c.clientId);
+    const ids = visibleClients.filter((c) => versions[c.clientId]?.upgradable === true).map((c) => c.clientId);
     return requestUpgrade(ids, doBatch);
   };
 
@@ -171,7 +173,7 @@ export default function ClientManage() {
 
       {/* 客户端版本卡片 */}
       <div className="flex flex-col gap-2.5">
-        {clients.map((c) => {
+        {visibleClients.map((c) => {
           const v = versions[c.clientId];
           const report = reports[c.clientId];
           const installed = v?.installedVersion;
@@ -231,7 +233,7 @@ export default function ClientManage() {
                   )}
                 </div>
                 {/* 未安装：自动安装 + 复制手动安装命令 */}
-                {!pending && notInstalled && (
+                {!pending && notInstalled && v?.installCommand !== undefined && (
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Button
                       size="sm"
@@ -251,19 +253,17 @@ export default function ClientManage() {
                         </>
                       )}
                     </Button>
-                    {v?.installCommand !== undefined && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-8"
-                        disabled={isBusy}
-                        title={t('clientManage.copyInstallHint', { command: v.installCommand })}
-                        aria-label={t('clientManage.copyInstall')}
-                        onClick={() => void onCopyCommand(v.installCommand as string)}
-                      >
-                        <Copy className="size-3.5" aria-hidden />
-                      </Button>
-                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8"
+                      disabled={isBusy}
+                      title={t('clientManage.copyInstallHint', { command: v.installCommand })}
+                      aria-label={t('clientManage.copyInstall')}
+                      onClick={() => void onCopyCommand(v.installCommand as string)}
+                    >
+                      <Copy className="size-3.5" aria-hidden />
+                    </Button>
                   </div>
                 )}
                 {!pending && !notInstalled && upgradable && (

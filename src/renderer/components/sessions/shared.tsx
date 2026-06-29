@@ -12,6 +12,11 @@ export const TOOL_CONFIG: Record<string, { color: string; label: string; dotColo
     label: 'Claude Code',
     dotColor: 'bg-orange-500',
   },
+  claude_desktop: {
+    color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    label: 'Claude Desktop',
+    dotColor: 'bg-orange-500',
+  },
   codex: {
     color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     label: 'Codex',

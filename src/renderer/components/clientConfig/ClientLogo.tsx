@@ -1,6 +1,7 @@
 // 客户端官方 logo（复用 @lobehub/icons-static-svg 静态 SVG，与 skills/AgentLogo 同源）。
 // 6 个 CLI 客户端 → 各自官方品牌图标；vite 把 .svg import 解析为资源 URL 供 <img> 使用。
 import claudeCodeIcon from '@lobehub/icons-static-svg/icons/claudecode-color.svg';
+import claudeDesktopIcon from '@lobehub/icons-static-svg/icons/claude-color.svg';
 import codexIcon from '@lobehub/icons-static-svg/icons/codex-color.svg';
 import geminiCliIcon from '@lobehub/icons-static-svg/icons/geminicli-color.svg';
 import openCodeIcon from '@lobehub/icons-static-svg/icons/opencode.svg';
@@ -11,6 +12,7 @@ import type { ClientConfigClientId } from '@shared/api-types';
 
 const CLIENT_ICON_MAP: Record<ClientConfigClientId, string> = {
   claude: claudeCodeIcon,
+  claude_desktop: claudeDesktopIcon,
   codex: codexIcon,
   gemini_cli: geminiCliIcon,
   opencode: openCodeIcon,

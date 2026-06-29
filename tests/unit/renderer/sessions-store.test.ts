@@ -152,3 +152,25 @@ it('refresh 重载当前工具并更新 byTool 和 probes', async () => {
   // selectedPath 被清空
   expect(state.selectedPath).toBeNull()
 })
+
+it('会话管理展示 Claude Desktop 客户端，选中后只加载 Desktop 会话源', async () => {
+  mocks.clients.mockResolvedValue([
+    { clientId: 'claude', displayName: 'Claude Code', detected: true, writeMode: 'switch' },
+    { clientId: 'claude_desktop', displayName: 'Claude Desktop', detected: true, writeMode: 'switch' },
+  ])
+  mocks.probeTools.mockResolvedValue([{ tool: 'claude_desktop', hasSessions: true, lastActiveAt: 1 }])
+  mocks.listSessions.mockResolvedValue({ items: [], total: 0, offset: 0 })
+
+  await useSessionsStore.getState().init()
+
+  expect(useSessionsStore.getState().clients.map((c) => c.clientId)).toEqual([
+    'claude',
+    'claude_desktop',
+  ])
+
+  await useSessionsStore.getState().selectClient('claude_desktop' as never)
+
+  expect(useSessionsStore.getState().activeClient).toBe('claude_desktop')
+  expect(useSessionsStore.getState().activeTool).toBe('claude_desktop')
+  expect(mocks.listSessions).toHaveBeenCalledWith('claude_desktop', expect.any(Number), 0)
+})

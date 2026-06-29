@@ -12,8 +12,9 @@ describe('CLIENT_WRITE_MODE', () => {
     expect(CLIENT_WRITE_MODE.openclaw).toBe('additive')
     expect(CLIENT_WRITE_MODE.hermes).toBe('additive')
   })
-  it('claude/gemini_cli 为 switch', () => {
+  it('claude/claude_desktop/gemini_cli 为 switch', () => {
     expect(CLIENT_WRITE_MODE.claude).toBe('switch')
+    expect(CLIENT_WRITE_MODE.claude_desktop).toBe('switch')
     expect(CLIENT_WRITE_MODE.gemini_cli).toBe('switch')
   })
   it('每个客户端都有写入模式与显示名', () => {

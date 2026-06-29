@@ -29,6 +29,7 @@ function findStateDbInDir(dir: string): string | undefined {
 
 export interface ApplyUpdatesResult {
   providerRows: number
+  modelRows: number
   userEventRows: number
   cwdRows: number
 }
@@ -73,10 +74,12 @@ export class CodexStateDb {
    */
   applyUpdates(
     target: string,
+    targetModel: string | null | undefined,
     userEventThreadIds: string[],
     cwdByThreadId: Record<string, string>,
   ): ApplyUpdatesResult {
-    const counts: ApplyUpdatesResult = { providerRows: 0, userEventRows: 0, cwdRows: 0 }
+    const counts: ApplyUpdatesResult = { providerRows: 0, modelRows: 0, userEventRows: 0, cwdRows: 0 }
+    const hasModelCol = this.hasColumn('threads', 'model')
     const hasUserEventCol = this.hasColumn('threads', 'has_user_event')
     const hasCwdCol = this.hasColumn('threads', 'cwd')
 
@@ -85,6 +88,18 @@ export class CodexStateDb {
       counts.providerRows = this.db
         .prepare(`UPDATE threads SET model_provider = ? WHERE COALESCE(model_provider, '') <> ?`)
         .run(target, target).changes
+
+      if (hasModelCol && targetModel !== undefined) {
+        if (targetModel === null) {
+          counts.modelRows = this.db
+            .prepare(`UPDATE threads SET model = NULL WHERE model IS NOT NULL`)
+            .run().changes
+        } else {
+          counts.modelRows = this.db
+            .prepare(`UPDATE threads SET model = ? WHERE COALESCE(model, '') <> ?`)
+            .run(targetModel, targetModel).changes
+        }
+      }
 
       // ② has_user_event
       if (hasUserEventCol) {
@@ -115,6 +130,7 @@ export class CodexStateDb {
    */
   countUpdates(
     target: string,
+    targetModel: string | null | undefined,
     userEventThreadIds: string[],
     cwdByThreadId: Record<string, string>,
   ): number {
@@ -125,6 +141,20 @@ export class CodexStateDb {
       .prepare(`SELECT COUNT(*) AS n FROM threads WHERE COALESCE(model_provider, '') <> ?`)
       .get(target) as { n: number }
     total += providerCount.n
+
+    if (this.hasColumn('threads', 'model') && targetModel !== undefined) {
+      if (targetModel === null) {
+        const modelCount = this.db
+          .prepare(`SELECT COUNT(*) AS n FROM threads WHERE model IS NOT NULL`)
+          .get() as { n: number }
+        total += modelCount.n
+      } else {
+        const modelCount = this.db
+          .prepare(`SELECT COUNT(*) AS n FROM threads WHERE COALESCE(model, '') <> ?`)
+          .get(targetModel) as { n: number }
+        total += modelCount.n
+      }
+    }
 
     // has_user_event
     if (this.hasColumn('threads', 'has_user_event')) {
@@ -147,6 +177,37 @@ export class CodexStateDb {
     }
 
     return total
+  }
+
+  countRepairableRows(target: string, targetModel: string | null | undefined): number {
+    if (!this.hasColumn('threads', 'model') || targetModel === undefined) {
+      const row = this.db
+        .prepare(`SELECT COUNT(*) AS n FROM threads WHERE COALESCE(model_provider, '') <> ?`)
+        .get(target) as { n: number }
+      return row.n
+    }
+
+    if (targetModel === null) {
+      const row = this.db
+        .prepare(`
+          SELECT COUNT(*) AS n
+          FROM threads
+          WHERE COALESCE(model_provider, '') <> ?
+             OR model IS NOT NULL
+        `)
+        .get(target) as { n: number }
+      return row.n
+    }
+
+    const row = this.db
+      .prepare(`
+        SELECT COUNT(*) AS n
+        FROM threads
+        WHERE COALESCE(model_provider, '') <> ?
+           OR COALESCE(model, '') <> ?
+      `)
+      .get(target, targetModel) as { n: number }
+    return row.n
   }
 
   close(): void {

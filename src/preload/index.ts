@@ -299,6 +299,10 @@ const api: HxgApi = {
     resume: (command, cwd) => ipcRenderer.invoke(SESSIONS_CHANNELS.resume, { command, cwd }),
     repairPreview: () => ipcRenderer.invoke(SESSIONS_CHANNELS.repairPreview),
     repair: (req) => ipcRenderer.invoke(SESSIONS_CHANNELS.repair, req),
+    claudeDesktopRepairPreview: () => ipcRenderer.invoke(SESSIONS_CHANNELS.claudeDesktopRepairPreview),
+    claudeDesktopRepair: (req) => ipcRenderer.invoke(SESSIONS_CHANNELS.claudeDesktopRepair, req ?? {}),
+    claudeDesktopRepairRollback: (backupId) =>
+      ipcRenderer.invoke(SESSIONS_CHANNELS.claudeDesktopRepairRollback, { backupId }),
     codexSwitchRepair: (args) => ipcRenderer.invoke(SESSIONS_CHANNELS.codexSwitchRepair, args),
     repairRollback: (backupId) =>
       ipcRenderer.invoke(SESSIONS_CHANNELS.repairRollback, { backupId }),

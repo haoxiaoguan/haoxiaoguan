@@ -28,7 +28,11 @@ export function RepairSessionsDialog({ open, onOpenChange }: { open: boolean; on
     setProgress(null)
     const unsub = sessionsService.onRepairProgress((p) => setProgress(p))
     try {
-      const r = await sessionsService.repair({ targetProvider: preview.currentProvider, rewriteRollout })
+      const r = await sessionsService.repair({
+        targetProvider: preview.currentProvider,
+        targetModel: preview.currentModel ?? null,
+        rewriteRollout,
+      })
       setResult(r)
       toast.success(t('sessionsView.repairDone', { n: r.updatedThreads }))
       // 修复后刷新预览：counts/可修复数应归零，否则界面停留在修复前的旧数字（用户实测此 bug）。

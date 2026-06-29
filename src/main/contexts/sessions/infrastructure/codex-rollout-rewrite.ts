@@ -49,11 +49,16 @@ export interface SessionMetaAccumulator {
 }
 
 /**
- * 处理单行：若是 session_meta 且 model_provider !== target 则改写其 provider，并把
+ * 处理单行：若是 session_meta 且 model_provider/model 与目标不一致则改写，并把
  * threadId/cwd/原始行/计数累积到 acc。返回应写出的行内容（非 session_meta / 无需改写则原样）。
  * analyzeRollout（整文件）与 codex-rollout-stream（大文件流式）共用此函数，避免规则分叉。
  */
-export function processRolloutLine(line: string, target: string, acc: SessionMetaAccumulator): string {
+export function processRolloutLine(
+  line: string,
+  targetProvider: string,
+  acc: SessionMetaAccumulator,
+  targetModel?: string | null,
+): string {
   if (line.trim().length === 0) return line
   let record: unknown
   try {
@@ -85,8 +90,24 @@ export function processRolloutLine(line: string, target: string, acc: SessionMet
   const providerVal = p['model_provider']
   const provider = typeof providerVal === 'string' ? providerVal : '(missing)'
   acc.providers.push(provider)
-  if (provider !== target) {
-    p['model_provider'] = target
+  let changed = false
+  if (provider !== targetProvider) {
+    p['model_provider'] = targetProvider
+    changed = true
+  }
+  if (targetModel !== undefined) {
+    const currentModel = typeof p['model'] === 'string' ? p['model'] : undefined
+    if (targetModel === null) {
+      if ('model' in p) {
+        delete p['model']
+        changed = true
+      }
+    } else if (currentModel !== targetModel) {
+      p['model'] = targetModel
+      changed = true
+    }
+  }
+  if (changed) {
     acc.rewriteNeeded = true
     return JSON.stringify(rec)
   }
@@ -100,7 +121,7 @@ export function processRolloutLine(line: string, target: string, acc: SessionMet
  * - 对每个 session_meta 行: 若 model_provider !== target → 改写并置 rewriteNeeded=true
  * - 非 session_meta 行原样保留
  */
-export function analyzeRollout(text: string, target: string): RolloutAnalysis {
+export function analyzeRollout(text: string, target: string, targetModel?: string | null): RolloutAnalysis {
   const result: RolloutAnalysis = {
     nextText: '',
     rewriteNeeded: false,
@@ -118,7 +139,7 @@ export function analyzeRollout(text: string, target: string): RolloutAnalysis {
 
   for (const segment of segments) {
     const { line, ending } = splitLineEnding(segment)
-    const nextLine = processRolloutLine(line, target, result)
+    const nextLine = processRolloutLine(line, target, result, targetModel)
     result.nextText += nextLine + ending
   }
 

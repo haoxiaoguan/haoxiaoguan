@@ -1,6 +1,6 @@
 import { CLIENT_IDS, type ClientId } from '../domain/client-profile'
 import type { ClientVersionInfo, ClientInstallationReport, ClientUpgradePlan } from '../domain/client-version'
-import { UPGRADE_COMMAND, INSTALL_COMMAND } from '../domain/client-version'
+import { UPGRADE_COMMAND, INSTALL_COMMAND, isCliClientId } from '../domain/client-version'
 import { compareSemver } from '../domain/semver'
 import { probeInstalledVersion } from '../infrastructure/cli-version-probe'
 import { fetchLatestVersion } from '../infrastructure/latest-version-fetcher'
@@ -92,6 +92,9 @@ export class ClientVersionService {
    * 弹窗展示「升级只动哪一处 / 各处版本 / 将执行的命令」，让用户知情后确认。只读、无副作用。
    */
   async planUpgrade(clientId: ClientId): Promise<ClientUpgradePlan> {
+    if (!isCliClientId(clientId)) {
+      return { clientId, command: '', anchored: false, needsConfirmation: false, installs: [] }
+    }
     const raw = await enumerateInstallationsRaw(clientId)
     const def = raw.find((i) => i.isPathDefault) ?? (raw.length === 1 ? raw[0] : undefined)
     const target =
@@ -108,6 +111,10 @@ export class ClientVersionService {
    * 不再把假成功当成功（即用户报的「显示升级成功但实际不成功」）。
    */
   async upgrade(clientId: ClientId): Promise<ClientUpgradeOutcome> {
+    if (!isCliClientId(clientId)) {
+      const version = await this.refreshOne(clientId)
+      return { ok: false, detail: '该客户端没有可升级的 CLI。', version }
+    }
     const before = await this.installedVersionFor(clientId)
     const result = await runUpgrade(clientId)
     const version = await this.refreshOne(clientId)
@@ -116,6 +123,10 @@ export class ClientVersionService {
 
   /** 一键安装某客户端（未安装时），完成后重新探测其版本并更新缓存对应项。 */
   async install(clientId: ClientId): Promise<ClientUpgradeOutcome> {
+    if (!isCliClientId(clientId)) {
+      const version = await this.refreshOne(clientId)
+      return { ok: false, detail: '该客户端没有可安装的 CLI。', version }
+    }
     const result = await runInstall(clientId)
     const version = await this.refreshOne(clientId)
     return { ...result, version }
@@ -126,6 +137,7 @@ export class ClientVersionService {
     const ids = clientIds !== undefined && clientIds.length > 0 ? clientIds : CLIENT_IDS
     return Promise.all(
       ids.map(async (clientId) => {
+        if (!isCliClientId(clientId)) return { clientId, installs: [], isConflict: false }
         const installs = await enumerateInstallations(clientId)
         return { clientId, installs, isConflict: isConflicting(installs) }
       }),
@@ -134,6 +146,7 @@ export class ClientVersionService {
 
   /** 升级前已装版本：优先用缓存（即用户在页面看到、点升级前的那个值），无缓存再探测一次。 */
   private async installedVersionFor(clientId: ClientId): Promise<string | undefined> {
+    if (!isCliClientId(clientId)) return undefined
     const cached = this.cache?.data.find((v) => v.clientId === clientId)?.installedVersion
     if (cached !== undefined) return cached
     return (await probeInstalledVersion(clientId)).version
@@ -153,6 +166,9 @@ export class ClientVersionService {
   }
 
   private async probeOne(clientId: ClientId): Promise<ClientVersionInfo> {
+    if (!isCliClientId(clientId)) {
+      return { clientId, upgradable: false, installedButBroken: false }
+    }
     const probe = await probeInstalledVersion(clientId)
     const installedVersion = probe.version
     let latestVersion: string | undefined

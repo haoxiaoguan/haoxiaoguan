@@ -91,7 +91,7 @@ export interface SaveConfigArgs {
 }
 
 // ── Sessions DTOs (sessions context — read-only on-disk AI CLI history) ──────
-export type SessionToolDto = 'claude' | 'codex' | 'gemini'
+export type SessionToolDto = 'claude' | 'claude_desktop' | 'codex' | 'gemini'
 export interface SessionSummaryDto {
   tool: SessionToolDto
   sessionId: string
@@ -129,17 +129,20 @@ export interface CodexRepairPreviewDto {
   available: boolean
   dbPath?: string
   currentProvider?: string
+  currentModel?: string
   counts: CodexProviderCountDto[]
   repairable: number
   codexRunning: boolean
 }
 export interface CodexRepairRequestDto {
   targetProvider: string
+  targetModel?: string | null
   fromProviders?: string[]
   rewriteRollout: boolean
 }
 export interface CodexRepairResultDto {
   updatedThreads: number
+  modelRows: number
   userEventRows: number
   cwdRows: number
   globalStateKeys: number
@@ -154,6 +157,36 @@ export interface CodexRepairProgressDto {
   message: string
   current?: number
   total?: number
+}
+
+export interface ClaudeDesktopNamespaceDto {
+  key: string
+  accountId: string
+  workspaceId: string
+  codeSessionCount: number
+  latestCodeSessionAt?: number
+  localAgentTouchedAt?: number
+}
+export interface ClaudeDesktopRepairPreviewDto {
+  available: boolean
+  appDataDir: string
+  codeSessionsDir: string
+  namespaces: ClaudeDesktopNamespaceDto[]
+  currentNamespace?: ClaudeDesktopNamespaceDto
+  sourceNamespaces: ClaudeDesktopNamespaceDto[]
+  repairable: number
+  desktopRunning: boolean
+}
+export interface ClaudeDesktopRepairRequestDto {
+  targetNamespace?: string
+  sourceNamespaces?: string[]
+}
+export interface ClaudeDesktopRepairResultDto {
+  copied: number
+  skippedExisting: number
+  backupId: string
+  targetNamespace: string
+  sourceNamespaces: string[]
 }
 
 export interface SessionDeleteRequestDto {

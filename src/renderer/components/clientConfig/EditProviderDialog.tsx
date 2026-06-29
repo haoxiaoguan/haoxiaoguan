@@ -36,6 +36,7 @@ export function EditProviderDialog({
   const clientId = profile.clientId;
   const extra = CLIENT_EXTRA_FIELD[clientId];
   const nativeProtoUi = CLIENT_NATIVE_PROTOCOL_UI[clientId];
+  const isClaudeFamily = clientId === 'claude' || clientId === 'claude_desktop';
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -123,9 +124,9 @@ export function EditProviderDialog({
     return true;
   };
 
-  // Claude 分级模型映射:仅保留有 model 或 name 的档位。
+  // Claude 家族分级模型映射:仅保留有 model 或 name 的档位。
   const modelMapClean: Record<string, { model?: string; name?: string }> = {};
-  if (clientId === 'claude') {
+  if (isClaudeFamily) {
     for (const tier of ['haiku', 'sonnet', 'opus'] as const) {
       const m = modelMap[tier].model.trim();
       const n = modelMap[tier].name.trim();
@@ -145,7 +146,7 @@ export function EditProviderDialog({
   };
   // 路由(直连/中转)改由页面级「路由」开关决定，清除历史档残留的 routeViaProxy（不再使用）。
   delete draftSettings.routeViaProxy;
-  if (clientId === 'claude') {
+  if (isClaudeFamily) {
     if (Object.keys(modelMapClean).length > 0) draftSettings.modelMap = modelMapClean;
     else delete draftSettings.modelMap;
   }
@@ -313,7 +314,7 @@ export function EditProviderDialog({
           </div>
         )}
 
-        {clientId === 'claude' && (
+        {isClaudeFamily && (
           <ClaudeModelMapFields
             value={modelMap}
             options={models}

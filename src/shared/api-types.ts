@@ -81,6 +81,9 @@ import type {
   CodexRepairRequestDto,
   CodexRepairResultDto,
   CodexRepairProgressDto,
+  ClaudeDesktopRepairPreviewDto,
+  ClaudeDesktopRepairRequestDto,
+  ClaudeDesktopRepairResultDto,
 } from './api/integrations'
 import type {
   ProxyDto,
@@ -451,6 +454,9 @@ export interface HxgApi {
     resume(command: string, cwd?: string): Promise<void>
     repairPreview(): Promise<CodexRepairPreviewDto>
     repair(req: CodexRepairRequestDto): Promise<CodexRepairResultDto>
+    claudeDesktopRepairPreview(): Promise<ClaudeDesktopRepairPreviewDto>
+    claudeDesktopRepair(req?: ClaudeDesktopRepairRequestDto): Promise<ClaudeDesktopRepairResultDto>
+    claudeDesktopRepairRollback(backupId: string): Promise<void>
     /** 启用/停用 codex 接入档 + 会话迁移合并为单次 Codex 重启。返回迁移结果或 null（无库/无可迁移）。 */
     codexSwitchRepair(args: {
       id: string

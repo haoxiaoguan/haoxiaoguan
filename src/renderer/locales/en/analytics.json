@@ -15,6 +15,9 @@
     "7d": "7 days",
     "30d": "30 days"
   },
+  "refresh": "Refresh",
+  "autoRefresh": "Auto refresh",
+  "refreshOff": "Off",
   "agent": {
     "all": "All",
     "claude": "Claude",

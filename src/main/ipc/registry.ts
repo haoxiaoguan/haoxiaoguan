@@ -64,6 +64,7 @@ import { registerProxyPoolConfigHandlers } from '../contexts/apiProxy/ipc/proxy-
 import type { SessionsService } from '../contexts/sessions/application/sessions-service'
 import { registerSessionsHandlers } from '../contexts/sessions/ipc/sessions-handlers'
 import type { CodexSessionRepair } from '../contexts/sessions/application/codex-session-repair'
+import type { ClaudeDesktopSessionRepair } from '../contexts/sessions/application/claude-desktop-session-repair'
 
 import { registerActivityHandlers } from '../contexts/activity/ipc/activity-handlers'
 import type { ClientConfigService } from '../contexts/clientConfig/application/client-config-service'
@@ -148,6 +149,7 @@ export interface Services {
   // sessions context (read-only on-disk AI CLI conversation history browser)
   sessionsService: SessionsService
   codexSessionRepair: CodexSessionRepair
+  claudeDesktopSessionRepair: ClaudeDesktopSessionRepair
 
   // activity context (session activity stats — incremental scan + trend query)
   activitySync: ActivitySyncService
@@ -207,6 +209,7 @@ export function registerAllHandlers(services: Services): void {
   registerSessionsHandlers(
     services.sessionsService,
     services.codexSessionRepair,
+    services.claudeDesktopSessionRepair,
     services.clientConfigService,
   )
   registerActivityHandlers(services.activitySync, services.activityQuery)

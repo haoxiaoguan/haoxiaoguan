@@ -122,8 +122,12 @@ describe('quota-display', () => {
     const [line] = metricLines(baseAccount, state);
     expect(line.percentText).toBe('3%'); // rounded
     expect(line.usageText).toBe('288 / 10,000'); // thousands separator
-    // resetText 现为「倒计时 (MM/DD HH:mm)」，倒计时部分依赖当前时间——只断言确定性后缀。
-    expect(line.resetText).toContain('(07/01 20:00)');
+    // resetText 现为「倒计时 (MM/DD HH:mm)」，倒计时部分依赖当前时间；
+    // 绝对时间按运行环境本地时区展示，测试也用同一规则生成预期后缀。
+    const resetDate = new Date('2026-07-01T12:00:00.000Z');
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const expectedSuffix = `(${pad(resetDate.getMonth() + 1)}/${pad(resetDate.getDate())} ${pad(resetDate.getHours())}:${pad(resetDate.getMinutes())})`;
+    expect(line.resetText).toContain(expectedSuffix);
     expect(line.progress).toBeCloseTo(2.88);
   });
 

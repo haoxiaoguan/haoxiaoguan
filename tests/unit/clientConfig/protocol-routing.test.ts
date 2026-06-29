@@ -17,6 +17,10 @@ describe('CLIENT_NATIVE_PROTOCOL', () => {
     expect(CLIENT_NATIVE_PROTOCOL.claude).toBe('anthropic')
   })
 
+  it('claude_desktop → anthropic', () => {
+    expect(CLIENT_NATIVE_PROTOCOL.claude_desktop).toBe('anthropic')
+  })
+
   it('codex → openai-responses', () => {
     expect(CLIENT_NATIVE_PROTOCOL.codex).toBe('openai-responses')
   })
@@ -88,6 +92,9 @@ describe('resolveRelayDecision', () => {
 describe('resolveRelayDecisionForClient', () => {
   it('claude + openai-chat → relay', () => {
     expect(resolveRelayDecisionForClient('claude', 'openai-chat')).toBe('relay')
+  })
+  it('claude_desktop + openai-chat → relay', () => {
+    expect(resolveRelayDecisionForClient('claude_desktop', 'openai-chat')).toBe('relay')
   })
   it('codex + openai-responses → direct', () => {
     expect(resolveRelayDecisionForClient('codex', 'openai-responses')).toBe('direct')

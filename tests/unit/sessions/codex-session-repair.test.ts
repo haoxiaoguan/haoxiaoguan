@@ -31,6 +31,7 @@ afterEach(async () => {
 function seedDb(rows: Array<{
   id: string
   provider: string
+  model?: string
   hasUserEvent?: number
   cwd?: string | null
   archived?: number
@@ -41,14 +42,15 @@ function seedDb(rows: Array<{
     CREATE TABLE threads (
       id TEXT PRIMARY KEY,
       model_provider TEXT NOT NULL,
+      model TEXT,
       has_user_event INTEGER NOT NULL DEFAULT 0,
       cwd TEXT,
       archived INTEGER NOT NULL DEFAULT 0
     )
   `)
-  const ins = db.prepare('INSERT INTO threads VALUES (?,?,?,?,?)')
+  const ins = db.prepare('INSERT INTO threads VALUES (?,?,?,?,?,?)')
   for (const r of rows) {
-    ins.run(r.id, r.provider, r.hasUserEvent ?? 0, r.cwd ?? null, r.archived ?? 0)
+    ins.run(r.id, r.provider, r.model ?? null, r.hasUserEvent ?? 0, r.cwd ?? null, r.archived ?? 0)
   }
   db.close()
   return p
@@ -58,6 +60,7 @@ function seedDb(rows: Array<{
 function rolloutText(opts: {
   threadId: string
   provider: string
+  model?: string
   cwd?: string
   hasUserMessage?: boolean
   sessionMetaCount?: number
@@ -69,6 +72,7 @@ function rolloutText(opts: {
       type: 'session_meta',
       payload: { id: opts.threadId, model_provider: opts.provider },
     }
+    if (opts.model) (meta.payload as Record<string, unknown>)['model'] = opts.model
     if (opts.cwd) (meta.payload as Record<string, unknown>)['cwd'] = opts.cwd
     lines.push(JSON.stringify(meta))
   }
@@ -108,7 +112,7 @@ describe('CodexSessionRepair.preview', () => {
     await writeFile(join(home, 'config.toml'), 'model = "gpt-5"\n') // 有 config.toml 但无 model_provider 键
     const pv = await repair().preview()
     expect(pv.currentProvider).toBe('openai')
-    expect(pv.repairable).toBe(2) // 两条 hxg_x 看不见，可归并回 openai
+    expect(pv.repairable).toBe(3) // 两条 hxg_x + 一条 openai 旧 model
   })
 
   it('config.toml 不存在 → currentProvider 回落 openai', async () => {
@@ -118,6 +122,18 @@ describe('CodexSessionRepair.preview', () => {
     ])
     const pv = await repair().preview()
     expect(pv.currentProvider).toBe('openai')
+    expect(pv.repairable).toBe(1)
+  })
+
+  it('provider 相同但 model 过期时仍计入可修复', async () => {
+    seedDb([
+      { id: 'a', provider: 'hxg_x', model: 'glm-old' },
+      { id: 'b', provider: 'hxg_x', model: 'glm-new' },
+    ])
+    await writeFile(join(home, 'config.toml'), 'model_provider = "hxg_x"\nmodel = "glm-new"\n')
+    const pv = await repair().preview()
+    expect(pv.currentProvider).toBe('hxg_x')
+    expect(pv.currentModel).toBe('glm-new')
     expect(pv.repairable).toBe(1)
   })
 
@@ -147,6 +163,20 @@ describe('CodexSessionRepair.repair — SQLite 三类更新', () => {
     const rows = db.prepare('SELECT model_provider FROM threads').all() as { model_provider: string }[]
     db.close()
     expect(rows.every((r) => r.model_provider === 'hxg_x')).toBe(true)
+  })
+
+  it('model 全量更新', async () => {
+    seedDb([
+      { id: 'a', provider: 'openai', model: 'gpt-old' },
+      { id: 'b', provider: 'hxg_x', model: 'glm-old' },
+    ])
+    await writeFile(join(home, 'config.toml'), 'model_provider = "hxg_x"\nmodel = "glm-new"\n')
+    const res = await repair().repair({ targetProvider: 'hxg_x', targetModel: 'glm-new', rewriteRollout: false })
+    expect(res.modelRows).toBe(2)
+    const db = new Database(join(home, 'state_5.sqlite'), { readonly: true })
+    const rows = db.prepare('SELECT model FROM threads ORDER BY id').all() as { model: string }[]
+    db.close()
+    expect(rows.map((r) => r.model)).toEqual(['glm-new', 'glm-new'])
   })
 
   it('has_user_event 回填', async () => {
@@ -216,6 +246,22 @@ describe('CodexSessionRepair.repair — rollout 改写', () => {
     expect(res.changedRollouts).toBe(1)
     const meta = JSON.parse((await readFile(rolloutA, 'utf8')).split('\n')[0]) as { payload: { model_provider: string } }
     expect(meta.payload.model_provider).toBe('hxg_x')
+  })
+
+  it('改写 rollout 文件中的 model', async () => {
+    const sessDir = join(home, 'sessions')
+    await mkdir(sessDir, { recursive: true })
+    const rolloutA = join(sessDir, 'rollout-a.jsonl')
+    await writeFile(rolloutA, rolloutText({ threadId: 'a', provider: 'hxg_x', model: 'glm-old' }))
+
+    seedDb([{ id: 'a', provider: 'hxg_x', model: 'glm-old' }])
+    await writeFile(join(home, 'config.toml'), 'model_provider = "hxg_x"\nmodel = "glm-new"\n')
+
+    const res = await repair().repair({ targetProvider: 'hxg_x', targetModel: 'glm-new', rewriteRollout: true })
+    expect(res.changedRollouts).toBe(1)
+    const meta = JSON.parse((await readFile(rolloutA, 'utf8')).split('\n')[0]) as { payload: { model_provider: string; model: string } }
+    expect(meta.payload.model_provider).toBe('hxg_x')
+    expect(meta.payload.model).toBe('glm-new')
   })
 
   it('改写 archived_sessions/ 下的 rollout 文件', async () => {

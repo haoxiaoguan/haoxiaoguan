@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { DateRangePicker } from '@/features/dashboard/components/DateRangePicker'
 import { presetRange, toWindow, type TimeRange } from '@/features/dashboard/utils/time-range'
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { systemService } from '@/services/tauri'
 import { AnalyticsHero } from '../components/AnalyticsHero'
 import { AgentFilterBar, type AgentFilter } from '../components/AgentFilterBar'
 import { AnalyticsTrendChart } from '../components/AnalyticsTrendChart'
@@ -31,6 +33,7 @@ function readStoredInterval(): number {
 }
 
 export default function AnalyticsPage() {
+  const { t } = useTranslation('analytics')
   const location = useLocation()
   const [range, setRange] = useState<TimeRange>(() => presetRange('7d', Date.now()))
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all')
@@ -49,17 +52,32 @@ export default function AnalyticsPage() {
     try { localStorage.setItem(LS_REFRESH_KEY, String(val)) } catch { /* ignore */ }
   }, [])
 
+  const reloadAll = useCallback(() => {
+    setRefreshNonce((n) => n + 1)
+  }, [])
+
   const cycleRefresh = () => {
     const idx = REFRESH_STEPS.indexOf(refreshInterval)
     handleIntervalChange(REFRESH_STEPS[(idx + 1) % REFRESH_STEPS.length] ?? 0)
   }
 
-  // 定时刷新
+  // 定时刷新：与仪表盘一致，只重读本地已同步数据，不主动触发同步任务。
   useEffect(() => {
     if (refreshInterval <= 0) return
-    const id = setInterval(() => setRefreshNonce((n) => n + 1), refreshInterval * 1000)
+    const id = setInterval(reloadAll, refreshInterval * 1000)
     return () => clearInterval(id)
-  }, [refreshInterval])
+  }, [refreshInterval, reloadAll])
+
+  const reloadAllRef = useRef(reloadAll)
+  reloadAllRef.current = reloadAll
+  useEffect(() => {
+    const unsub = systemService.onUsageSynced(() => reloadAllRef.current())
+    return unsub
+  }, [])
+
+  const refreshLabel = t('refresh', { defaultValue: '刷新' })
+  const autoRefreshLabel = t('autoRefresh', { defaultValue: '自动刷新' })
+  const refreshOffLabel = t('refreshOff', { defaultValue: '关闭' })
 
   return (
     <div className="flex h-[calc(100vh-98px)] min-h-0 flex-col gap-4 px-6 py-5">
@@ -71,20 +89,28 @@ export default function AnalyticsPage() {
         <div className="flex items-center gap-2">
           {!isPricing && <DateRangePicker value={range} onChange={setRange} />}
           {!isPricing && (
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={reloadAll}>
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.9} />
+              {refreshLabel}
+            </Button>
+          )}
+          {!isPricing && (
             <TooltipProvider delayDuration={150}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
-                    size="icon"
-                    className={cn('h-8 w-8', refreshInterval > 0 && 'text-primary')}
+                    size="sm"
+                    className={cn('h-8 gap-1.5 px-2.5 tabular-nums', refreshInterval > 0 && 'text-primary')}
                     onClick={cycleRefresh}
+                    aria-label={`${autoRefreshLabel}: ${refreshInterval > 0 ? `${refreshInterval}s` : refreshOffLabel}`}
                   >
-                    <RefreshCw className={cn('h-4 w-4', )} strokeWidth={1.9} />
+                    <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.9} />
+                    {refreshInterval > 0 ? `${refreshInterval}s` : refreshOffLabel}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="text-xs">
-                  {refreshInterval > 0 ? `${refreshInterval}s` : '关闭'}
+                  {autoRefreshLabel}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

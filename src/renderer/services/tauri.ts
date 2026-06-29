@@ -549,6 +549,9 @@ import type {
   CodexRepairRequestDto,
   CodexRepairResultDto,
   CodexRepairProgressDto,
+  ClaudeDesktopRepairPreviewDto,
+  ClaudeDesktopRepairRequestDto,
+  ClaudeDesktopRepairResultDto,
   ActivityTrendPointResponse,
   ActivitySyncSummaryResponse,
 } from '@shared/api-types';
@@ -567,6 +570,12 @@ export const sessionsService = {
     bridge().sessions.resume(command, cwd),
   repairPreview: () => bridge().sessions.repairPreview() as Promise<CodexRepairPreviewDto>,
   repair: (req: CodexRepairRequestDto) => bridge().sessions.repair(req) as Promise<CodexRepairResultDto>,
+  claudeDesktopRepairPreview: () =>
+    bridge().sessions.claudeDesktopRepairPreview() as Promise<ClaudeDesktopRepairPreviewDto>,
+  claudeDesktopRepair: (req?: ClaudeDesktopRepairRequestDto) =>
+    bridge().sessions.claudeDesktopRepair(req) as Promise<ClaudeDesktopRepairResultDto>,
+  claudeDesktopRepairRollback: (backupId: string) =>
+    bridge().sessions.claudeDesktopRepairRollback(backupId) as Promise<void>,
   codexSwitchRepair: (args: { id: string; action: 'enable' | 'disable' }) =>
     bridge().sessions.codexSwitchRepair(args) as Promise<CodexRepairResultDto | null>,
   repairRollback: (backupId: string) => bridge().sessions.repairRollback(backupId) as Promise<void>,

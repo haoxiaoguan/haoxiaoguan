@@ -1,9 +1,11 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { SettingsFileService } from './contexts/settings/infrastructure/settings-file-service'
 import { SettingsApplicationService } from './contexts/settings/application/settings-service'
-import { appDataDir, dotDir, xdgConfigDir } from './platform/persistence/paths'
+import { appDataDir, appSupportDir, dotDir, xdgConfigDir } from './platform/persistence/paths'
 import { initDatabase, getEm } from './platform/persistence/database'
 import type { Services } from './ipc/registry'
 
@@ -102,6 +104,7 @@ import { ClientConfigService } from './contexts/clientConfig/application/client-
 import { ClientVersionService } from './contexts/clientConfig/application/client-version-service'
 import { ConfigSnapshotStore } from './contexts/clientConfig/infrastructure/config-snapshot'
 import { ClaudeWriter } from './contexts/clientConfig/infrastructure/writers/claude-writer'
+import { ClaudeDesktopWriter } from './contexts/clientConfig/infrastructure/writers/claude-desktop-writer'
 import { GeminiWriter } from './contexts/clientConfig/infrastructure/writers/gemini-writer'
 import { OpenCodeWriter } from './contexts/clientConfig/infrastructure/writers/opencode-writer'
 import { CodexWriter } from './contexts/clientConfig/infrastructure/writers/codex-writer'
@@ -170,7 +173,9 @@ import { AccountGroupService } from './contexts/accountGroup/application/account
 // Sessions context — read-only on-disk AI CLI conversation history browser.
 import { SessionsService } from './contexts/sessions/application/sessions-service'
 import { CodexSessionRepair } from './contexts/sessions/application/codex-session-repair'
+import { ClaudeDesktopSessionRepair } from './contexts/sessions/application/claude-desktop-session-repair'
 import { ClaudeSessionSource } from './contexts/sessions/infrastructure/claude-session-source'
+import { ClaudeDesktopSessionSource } from './contexts/sessions/infrastructure/claude-desktop-session-source'
 import { CodexSessionSource } from './contexts/sessions/infrastructure/codex-session-source'
 import { GeminiSessionSource } from './contexts/sessions/infrastructure/gemini-session-source'
 
@@ -203,6 +208,18 @@ export interface Container extends Services {
   reloadRelayUpstreams: () => Promise<void>
   /** clientConfig relay 桥：按 profileId 建/删 relay 上游并热重载（T8）。 */
   clientConfigRelayProvisioning: RelayProvisioningPort
+}
+
+const execFileAsync = promisify(execFile)
+
+async function isClaudeDesktopRunning(): Promise<boolean> {
+  if (process.platform !== 'darwin') return false
+  try {
+    await execFileAsync('pgrep', ['-x', 'Claude'], { timeout: 1000 })
+    return true
+  } catch {
+    return false
+  }
 }
 
 // Builds and wires all service singletons (the Electron equivalent of the
@@ -780,6 +797,12 @@ export async function buildContainer(): Promise<Container> {
   const clientConfigRegistry = new WriterRegistry()
   clientConfigRegistry.register(new ClaudeWriter(join(dotDir('claude'), 'settings.json')))
   clientConfigRegistry.register(
+    new ClaudeDesktopWriter(
+      join(appSupportDir('Claude'), 'claude_desktop_config.json'),
+      join(appSupportDir('Claude-3p'), 'claude_desktop_config.json'),
+    ),
+  )
+  clientConfigRegistry.register(
     new GeminiWriter(join(dotDir('gemini'), '.env'), join(dotDir('gemini'), 'settings.json')),
   )
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
@@ -964,14 +987,18 @@ export async function buildContainer(): Promise<Container> {
   // 客户端版本/可升级探测（独立 service，带 TTL 缓存；clients() 列表仍走文件检测保持秒开）。
   const clientVersionService = new ClientVersionService()
 
-  // Sessions context — 不落库，惰性扫盘，terminaLaunchTemplate 运行时从 settings 读。
-  // logSources 同时注入 sessionsService 与 activitySync，接新 agent 只动这一个数组。
-  const logSources = [
-    new ClaudeSessionSource(),
-    new CodexSessionSource(),
-    new GeminiSessionSource(),
+  // Sessions context — 不落库，惰性扫盘，terminalLaunchTemplate 运行时从 settings 读。
+  const claudeSessionSource = new ClaudeSessionSource()
+  const codexSessionSource = new CodexSessionSource()
+  const geminiSessionSource = new GeminiSessionSource()
+  const activitySources = [claudeSessionSource, codexSessionSource, geminiSessionSource]
+  const sessionSources = [
+    claudeSessionSource,
+    new ClaudeDesktopSessionSource(),
+    codexSessionSource,
+    geminiSessionSource,
   ]
-  const sessionsService = new SessionsService(logSources, () =>
+  const sessionsService = new SessionsService(sessionSources, () =>
     settings.getTerminalLaunchTemplate(),
   )
   const codexSessionRepair = new CodexSessionRepair(
@@ -981,10 +1008,15 @@ export async function buildContainer(): Promise<Container> {
     () => codexProcessControl.isRunning(),
     join(appDataDir(), 'session-repair-backups'),
   )
+  const claudeDesktopSessionRepair = new ClaudeDesktopSessionRepair(
+    appSupportDir('Claude'),
+    join(appDataDir(), 'session-repair-backups', 'claude-desktop'),
+    isClaudeDesktopRunning,
+  )
 
-  // Activity context — 复用 logSources，不重建适配器实例。
+  // Activity context — 只扫 CLI transcript 源，避免 Claude Desktop 对同一 transcript 重复计数。
   const activityRepo = new MikroOrmActivityRepository()
-  const activitySync = new ActivitySyncService(logSources, activityRepo)
+  const activitySync = new ActivitySyncService(activitySources, activityRepo)
   const activityQuery = new ActivityQueryService(activityRepo)
 
   return {
@@ -1029,6 +1061,7 @@ export async function buildContainer(): Promise<Container> {
     platformQuotaScheduler,
     sessionsService,
     codexSessionRepair,
+    claudeDesktopSessionRepair,
     activitySync,
     activityQuery,
     relayUpstreamRepo,

@@ -50,6 +50,7 @@ export function AddProviderDialog({
   const extra = CLIENT_EXTRA_FIELD[clientId];
   const nativeProtoUi = CLIENT_NATIVE_PROTOCOL_UI[clientId];
   const presets = CLIENT_PRESETS[clientId] ?? [];
+  const isClaudeFamily = clientId === 'claude' || clientId === 'claude_desktop';
 
   const [presetId, setPresetId] = useState(CUSTOM);
   const [name, setName] = useState('');
@@ -62,7 +63,7 @@ export function AddProviderDialog({
   const [upstreamProtocol, setUpstreamProtocol] = useState(nativeProtoUi ?? '');
   // 选中预设的品牌元数据(图标/颜色/品牌 id),提交时写进 settings.uiMeta。
   const [brand, setBrand] = useState<{ brandId?: string; icon?: string; iconColor?: string }>({});
-  // Claude 分级模型映射(仅 claude 客户端使用)。
+  // Claude 家族分级模型映射(Claude Code env / Claude Desktop 3P profile)。
   const [modelMap, setModelMap] = useState<ModelMap>(EMPTY_MODEL_MAP);
   // Codex 模型列表(仅 codex 客户端使用)。
   const [codexModels, setCodexModels] = useState<CodexModelItem[]>([]);
@@ -172,7 +173,7 @@ export function AddProviderDialog({
 
   // Claude 分级模型映射:仅保留有 model 或 name 的档位。
   const modelMapClean: Record<string, { model?: string; name?: string }> = {};
-  if (clientId === 'claude') {
+  if (isClaudeFamily) {
     for (const tier of ['haiku', 'sonnet', 'opus'] as const) {
       const m = modelMap[tier].model.trim();
       const n = modelMap[tier].name.trim();
@@ -319,7 +320,7 @@ export function AddProviderDialog({
         )}
 
         {/* Claude 分级模型映射(可选) */}
-        {clientId === 'claude' && (
+        {isClaudeFamily && (
           <ClaudeModelMapFields
             value={modelMap}
             options={models}

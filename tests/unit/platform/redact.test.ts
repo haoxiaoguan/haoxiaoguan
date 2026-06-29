@@ -47,6 +47,22 @@ describe('redactString', () => {
     expect(result).not.toContain('myRefresh99')
   })
 
+  it('inline snake_case credential keys 替换', () => {
+    const result = redactString(
+      'access_token=access123 refresh_token=refresh456 api_key=sk-test client_secret=secret789 id_token=idtok',
+    )
+    expect(result).toContain('access_token=[REDACTED]')
+    expect(result).toContain('refresh_token=[REDACTED]')
+    expect(result).toContain('api_key=[REDACTED]')
+    expect(result).toContain('client_secret=[REDACTED]')
+    expect(result).toContain('id_token=[REDACTED]')
+    expect(result).not.toContain('access123')
+    expect(result).not.toContain('refresh456')
+    expect(result).not.toContain('sk-test')
+    expect(result).not.toContain('secret789')
+    expect(result).not.toContain('idtok')
+  })
+
   it('inline password=value 替换', () => {
     const result = redactString('password=hunter2')
     expect(result).toContain('password')
@@ -141,6 +157,24 @@ describe('redactValue', () => {
     expect(result.Authorization).toBe('[REDACTED]')
     expect(result.apiKey).toBe('[REDACTED]')
     expect(result.clientSecret).toBe('[REDACTED]')
+  })
+
+  it('snake_case 敏感键整体替换为 [REDACTED]', () => {
+    const obj = {
+      access_token: 'access123',
+      refresh_token: 'refresh456',
+      api_key: 'sk-test',
+      client_secret: 'secret789',
+      id_token: 'idtok',
+      safe_value: 'visible',
+    }
+    const result = redactValue(obj) as Record<string, unknown>
+    expect(result.access_token).toBe('[REDACTED]')
+    expect(result.refresh_token).toBe('[REDACTED]')
+    expect(result.api_key).toBe('[REDACTED]')
+    expect(result.client_secret).toBe('[REDACTED]')
+    expect(result.id_token).toBe('[REDACTED]')
+    expect(result.safe_value).toBe('visible')
   })
 
   it('嵌套对象递归脱敏', () => {
