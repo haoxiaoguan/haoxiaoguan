@@ -11,6 +11,26 @@ import {
   type QuotaMetric,
 } from './model'
 
+// 主动重置次数（rate_limit_reset_credits.available_count）展示为一条无进度条的
+// 计数信息行：kind=balance、无 percent → 渲染层不画进度条，仅显示 "N 次"。
+function resetCreditsMetric(count: number): QuotaMetric {
+  return {
+    key: 'codex_reset_credits',
+    label: '主动重置次数',
+    kind: 'balance',
+    unit: 'none',
+    used: undefined,
+    total: undefined,
+    remaining: count,
+    percentUsed: undefined,
+    percentRemaining: undefined,
+    displayValue: `${count} 次`,
+    window: undefined,
+    resetAt: undefined,
+    status: 'ok',
+  }
+}
+
 export function stateFromProfile(
   profilePayload: JsonValue,
   credentialRawMetadata: JsonValue | undefined,
@@ -69,6 +89,15 @@ export function stateFromProfile(
       'billing_cycle',
     )
     if (metric) metrics.push(metric)
+  }
+
+  // 主动重置次数：available_count 存在即展示（含 0，表示当前无可用重置次数）。
+  const resetCredits = pickNumberAny(profilePayload, credentialRawMetadata, [
+    ['quota', 'reset_credits_available'],
+    ['quota', 'resetCreditsAvailable'],
+  ])
+  if (resetCredits !== undefined) {
+    metrics.push(resetCreditsMetric(Math.max(0, Math.round(resetCredits))))
   }
 
   return stateFromMetrics(metrics, profilePayload)

@@ -147,6 +147,149 @@ function cursorPayloadResult(): QuotaFetchResult {
   }
 }
 
+function codexUsageResult(resetCreditsAvailable: number): QuotaFetchResult {
+  return {
+    outcome: 'success',
+    source: 'live',
+    freshness: 'fresh',
+    fetchedAt: new Date(),
+    models: [],
+    providerPayload: {
+      quota: {
+        hourly_percentage: 80,
+        hourly_window_present: true,
+        weekly_window_present: false,
+        reset_credits_available: resetCreditsAvailable,
+      },
+    },
+    updatedCredential: undefined,
+    error: undefined,
+  }
+}
+
+describe('QuotaApplicationService.consumeCodexResetCredit', () => {
+  it('codex: calls the consumer then refreshes state (reset count reflects新值)', async () => {
+    const account = makeAccount('codex')
+    let consumed = 0
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher(codexUsageResult(5)),
+      undefined,
+      undefined,
+      async () => {
+        consumed += 1
+        return { updatedCredential: undefined }
+      },
+    )
+    const state = await svc.consumeCodexResetCredit(account.id)
+    expect(consumed).toBe(1)
+    const reset = state.metrics.find((m) => m.key === 'codex_reset_credits')
+    expect(reset?.displayValue).toBe('5 次')
+  })
+
+  it('persists the refreshed credential when the consumer rotated the token', async () => {
+    const account = makeAccount('codex')
+    const store = new FakeCredentialStore(new Credential('old-tok', 'refresh'))
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      store,
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher(codexUsageResult(4)),
+      undefined,
+      undefined,
+      async () => ({ updatedCredential: new Credential('new-tok', 'refresh2') }),
+    )
+    await svc.consumeCodexResetCredit(account.id)
+    expect(store.stored?.token).toBe('new-tok')
+  })
+
+  it('rejects for a non-codex account', async () => {
+    const account = makeAccount('cursor')
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher(legacyModelsResult()),
+      undefined,
+      undefined,
+      async () => ({ updatedCredential: undefined }),
+    )
+    await expect(svc.consumeCodexResetCredit(account.id)).rejects.toThrow(/Codex/)
+  })
+})
+
+describe('QuotaApplicationService.getCodexResetCredits', () => {
+  it('codex: returns the credit view from the injected fetcher', async () => {
+    const account = makeAccount('codex')
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher(legacyModelsResult()),
+      undefined,
+      undefined,
+      async () => ({ updatedCredential: undefined }),
+      async () => ({
+        availableCount: 2,
+        nextExpiresAt: 1893456000,
+        credits: [
+          { id: 'c1', status: 'available', expiresAt: 1893456000 },
+          { id: 'c2', status: 'available', expiresAt: 1900000000 },
+        ],
+      }),
+    )
+    const view = await svc.getCodexResetCredits(account.id)
+    expect(view.availableCount).toBe(2)
+    expect(view.credits).toHaveLength(2)
+    expect(view.credits[0].expiresAt).toBe(1893456000)
+  })
+
+  it('persists a rotated credential when the fetcher refreshed the token', async () => {
+    const account = makeAccount('codex')
+    const store = new FakeCredentialStore(new Credential('old', 'r'))
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      store,
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher(legacyModelsResult()),
+      undefined,
+      undefined,
+      async () => ({ updatedCredential: undefined }),
+      async () => ({
+        availableCount: 0,
+        nextExpiresAt: null,
+        credits: [],
+        updatedCredential: new Credential('new', 'r2'),
+      }),
+    )
+    await svc.getCodexResetCredits(account.id)
+    expect(store.stored?.token).toBe('new')
+  })
+
+  it('rejects for a non-codex account', async () => {
+    const account = makeAccount('cursor')
+    const svc = new QuotaApplicationService(
+      new FakeAccountRepo([account]),
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher(legacyModelsResult()),
+      undefined,
+      undefined,
+      async () => ({ updatedCredential: undefined }),
+      async () => ({ availableCount: 0, nextExpiresAt: null, credits: [] }),
+    )
+    await expect(svc.getCodexResetCredits(account.id)).rejects.toThrow(/Codex/)
+  })
+})
+
 describe('QuotaApplicationService.refreshQuota', () => {
   it('returns models from a legacy live fetch', async () => {
     const account = makeAccount()

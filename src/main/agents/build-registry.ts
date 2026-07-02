@@ -1,6 +1,6 @@
-// Registry builder — constructs the AgentRegistry with all 17 adapters in the
+// Registry builder — constructs the AgentRegistry with all 18 adapters in the
 // canonical AgentId order (the bootstrap registration order) and
-// runtime-asserts the count is exactly 17. This is the single place the agents
+// runtime-asserts the count is exactly 18. This is the single place the agents
 // layer is assembled; the container/IPC wiring consumes the result.
 
 import { AgentRegistry } from './domain/agent-registry'
@@ -10,6 +10,7 @@ import { ALL_AGENT_IDS } from './domain/agent-id'
 import { CursorAdapter } from './adapters/cursor-adapter'
 import { WindsurfAdapter } from './adapters/windsurf-adapter'
 import { AntigravityAdapter } from './adapters/antigravity-adapter'
+import { AntigravityIdeAdapter } from './adapters/antigravity-ide-adapter'
 import { GithubCopilotAdapter } from './adapters/github-copilot-adapter'
 import { CodebuddyAdapter } from './adapters/codebuddy-adapter'
 import { CodebuddyCnAdapter } from './adapters/codebuddy-cn-adapter'
@@ -25,14 +26,15 @@ import { GeminiAdapter } from './adapters/gemini-adapter'
 import { OpenCodeAdapter } from './adapters/opencode-adapter'
 import { HermesAdapter } from './adapters/hermes-adapter'
 
-const EXPECTED_ADAPTER_COUNT = 17
+const EXPECTED_ADAPTER_COUNT = 18
 
-/** Build the registry with all 17 agent adapters. Throws if the count drifts. */
+/** Build the registry with all 18 agent adapters. Throws if the count drifts. */
 export function buildAgentRegistry(): AgentRegistry {
   const adapters: AgentClient[] = [
     new CursorAdapter(),
     new WindsurfAdapter(),
     new AntigravityAdapter(),
+    new AntigravityIdeAdapter(),
     new GithubCopilotAdapter(),
     new CodebuddyAdapter(),
     new CodebuddyCnAdapter(),

@@ -523,8 +523,34 @@ describe('fromAccountProfile — per platform', () => {
     expect(state.metrics[0].percentUsed).toBe(40)
   })
 
-  it('antigravity returns undefined (unsupported)', () => {
-    expect(fromAccountProfile('antigravity', { creditsUsed: 1, creditsTotal: 2 }, undefined)).toBeUndefined()
+  it('antigravity parses retrieveUserQuotaSummary groups/buckets', () => {
+    const resetTime = '2027-01-01T00:00:00.000Z'
+    const state = fromAccountProfile(
+      'antigravity',
+      {
+        antigravity_quota_summary_raw: {
+          groups: [
+            {
+              buckets: [
+                { bucketId: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', remainingFraction: 0.42, resetTime },
+                { bucketId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', remainingFraction: 1.0 },
+              ],
+            },
+          ],
+        },
+      },
+      undefined,
+    )!
+    const pro = state.metrics.find((m) => m.key === 'gemini-2.5-pro')!
+    expect(pro.label).toBe('Gemini 2.5 Pro')
+    // remainingFraction 0.42 → 42% remaining → 58% used
+    expect(pro.percentUsed).toBe(58)
+    const flash = state.metrics.find((m) => m.key === 'gemini-2.5-flash')!
+    expect(flash.percentUsed).toBe(0)
+  })
+
+  it('antigravity returns undefined when there is no quota data', () => {
+    expect(fromAccountProfile('antigravity', {}, undefined)).toBeUndefined()
   })
 })
 

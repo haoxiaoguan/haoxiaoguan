@@ -128,6 +128,10 @@ export const QUOTA_CHANNELS = {
   getQuota: 'get_quota',
   getQuotaState: 'get_quota_state',
   refreshQuotaState: 'refresh_quota_state',
+  // Codex 主动重置额度：消耗一次 reset credit 后回传最新 quota_state。
+  consumeCodexResetCredit: 'consume_codex_reset_credit',
+  // Codex 主动重置券明细：每张券的过期时间（hover 展示用）。
+  getCodexResetCredits: 'get_codex_reset_credits',
 } as const
 
 // MCP context. Channel string VALUES match the Tauri frontend contract

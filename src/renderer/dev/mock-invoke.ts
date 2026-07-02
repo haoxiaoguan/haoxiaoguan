@@ -223,7 +223,8 @@ const SAMPLE_ACCOUNTS = [
 const PLATFORM_NAMES: Record<string, string> = {
   cursor: 'Cursor',
   windsurf: 'Windsurf',
-  antigravity: 'Antigravity IDE',
+  antigravity: 'Antigravity',
+  'antigravity-ide': 'Antigravity IDE',
   kiro: 'Kiro',
   'github-copilot': 'GitHub Copilot',
   codex: 'Codex',

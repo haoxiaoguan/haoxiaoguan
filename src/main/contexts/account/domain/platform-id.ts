@@ -16,6 +16,7 @@ export type PlatformId =
   | 'cursor'
   | 'windsurf'
   | 'antigravity'
+  | 'antigravity_ide'
   | 'kiro'
   | 'github_copilot'
   | 'codebuddy'
@@ -31,11 +32,12 @@ export type PlatformId =
   | 'opencode'
   | 'hermes'
 
-// All 17 agent ids in canonical snake_case form.
+// All 18 agent ids in canonical snake_case form.
 export const ALL_PLATFORM_IDS: readonly PlatformId[] = [
   'cursor',
   'windsurf',
   'antigravity',
+  'antigravity_ide',
   'kiro',
   'github_copilot',
   'codebuddy',
@@ -52,11 +54,12 @@ export const ALL_PLATFORM_IDS: readonly PlatformId[] = [
   'hermes',
 ]
 
-// The 12 platforms account import/switch accepts.
+// The 13 platforms account import/switch accepts.
 const IMPORTABLE_PLATFORMS: readonly PlatformId[] = [
   'cursor',
   'windsurf',
   'antigravity',
+  'antigravity_ide',
   'kiro',
   'github_copilot',
   'codex',
@@ -74,6 +77,7 @@ const FRONTEND_ID: Record<PlatformId, string> = {
   cursor: 'cursor',
   windsurf: 'windsurf',
   antigravity: 'antigravity',
+  antigravity_ide: 'antigravity-ide',
   kiro: 'kiro',
   github_copilot: 'github-copilot',
   codex: 'codex',
@@ -96,6 +100,7 @@ const IDENTITY_PREFIX: Partial<Record<PlatformId, string>> = {
   cursor: 'cursor',
   windsurf: 'windsurf',
   antigravity: 'antigravity',
+  antigravity_ide: 'antigravity-ide',
   kiro: 'kiro',
   github_copilot: 'github-copilot',
   codex: 'codex',
@@ -119,9 +124,11 @@ export function parsePlatform(input: string): PlatformId {
     case 'windsurf':
       return 'windsurf'
     case 'antigravity':
+      return 'antigravity'
     case 'antigravity_ide':
     case 'antigravity-ide':
-      return 'antigravity'
+    case 'antigravityide':
+      return 'antigravity_ide'
     case 'kiro':
       return 'kiro'
     case 'github_copilot':

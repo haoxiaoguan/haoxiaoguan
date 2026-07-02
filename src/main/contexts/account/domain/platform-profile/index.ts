@@ -1002,6 +1002,7 @@ export function profileFromImportMaterial(
     case 'windsurf':
       return windsurfProfile(email, rawMetadata, tokenHint)
     case 'antigravity':
+    case 'antigravity_ide':
       return antigravityProfile(email, rawMetadata, tokenHint)
     case 'kiro':
       return kiroProfile(email, rawMetadata, tokenHint)

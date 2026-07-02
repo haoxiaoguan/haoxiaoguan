@@ -3,6 +3,8 @@ import type { Account, AccountQuotaState, QuotaMetric, QuotaStatus } from '../..
 export type MetricTone = 'normal' | 'success' | 'warning' | 'danger' | 'muted';
 
 export interface MetricLine {
+  /** Stable metric key (e.g. 'codex_reset_credits') so the UI can attach actions. */
+  key?: string;
   label: string;
   value?: string;
   subLabel?: string;
@@ -50,6 +52,7 @@ export function metricLines(account: Account, state?: AccountQuotaState): Metric
     const value = metric.displayValue ?? formatMetricValue(metric);
     const subLabel = formatMetricSubLabel(metric);
     return {
+      key: metric.key,
       label: metric.label,
       value,
       // subLabel shows the absolute used/total only when `value` is something

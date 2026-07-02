@@ -42,6 +42,10 @@ const ADAPTER_SPECS: Record<string, AdapterSpec> = {
     format: 'storage_json',
     path: () => join(appSupportDir('Antigravity'), 'User', 'globalStorage', 'storage.json'),
   },
+  antigravity_ide: {
+    format: 'storage_json',
+    path: () => join(appSupportDir('Antigravity IDE'), 'User', 'globalStorage', 'storage.json'),
+  },
   kiro: {
     format: 'storage_json',
     path: () => join(appSupportDir('Kiro'), 'User', 'globalStorage', 'storage.json'),
@@ -56,7 +60,8 @@ const ADAPTER_SPECS: Record<string, AdapterSpec> = {
   },
   codebuddy_cn: {
     format: 'storage_json',
-    path: () => join(appSupportDir('CodeBuddyCN'), 'User', 'globalStorage', 'storage.json'),
+    // 真实数据目录是 "CodeBuddy CN"（带空格），对照 get_default_codebuddy_cn_data_dir。
+    path: () => join(appSupportDir('CodeBuddy CN'), 'User', 'globalStorage', 'storage.json'),
   },
   qoder: {
     format: 'json_file',

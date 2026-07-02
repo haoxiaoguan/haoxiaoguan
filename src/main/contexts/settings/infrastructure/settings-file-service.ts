@@ -6,6 +6,15 @@ import { atomicWrite } from '../../../platform/fs/atomic-write'
 export class SettingsFileService implements SettingsRepository {
   private readonly path: string
   private cache: AppSettings
+  // Serialises disk writes. mutate() has no lock around save(), and two
+  // renderer-triggered updateSettings() calls fired close together (e.g. two
+  // controls in PlatformSettingsDialog) reliably overlap in practice; without
+  // this queue their atomicWrite calls race independently and whichever one's
+  // rename lands last wins — even if it captured its settings snapshot BEFORE
+  // the other call's mutation, silently reverting it on disk. Chaining every
+  // write onto this promise guarantees they land in the same order they were
+  // queued, so the most recent mutate() always has the final say.
+  private writeQueue: Promise<void> = Promise.resolve()
 
   constructor(path: string) {
     this.path = path
@@ -34,7 +43,19 @@ export class SettingsFileService implements SettingsRepository {
 
   async save(settings: AppSettings): Promise<void> {
     this.cache = settings
-    await atomicWrite(this.path, JSON.stringify(settings.toJson(), null, 2))
+    // Snapshot now (synchronous), write in queue order. A prior write's
+    // failure must not stall this one — each call still gets its own
+    // resolution/rejection via `write`, only the ordering is shared.
+    const data = JSON.stringify(settings.toJson(), null, 2)
+    const write = this.writeQueue.then(
+      () => atomicWrite(this.path, data),
+      () => atomicWrite(this.path, data),
+    )
+    this.writeQueue = write.then(
+      () => undefined,
+      () => undefined,
+    )
+    await write
   }
 
   async mutate(fn: (s: AppSettings) => void): Promise<void> {

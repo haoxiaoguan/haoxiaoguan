@@ -32,6 +32,7 @@ import type {
   QuotaResponse,
   QuotaRefreshResultResponse,
   AccountQuotaStateResponse,
+  CodexResetCreditsResponse,
 } from './api/account'
 import type {
   InstalledSkillDto,
@@ -241,6 +242,8 @@ export interface HxgApi {
     getQuota(args: { accountId: string }): Promise<QuotaResponse>
     getQuotaState(args: { accountId: string }): Promise<AccountQuotaStateResponse>
     refreshQuotaState(args: { accountId: string }): Promise<AccountQuotaStateResponse>
+    consumeCodexResetCredit(args: { accountId: string }): Promise<AccountQuotaStateResponse>
+    getCodexResetCredits(args: { accountId: string }): Promise<CodexResetCreditsResponse>
   }
   skill: {
     getInstalledSkills(): Promise<InstalledSkillDto[]>

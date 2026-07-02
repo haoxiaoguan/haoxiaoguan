@@ -1,5 +1,6 @@
 // Codex live quota fetch.
 
+import { randomUUID } from 'node:crypto'
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import { Credential } from '../../../account/domain/credential'
 import type { QuotaFetchResult } from '../../domain/capabilities'
@@ -20,6 +21,9 @@ import { getPathValue } from '../../domain/quota-state'
 
 const USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
 const ACCOUNTS_CHECK_URL = 'https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27'
+const RESET_CREDITS_URL = 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits'
+const RESET_CREDITS_CONSUME_URL =
+  'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume'
 const TOKEN_ENDPOINT = 'https://auth.openai.com/oauth/token'
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const CHATGPT_WEB_USER_AGENT =
@@ -90,6 +94,220 @@ export async function fetch(
   }
 
   return successResult('codex', credential, providerPayload, updated)
+}
+
+/** 主动重置额度结果：消耗一次 reset credit（对照 cockpit-tools consume_reset_credit）。 */
+export interface CodexResetCreditResult {
+  /** token 被刷新时返回新凭据，供上层持久化；未刷新则 undefined。 */
+  updatedCredential?: Credential | undefined
+}
+
+/** 单张主动重置券（时间戳为 unix 秒）。 */
+export interface CodexResetCredit {
+  id?: string | undefined
+  status?: string | undefined
+  resetType?: string | undefined
+  grantedAt?: number | undefined
+  expiresAt?: number | undefined
+  redeemedAt?: number | undefined
+}
+
+/** 主动重置券快照（GET rate-limit-reset-credits，含每张券的过期时间）。 */
+export interface CodexResetCreditsSnapshot {
+  availableCount: number | null
+  nextExpiresAt: number | null
+  credits: CodexResetCredit[]
+  updatedCredential?: Credential | undefined
+}
+
+const CONSUMED_RESET_STATES = new Set(['redeemed', 'used', 'consumed', 'expired'])
+
+function normalizeResetTimestamp(raw: JsonValue | undefined): number | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    // 券接口可能返回毫秒或秒；>1e12 视为毫秒。
+    return raw > 1_000_000_000_000 ? Math.floor(raw / 1000) : Math.floor(raw)
+  }
+  if (typeof raw === 'string') {
+    const n = Number(raw.trim())
+    if (Number.isFinite(n) && /^\d+$/.test(raw.trim())) {
+      return n > 1_000_000_000_000 ? Math.floor(n / 1000) : Math.floor(n)
+    }
+    const ms = Date.parse(raw.trim())
+    if (!Number.isNaN(ms)) return Math.floor(ms / 1000)
+  }
+  return undefined
+}
+
+function isAvailableResetCredit(credit: CodexResetCredit): boolean {
+  const status = (credit.status ?? '').toLowerCase()
+  if (CONSUMED_RESET_STATES.has(status)) return false
+  // 有过期时间且已过期 → 不可用。
+  if (credit.expiresAt !== undefined && credit.expiresAt <= Math.floor(Date.now() / 1000)) {
+    return false
+  }
+  return true
+}
+
+function parseResetCredit(value: JsonValue): CodexResetCredit {
+  const id = pickStringHttp(value, [['id'], ['credit_id'], ['creditId']])
+  const rawStatus = pickStringHttp(value, [['status'], ['state']])
+  return {
+    id,
+    status: rawStatus?.toLowerCase(),
+    resetType: pickStringHttp(value, [['type'], ['reset_type'], ['resetType']]),
+    grantedAt: normalizeResetTimestamp(
+      getPathValue(value, ['granted_at']) ?? getPathValue(value, ['created_at']) ?? getPathValue(value, ['grantedAt']),
+    ),
+    expiresAt: normalizeResetTimestamp(
+      getPathValue(value, ['expires_at']) ?? getPathValue(value, ['expire_at']) ?? getPathValue(value, ['expiresAt']),
+    ),
+    redeemedAt: normalizeResetTimestamp(
+      getPathValue(value, ['redeemed_at']) ??
+        getPathValue(value, ['used_at']) ??
+        getPathValue(value, ['consumed_at']) ??
+        getPathValue(value, ['redeemedAt']),
+    ),
+  }
+}
+
+function parseResetCreditsSnapshot(payload: JsonValue): Omit<CodexResetCreditsSnapshot, 'updatedCredential'> {
+  const rawCredits = getPathValue(payload, ['credits']) ?? getPathValue(payload, ['data', 'credits'])
+  const credits = Array.isArray(rawCredits) ? rawCredits.map(parseResetCredit) : []
+
+  const availableRaw =
+    pickI64Http(payload, [
+      ['available_count'],
+      ['availableCount'],
+      ['data', 'available_count'],
+      ['data', 'availableCount'],
+    ]) ?? credits.filter(isAvailableResetCredit).length
+  const availableCount = availableRaw
+
+  const nextExpiresAt =
+    credits
+      .filter(isAvailableResetCredit)
+      .map((c) => c.expiresAt)
+      .filter((t): t is number => typeof t === 'number')
+      .sort((a, b) => a - b)[0] ?? null
+
+  return { availableCount, credits, nextExpiresAt }
+}
+
+/**
+ * 查询 Codex 主动重置券明细（GET rate-limit-reset-credits，含每张券的过期时间）。
+ * 过期先刷 token；401 时刷新后重试一次。
+ */
+export async function fetchResetCredits(
+  credential: Credential,
+  profilePayload: JsonValue,
+): Promise<CodexResetCreditsSnapshot> {
+  let accessToken = credential.token
+  let refreshToken = credential.refreshToken
+  let expiresAt = credential.expiresAt
+  let updated: Credential | undefined
+
+  const refreshIfPossible = async (): Promise<boolean> => {
+    const refresh = normalizeNonEmpty(refreshToken)
+    if (refresh === undefined) return false
+    const token = await refreshAccessToken(refresh)
+    const nextAccess = pickStringHttp(token, [['access_token'], ['accessToken']])
+    if (nextAccess === undefined) return false
+    accessToken = nextAccess
+    refreshToken = pickStringHttp(token, [['refresh_token'], ['refreshToken']]) ?? refreshToken
+    const expiresIn = getPathValue(token, ['expires_in'])
+    if (typeof expiresIn === 'number') expiresAt = new Date(Date.now() + expiresIn * 1000)
+    updated = credentialWithPayload(credential, accessToken, refreshToken, expiresAt, profilePayload)
+    return true
+  }
+
+  if (jwtNeedsRefresh(accessToken)) await refreshIfPossible()
+
+  const accountId = chatgptAccountId(accessToken, credential.rawMetadata, profilePayload)
+  let resp = await getResetCredits(accessToken, accountId)
+  if (resp.status === 401 && (await refreshIfPossible())) {
+    const retryAccountId = chatgptAccountId(accessToken, credential.rawMetadata, profilePayload)
+    resp = await getResetCredits(accessToken, retryAccountId)
+  }
+  if (!resp.ok) {
+    throw providerError(`Codex 主动重置券接口返回异常: status=${resp.status}`)
+  }
+  const payload = await parseJson(resp, '解析 Codex 主动重置券响应失败')
+  return { ...parseResetCreditsSnapshot(payload), updatedCredential: updated }
+}
+
+async function getResetCredits(accessToken: string, accountId: string | undefined): Promise<Response> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/json',
+    Referer: 'https://chatgpt.com/',
+    'User-Agent': CHATGPT_WEB_USER_AGENT,
+  }
+  if (accountId !== undefined) headers['ChatGPT-Account-Id'] = accountId
+  return httpFetch(RESET_CREDITS_URL, { method: 'GET', headers }, '请求 Codex 主动重置券失败')
+}
+
+/**
+ * 消耗一次 Codex「主动重置额度」（POST rate-limit-reset-credits/consume）。
+ * 过期先刷 token；接口 401 时刷新后重试一次。API Key 账号不支持。
+ */
+export async function consumeResetCredit(
+  credential: Credential,
+  profilePayload: JsonValue,
+): Promise<CodexResetCreditResult> {
+  let accessToken = credential.token
+  let refreshToken = credential.refreshToken
+  let expiresAt = credential.expiresAt
+  let updated: Credential | undefined
+
+  const refreshIfPossible = async (): Promise<boolean> => {
+    const refresh = normalizeNonEmpty(refreshToken)
+    if (refresh === undefined) return false
+    const token = await refreshAccessToken(refresh)
+    const nextAccess = pickStringHttp(token, [['access_token'], ['accessToken']])
+    if (nextAccess === undefined) return false
+    accessToken = nextAccess
+    refreshToken = pickStringHttp(token, [['refresh_token'], ['refreshToken']]) ?? refreshToken
+    const expiresIn = getPathValue(token, ['expires_in'])
+    if (typeof expiresIn === 'number') expiresAt = new Date(Date.now() + expiresIn * 1000)
+    updated = credentialWithPayload(credential, accessToken, refreshToken, expiresAt, profilePayload)
+    return true
+  }
+
+  if (jwtNeedsRefresh(accessToken)) await refreshIfPossible()
+
+  const accountId = chatgptAccountId(accessToken, credential.rawMetadata, profilePayload)
+  const redeemRequestId = randomUUID()
+
+  let status = await postConsume(accessToken, accountId, redeemRequestId)
+  if (status === 401 && (await refreshIfPossible())) {
+    const retryAccountId = chatgptAccountId(accessToken, credential.rawMetadata, profilePayload)
+    status = await postConsume(accessToken, retryAccountId, redeemRequestId)
+  }
+  if (status < 200 || status >= 300) {
+    throw providerError(`Codex 主动重置接口返回异常: status=${status}`)
+  }
+  return { updatedCredential: updated }
+}
+
+async function postConsume(
+  accessToken: string,
+  accountId: string | undefined,
+  redeemRequestId: string,
+): Promise<number> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Referer: 'https://chatgpt.com/',
+    'User-Agent': CHATGPT_WEB_USER_AGENT,
+  }
+  if (accountId !== undefined) headers['ChatGPT-Account-Id'] = accountId
+  const response = await httpFetch(
+    RESET_CREDITS_CONSUME_URL,
+    { method: 'POST', headers, body: JSON.stringify({ redeem_request_id: redeemRequestId }) },
+    '请求 Codex 主动重置失败',
+  )
+  return response.status
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<JsonValue> {
@@ -220,6 +438,12 @@ function chatgptAccountId(
 export function parseQuota(usage: JsonValue): JsonValue {
   const primary = getPathValue(usage, ['rate_limit', 'primary_window'])
   const secondary = getPathValue(usage, ['rate_limit', 'secondary_window'])
+  // 主动重置次数（rate_limit_reset_credits.available_count）：对齐 cockpit-tools
+  // codex_quota.rs 的 ResetCreditsInfo，与限速窗口同在 wham/usage 响应里返回，无需额外请求。
+  const resetCreditsAvailable = pickI64Http(usage, [
+    ['rate_limit_reset_credits', 'available_count'],
+    ['rateLimitResetCredits', 'availableCount'],
+  ])
   return {
     hourly_percentage: remainingPercentage(primary),
     hourly_reset_time: resetTime(primary) ?? null,
@@ -231,6 +455,7 @@ export function parseQuota(usage: JsonValue): JsonValue {
     weekly_reset_time: resetTime(secondary) ?? null,
     weekly_window_minutes: windowMinutes(secondary) ?? null,
     weekly_window_present: secondary != null,
+    reset_credits_available: resetCreditsAvailable ?? null,
     raw_data: usage,
   }
 }

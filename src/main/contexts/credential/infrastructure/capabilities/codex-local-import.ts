@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { JsonValue } from '../../../account/domain/platform-account-profile'
 import type { PlatformId } from '../../../account/domain/platform-id'
 import type { LocalImportCapability } from '../../domain/capabilities'
-import type { ImportedCredentialMaterial } from '../../domain/capability-types'
+import type { ImportedCredentialMaterial, ImportSource } from '../../domain/capability-types'
 import { CredentialError } from '../../domain/credential-error'
 import { homeDir, jwtClaimString, jwtPayload, parseExpiresAt, pickString } from '../scan-helpers'
 
@@ -97,9 +97,13 @@ function apiKeyMaterial(apiKey: string, authFile: Record<string, unknown>): Impo
   }
 }
 
-function materialFromOauthTokens(
+// Shared by the OAuth capability (codex-oauth.ts): the token-response shape is
+// identical to auth.json `tokens`, so both paths normalise through here and the
+// resulting rawMetadata stays byte-compatible for refresh/injection/profile.
+export function materialFromOauthTokens(
   tokens: Record<string, unknown>,
   authFile: Record<string, unknown>,
+  source: ImportSource = 'local_scan',
 ): ImportedCredentialMaterial[] {
   const accessToken = pickString(tokens, [['access_token'], ['accessToken']])
   if (!accessToken) {
@@ -158,7 +162,7 @@ function materialFromOauthTokens(
       accessToken,
       refreshToken,
       expiresAt,
-      source: 'local_scan',
+      source,
       rawMetadata,
     },
   ]

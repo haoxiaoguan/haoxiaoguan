@@ -38,6 +38,13 @@ export const PLATFORM_TONE: Record<string, PlatformTone> = {
     progress: 'bg-[#059669]',
     soft: 'bg-[#059669]/5',
   },
+  'antigravity-ide': {
+    bar: 'bg-[#059669]',
+    chip: 'bg-[#059669]/15 text-[#047857] dark:text-[#6ee7b7]',
+    glow: 'from-[#059669]/14 via-transparent to-transparent',
+    progress: 'bg-[#059669]',
+    soft: 'bg-[#059669]/5',
+  },
   kiro: {
     bar: 'bg-[#f59e0b]',
     chip: 'bg-[#f59e0b]/15 text-[#b45309] dark:text-[#fbbf24]',

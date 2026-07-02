@@ -9,6 +9,7 @@ export type QuotaErrorKind =
   | 'RepositoryError'
   | 'InvalidCredentialFormat'
   | 'CryptoError'
+  | 'Unsupported'
 
 export class QuotaError extends Error {
   readonly kind: QuotaErrorKind
@@ -34,5 +35,9 @@ export class QuotaError extends Error {
 
   static cryptoError(reason: string): QuotaError {
     return new QuotaError('CryptoError', `Crypto operation failed: ${reason}`)
+  }
+
+  static unsupported(reason: string): QuotaError {
+    return new QuotaError('Unsupported', reason)
   }
 }

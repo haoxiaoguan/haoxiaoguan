@@ -142,3 +142,18 @@ export interface AccountQuotaStateResponse {
   error?: string
   providerPayload: unknown
 }
+
+// Codex 主动重置券明细（时间戳为 unix 秒）。
+export interface CodexResetCreditResponse {
+  id?: string
+  status?: string
+  resetType?: string
+  grantedAt?: number
+  expiresAt?: number
+  redeemedAt?: number
+}
+export interface CodexResetCreditsResponse {
+  availableCount: number | null
+  nextExpiresAt: number | null
+  credits: CodexResetCreditResponse[]
+}

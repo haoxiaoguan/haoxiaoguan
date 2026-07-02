@@ -4,6 +4,7 @@ export type AgentId =
   | 'cursor'
   | 'windsurf'
   | 'antigravity'
+  | 'antigravity-ide'
   | 'kiro'
   | 'github-copilot'
   | 'codex'
@@ -153,6 +154,21 @@ export interface AccountQuotaState {
   fetchedAt?: string;
   error?: string;
   providerPayload: unknown;
+}
+
+// Codex 主动重置券（时间戳为 unix 秒）。
+export interface CodexResetCredit {
+  id?: string;
+  status?: string;
+  resetType?: string;
+  grantedAt?: number;
+  expiresAt?: number;
+  redeemedAt?: number;
+}
+export interface CodexResetCredits {
+  availableCount: number | null;
+  nextExpiresAt: number | null;
+  credits: CodexResetCredit[];
 }
 
 export interface QuotaRefreshResult {

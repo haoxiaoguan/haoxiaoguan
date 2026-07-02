@@ -31,6 +31,14 @@ const CANDIDATES: Partial<Record<PlatformId, Record<OsKey, string[]>>> = {
     linux: ['/usr/bin/kiro', '/opt/kiro/kiro'],
   },
   antigravity: {
+    darwin: ['/Applications/Antigravity.app'],
+    win32: [
+      '%LOCALAPPDATA%\\Programs\\Antigravity\\Antigravity.exe',
+      '%PROGRAMFILES%\\Antigravity\\Antigravity.exe',
+    ],
+    linux: ['/usr/bin/antigravity', '/opt/antigravity/antigravity', '~/.local/bin/antigravity'],
+  },
+  antigravity_ide: {
     darwin: ['/Applications/Antigravity IDE.app'],
     win32: [
       '%LOCALAPPDATA%\\Programs\\Antigravity IDE\\Antigravity IDE.exe',
@@ -54,8 +62,9 @@ const CANDIDATES: Partial<Record<PlatformId, Record<OsKey, string[]>>> = {
     linux: ['/usr/bin/codebuddy', '/usr/local/bin/codebuddy', '/opt/codebuddy/codebuddy'],
   },
   codebuddy_cn: {
-    darwin: ['/Applications/CodeBuddyCN.app'],
-    win32: ['%LOCALAPPDATA%\\Programs\\CodeBuddyCN\\CodeBuddyCN.exe', '%PROGRAMFILES%\\CodeBuddyCN\\CodeBuddyCN.exe'],
+    // 真实安装名带空格 "CodeBuddy CN.app"（对照 reference process.rs）。
+    darwin: ['/Applications/CodeBuddy CN.app'],
+    win32: ['%LOCALAPPDATA%\\Programs\\CodeBuddy CN\\CodeBuddy CN.exe', '%PROGRAMFILES%\\CodeBuddy CN\\CodeBuddy CN.exe'],
     linux: ['/usr/bin/codebuddycn', '/usr/local/bin/codebuddycn', '/opt/codebuddycn/codebuddycn'],
   },
   qoder: {

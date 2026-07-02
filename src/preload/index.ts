@@ -117,6 +117,10 @@ const api: HxgApi = {
     getQuota: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.getQuota, args),
     getQuotaState: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.getQuotaState, args),
     refreshQuotaState: (args) => ipcRenderer.invoke(QUOTA_CHANNELS.refreshQuotaState, args),
+    consumeCodexResetCredit: (args) =>
+      ipcRenderer.invoke(QUOTA_CHANNELS.consumeCodexResetCredit, args),
+    getCodexResetCredits: (args) =>
+      ipcRenderer.invoke(QUOTA_CHANNELS.getCodexResetCredits, args),
   },
   skill: {
     getInstalledSkills: () => ipcRenderer.invoke(SKILL_CHANNELS.getInstalledSkills),

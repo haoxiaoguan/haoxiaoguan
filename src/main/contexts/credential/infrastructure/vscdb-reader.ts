@@ -40,6 +40,25 @@ export function buildSecretStorageItemKey(extensionId: string, key: string): str
   return `secret://{"extensionId":"${extensionId}","key":"${key}"}`
 }
 
+/** First ItemTable key matching a SQL LIKE pattern (e.g. 'windsurf_auth-%'), or null. */
+export function readVscdbKeyLike(dbPath: string, likePattern: string): string | null {
+  if (!existsSync(dbPath)) return null
+  let db: Database.Database | null = null
+  try {
+    db = new Database(dbPath, { readonly: true, fileMustExist: true })
+    const row = db.prepare('SELECT key FROM ItemTable WHERE key LIKE ? LIMIT 1').get(likePattern) as
+      | { key: string }
+      | undefined
+    return row?.key ?? null
+  } catch (e) {
+    throw CredentialError.storageError(
+      `read state.vscdb keys (${dbPath} LIKE ${likePattern}): ${e instanceof Error ? e.message : String(e)}`,
+    )
+  } finally {
+    db?.close()
+  }
+}
+
 export function normalizeNonEmpty(value: string | null | undefined): string | undefined {
   if (value === null || value === undefined) return undefined
   const trimmed = value.trim()

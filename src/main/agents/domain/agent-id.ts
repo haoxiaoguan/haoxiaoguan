@@ -5,6 +5,7 @@ export type AgentId =
   | 'cursor'
   | 'windsurf'
   | 'antigravity'
+  | 'antigravity_ide'
   | 'kiro'
   | 'github_copilot'
   | 'codebuddy'
@@ -24,6 +25,7 @@ export const ALL_AGENT_IDS: readonly AgentId[] = [
   'cursor',
   'windsurf',
   'antigravity',
+  'antigravity_ide',
   'kiro',
   'github_copilot',
   'codebuddy',

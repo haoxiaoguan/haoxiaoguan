@@ -17,6 +17,7 @@ import type {
   FilterAccountsRequest,
   BatchDeleteResponse,
   AccountQuotaState,
+  CodexResetCredits,
   QuotaInfo,
   QuotaRefreshResult,
   Settings,
@@ -98,6 +99,12 @@ export const quotaService = {
 
   refreshQuotaState: (accountId: string) =>
     bridge().quota.refreshQuotaState({ accountId }) as Promise<AccountQuotaState>,
+
+  consumeCodexResetCredit: (accountId: string) =>
+    bridge().quota.consumeCodexResetCredit({ accountId }) as Promise<AccountQuotaState>,
+
+  getCodexResetCredits: (accountId: string) =>
+    bridge().quota.getCodexResetCredits({ accountId }) as Promise<CodexResetCredits>,
 };
 
 // ============================================================================

@@ -1,4 +1,4 @@
-import { createDecipheriv, pbkdf2Sync } from 'node:crypto'
+import { createCipheriv, createDecipheriv, pbkdf2Sync } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { CredentialError } from '../domain/credential-error'
@@ -33,7 +33,7 @@ const LINUX_EMPTY_KEY = Buffer.from([
 ])
 
 /** SafeStorage "mode" — maps to the Keychain service/account candidates. */
-export type SafeStorageMode = 'default' | 'codebuddy' | 'codebuddy_cn' | 'qoder'
+export type SafeStorageMode = 'default' | 'codebuddy' | 'codebuddy_cn' | 'qoder' | 'windsurf' | 'antigravity'
 
 export function pbkdf2Sha1Key(password: string, iterations: number): Buffer {
   return pbkdf2Sync(Buffer.from(password, 'utf8'), SALT, iterations, 16, 'sha1')
@@ -49,6 +49,24 @@ function decryptCbcPrefixed(encrypted: Buffer, expectedPrefix: Buffer, key: Buff
   const decipher = createDecipheriv('aes-128-cbc', key, CBC_IV)
   decipher.setAutoPadding(true)
   return Buffer.concat([decipher.update(raw), decipher.final()])
+}
+
+function encryptCbcPrefixed(prefix: Buffer, key: Buffer, plaintext: Buffer): Buffer {
+  const cipher = createCipheriv('aes-128-cbc', key, CBC_IV)
+  cipher.setAutoPadding(true)
+  const body = Buffer.concat([cipher.update(plaintext), cipher.final()])
+  return Buffer.concat([prefix, body])
+}
+
+// Exported for tests: pure v10/v11 AES-128-CBC round-trip with an explicit
+// 16-byte key (no Keychain), so the SafeStorage crypto can be verified
+// deterministically on any OS.
+export function __encryptV10ForTest(key: Buffer, plaintext: string): Buffer {
+  return encryptCbcPrefixed(V10_PREFIX, key, Buffer.from(plaintext, 'utf8'))
+}
+
+export function __decryptV10ForTest(key: Buffer, encrypted: Buffer): string {
+  return decryptCbcPrefixed(encrypted, V10_PREFIX, key).toString('utf8')
 }
 
 function detectPrefix(encrypted: Buffer): 'v10' | 'v11' | null {
@@ -88,6 +106,16 @@ function macosCandidates(mode: SafeStorageMode): Array<[string, string | undefin
       return [
         ['Qoder Safe Storage', 'Qoder'],
         ['Qoder Safe Storage', undefined],
+      ]
+    case 'windsurf':
+      return [
+        ['Windsurf Safe Storage', 'Windsurf'],
+        ['Windsurf Safe Storage', undefined],
+      ]
+    case 'antigravity':
+      return [
+        ['Antigravity Safe Storage', 'Antigravity'],
+        ['Antigravity Safe Storage', undefined],
       ]
     default:
       // Default VSCode-family: the app supplies its own service name via the
@@ -169,6 +197,55 @@ export async function decryptSecretPayload(
   throw CredentialError.storageError(
     `unsupported SecretStorage ciphertext prefix: ${encrypted.subarray(0, 3).toString()}`,
   )
+}
+
+/**
+ * Encrypt UTF-8 plaintext into a VSCode SecretStorage byte blob (inverse of
+ * decryptSecretPayload). `existingPrefix` (from the current DB value, if any)
+ * lets Linux keep the account's existing scheme; macOS is always v10. Throws on
+ * Windows (DPAPI/GCM not implemented) — same coverage as decrypt.
+ */
+export async function encryptSecretPayload(
+  plaintext: string,
+  mode: SafeStorageMode = 'default',
+  existingPrefix: 'v10' | 'v11' | null = null,
+): Promise<Buffer> {
+  const bytes = Buffer.from(plaintext, 'utf8')
+  if (process.platform === 'win32') {
+    throw CredentialError.storageError(
+      'Windows VS Code SecretStorage encryption is not implemented (DPAPI unsupported)',
+    )
+  }
+  if (process.platform === 'darwin') {
+    const password = await macosSafeStoragePassword(mode)
+    if (password === null) {
+      throw CredentialError.storageError('unable to read Safe Storage password from Keychain')
+    }
+    return encryptCbcPrefixed(V10_PREFIX, pbkdf2Sha1Key(password, 1003), bytes)
+  }
+  // Linux: honour the existing prefix when present, else prefer v11 (secret
+  // service) and fall back to the fixed v10 key.
+  if (existingPrefix === 'v11') {
+    const key = await linuxV11Key()
+    if (key) return encryptCbcPrefixed(V11_PREFIX, key, bytes)
+    return encryptCbcPrefixed(V11_PREFIX, LINUX_EMPTY_KEY, bytes)
+  }
+  if (existingPrefix === 'v10') {
+    return encryptCbcPrefixed(V10_PREFIX, LINUX_V10_KEY, bytes)
+  }
+  const key = await linuxV11Key()
+  if (key) return encryptCbcPrefixed(V11_PREFIX, key, bytes)
+  return encryptCbcPrefixed(V10_PREFIX, LINUX_V10_KEY, bytes)
+}
+
+/** Serialize an encrypted blob to the state.vscdb Buffer JSON VSCode expects. */
+export function encodeSecretStorageBuffer(encrypted: Buffer): string {
+  return JSON.stringify({ type: 'Buffer', data: Array.from(encrypted) })
+}
+
+/** Detect the SafeStorage scheme prefix of an existing (decoded) blob, or null. */
+export function detectSecretPrefix(encrypted: Buffer): 'v10' | 'v11' | null {
+  return detectPrefix(encrypted)
 }
 
 /**

@@ -25,6 +25,7 @@ const PLATFORM_ICON_MAP: Partial<Record<PlatformId, string>> = {
   cursor: cursorIcon,
   windsurf: windsurfIcon,
   antigravity: antigravityIcon,
+  'antigravity-ide': antigravityIcon,
   kiro: kiroIcon,
   'github-copilot': githubCopilotIcon,
   codex: codexIcon,

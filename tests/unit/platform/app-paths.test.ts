@@ -28,7 +28,7 @@ describe('detectAppPath', () => {
     // codebuddy-cn is a known multi-word kebab id with candidates.
     const cn = detectAppPath('codebuddy-cn')
     if (process.platform === 'darwin') {
-      expect(cn.suggestion).toBe('/Applications/CodeBuddyCN.app')
+      expect(cn.suggestion).toBe('/Applications/CodeBuddy CN.app')
     }
   })
 

@@ -3,9 +3,11 @@ import { toIpcError } from '../../../ipc/error'
 import { QUOTA_CHANNELS } from './quota-channels'
 import {
   toAccountQuotaStateResponse,
+  toCodexResetCreditsResponse,
   toQuotaRefreshResultResponse,
   toQuotaResponse,
   type AccountQuotaStateResponse,
+  type CodexResetCreditsResponse,
   type QuotaRefreshResultResponse,
   type QuotaResponse,
 } from './quota-response'
@@ -79,6 +81,34 @@ export function registerQuotaHandlers(quotaService: QuotaApplicationService): vo
       try {
         const state = await quotaService.refreshQuotaState(args.accountId)
         return toAccountQuotaStateResponse(state)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
+  // consume_codex_reset_credit — args: { accountId } → AccountQuotaStateResponse
+  // 消耗一次 Codex 主动重置额度后回传刷新后的额度状态。
+  ipcMain.handle(
+    QUOTA_CHANNELS.consumeCodexResetCredit,
+    async (_e, args: { accountId: string }): Promise<AccountQuotaStateResponse> => {
+      try {
+        const state = await quotaService.consumeCodexResetCredit(args.accountId)
+        return toAccountQuotaStateResponse(state)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
+  // get_codex_reset_credits — args: { accountId } → CodexResetCreditsResponse
+  // Codex 主动重置券明细（每张券过期时间），hover 展示用。
+  ipcMain.handle(
+    QUOTA_CHANNELS.getCodexResetCredits,
+    async (_e, args: { accountId: string }): Promise<CodexResetCreditsResponse> => {
+      try {
+        const view = await quotaService.getCodexResetCredits(args.accountId)
+        return toCodexResetCreditsResponse(view)
       } catch (e) {
         throw new Error(toIpcError(e))
       }

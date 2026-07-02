@@ -42,6 +42,41 @@ export interface QuotaRefreshResult {
   error?: string | undefined
 }
 
+/**
+ * Consume one Codex「主动重置额度」for an already-decrypted credential. Injected
+ * (default wired in the container to quota/infrastructure/http/codex) so the
+ * application layer stays free of infrastructure imports. Returns the updated
+ * credential when a token refresh happened during the call.
+ */
+export type CodexResetConsumer = (
+  credential: Credential,
+  profilePayload: JsonValue,
+) => Promise<{ updatedCredential?: Credential | undefined }>
+
+/** 单张主动重置券（unix 秒时间戳）。 */
+export interface CodexResetCreditView {
+  id?: string | undefined
+  status?: string | undefined
+  resetType?: string | undefined
+  grantedAt?: number | undefined
+  expiresAt?: number | undefined
+  redeemedAt?: number | undefined
+}
+
+/** 主动重置券快照（含每张券的过期时间；updatedCredential 供上层持久化）。 */
+export interface CodexResetCreditsView {
+  availableCount: number | null
+  nextExpiresAt: number | null
+  credits: CodexResetCreditView[]
+  updatedCredential?: Credential | undefined
+}
+
+/** 查询 Codex 主动重置券明细（GET rate-limit-reset-credits）。注入自 infra codex http。 */
+export type CodexResetCreditsFetcher = (
+  credential: Credential,
+  profilePayload: JsonValue,
+) => Promise<CodexResetCreditsView>
+
 /** The 12 platforms HttpLiveQuotaFetcher can fetch (the supported list when all
  *  adapters registered). refreshAll enumerates accounts across these. */
 export const QUOTA_FETCH_PLATFORMS: readonly PlatformId[] = [
@@ -57,6 +92,7 @@ export const QUOTA_FETCH_PLATFORMS: readonly PlatformId[] = [
   'trae',
   'zed',
   'antigravity',
+  'antigravity_ide',
 ]
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
@@ -71,6 +107,8 @@ export class QuotaApplicationService {
     private readonly quotaFetcher: LiveQuotaFetcher,
     private readonly supportedPlatforms: readonly PlatformId[] = QUOTA_FETCH_PLATFORMS,
     private readonly dispatcherResolver?: AccountDispatcherResolver,
+    private readonly codexResetConsumer?: CodexResetConsumer,
+    private readonly codexResetCreditsFetcher?: CodexResetCreditsFetcher,
   ) {}
 
   /** 账号 quota_state 的最近抓取时间（PlatformQuotaScheduler 重启播种用）。 */
@@ -206,6 +244,68 @@ export class QuotaApplicationService {
       // fall through to live refresh
     }
     return this.refreshQuota(accountId)
+  }
+
+  /**
+   * Codex 主动重置：消耗一次 reset credit，然后在线刷新额度并返回最新状态
+   * （消耗后剩余次数与限速窗口都会变化）。仅 codex；非 codex 抛错。
+   */
+  async consumeCodexResetCredit(accountId: string): Promise<AccountQuotaState> {
+    if (this.codexResetConsumer === undefined) {
+      throw QuotaError.unsupported('codex reset credit consumer not configured')
+    }
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) throw QuotaError.notFound('Account', accountId)
+    const platform = platformFromAgentIdOrCursor(account.agentId)
+    if (platform !== 'codex') {
+      throw QuotaError.unsupported('主动重置额度仅支持 Codex 账号')
+    }
+
+    const credential = await this.decryptCredential(accountId)
+    const dispatcher =
+      this.dispatcherResolver !== undefined
+        ? await this.dispatcherResolver.dispatcherForAccount(accountId)
+        : undefined
+
+    const result = await runWithDispatcher(dispatcher, () =>
+      this.codexResetConsumer!(credential, account.profilePayload),
+    )
+    if (result.updatedCredential !== undefined) {
+      await this.storeCredential(accountId, platform, result.updatedCredential)
+    }
+
+    // 消耗成功后在线刷新额度：剩余重置次数 + 限速窗口都会更新。
+    return this.refreshQuotaState(accountId)
+  }
+
+  /**
+   * 查询 Codex 主动重置券明细（每张券的过期时间），供 hover 展示。仅 codex。
+   * 只读不改额度；若查询过程刷新了 token 则顺带持久化新凭据。
+   */
+  async getCodexResetCredits(accountId: string): Promise<CodexResetCreditsView> {
+    if (this.codexResetCreditsFetcher === undefined) {
+      throw QuotaError.unsupported('codex reset credits fetcher not configured')
+    }
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) throw QuotaError.notFound('Account', accountId)
+    const platform = platformFromAgentIdOrCursor(account.agentId)
+    if (platform !== 'codex') {
+      throw QuotaError.unsupported('主动重置券仅支持 Codex 账号')
+    }
+
+    const credential = await this.decryptCredential(accountId)
+    const dispatcher =
+      this.dispatcherResolver !== undefined
+        ? await this.dispatcherResolver.dispatcherForAccount(accountId)
+        : undefined
+
+    const view = await runWithDispatcher(dispatcher, () =>
+      this.codexResetCreditsFetcher!(credential, account.profilePayload),
+    )
+    if (view.updatedCredential !== undefined) {
+      await this.storeCredential(accountId, platform, view.updatedCredential)
+    }
+    return view
   }
 
   /** Live refresh then return the normalised state. */

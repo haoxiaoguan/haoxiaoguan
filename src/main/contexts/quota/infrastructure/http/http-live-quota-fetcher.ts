@@ -1,8 +1,8 @@
 // HttpLiveQuotaFetcher — dispatches a live HTTP quota fetch per platform.
 //
-// Antigravity and the 5
-// CLI-only agents (claude/claude_desktop/gemini/opencode/hermes) return an
-// Unsupported result. Each platform module handles its own token refresh inline.
+// All 11 desktop platforms have a live fetcher; only truly unsupported ids fall
+// through to the Unsupported result. Each platform module handles its own token
+// refresh inline.
 
 import type { LiveQuotaFetcher, QuotaFetchRequest } from '../../domain/ports'
 import { unsupportedFetchResult, type QuotaFetchResult } from '../../domain/capabilities'
@@ -16,6 +16,7 @@ import * as codebuddy from './codebuddy'
 import * as qoder from './qoder'
 import * as trae from './trae'
 import * as zed from './zed'
+import * as antigravity from './antigravity'
 
 export class HttpLiveQuotaFetcher implements LiveQuotaFetcher {
   async fetch(request: QuotaFetchRequest): Promise<QuotaFetchResult> {
@@ -43,6 +44,8 @@ export class HttpLiveQuotaFetcher implements LiveQuotaFetcher {
       case 'zed':
         return zed.fetch(credential, profilePayload)
       case 'antigravity':
+      case 'antigravity_ide':
+        return antigravity.fetch(credential, profilePayload)
       default:
         return unsupportedFetchResult()
     }

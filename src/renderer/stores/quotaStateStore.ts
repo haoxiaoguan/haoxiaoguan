@@ -9,6 +9,8 @@ interface QuotaStateStore {
   ensure: (accountId: string) => Promise<void>;
   ensureMany: (accountIds: string[]) => Promise<void>;
   refresh: (accountId: string) => Promise<void>;
+  /** Codex 主动重置：消耗一次 reset credit，成功后用返回的最新额度态更新缓存。 */
+  consumeResetCredit: (accountId: string) => Promise<void>;
   /** 主进程 quota:updated 推送后强制重拉缓存态（绕过 ensure 的已有即跳过）。 */
   pull: (accountIds: string[]) => Promise<void>;
   clear: () => void;
@@ -99,6 +101,26 @@ export const useQuotaStateStore = create<QuotaStateStore>((set, get) => ({
       set({ errors });
       // 重新抛出:调用方据此弹出错误提示并标记卡片失败态(刷新失败不再被静默吞掉)
       throw error;
+    } finally {
+      const next = new Set(get().loading);
+      next.delete(accountId);
+      set({ loading: next });
+    }
+  },
+
+  consumeResetCredit: async (accountId) => {
+    const loading = new Set(get().loading);
+    loading.add(accountId);
+    set({ loading });
+    try {
+      // 成功：用返回的最新额度态更新缓存。失败：不写 errors（避免把卡片标成刷新
+      // 失败态），直接向上抛给调用方 toast 提示。finally 统一清 loading。
+      const state = await quotaService.consumeCodexResetCredit(accountId);
+      const states = new Map(get().states);
+      const errors = new Map(get().errors);
+      states.set(accountId, state);
+      errors.delete(accountId);
+      set({ states, errors });
     } finally {
       const next = new Set(get().loading);
       next.delete(accountId);

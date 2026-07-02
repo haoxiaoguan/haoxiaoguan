@@ -159,6 +159,9 @@ export default function AddAccountSheet({
           );
           setMaterial(m);
           onboarding.setMaterial(m);
+          // OAuth 授权成功即代表用户已确认，直接入库并关闭弹窗（不再需要二次「确认」）。
+          // 本地扫描/批量仍保留预览确认。
+          await importMaterial(m);
           break;
         }
         case 'local_scan': {
@@ -178,25 +181,31 @@ export default function AddAccountSheet({
     }
   };
 
+  // 由物料创建账号并收尾（绑定分组/代理 → 关闭弹窗）。OAuth 授权后自动调用；
+  // 本地扫描/单条预览走「确认」按钮调用。抛错交由调用方 setError 展示。
+  const importMaterial = async (m: ImportedCredentialMaterial) => {
+    const account = await importAccount({
+      platform: m.provider,
+      email: m.email,
+      token: m.access_token,
+      refreshToken: m.refresh_token,
+      expiresAt: m.expires_at,
+      rawMetadata: m.raw_metadata,
+      tags: [],
+    });
+    const bindErr = await applyBindings(account.id);
+    onboarding.finish();
+    onSuccess();
+    closeAndReset(false);
+    if (bindErr) toast.warning(t('binding.failed'), { description: bindErr });
+  };
+
   const commitImport = async () => {
     if (!material) return;
     setBusy(true);
     setError(null);
     try {
-      const account = await importAccount({
-        platform: material.provider,
-        email: material.email,
-        token: material.access_token,
-        refreshToken: material.refresh_token,
-        expiresAt: material.expires_at,
-        rawMetadata: material.raw_metadata,
-        tags: [],
-      });
-      const bindErr = await applyBindings(account.id);
-      onboarding.finish();
-      onSuccess();
-      closeAndReset(false);
-      if (bindErr) toast.warning(t('binding.failed'), { description: bindErr });
+      await importMaterial(material);
     } catch (e) {
       setError(String(e));
     } finally {

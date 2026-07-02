@@ -1,5 +1,5 @@
 // CodeBuddy CN adapter — VSCode family, credential-only (storage.json merge).
-// Mirrors Rust CodebuddyCnAdapter (app dir "CodeBuddyCN").
+// Mirrors Rust CodebuddyCnAdapter (data dir "CodeBuddy CN", with a space).
 
 import { join } from 'node:path'
 import { BaseAgentClient } from '../domain/base-agent-client'
@@ -12,7 +12,7 @@ import { FileCredentialInjection } from '../infrastructure/shared/credential-inj
 
 export class CodebuddyCnAdapter extends BaseAgentClient {
   private readonly credential = new FileCredentialInjection(
-    join(appSupportDir('CodeBuddyCN'), 'User', 'globalStorage', 'storage.json'),
+    join(appSupportDir('CodeBuddy CN'), 'User', 'globalStorage', 'storage.json'),
     'storage_json',
   )
 

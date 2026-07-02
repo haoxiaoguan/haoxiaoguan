@@ -17,6 +17,7 @@ import { stateFromProfile as codebuddyState } from './codebuddy'
 import { stateFromProfile as qoderState } from './qoder'
 import { stateFromProfile as traeState } from './trae'
 import { stateFromProfile as zedState } from './zed'
+import { stateFromProfile as antigravityState } from './antigravity'
 
 export * from './model'
 export * from './serde'
@@ -36,7 +37,8 @@ function isJsonNull(value: JsonValue): boolean {
 
 /**
  * Dispatch profile-payload parsing per platform.
- * Antigravity + the 5 CLI-only agents return undefined.
+ * The 5 CLI-only agents (claude/claude_desktop/gemini/opencode/hermes) return
+ * undefined.
  */
 export function fromAccountProfile(
   platform: PlatformId,
@@ -65,6 +67,9 @@ export function fromAccountProfile(
       return traeState(profilePayload, credentialRawMetadata)
     case 'zed':
       return zedState(profilePayload, credentialRawMetadata)
+    case 'antigravity':
+    case 'antigravity_ide':
+      return antigravityState(profilePayload, credentialRawMetadata)
     default:
       return undefined
   }

@@ -17,6 +17,7 @@ const EXPECTED: Record<AgentId, Expected> = {
   cursor: { family: 'v_s_code', displayName: 'Cursor', caps: ['credential'] },
   windsurf: { family: 'v_s_code', displayName: 'Windsurf', caps: ['credential'] },
   antigravity: { family: 'v_s_code', displayName: 'Antigravity', caps: ['credential'] },
+  antigravity_ide: { family: 'v_s_code', displayName: 'Antigravity IDE', caps: ['credential'] },
   kiro: { family: 'v_s_code', displayName: 'Kiro', caps: ['credential', 'session_log'] },
   github_copilot: { family: 'standalone', displayName: 'GitHub Copilot', caps: ['credential'] },
   codebuddy: { family: 'v_s_code', displayName: 'CodeBuddy', caps: ['credential'] },
@@ -42,10 +43,10 @@ const EXPECTED: Record<AgentId, Expected> = {
 }
 
 describe('buildAgentRegistry', () => {
-  it('registers exactly 17 adapters', () => {
+  it('registers exactly 18 adapters', () => {
     const reg = buildAgentRegistry()
-    expect(reg.count()).toBe(17)
-    expect(reg.listAll().length).toBe(17)
+    expect(reg.count()).toBe(18)
+    expect(reg.listAll().length).toBe(18)
   })
 
   it('has one adapter for every known AgentId', () => {
@@ -81,9 +82,9 @@ describe('buildAgentRegistry', () => {
 describe('AgentRegistryService', () => {
   const svc = new AgentRegistryService(buildAgentRegistry())
 
-  it('listAll() returns 17 camelCase AgentInfo DTOs', () => {
+  it('listAll() returns 18 camelCase AgentInfo DTOs', () => {
     const all = svc.listAll()
-    expect(all.length).toBe(17)
+    expect(all.length).toBe(18)
     const claude = all.find((a) => a.id === 'claude')!
     expect(claude).toEqual({
       id: 'claude',

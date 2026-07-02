@@ -8,7 +8,7 @@
 import type { QuotaInfo, ModelQuota } from '../domain/quota'
 import type { AccountQuotaState } from '../domain/quota-state'
 import { accountQuotaStateToJson, type AccountQuotaStateJson } from '../domain/quota-state'
-import type { QuotaRefreshResult } from '../application/quota-service'
+import type { QuotaRefreshResult, CodexResetCreditsView } from '../application/quota-service'
 
 export interface ModelQuotaResponse {
   modelName: string
@@ -33,6 +33,38 @@ export interface QuotaRefreshResultResponse {
 }
 
 export type AccountQuotaStateResponse = AccountQuotaStateJson
+
+export interface CodexResetCreditResponse {
+  id?: string
+  status?: string
+  resetType?: string
+  grantedAt?: number
+  expiresAt?: number
+  redeemedAt?: number
+}
+
+export interface CodexResetCreditsResponse {
+  availableCount: number | null
+  nextExpiresAt: number | null
+  credits: CodexResetCreditResponse[]
+}
+
+export function toCodexResetCreditsResponse(view: CodexResetCreditsView): CodexResetCreditsResponse {
+  return {
+    availableCount: view.availableCount,
+    nextExpiresAt: view.nextExpiresAt,
+    credits: view.credits.map((c) => {
+      const out: CodexResetCreditResponse = {}
+      if (c.id !== undefined) out.id = c.id
+      if (c.status !== undefined) out.status = c.status
+      if (c.resetType !== undefined) out.resetType = c.resetType
+      if (c.grantedAt !== undefined) out.grantedAt = c.grantedAt
+      if (c.expiresAt !== undefined) out.expiresAt = c.expiresAt
+      if (c.redeemedAt !== undefined) out.redeemedAt = c.redeemedAt
+      return out
+    }),
+  }
+}
 
 function toModelQuotaResponse(model: ModelQuota): ModelQuotaResponse {
   const out: ModelQuotaResponse = {

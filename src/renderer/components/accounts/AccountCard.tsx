@@ -1,4 +1,4 @@
-import { memo, type ComponentType, type ReactNode } from 'react'
+import { memo, useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -10,17 +10,30 @@ import {
   Monitor,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Trash2,
   Upload,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
+import { Badge, badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { useAccountStore, useHealthStore, useQuotaStateStore } from '../../stores'
-import type { Account } from '../../types'
+import { quotaService } from '../../services/tauri'
+import type { Account, CodexResetCredits } from '../../types'
 import {
   accountPlanLabel,
   codexSubscriptionInfo,
@@ -102,9 +115,28 @@ function AccountCard(props: AccountCardProps) {
   const refreshing = useHealthStore((s) => s.refreshing.has(props.account.id))
   const quotaState = useQuotaStateStore((s) => s.states.get(props.account.id))
   const refreshQuotaState = useQuotaStateStore((s) => s.refresh)
+  const consumeResetCredit = useQuotaStateStore((s) => s.consumeResetCredit)
   const quotaRefreshing = useQuotaStateStore((s) => s.loading.has(props.account.id))
   const quotaError = useQuotaStateStore((s) => s.errors.get(props.account.id))
   const fetchAccounts = useAccountStore((s) => s.fetchAccounts)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  const handleConsumeReset = () => {
+    setResetting(true)
+    consumeResetCredit(props.account.id)
+      .then(() => {
+        setResetConfirmOpen(false)
+        toast.success(t('resetCredit.success'))
+        void fetchAccounts(props.account.platform)
+      })
+      .catch((error: unknown) => {
+        toast.error(t('resetCredit.failed'), {
+          description: error instanceof Error ? error.message : String(error),
+        })
+      })
+      .finally(() => setResetting(false))
+  }
 
   const handleRefresh = () => {
     refreshQuotaState(props.account.id)
@@ -138,7 +170,14 @@ function AccountCard(props: AccountCardProps) {
   const plan = accountPlanLabel(props.account)
   const login = loginMethodLabel(props.account)
   // 不截断:cursor 有 Total/Auto/API/按需 四条,codex 两条,全部展示。
-  const lines = metricLines(props.account, quotaState)
+  // 主动重置次数改为「Codex 标签旁的按钮 tag」，从额度行里剔除避免重复。
+  const allLines = metricLines(props.account, quotaState)
+  const lines = allLines.filter((line) => line.key !== 'codex_reset_credits')
+  const resetMetric =
+    props.account.platform === 'codex'
+      ? quotaState?.metrics.find((m) => m.key === 'codex_reset_credits')
+      : undefined
+  const resetCount = typeof resetMetric?.remaining === 'number' ? resetMetric.remaining : undefined
   const subscription = codexSubscriptionInfo(props.account)
 
   return (
@@ -186,10 +225,20 @@ function AccountCard(props: AccountCardProps) {
         </span>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <Badge className="h-5 border-transparent bg-primary/10 px-1.5 text-[11.5px] text-primary hover:bg-primary/10">
           {props.platformDisplayName}
         </Badge>
+        {resetCount !== undefined ? (
+          <ResetCreditBadge
+            account={props.account}
+            count={resetCount}
+            disabled={resetting || quotaRefreshing}
+            onConsume={() => {
+              if (!resetting) setResetConfirmOpen(true)
+            }}
+          />
+        ) : null}
         {props.account.tags.slice(0, 2).map((tag) => (
           <Badge
             key={tag}
@@ -280,6 +329,28 @@ function AccountCard(props: AccountCardProps) {
           />
         </div>
       </div>
+
+      <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('resetCredit.confirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('resetCredit.confirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>{t('actions.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting}
+              onClick={(e) => {
+                // 阻止默认关闭：等请求完成再由 handler 关闭，避免闪退感。
+                e.preventDefault()
+                handleConsumeReset()
+              }}
+            >
+              {resetting ? t('resetCredit.consuming') : t('resetCredit.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </article>
   )
 }
@@ -376,6 +447,164 @@ function QuotaLine({ line }: { line: MetricLine }) {
       ) : null}
     </div>
   )
+}
+
+// Codex「重置 (N)」按钮 tag：位于平台标签旁。点击 → 确认消耗；hover → 弹出各券
+// 过期时间明细（懒加载）。
+function ResetCreditBadge({
+  account,
+  count,
+  disabled,
+  onConsume,
+}: {
+  account: Account
+  count: number
+  disabled?: boolean
+  onConsume: () => void
+}) {
+  const { t } = useTranslation('accounts')
+  const [data, setData] = useState<CodexResetCredits | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    if (data || loading) return
+    setLoading(true)
+    quotaService
+      .getCodexResetCredits(account.id)
+      .then((c) => {
+        setData(c)
+        setError(null)
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false))
+  }
+
+  return (
+    <HoverCard
+      openDelay={200}
+      closeDelay={80}
+      onOpenChange={(open) => {
+        if (open) load()
+      }}
+    >
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          title={t('resetCredit.hint')}
+          className={cn(
+            // 与平台标签 Badge 同款外观（h-5 / rounded-md / border-transparent /
+            // bg-primary/10 / text-[11.5px] / text-primary），仅加可点击态。
+            badgeVariants(),
+            'h-5 shrink-0 cursor-pointer gap-1 border-transparent bg-primary/10 px-1.5 text-[11.5px] text-primary hover:bg-primary/20',
+            disabled && 'pointer-events-none opacity-50',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            onConsume()
+          }}
+        >
+          <RotateCcw className="size-3" strokeWidth={2} aria-hidden />
+          {t('resetCredit.badge', { count })}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-72" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-foreground">
+            {t('resetCredit.voucherTitle')}
+          </span>
+          {data?.availableCount != null ? (
+            <span className="text-[11px] text-muted-foreground">
+              {t('resetCredit.voucherCount', { count: data.availableCount })}
+            </span>
+          ) : null}
+        </div>
+        {loading ? (
+          <div className="py-2 text-[11.5px] text-muted-foreground">{t('resetCredit.loading')}</div>
+        ) : error ? (
+          <div className="py-2 text-[11.5px] text-rose-600 dark:text-rose-400">{error}</div>
+        ) : (
+          <ResetCreditRows data={data} />
+        )}
+        <div className="mt-2 border-t border-border/60 pt-2 text-[10.5px] text-muted-foreground">
+          {t('resetCredit.hint')}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
+function ResetCreditRows({ data }: { data: CodexResetCredits | null }) {
+  const { t } = useTranslation('accounts')
+  const credits = (data?.credits ?? []).filter((c) => {
+    const s = (c.status ?? '').toLowerCase()
+    return s !== 'redeemed' && s !== 'used' && s !== 'consumed'
+  })
+  if (credits.length === 0) {
+    // 有次数但无明细：Codex 只回了计数、没给逐券过期。
+    if (data?.availableCount && data.availableCount > 0) {
+      return (
+        <div className="py-1 text-[11.5px] text-muted-foreground">
+          {t('resetCredit.noDetail', { count: data.availableCount })}
+        </div>
+      )
+    }
+    return <div className="py-1 text-[11.5px] text-muted-foreground">{t('resetCredit.empty')}</div>
+  }
+  return (
+    <ul className="space-y-1.5">
+      {credits.map((credit, i) => {
+        const expiry = formatCreditExpiry(credit.expiresAt)
+        return (
+          <li key={credit.id ?? i} className="flex items-center justify-between gap-3 text-[11.5px]">
+            <span className="inline-flex items-center gap-1.5 text-foreground">
+              <span className={cn('size-1.5 rounded-full', expiry.dot)} aria-hidden />
+              {t('resetCredit.voucherRow', { index: i + 1 })}
+            </span>
+            <span className={cn('shrink-0 tabular-nums', expiry.className)}>{expiry.text}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+// 券过期时间格式化：unix 秒 → 「MM/DD HH:mm（剩 Xd Yh）」；临期/今日高亮，已过期红色。
+function formatCreditExpiry(sec?: number): { text: string; className: string; dot: string } {
+  if (sec === undefined) {
+    return {
+      text: '过期时间未知',
+      className: 'text-muted-foreground',
+      dot: 'bg-muted-foreground/40',
+    }
+  }
+  const date = new Date(sec * 1000)
+  const diffMs = date.getTime() - Date.now()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const absolute = `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  if (diffMs <= 0) {
+    return { text: `${absolute} · 已过期`, className: 'text-rose-600 dark:text-rose-400', dot: 'bg-rose-500' }
+  }
+  const totalMinutes = Math.floor(diffMs / 60_000)
+  const days = Math.floor(totalMinutes / (60 * 24))
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60)
+  const minutes = totalMinutes % 60
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (days === 0 && hours === 0) parts.push(`${Math.max(1, minutes)}m`)
+  const remain = parts.join(' ')
+  // < 24h 视为临期（amber），< 6h 视为今日紧急（rose）。
+  const className =
+    diffMs < 6 * 3_600_000
+      ? 'text-rose-600 dark:text-rose-400'
+      : diffMs < 24 * 3_600_000
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-foreground'
+  const dot =
+    diffMs < 6 * 3_600_000 ? 'bg-rose-500' : diffMs < 24 * 3_600_000 ? 'bg-amber-500' : 'bg-emerald-500'
+  return { text: `${absolute} · 剩 ${remain}`, className, dot }
 }
 
 function IconAction({

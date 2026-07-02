@@ -17,6 +17,10 @@ export const DETECT_PLATFORMS: readonly PlatformId[] = [
   'codebuddy',
   'codebuddy_cn',
   'antigravity',
+  'antigravity_ide',
+  'github_copilot',
+  'gemini_cli',
+  'zed',
 ]
 
 /** Per-platform detection outcome (frontend platform id). */

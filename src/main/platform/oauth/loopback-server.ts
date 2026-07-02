@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
 
 // Reusable OAuth loopback HTTP server.
 //
@@ -26,6 +27,11 @@ export const DEFAULT_CANDIDATE_PORTS = [
   3128, 4649, 6588, 8008, 9091, 49153, 50153, 51153, 52153, 53153,
 ]
 
+// Bind an OS-assigned ephemeral port (used by providers whose redirect_uri is
+// dynamic, e.g. Google/Gemini/Zed/Windsurf/Trae): pass [EPHEMERAL_PORT] and read
+// the real port back from tryBind()/port.
+export const EPHEMERAL_PORT = 0
+
 const SUCCESS_HTML =
   '<!doctype html><html><head><meta charset="utf-8"><title>授权完成</title></head>' +
   '<body style="font-family:system-ui;text-align:center;padding-top:4rem">' +
@@ -48,10 +54,10 @@ export class LoopbackServer {
 
     for (const port of candidatePorts) {
       try {
-        await this.listenOnce(server, port)
+        const actualPort = await this.listenOnce(server, port)
         this.server = server
-        this.boundPort = port
-        return port
+        this.boundPort = actualPort
+        return actualPort
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
           continue
@@ -94,15 +100,19 @@ export class LoopbackServer {
     this.boundPort = null
   }
 
-  private listenOnce(server: Server, port: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
+  private listenOnce(server: Server, port: number): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
       const onError = (err: Error) => {
         server.removeListener('listening', onListening)
         reject(err)
       }
       const onListening = () => {
         server.removeListener('error', onError)
-        resolve()
+        // For an ephemeral (0) request the OS assigns the real port; read it back
+        // from the bound address so callers get the actual redirect port.
+        const address = server.address()
+        const actual = address !== null && typeof address === 'object' ? (address as AddressInfo).port : port
+        resolve(actual)
       }
       server.once('error', onError)
       server.once('listening', onListening)
