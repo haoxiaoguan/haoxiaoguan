@@ -172,4 +172,50 @@ describe('UsageEventIngestService（缓冲 + flush 模式）', () => {
     ingest.ingestProxyEvent(makeProxyRecord(), 'claude-cli/1.0')
     expect(ingest.pendingCount()).toBe(1)
   })
+
+  it('recostZeroCostEvents 回填历史零费用事件（能计价的重算，不能的保持 0）', async () => {
+    const { eventRepo, ingest } = await setup()
+
+    // 模拟"定价条目缺失时期"落库的零费用历史行
+    const zeroCost = {
+      inputCostUsd: 0, outputCostUsd: 0, cacheReadCostUsd: 0, cacheCreationCostUsd: 0, totalCostUsd: 0,
+      occurredAt: 1700000000, createdAt: 1700000100,
+    }
+    await eventRepo.batchInsertEvents([
+      {
+        requestId: 'session:fable-1', source: 'session', agentId: 'claude',
+        model: 'claude-fable-5',
+        inputTokens: 1000, outputTokens: 500, cacheReadTokens: 200, cacheCreationTokens: 100,
+        ...zeroCost,
+      },
+      {
+        requestId: 'session:relay-1', source: 'session', agentId: 'claude',
+        model: 'aimami_relay_deadbeef',
+        inputTokens: 1000, outputTokens: 500, cacheReadTokens: 0, cacheCreationTokens: 0,
+        ...zeroCost,
+      },
+    ])
+
+    const updated = await ingest.recostZeroCostEvents()
+    expect(updated).toBe(1)
+
+    // fable-5：claude 协议不扣 cacheRead，$10/$50/$1/$12.5 每百万 token
+    const fable = await eventRepo.findByRequestId('session:fable-1')
+    expect(fable!.inputCostUsd).toBeCloseTo((1000 * 10.0) / 1_000_000, 10)
+    expect(fable!.outputCostUsd).toBeCloseTo((500 * 50.0) / 1_000_000, 10)
+    expect(fable!.cacheReadCostUsd).toBeCloseTo((200 * 1.0) / 1_000_000, 10)
+    expect(fable!.cacheCreationCostUsd).toBeCloseTo((100 * 12.5) / 1_000_000, 10)
+    expect(fable!.totalCostUsd).toBeCloseTo(
+      fable!.inputCostUsd + fable!.outputCostUsd + fable!.cacheReadCostUsd + fable!.cacheCreationCostUsd,
+      10,
+    )
+
+    // 中转自定义模型名匹配不到价格 → 保持 0
+    const relay = await eventRepo.findByRequestId('session:relay-1')
+    expect(relay!.totalCostUsd).toBe(0)
+
+    // 幂等：第二次运行没有可更新行
+    const second = await ingest.recostZeroCostEvents()
+    expect(second).toBe(0)
+  })
 })

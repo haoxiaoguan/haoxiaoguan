@@ -30,6 +30,27 @@ import type {
 import type { ModelPricingEntity } from './model-pricing.entity'
 import type { PricingConfigEntity } from './pricing-config.entity'
 
+/** 零费用候选行（回填重算用的最小投影）。 */
+export interface ZeroCostEventRow {
+  requestId: string
+  agentId: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+}
+
+/** 单条事件的费用更新。 */
+export interface EventCostUpdate {
+  requestId: string
+  inputCostUsd: number
+  outputCostUsd: number
+  cacheReadCostUsd: number
+  cacheCreationCostUsd: number
+  totalCostUsd: number
+}
+
 export class MikroOrmUsageEventRepository {
   private readonly getEm: () => EntityManager
 
@@ -311,6 +332,63 @@ export class MikroOrmUsageEventRepository {
       return { rows: mapped, nextCursor }
     }
     return { rows: mapped }
+  }
+
+  /**
+   * 列出"费用为 0 但有 token"的事件（定价缺失时写入的历史行）。
+   * 供定价表补充条目后的启动回填重算使用。
+   */
+  async listZeroCostEvents(): Promise<ZeroCostEventRow[]> {
+    const conn = this.getEm().getConnection()
+    const rows = (await conn.execute(
+      `SELECT request_id, agent_id, model, input_tokens, output_tokens,
+              cache_read_tokens, cache_creation_tokens
+       FROM usage_events
+       WHERE total_cost_usd = 0
+         AND (input_tokens + output_tokens) > 0
+         AND model IS NOT NULL AND model != ''`,
+      [],
+      'all',
+    )) as Array<Record<string, unknown>>
+    return rows.map((r) => ({
+      requestId: String(r.request_id),
+      agentId: String(r.agent_id),
+      model: String(r.model),
+      inputTokens: Number(r.input_tokens),
+      outputTokens: Number(r.output_tokens),
+      cacheReadTokens: Number(r.cache_read_tokens),
+      cacheCreationTokens: Number(r.cache_creation_tokens),
+    }))
+  }
+
+  /** 批量更新事件费用（分块事务，块间让出事件循环）。返回更新条数。 */
+  async updateEventCosts(updates: EventCostUpdate[]): Promise<number> {
+    if (updates.length === 0) return 0
+    const conn = this.getEm().getConnection()
+    const CHUNK = 500
+    let updated = 0
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      const chunk = updates.slice(i, i + CHUNK)
+      await conn.execute('BEGIN')
+      try {
+        for (const u of chunk) {
+          await conn.execute(
+            `UPDATE usage_events SET
+               input_cost_usd = ?, output_cost_usd = ?,
+               cache_read_cost_usd = ?, cache_creation_cost_usd = ?, total_cost_usd = ?
+             WHERE request_id = ?`,
+            [u.inputCostUsd, u.outputCostUsd, u.cacheReadCostUsd, u.cacheCreationCostUsd, u.totalCostUsd, u.requestId],
+          )
+          updated++
+        }
+        await conn.execute('COMMIT')
+      } catch (err) {
+        await conn.execute('ROLLBACK')
+        throw err
+      }
+      if (i + CHUNK < updates.length) await new Promise((resolve) => setImmediate(resolve))
+    }
+    return updated
   }
 
   /** 获取单条明细。 */

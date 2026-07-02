@@ -1,4 +1,4 @@
-// 生成文件——模型定价数据（USD / 每百万 token），从 cc-switch model_pricing 表导出（148 条）。
+// 生成文件——模型定价数据（USD / 每百万 token），从 cc-switch model_pricing 表导出（150 条）。
 // 口径与 cc-switch 一致；如需调整价格直接改这里（纯数据，无副作用）。
 // inP=input, outP=output, crP=cache_read, ccP=cache_creation（单位：美元/百万 token）。
 
@@ -13,6 +13,7 @@ export interface ModelPriceRow {
 export const MODEL_PRICING: ReadonlyArray<ModelPriceRow> = [
   { id: "claude-3-5-haiku-20241022", inP: 0.8, outP: 4.0, crP: 0.08, ccP: 1.0 },
   { id: "claude-3-5-sonnet-20241022", inP: 3.0, outP: 15.0, crP: 0.3, ccP: 3.75 },
+  { id: "claude-fable-5", inP: 10.0, outP: 50.0, crP: 1.0, ccP: 12.5 },
   { id: "claude-haiku-4-5-20251001", inP: 1.0, outP: 5.0, crP: 0.1, ccP: 1.25 },
   { id: "claude-opus-4-1-20250805", inP: 15.0, outP: 75.0, crP: 1.5, ccP: 18.75 },
   { id: "claude-opus-4-20250514", inP: 15.0, outP: 75.0, crP: 1.5, ccP: 18.75 },
@@ -23,6 +24,8 @@ export const MODEL_PRICING: ReadonlyArray<ModelPriceRow> = [
   { id: "claude-sonnet-4-20250514", inP: 3.0, outP: 15.0, crP: 0.3, ccP: 3.75 },
   { id: "claude-sonnet-4-5-20250929", inP: 3.0, outP: 15.0, crP: 0.3, ccP: 3.75 },
   { id: "claude-sonnet-4-6-20260217", inP: 3.0, outP: 15.0, crP: 0.3, ccP: 3.75 },
+  // Sonnet 5 介绍价（至 2026-08-31）；2026-09-01 起官方标准价为 3.0/15.0/0.3/3.75。
+  { id: "claude-sonnet-5", inP: 2.0, outP: 10.0, crP: 0.2, ccP: 2.5 },
   { id: "codestral-2508", inP: 0.3, outP: 0.9, crP: 0.03, ccP: 0.0 },
   { id: "codex-mini", inP: 0.75, outP: 3.0, crP: 0.025, ccP: 0.0 },
   { id: "command-a", inP: 2.5, outP: 10.0, crP: 0.0, ccP: 0.0 },

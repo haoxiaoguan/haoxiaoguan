@@ -46,6 +46,10 @@ import { ValidationService as CredentialValidationService } from './contexts/cre
 import { MikroOrmQuotaCacheRepository } from './contexts/quota/infrastructure/mikro-orm-quota-cache-repository'
 import { MikroOrmQuotaStateRepository } from './contexts/quota/infrastructure/mikro-orm-quota-state-repository'
 import { HttpLiveQuotaFetcher } from './contexts/quota/infrastructure/http/http-live-quota-fetcher'
+import {
+  consumeResetCredit as consumeCodexResetCredit,
+  fetchResetCredits as fetchCodexResetCredits,
+} from './contexts/quota/infrastructure/http/codex'
 import { QuotaApplicationService } from './contexts/quota/application/quota-service'
 
 // Skill context.
@@ -333,6 +337,10 @@ export async function buildContainer(): Promise<Container> {
     quotaFetcher,
     undefined,
     proxyResolver,
+    // Codex 主动重置额度消耗（POST rate-limit-reset-credits/consume）。
+    (credential, profilePayload) => consumeCodexResetCredit(credential, profilePayload),
+    // Codex 主动重置券明细查询（GET rate-limit-reset-credits，hover 展示过期时间）。
+    (credential, profilePayload) => fetchCodexResetCredits(credential, profilePayload),
   )
 
   // 4d. Account validation / health — wired to the REAL capability registry
@@ -393,6 +401,14 @@ export async function buildContainer(): Promise<Container> {
     await seedModelPricing(getEm())
   } catch (e) {
     console.error('[analytics] seed pricing failed:', e)
+  }
+  // 零费用回填：定价条目补齐后（如 claude-fable-5），把历史 cost=0 的事件重算。
+  // 天然幂等（重算后 cost>0 不再命中筛选），每次启动跑一遍以自愈后续新增的定价条目。
+  try {
+    const recosted = await analyticsIngest.recostZeroCostEvents()
+    if (recosted > 0) console.log(`[analytics] recost backfill: ${recosted} zero-cost events repriced`)
+  } catch (e) {
+    console.error('[analytics] recost backfill failed:', e)
   }
   // 一次性维护（analytics_meta 标志位防重复）：
   //  (a) 重置 per-file 游标 → 让首次 syncAll 全量重读历史日志写入 usage_events

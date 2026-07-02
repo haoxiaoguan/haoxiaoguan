@@ -12,17 +12,17 @@ afterEach(async () => {
 })
 
 describe('model_pricing + pricing_config 实体与 seed', () => {
-  it('建表后 seed 148 条定价数据', async () => {
+  it('建表后 seed 150 条定价数据', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hxg-pricing-'))
     const dbFile = join(dir, 'test.db')
     await initDatabase({ dbName: dbFile, createSchemaOnInit: true })
     const em = getEm()
 
     const inserted = await seedModelPricing(em)
-    expect(inserted).toBe(148)
+    expect(inserted).toBe(150)
 
     const count = await em.count(ModelPricingEntity, {})
-    expect(count).toBe(148)
+    expect(count).toBe(150)
   })
 
   it('seed 幂等：重复执行不重复插入', async () => {
@@ -36,7 +36,7 @@ describe('model_pricing + pricing_config 实体与 seed', () => {
     expect(secondRun).toBe(0)
 
     const count = await em.count(ModelPricingEntity, {})
-    expect(count).toBe(148)
+    expect(count).toBe(150)
   })
 
   it('pricing_config 表可读写默认值', async () => {

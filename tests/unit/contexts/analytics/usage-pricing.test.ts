@@ -6,6 +6,7 @@ import {
   type TokenSums,
 } from '../../../../src/main/contexts/analytics/domain/usage-pricing'
 import type { ModelPricingRow, PricingConfig } from '../../../../src/main/contexts/analytics/domain/usage-event'
+import { MODEL_PRICING } from '../../../../src/main/contexts/usage/domain/model-pricing-data'
 
 const PRICING_ROWS: ModelPricingRow[] = [
   {
@@ -101,5 +102,42 @@ describe('usage-pricing 定价计算', () => {
     expect(findPrice('gpt-5.5', INDEX)).toBeNull()
     // gpt-5-codex 精确命中
     expect(findPrice('gpt-5-codex', INDEX)).not.toBeNull()
+  })
+
+  it('内置定价表包含 claude-fable-5，且各变体名都能命中', () => {
+    const index = buildPricingIndex(
+      MODEL_PRICING.map((r) => ({
+        modelId: r.id,
+        displayName: r.id,
+        inputCostPerMillion: r.inP,
+        outputCostPerMillion: r.outP,
+        cacheReadCostPerMillion: r.crP,
+        cacheCreationCostPerMillion: r.ccP,
+      })),
+    )
+
+    // 官方 API 定价：$10 in / $50 out / $1 cache-read / $12.5 cache-write（每百万 token）
+    const exact = findPrice('claude-fable-5', index)
+    expect(exact).not.toBeNull()
+    expect(exact!.inputCostPerMillion).toBe(10.0)
+    expect(exact!.outputCostPerMillion).toBe(50.0)
+    expect(exact!.cacheReadCostPerMillion).toBe(1.0)
+    expect(exact!.cacheCreationCostPerMillion).toBe(12.5)
+
+    // reasoning/effort 后缀变体经归一剥离后应命中同一条目
+    for (const variant of [
+      'claude-fable-5-thinking',
+      'claude-fable-5-thinking-max',
+      'claude-fable-5-high',
+      'Claude-Fable-5',
+    ]) {
+      expect(findPrice(variant, index)?.modelId).toBe('claude-fable-5')
+    }
+
+    // sonnet-5 同批补充（介绍价 $2/$10）
+    const sonnet5 = findPrice('claude-sonnet-5', index)
+    expect(sonnet5).not.toBeNull()
+    expect(sonnet5!.inputCostPerMillion).toBe(2.0)
+    expect(sonnet5!.outputCostPerMillion).toBe(10.0)
   })
 })

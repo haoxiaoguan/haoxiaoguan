@@ -13,10 +13,10 @@
  */
 import type { ProxyRequestRecord } from '../../apiProxy/domain/observability/proxy-request-log'
 import type { UsageRecord } from '../../usage/domain/usage-record'
-import type { MikroOrmUsageEventRepository } from '../infrastructure/mikro-orm-usage-event-repository'
+import type { MikroOrmUsageEventRepository, EventCostUpdate } from '../infrastructure/mikro-orm-usage-event-repository'
 import type { MikroOrmPricingRepository } from '../infrastructure/mikro-orm-pricing-repository'
 import { detectAgent } from './agent-detector'
-import { buildPricingIndex, calculateForAgent } from '../domain/usage-pricing'
+import { buildPricingIndex, calculateForAgent, findPrice } from '../domain/usage-pricing'
 import type { UsageEvent, ModelPricingRow, PricingConfig } from '../domain/usage-event'
 
 const BUFFER_CAP = 5000
@@ -182,6 +182,42 @@ export class UsageEventIngestService {
   /** 当前缓冲待写入条数（诊断用）。 */
   pendingCount(): number {
     return this.buffer.length
+  }
+
+  /**
+   * 历史零费用回填：对"费用=0 但有 token"的存量事件重算费用。
+   *
+   * 事件写入时若定价表还没有该模型的条目（如 claude-fable-5 上线初期），
+   * cost 会以 0 落库且不会再被触碰。定价表补充条目后在启动时调用本方法，
+   * 只有当前能匹配到价格的行才会被更新——天然幂等（更新后 cost>0 不再命中筛选），
+   * 匹配不到价格的行保持 0 等待未来的条目。返回实际更新条数。
+   */
+  async recostZeroCostEvents(): Promise<number> {
+    const index = await this.ensurePricingIndex()
+    const candidates = await this.eventRepo.listZeroCostEvents()
+    if (candidates.length === 0) return 0
+
+    const updates: EventCostUpdate[] = []
+    for (const row of candidates) {
+      if (findPrice(row.model, index) === null) continue
+      const config = await this.ensureConfig(row.agentId)
+      const cost = calculateForAgent(row.agentId, row.model, {
+        inputTokens: row.inputTokens,
+        outputTokens: row.outputTokens,
+        cacheReadTokens: row.cacheReadTokens,
+        cacheCreationTokens: row.cacheCreationTokens,
+      }, index, config)
+      if (cost.totalCostUsd === 0) continue
+      updates.push({
+        requestId: row.requestId,
+        inputCostUsd: cost.inputCostUsd,
+        outputCostUsd: cost.outputCostUsd,
+        cacheReadCostUsd: cost.cacheReadCostUsd,
+        cacheCreationCostUsd: cost.cacheCreationCostUsd,
+        totalCostUsd: cost.totalCostUsd,
+      })
+    }
+    return this.eventRepo.updateEventCosts(updates)
   }
 
   private pushToBuffer(event: UsageEvent): void {
