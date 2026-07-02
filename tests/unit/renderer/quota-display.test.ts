@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Account, AccountQuotaState } from '@/types';
 import { metricLines } from '@/components/accounts/quota-display';
 
@@ -25,6 +25,10 @@ const codexAccount: Account = {
 };
 
 describe('quota-display', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('does not render null quota pairs from persisted metric data', () => {
     const state: AccountQuotaState = {
       version: 1,
@@ -97,6 +101,9 @@ describe('quota-display', () => {
   });
 
   it('builds screenshot-style fields for a credit metric (percent, used/total, reset date)', () => {
+    // resetText 依赖当前时间（倒计时 + "已重置"判定），固定系统时间保证稳定。
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T12:00:00.000Z'));
     const state: AccountQuotaState = {
       version: 1,
       status: 'ok',
