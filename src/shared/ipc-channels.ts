@@ -85,6 +85,7 @@ export const ACCOUNT_CHANNELS = {
   updateAccount: 'account:updateAccount',
   reauthenticate: 'account:reauthenticate',
   refundCursor: 'account:refundCursor',
+  openCursorCheckout: 'account:openCursorCheckout',
   getAccountHealth: 'account:getAccountHealth',
   validateCredential: 'account:validateCredential',
   validateBatch: 'account:validateBatch',

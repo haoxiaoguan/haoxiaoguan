@@ -12,6 +12,11 @@ import {
 import type { AccountRepository } from '../domain/account-repository'
 import type { CredentialStorePort } from '../domain/ports'
 import type { CursorRefundFn, CursorRefundResult } from '../domain/cursor-refund'
+import type {
+  CursorCheckoutFn,
+  CursorCheckoutTarget,
+  CursorCheckoutTier,
+} from '../domain/cursor-checkout'
 import { SwitchService } from './switch-service'
 import {
   type ConflictStrategy,
@@ -45,6 +50,8 @@ export class AccountApplicationService {
     private readonly switchService: SwitchService,
     // Cursor 一键退款能力（可选注入）。缺省未配置时 refundCursorAccount 抛错。
     private readonly cursorRefund?: CursorRefundFn,
+    // Cursor 充值开窗能力（可选注入）。缺省未配置时 openCursorCheckout 抛错。
+    private readonly cursorCheckout?: CursorCheckoutFn,
   ) {}
 
   /**
@@ -228,6 +235,40 @@ export class AccountApplicationService {
       throw AccountError.notFound('Credential', accountId)
     }
     return this.cursorRefund(credential)
+  }
+
+  /**
+   * Cursor 充值：打开对应档位（pro/pro_plus/ultra）的结账页。
+   *   - target='embedded'：解密账号凭证 → 内嵌窗口注入登录 cookie 免登录直达本号结账；
+   *   - target='chrome'：用系统 Chrome 打开（充值 Chrome 里登录的账号，无需本号凭证）。
+   * 仅 Cursor 账号；付款由用户在结账页完成。
+   */
+  async openCursorCheckout(
+    accountId: string,
+    tier: CursorCheckoutTier,
+    target: CursorCheckoutTarget,
+  ): Promise<void> {
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) {
+      throw AccountError.notFound('Account', accountId)
+    }
+    const platform = parsePlatformAgent(account.agentId)
+    if (platform !== 'cursor') {
+      throw AccountError.invalidCredentialFormat('充值仅支持 Cursor 账号')
+    }
+    if (this.cursorCheckout === undefined) {
+      throw AccountError.repositoryError('Cursor 充值能力未配置')
+    }
+    // 内嵌免登录需要本号 access token；用 Chrome 打开走浏览器登录态，无需解密。
+    let accessToken = ''
+    if (target === 'embedded') {
+      const credential = await this.credentialStore.retrieve(accountId)
+      if (credential === null) {
+        throw AccountError.notFound('Credential', accountId)
+      }
+      accessToken = credential.token
+    }
+    await this.cursorCheckout({ accessToken, tier, target })
   }
 
   /**

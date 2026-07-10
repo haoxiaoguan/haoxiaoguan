@@ -4,7 +4,13 @@
  * groups now call the Electron `window.api.*` bridge directly.
  */
 import { bridge } from './bridge';
-import type { CursorRefundResult, TimeWindowDto, TrendGranularityDto } from '@shared/api-types';
+import type {
+  CursorCheckoutTarget,
+  CursorCheckoutTier,
+  CursorRefundResult,
+  TimeWindowDto,
+  TrendGranularityDto,
+} from '@shared/api-types';
 
 // ============================================================================
 // Account Commands
@@ -44,6 +50,10 @@ export const accountService = {
   /** Cursor 一键退款(不可逆:退款后订阅转 Free、token 失效)。仅 Cursor 账号。 */
   refundCursor: (accountId: string) =>
     bridge().account.refundCursor(accountId) as Promise<CursorRefundResult>,
+
+  /** Cursor 充值:打开对应档位结账页(embedded=内嵌窗口免登录本号 / chrome=系统 Chrome)。 */
+  openCursorCheckout: (accountId: string, tier: CursorCheckoutTier, target: CursorCheckoutTarget) =>
+    bridge().account.openCursorCheckout(accountId, tier, target) as Promise<void>,
 
   deleteAccount: (accountId: string) =>
     bridge().account.deleteAccount(accountId),

@@ -186,6 +186,7 @@
     "refresh": "刷新",
     "export": "导出",
     "refund": "退款",
+    "recharge": "充值",
     "cancel": "取消",
     "viewDetail": "查看详情",
     "batchDelete": "批量删除",
@@ -205,6 +206,21 @@
     "alreadyFree": "该账号当前已是 Free，无需退款",
     "limited": "操作过于频繁，请稍后再试",
     "failed": "退款失败"
+  },
+  "recharge": {
+    "title": "充值 / 升级 Cursor",
+    "desc": "选择要开通的档位，然后打开结账页完成付款。",
+    "note": "「内嵌窗口」免登录、精确对应本账号；「用 Chrome 打开」充值的是 Chrome 里当前登录的账号。付款信息需你在结账页自行填写。",
+    "tier": {
+      "pro": "Pro",
+      "pro_plus": "Pro+",
+      "ultra": "Ultra"
+    },
+    "openEmbedded": "内嵌窗口(免登录)",
+    "openChrome": "用 Chrome 打开",
+    "opening": "打开中…",
+    "opened": "已打开结账页",
+    "failed": "打开充值页失败"
   },
   "tooltips": {
     "add": "添加账号",
