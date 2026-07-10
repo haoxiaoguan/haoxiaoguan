@@ -6,6 +6,7 @@ import { parsePlatform } from '../domain/platform-id'
 import type { JsonValue } from '../domain/platform-account-profile'
 import type { AccountApplicationService } from '../application/account-service'
 import type { CursorRefundResult } from '../domain/cursor-refund'
+import type { CursorCheckoutTarget, CursorCheckoutTier } from '../domain/cursor-checkout'
 import type { SwitchOrchestrator } from '../application/switch-orchestrator'
 import type { ValidationService } from '../application/validation-service'
 import type { AccountHealthService } from '../application/health-service'
@@ -325,6 +326,22 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
     async (_e, args: { accountId: string }): Promise<CursorRefundResult> => {
       try {
         return await accountService.refundCursorAccount(args.accountId)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
+  // open_cursor_checkout — args: { accountId, tier, target } → void。打开 Cursor 充值页
+  // （embedded=内嵌窗口注入 cookie 免登录本号；chrome=系统 Chrome 用其登录态）。
+  ipcMain.handle(
+    ACCOUNT_CHANNELS.openCursorCheckout,
+    async (
+      _e,
+      args: { accountId: string; tier: CursorCheckoutTier; target: CursorCheckoutTarget },
+    ): Promise<void> => {
+      try {
+        await accountService.openCursorCheckout(args.accountId, args.tier, args.target)
       } catch (e) {
         throw new Error(toIpcError(e))
       }

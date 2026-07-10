@@ -498,9 +498,9 @@
     },
     "support_panel": {
       "title": "Join the community",
-      "desc": "Scan to join our group for help and updates.",
-      "wechat": "WeChat Group",
-      "qq": "QQ Group"
+      "desc": "Scan to join our QQ group, or support the author.",
+      "qq": "QQ Group",
+      "reward": "Support the author"
     },
     "update": {
       "title": "Software update",

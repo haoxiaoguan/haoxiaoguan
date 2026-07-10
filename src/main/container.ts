@@ -23,6 +23,7 @@ import { SwitchService } from './contexts/account/application/switch-service'
 import { CodexSwitchLifecycle } from './contexts/account/infrastructure/codex-switch-lifecycle'
 import { CodexCredentialRefresher } from './contexts/account/infrastructure/codex-credential-refresher'
 import { refundCursorCredential } from './contexts/account/infrastructure/cursor-refund-client'
+import { openCursorCheckout } from './contexts/account/infrastructure/cursor-checkout-opener'
 import { createCursorProcessControl } from './contexts/account/infrastructure/cursor-process'
 import { CursorSwitchLifecycle } from './contexts/account/infrastructure/cursor-switch-lifecycle'
 import { SwitchOrchestrator } from './contexts/account/application/switch-orchestrator'
@@ -288,6 +289,8 @@ export async function buildContainer(): Promise<Container> {
     switchService,
     // Cursor 一键退款：解密凭证后交给退款客户端调 KC 后端（对齐 9router/tk.sh）。
     (credential) => refundCursorCredential(credential),
+    // Cursor 充值：打开对应档位结账页（内嵌窗口注入 cookie 免登录 / 系统 Chrome）。
+    (params) => openCursorCheckout(params),
   )
   const accountSwitchOrchestrator = new SwitchOrchestrator(
     accountRepo,

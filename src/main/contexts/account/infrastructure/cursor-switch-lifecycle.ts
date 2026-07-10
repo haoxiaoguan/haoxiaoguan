@@ -9,11 +9,11 @@ import type { CursorProcessControl } from './cursor-process'
 // 重开 Cursor 要求重新登录（这正是与 cockpit 未对齐处：号小管此前只对 codex 接了
 // 停-写-启，cursor 缺失）。
 //
-// 与 codex 的差异：cursor 不设「切换后自动启动」开关，改为「只在切换前它确实在运行时
-// 才重启」——用户本就开着 Cursor 才停+拉回；本来没开则只注入、由用户下次自己打开时读到
-// 新登录态（避免无谓地弹出 Cursor 窗口）。
+// 拉起策略对齐 cockpit：cursor_start_instance 里 start_cursor 是**无条件**的——不管切换前
+// Cursor 有没有在运行，注入后都拉起 Cursor（让它读到注入后的 state.vscdb 显示新账号）。
+// 运行中的先停掉再启（停-写-启）；没在运行的也启（否则用户看不到切换效果、以为切号无效）。
 
-// 对齐 cockpit close_cursor(20)：刚拉起的 Cursor 对 quit 的响应可能较慢，给足超时。
+// 对齐 cockpit close_cursor(20)：刚拉起的 Cursor 对退出的响应可能较慢，给足超时。
 const DEFAULT_QUIT_TIMEOUT_MS = 20000
 
 export class CursorSwitchLifecycle implements PlatformSwitchLifecycle {
@@ -25,20 +25,19 @@ export class CursorSwitchLifecycle implements PlatformSwitchLifecycle {
   ) {}
 
   async beforeInject(): Promise<SwitchLifecycleToken> {
-    if (!(await this.control.isRunning())) {
-      // 没在运行：只注入，不主动拉起（用户下次自己打开时读到新态）。
-      return { relaunch: false }
+    // 运行中的先停掉（否则写完被运行中的 Cursor 反写回旧账号）；停不掉则中止切换。
+    if (await this.control.isRunning()) {
+      const exited = await this.control.quit(this.quitTimeoutMs)
+      if (!exited) {
+        throw new Error('Cursor 仍在运行且无法退出，切换已中止。请手动完全退出 Cursor 后重试。')
+      }
     }
-    const exited = await this.control.quit(this.quitTimeoutMs)
-    if (!exited) {
-      // 停不掉就中止切换：否则写完被运行中的 Cursor 反写回旧账号，看似切了实际没切。
-      throw new Error('Cursor 仍在运行且无法退出，切换已中止。请手动完全退出 Cursor 后重试。')
-    }
+    // 无论之前是否在运行，注入后都拉起 Cursor（对齐 cockpit 的无条件 start_cursor）。
     return { relaunch: true }
   }
 
   async afterInject(token: SwitchLifecycleToken): Promise<void> {
-    // 只重启我们停过的（切换前在运行的）Cursor，让它重读注入后的 state.vscdb。
+    // 注入后拉起 Cursor，让它重读注入后的 state.vscdb 显示新账号。
     if (token.relaunch) await this.control.launch(this.appPath())
   }
 }

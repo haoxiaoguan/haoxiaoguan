@@ -145,6 +145,10 @@ export interface CursorRefundResult {
   sponsorUrl?: string
 }
 
+/** Cursor 充值档位 / 打开方式（对应主进程 account/domain/cursor-checkout）。 */
+export type CursorCheckoutTier = 'pro' | 'pro_plus' | 'ultra'
+export type CursorCheckoutTarget = 'embedded' | 'chrome'
+
 export interface HxgApi {
   settings: {
     getSettings(): Promise<SettingsResponse>
@@ -203,6 +207,12 @@ export interface HxgApi {
     ): Promise<AccountResponse>
     /** Cursor 一键退款(不可逆:退款后订阅转 Free、token 失效)。仅 Cursor 账号。 */
     refundCursor(accountId: string): Promise<CursorRefundResult>
+    /** Cursor 充值:打开对应档位结账页(embedded=内嵌窗口免登录本号 / chrome=系统 Chrome)。 */
+    openCursorCheckout(
+      accountId: string,
+      tier: CursorCheckoutTier,
+      target: CursorCheckoutTarget,
+    ): Promise<void>
     validateCredential(accountId: string): Promise<CredentialValidationResult>
     getAccountHealth(accountId: string): Promise<HealthSnapshot>
     validateBatch(

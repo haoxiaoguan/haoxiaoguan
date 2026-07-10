@@ -498,9 +498,9 @@
     },
     "support_panel": {
       "title": "加入社群",
-      "desc": "扫码加入交流群，获取使用帮助与最新动态。",
-      "wechat": "微信群",
-      "qq": "QQ 群"
+      "desc": "扫码加入 QQ 群交流，或打赏支持作者。",
+      "qq": "QQ 群",
+      "reward": "打赏作者"
     },
     "update": {
       "title": "软件更新",

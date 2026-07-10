@@ -1,13 +1,14 @@
 import { useTranslation } from 'react-i18next';
-import { SampleQRCode } from '@/components/ui/sample-qrcode';
+import qunQr from '@/assets/brand/qun.png';
+import dashangQr from '@/assets/brand/dashang.png';
 
-/** 支持图标的 hover 浮层：微信群 / QQ 群二维码（示例占位）。 */
+/** 支持图标的 hover 浮层：拆两块——左「QQ 群」二维码(qun.png) / 右「打赏作者」二维码(dashang.png)。 */
 export function SupportPopover() {
   const { t } = useTranslation();
 
-  const groups = [
-    { key: 'wechat', label: t('nav:shell.support_panel.wechat'), seed: 'haoxiaoguan-wechat' },
-    { key: 'qq', label: t('nav:shell.support_panel.qq'), seed: 'haoxiaoguan-qq' },
+  const blocks = [
+    { key: 'qq', label: t('nav:shell.support_panel.qq'), src: qunQr },
+    { key: 'reward', label: t('nav:shell.support_panel.reward'), src: dashangQr },
   ];
 
   return (
@@ -15,10 +16,14 @@ export function SupportPopover() {
       <p className="text-sm font-semibold">{t('nav:shell.support_panel.title')}</p>
       <p className="mt-1 text-xs text-muted-foreground">{t('nav:shell.support_panel.desc')}</p>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        {groups.map((g) => (
-          <div key={g.key} className="flex flex-col items-center gap-1.5">
-            <SampleQRCode seed={g.seed} size={112} className="border border-border/50" />
-            <span className="text-xs text-muted-foreground">{g.label}</span>
+        {blocks.map((b) => (
+          <div key={b.key} className="flex flex-col items-center gap-1.5">
+            <img
+              src={b.src}
+              alt={b.label}
+              className="aspect-square w-full max-w-[120px] rounded border border-border/50 bg-white object-contain"
+            />
+            <span className="text-xs text-muted-foreground">{b.label}</span>
           </div>
         ))}
       </div>

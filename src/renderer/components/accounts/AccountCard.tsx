@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Chrome,
   Copy,
+  CreditCard,
   Github,
   KeyRound,
   Mail,
@@ -34,6 +35,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { cn } from '@/lib/utils'
 import { useAccountStore, useHealthStore, useQuotaStateStore } from '../../stores'
 import { accountService, quotaService } from '../../services/tauri'
+import type { CursorCheckoutTarget, CursorCheckoutTier } from '@shared/api-types'
 import type { Account, CodexResetCredits } from '../../types'
 import {
   accountPlanLabel,
@@ -126,6 +128,10 @@ function AccountCard(props: AccountCardProps) {
   const isCursor = props.account.platform === 'cursor'
   const [refundConfirmOpen, setRefundConfirmOpen] = useState(false)
   const [refunding, setRefunding] = useState(false)
+  // Cursor 充值：卡片按钮 → 弹窗选 Pro/Pro+/Ultra → 内嵌窗口(免登录本号)或系统 Chrome 打开结账。
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [checkoutTier, setCheckoutTier] = useState<CursorCheckoutTier>('pro')
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
 
   const handleConsumeReset = () => {
     setResetting(true)
@@ -176,6 +182,22 @@ function AccountCard(props: AccountCardProps) {
         })
       })
       .finally(() => setRefunding(false))
+  }
+
+  const handleCheckout = (target: CursorCheckoutTarget) => {
+    setCheckoutBusy(true)
+    accountService
+      .openCursorCheckout(props.account.id, checkoutTier, target)
+      .then(() => {
+        setCheckoutOpen(false)
+        toast.success(t('recharge.opened'))
+      })
+      .catch((error: unknown) => {
+        toast.error(t('recharge.failed'), {
+          description: error instanceof Error ? error.message : String(error),
+        })
+      })
+      .finally(() => setCheckoutBusy(false))
   }
 
   const handleRefresh = () => {
@@ -365,6 +387,13 @@ function AccountCard(props: AccountCardProps) {
           )}
           {isCursor && (
             <IconAction
+              label={t('actions.recharge')}
+              icon={CreditCard}
+              onClick={() => setCheckoutOpen(true)}
+            />
+          )}
+          {isCursor && (
+            <IconAction
               label={t('actions.refund')}
               icon={BadgeDollarSign}
               disabled={refunding}
@@ -420,6 +449,47 @@ function AccountCard(props: AccountCardProps) {
             >
               {refunding ? t('refund.processing') : t('refund.confirm')}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('recharge.title')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('recharge.desc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-3 gap-2 py-1">
+            {(['pro', 'pro_plus', 'ultra'] as const).map((tier) => (
+              <button
+                key={tier}
+                type="button"
+                onClick={() => setCheckoutTier(tier)}
+                className={cn(
+                  'rounded-[8px] border px-2 py-2 text-[12.5px] font-medium transition-colors',
+                  checkoutTier === tier
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-foreground/80 hover:bg-muted/60',
+                )}
+              >
+                {t(`recharge.tier.${tier}`)}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11.5px] leading-relaxed text-muted-foreground">{t('recharge.note')}</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={checkoutBusy}>{t('actions.cancel')}</AlertDialogCancel>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={checkoutBusy}
+              onClick={() => handleCheckout('chrome')}
+            >
+              {t('recharge.openChrome')}
+            </Button>
+            <Button size="sm" disabled={checkoutBusy} onClick={() => handleCheckout('embedded')}>
+              {checkoutBusy ? t('recharge.opening') : t('recharge.openEmbedded')}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

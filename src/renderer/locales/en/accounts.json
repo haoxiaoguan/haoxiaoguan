@@ -186,6 +186,7 @@
     "refresh": "Refresh",
     "export": "Export",
     "refund": "Refund",
+    "recharge": "Upgrade",
     "cancel": "Cancel",
     "viewDetail": "Detail",
     "batchDelete": "Delete selected",
@@ -205,6 +206,21 @@
     "alreadyFree": "This account is already Free — nothing to refund",
     "limited": "Too many requests, please try again later",
     "failed": "Refund failed"
+  },
+  "recharge": {
+    "title": "Upgrade Cursor",
+    "desc": "Pick a plan, then open the checkout page to complete payment.",
+    "note": "\"In-app window\" opens logged in as THIS account, no sign-in needed. \"Open in Chrome\" uses whichever Cursor account is signed into Chrome. You enter payment details on the checkout page.",
+    "tier": {
+      "pro": "Pro",
+      "pro_plus": "Pro+",
+      "ultra": "Ultra"
+    },
+    "openEmbedded": "In-app window (no login)",
+    "openChrome": "Open in Chrome",
+    "opening": "Opening…",
+    "opened": "Checkout page opened",
+    "failed": "Failed to open checkout"
   },
   "tooltips": {
     "add": "Add account",
