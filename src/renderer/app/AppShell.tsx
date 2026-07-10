@@ -242,7 +242,14 @@ export function AppShell({ shell }: AppShellProps) {
             description: event.message,
           });
       }
-      void useQuotaStateStore.getState().pull([event.accountId]);
+      // 用在线刷新（非只读缓存 pull）：refreshQuota 在调退款消费者之前就存了退款前的 exhausted
+      // 快照，pull 只会读回那个旧态、卡片仍显示 Pro/额度耗尽。refresh 走一次真刷拿退款后的新态
+      // （订阅转 Free / 额度重置）。重入安全：退款消费者被在途锁 + autoRefundStatus 终态 + Free 会员
+      // 三重门控挡住，不会重复退、不成环。
+      void useQuotaStateStore
+        .getState()
+        .refresh(event.accountId)
+        .catch(() => {});
     });
     return unsub;
   }, [tAccounts]);
