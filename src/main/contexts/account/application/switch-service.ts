@@ -1,5 +1,7 @@
 import type { Account } from '../domain/account'
 import { AccountError } from '../domain/account-error'
+import { Credential } from '../domain/credential'
+import type { JsonValue } from '../domain/platform-account-profile'
 import { platformFromAgentIdOrCursor } from '../domain/platform-id'
 import type {
   CredentialStorePort,
@@ -65,11 +67,18 @@ export class SwitchService {
 
     // 5. Inject, bracketed by the platform lifecycle（beforeInject 停不掉运行中
     //    的 App 会抛错中止；afterInject 在注入失败时也执行，恢复用户的 App）。
+    // Cursor 靠 cursorAuth/cachedEmail 显示当前账号。OAuth/Google 导入的凭证元数据里没有该
+    // 字段，只从元数据取会漏 → 切号后 cachedEmail 残留上一个账号（accessToken 已切、显示没变，
+    // 看着像没切）。用账号权威 email（heal 后的真实邮箱）兜底写入，对齐 cockpit 无条件写
+    // cursorAuth/cachedEmail = account.email。
+    const credForInject =
+      platform === 'cursor' ? withCursorAccountEmail(credential, account.email) : credential
+
     const lifecycle = this.lifecycles?.lifecycle(platform)
     const token = lifecycle !== undefined ? await lifecycle.beforeInject() : undefined
     let platformLaunched = false
     try {
-      await injector.inject(platform, credential)
+      await injector.inject(platform, credForInject)
     } finally {
       if (lifecycle !== undefined && token !== undefined) {
         try {
@@ -86,4 +95,27 @@ export class SwitchService {
 
     return { success: true, platformLaunched }
   }
+}
+
+function isPlainObject(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * 返回一个把账号权威 email 写进 cursor_auth_raw.cachedEmail（+ 顶层 email）的 Credential 副本，
+ * 供 Cursor 注入用（cursorAuth/cachedEmail 决定 Cursor 显示哪个账号）。email 为空则原样返回。
+ */
+function withCursorAccountEmail(credential: Credential, email: string): Credential {
+  const trimmed = email.trim()
+  if (trimmed.length === 0) return credential
+  const meta: { [key: string]: JsonValue } = isPlainObject(credential.rawMetadata)
+    ? { ...credential.rawMetadata }
+    : {}
+  const car: { [key: string]: JsonValue } = isPlainObject(meta.cursor_auth_raw)
+    ? { ...meta.cursor_auth_raw }
+    : {}
+  car.cachedEmail = trimmed
+  meta.cursor_auth_raw = car
+  meta.email = trimmed
+  return new Credential(credential.token, credential.refreshToken, credential.expiresAt, meta)
 }

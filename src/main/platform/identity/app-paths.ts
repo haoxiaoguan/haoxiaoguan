@@ -17,7 +17,7 @@ type OsKey = 'darwin' | 'win32' | 'linux'
 const CANDIDATES: Partial<Record<PlatformId, Record<OsKey, string[]>>> = {
   cursor: {
     darwin: ['/Applications/Cursor.app'],
-    win32: ['%LOCALAPPDATA%\\Programs\\Cursor\\Cursor.exe'],
+    win32: ['%LOCALAPPDATA%\\Programs\\Cursor\\Cursor.exe', '%PROGRAMFILES%\\Cursor\\Cursor.exe'],
     linux: ['/usr/bin/cursor', '/opt/cursor/cursor'],
   },
   windsurf: {

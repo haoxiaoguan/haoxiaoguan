@@ -24,12 +24,16 @@ function pickString(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim().length > 0 ? v : undefined
 }
 
-// credential.metadata 是 raw_metadata 的 JSON 串，cursor_auth_raw 里有导入时从 state.vscdb 读出的原值。
+// credential.metadata 是 raw_metadata 的 JSON 串：cursor_auth_raw 里有本地扫描导入时读出的
+// 原值；顶层字段（email/membershipType/…）是配额刷新回填的最新值。身份字段（尤其 cachedEmail）
+// 从两处兜底读取——OAuth/Google 导入的凭证 cursor_auth_raw 里没有 cachedEmail，只读它会漏，
+// 导致切号后 cursorAuth/cachedEmail 残留上一个账号（Cursor 按 cachedEmail 显示，看着像没切）。
 function extractCursorAuth(credential: DecryptedCredential): CursorAuthFields {
+  let meta: Record<string, unknown> = {}
   let raw: Record<string, unknown> = {}
   if (credential.metadata) {
     try {
-      const meta = JSON.parse(credential.metadata) as Record<string, unknown>
+      meta = JSON.parse(credential.metadata) as Record<string, unknown>
       const car = meta.cursor_auth_raw
       if (car !== null && typeof car === 'object' && !Array.isArray(car)) {
         raw = car as Record<string, unknown>
@@ -41,10 +45,16 @@ function extractCursorAuth(credential: DecryptedCredential): CursorAuthFields {
   return {
     accessToken: pickString(raw.accessToken) ?? credential.token,
     refreshToken: pickString(raw.refreshToken) ?? credential.refreshToken,
-    email: pickString(raw.cachedEmail),
-    membershipType: pickString(raw.stripeMembershipType),
-    subscriptionStatus: pickString(raw.stripeSubscriptionStatus),
-    signUpType: pickString(raw.cachedSignUpType),
+    email: pickString(raw.cachedEmail) ?? pickString(raw.email) ?? pickString(meta.email),
+    membershipType:
+      pickString(raw.stripeMembershipType) ??
+      pickString(meta.membershipType) ??
+      pickString(meta.membership_type),
+    subscriptionStatus:
+      pickString(raw.stripeSubscriptionStatus) ??
+      pickString(meta.subscriptionStatus) ??
+      pickString(meta.subscription_status),
+    signUpType: pickString(raw.cachedSignUpType) ?? pickString(meta.sign_up_type),
   }
 }
 
