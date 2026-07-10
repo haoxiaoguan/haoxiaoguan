@@ -23,6 +23,10 @@ import { SwitchService } from './contexts/account/application/switch-service'
 import { CodexSwitchLifecycle } from './contexts/account/infrastructure/codex-switch-lifecycle'
 import { CodexCredentialRefresher } from './contexts/account/infrastructure/codex-credential-refresher'
 import { refundCursorCredential } from './contexts/account/infrastructure/cursor-refund-client'
+import {
+  createCursorAutoRefundConsumer,
+  type CursorAutoRefundNotice,
+} from './contexts/account/application/cursor-auto-refund-consumer'
 import { openCursorCheckout } from './contexts/account/infrastructure/cursor-checkout-opener'
 import { createCursorProcessControl } from './contexts/account/infrastructure/cursor-process'
 import { CursorSwitchLifecycle } from './contexts/account/infrastructure/cursor-switch-lifecycle'
@@ -216,6 +220,8 @@ export interface Container extends Services {
   reloadRelayUpstreams: () => Promise<void>
   /** clientConfig relay 桥：按 profileId 建/删 relay 上游并热重载（T8）。 */
   clientConfigRelayProvisioning: RelayProvisioningPort
+  /** 设置 Cursor 自动退款通知回调（main.ts 在窗口就绪后接 webContents.send）。 */
+  setAutoRefundNotifier: (cb: (notice: CursorAutoRefundNotice) => void) => void
 }
 
 const execFileAsync = promisify(execFile)
@@ -352,6 +358,15 @@ export async function buildContainer(): Promise<Container> {
     console.warn('[quota] 孤儿 quota 行清理失败（忽略）：', e)
   }
   const quotaFetcher = new HttpLiveQuotaFetcher()
+  // Cursor「额度用尽自动退款」消费者：门控/退款/持久化在实现里；notify 需 webContents，
+  // container 无 window，故留一个可被 main.ts 在窗口就绪后设置的 notifier（对齐
+  // platformQuotaScheduler.setOnRefreshed 的做法）。默认 no-op（窗口未就绪时静默丢弃）。
+  let autoRefundNotifier: (notice: CursorAutoRefundNotice) => void = () => {}
+  const cursorAutoRefundConsumer = createCursorAutoRefundConsumer({
+    refund: (credential) => refundCursorCredential(credential),
+    saveAccount: (account) => accountRepo.save(account),
+    notify: (notice) => autoRefundNotifier(notice),
+  })
   const quotaService = new QuotaApplicationService(
     accountRepo,
     credentialStore,
@@ -364,6 +379,8 @@ export async function buildContainer(): Promise<Container> {
     (credential, profilePayload) => consumeCodexResetCredit(credential, profilePayload),
     // Codex 主动重置券明细查询（GET rate-limit-reset-credits，hover 展示过期时间）。
     (credential, profilePayload) => fetchCodexResetCredits(credential, profilePayload),
+    // Cursor 额度用尽自动退款（末参，与 codex 可选参对齐）。
+    cursorAutoRefundConsumer,
   )
 
   // 4d. Account validation / health — wired to the REAL capability registry
@@ -1106,5 +1123,8 @@ export async function buildContainer(): Promise<Container> {
     relayUpstreamRepo,
     reloadRelayUpstreams,
     clientConfigRelayProvisioning,
+    setAutoRefundNotifier: (cb) => {
+      autoRefundNotifier = cb
+    },
   }
 }

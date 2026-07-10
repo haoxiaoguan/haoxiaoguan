@@ -207,6 +207,17 @@
     "limited": "操作过于频繁，请稍后再试",
     "failed": "退款失败"
   },
+  "autoRefund": {
+    "label": "额度用尽自动退款",
+    "hint": "开启后额度耗尽将自动发起退款（不可逆：订阅立即转 Free、Token 随之失效）",
+    "toast": {
+      "success": "账号 {{account}} 已自动退款 {{amount}}",
+      "pending": "账号 {{account}} 已提交自动退款 {{amount}}，同步中",
+      "alreadyFree": "账号 {{account}} 已是 Free，无需退款",
+      "limited": "账号 {{account}} 自动退款过于频繁，请稍后再试",
+      "failed": "账号 {{account}} 自动退款失败"
+    }
+  },
   "recharge": {
     "title": "充值 / 升级 Cursor",
     "desc": "选择要开通的档位，然后打开结账页完成付款。",

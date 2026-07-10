@@ -23,6 +23,8 @@ export interface AccountResponse {
   tags: string[]
   notes?: string | undefined
   isActive: boolean
+  /** Cursor 专属「额度用尽自动退款」开关（源自 profilePayload.autoRefundEnabled，默认 false）。 */
+  autoRefundEnabled: boolean
   createdAt: string
   lastUsedAt?: string | undefined
 }
@@ -45,6 +47,7 @@ export function toAccountResponse(account: Account): AccountResponse {
     tags: [...account.tags.asSlice()],
     notes: account.notes?.asStr(),
     isActive: account.isActive,
+    autoRefundEnabled: account.autoRefundEnabled,
     createdAt: account.createdAt.toISOString(),
     lastUsedAt: account.lastUsedAt ? account.lastUsedAt.toISOString() : undefined,
   }

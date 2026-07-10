@@ -262,7 +262,19 @@ export class Account {
     return true
   }
 
+  /**
+   * Cursor 专属「额度用尽自动退款」开关。值存 profilePayload.autoRefundEnabled，
+   * 随 profile_payload_json 序列化持久化/导出/导入，不在共享 accounts 表加列。
+   */
+  setAutoRefundEnabled(enabled: boolean): void {
+    if (isPlainObject(this._profilePayload)) this._profilePayload.autoRefundEnabled = enabled
+    else this._profilePayload = { autoRefundEnabled: enabled }
+  }
+
   // --- Getters ---
+  get autoRefundEnabled(): boolean {
+    return isPlainObject(this._profilePayload) && this._profilePayload.autoRefundEnabled === true
+  }
   get id(): string {
     return this._id
   }

@@ -5,6 +5,7 @@
  */
 import { bridge } from './bridge';
 import type {
+  AutoRefundEventDto,
   CursorCheckoutTarget,
   CursorCheckoutTier,
   CursorRefundResult,
@@ -82,6 +83,10 @@ export const accountService = {
     patch: { name?: string | null; tags?: string[]; notes?: string | null },
   ) => bridge().account.updateAccount(accountId, patch) as Promise<Account>,
 
+  /** Cursor 专属「额度用尽自动退款」开关（存 profilePayload.autoRefundEnabled）。 */
+  setAccountAutoRefund: (accountId: string, enabled: boolean) =>
+    bridge().account.setAccountAutoRefund(accountId, enabled) as Promise<Account>,
+
   reauthenticate: (
     accountId: string,
     input: {
@@ -144,6 +149,7 @@ export const systemService = {
   detectAppPath: (platform: string) => bridge().system.detectAppPath(platform) as Promise<AppPathInfo>,
   onQuotaUpdated: (cb: (accountIds: string[]) => void) => bridge().system.onQuotaUpdated(cb),
   onUsageSynced: (cb: () => void) => bridge().system.onUsageSynced(cb),
+  onAutoRefunded: (cb: (event: AutoRefundEventDto) => void) => bridge().system.onAutoRefunded(cb),
 };
 
 // ============================================================================

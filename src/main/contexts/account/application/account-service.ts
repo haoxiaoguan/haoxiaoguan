@@ -123,6 +123,19 @@ export class AccountApplicationService {
   }
 
   /**
+   * Toggle the Cursor per-account「额度用尽自动退款」switch. Stored on the
+   * account's profilePayload (autoRefundEnabled) so it follows the account
+   * through export/import/persistence without a shared-table column.
+   */
+  async setAccountAutoRefund(accountId: string, enabled: boolean): Promise<Account> {
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) throw AccountError.notFound('Account', accountId)
+    account.setAutoRefundEnabled(enabled)
+    await this.accountRepo.save(account)
+    return account
+  }
+
+  /**
    * Re-authenticate: replace an account's credential without losing its id,
    * tags, notes, or group memberships.
    *

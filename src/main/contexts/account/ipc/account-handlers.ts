@@ -137,6 +137,19 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
     },
   )
 
+  // set_account_auto_refund — args: { accountId, enabled } → AccountResponse
+  ipcMain.handle(
+    ACCOUNT_CHANNELS.setAccountAutoRefund,
+    async (_e, args: { accountId: string; enabled: boolean }): Promise<AccountResponse> => {
+      try {
+        const account = await accountService.setAccountAutoRefund(args.accountId, args.enabled)
+        return toAccountResponse(account)
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
   // reauthenticate — args: { accountId, identifier, token, ... } → AccountResponse
   ipcMain.handle(
     ACCOUNT_CHANNELS.reauthenticate,

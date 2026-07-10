@@ -7,6 +7,7 @@ import { appDataDir } from './platform/persistence/paths'
 import {
   QUOTA_EVENTS,
   USAGE_EVENTS,
+  REFUND_EVENTS,
   UPDATE_EVENTS,
   ROUTING_OBS_EVENTS,
   WINDOW_CHANNELS,
@@ -352,6 +353,11 @@ if (!gotLock) {
       mainWindow?.webContents.send(QUOTA_EVENTS.updated, accountIds)
     })
     services.platformQuotaScheduler.start()
+
+    // Cursor 额度用尽自动退款：退款完成后推事件给渲染层弹 toast（窗口就绪后接线）。
+    services.setAutoRefundNotifier((e) => {
+      mainWindow?.webContents.send(REFUND_EVENTS.autoRefunded, e)
+    })
 
     // tokenizer 加载自检（一次性，打包后可观测是否降级）。
     if (isOfficialTokenizerAvailable()) {

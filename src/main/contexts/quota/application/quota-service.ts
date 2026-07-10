@@ -53,6 +53,18 @@ export type CodexResetConsumer = (
   profilePayload: JsonValue,
 ) => Promise<{ updatedCredential?: Credential | undefined }>
 
+/**
+ * Cursor「额度用尽自动退款」消费者：配额刷新算出整体态后（仅 cursor 平台）回调一次。
+ * 门控 + 退款 + 持久化 + 通知都在实现里（account application 的 cursor-auto-refund-consumer），
+ * 注入自 container。类型定义在 quota 侧以避免 quota → account 的层依赖（account 实现 satisfies 之）。
+ */
+export type CursorAutoRefundConsumer = (input: {
+  account: Account
+  credential: Credential
+  /** 计划额度（total_usage 指标）是否耗尽——由 seam 从该指标算出，而非配额聚合态。 */
+  quotaExhausted: boolean
+}) => Promise<void>
+
 /** 单张主动重置券（unix 秒时间戳）。 */
 export interface CodexResetCreditView {
   id?: string | undefined
@@ -109,6 +121,7 @@ export class QuotaApplicationService {
     private readonly dispatcherResolver?: AccountDispatcherResolver,
     private readonly codexResetConsumer?: CodexResetConsumer,
     private readonly codexResetCreditsFetcher?: CodexResetCreditsFetcher,
+    private readonly cursorAutoRefund?: CursorAutoRefundConsumer,
   ) {}
 
   /** 账号 quota_state 的最近抓取时间（PlatformQuotaScheduler 重启播种用）。 */
@@ -202,6 +215,25 @@ export class QuotaApplicationService {
 
     await this.quotaCache.save(quotaInfo)
     await this.saveQuotaStateSilently(accountId, quotaState)
+
+    // Cursor「额度用尽自动退款」：计划额度算完后回调消费者（门控/退款/持久化/通知在实现里）。
+    // account 此时已 updateProfilePayload + save 过。判定「额度用尽」只看**计划额度**（total_usage 指标）
+    // 耗尽，而非配额聚合态 quotaState.status——聚合态是「任一子指标耗尽」，会被 on_demand（按需消费封顶）
+    // 等子桶打满误触发退款。
+    if (platform === 'cursor' && this.cursorAutoRefund !== undefined) {
+      const planExhausted = quotaState.metrics.some(
+        (m) => m.key === 'total_usage' && m.status === 'exhausted',
+      )
+      try {
+        await this.cursorAutoRefund({
+          account,
+          credential: credentialForState,
+          quotaExhausted: planExhausted,
+        })
+      } catch (e) {
+        console.warn(`[quota] cursor 自动退款回调失败: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
 
     return quotaInfo
   }
