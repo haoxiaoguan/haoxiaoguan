@@ -66,6 +66,17 @@ export function createCursorAutoRefundConsumer(
       const planTier = account.planTier
       const membershipType = readMembershipType(account.profilePayload)
       const lastStatus = readAutoRefundStatus(account.profilePayload)
+
+      // 额度健康（充值/新计费周期后未耗尽）→ 清掉上一轮的终态幂等标记，为下次耗尽重新武装。
+      // 否则退款成功后 autoRefundStatus=success 会永久压制：账号再充值/升级、开关仍开着也不会再退。
+      if (!quotaExhausted) {
+        if (lastStatus !== undefined) {
+          account.clearAutoRefundStatus()
+          await deps.saveAccount(account)
+        }
+        return
+      }
+
       const attempt = shouldAttemptAutoRefund({
         enabled: account.autoRefundEnabled,
         quotaExhausted,

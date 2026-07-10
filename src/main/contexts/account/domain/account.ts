@@ -265,10 +265,24 @@ export class Account {
   /**
    * Cursor 专属「额度用尽自动退款」开关。值存 profilePayload.autoRefundEnabled，
    * 随 profile_payload_json 序列化持久化/导出/导入，不在共享 accounts 表加列。
+   * 切换开关会一并清掉上一轮的终态幂等标记（autoRefundStatus/autoRefundAt）→ 重新武装：
+   * 账号退款后又充值/升级、用户重开开关时，下次额度耗尽能再次自动退款。
    */
   setAutoRefundEnabled(enabled: boolean): void {
-    if (isPlainObject(this._profilePayload)) this._profilePayload.autoRefundEnabled = enabled
-    else this._profilePayload = { autoRefundEnabled: enabled }
+    if (!isPlainObject(this._profilePayload)) this._profilePayload = {}
+    this._profilePayload.autoRefundEnabled = enabled
+    delete this._profilePayload.autoRefundStatus
+    delete this._profilePayload.autoRefundAt
+  }
+
+  /**
+   * 清掉自动退款的终态幂等标记（autoRefundStatus/autoRefundAt），为下次额度耗尽重新武装。
+   * 由消费者在「额度恢复健康（充值/新计费周期后未耗尽）」时调用。
+   */
+  clearAutoRefundStatus(): void {
+    if (!isPlainObject(this._profilePayload)) return
+    delete this._profilePayload.autoRefundStatus
+    delete this._profilePayload.autoRefundAt
   }
 
   // --- Getters ---

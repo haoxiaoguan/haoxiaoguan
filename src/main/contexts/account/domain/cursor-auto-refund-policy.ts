@@ -12,27 +12,30 @@ function isPlainObject(value: JsonValue): value is { [key: string]: JsonValue } 
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** 排除档：免费/试用/团队/企业，命中即绝不退款。 */
+function isExcludedTier(v: string): boolean {
+  return v.length > 0 && /free|trial|team|enterprise|business/.test(v)
+}
+
 /**
- * 是否为「可退款的付费个人号」。**同时**看 planTier 与 membershipType 两个信号（不是取第一个）：
- *   - 任一信号命中 free / trial / team / enterprise / business → false（免费/试用/团队/企业均不退）；
- *   - 至少一个信号命中 pro / ultra → true（pro / pro_plus / ultra 付费个人档）；
- *   - 否则 false（含两者皆空）。
+ * 是否为「可退款的付费个人号」。两个信号不对称：
+ *   - membershipType 是**实时**值（配额刷新每轮读取），planTier 是**导入时冻结**值（刷新从不回写）。
+ *   - 任一信号（实时 or 冻结）命中 free/trial/team/enterprise/business → false（并集排除，防已降级/转团队号）。
+ *   - **只有实时 membershipType 明确是 pro/ultra 才放行**；冻结 planTier 不能单独放行。
  *
- * 之所以「任一命中排除词就拒」而非「取第一个非空值判定」：planTier 是导入时冻结的（在线刷新只更新
- * membershipType，不回写 planTier），一个导入时为 pro、之后变 team/企业或降级 free 的号，planTier 会
- * 停留在旧的 pro。若只信 planTier 会误退这类号。退款不可逆，故对排除方向取两信号的并集（更保守：
- * 宁可漏退一个真付费个人号——用户可手动退——也不误退团队/企业/已降级号）。
+ * 为何不许 planTier 单独放行：Cursor fetcher 取不到 membership 时会把 membershipType 写成 null →
+ * 门控只剩冻结的 planTier。一个导入时为 Pro、之后降级/转团队/企业的号，在「membership 缺失 + 计划额度
+ * 耗尽」的那次刷新里，若允许 planTier='pro' 单独放行就会误退错号（不可逆）。故缺实时付费信号时宁可漏退
+ * （用户可手动退、或下轮 membership 可读时再退），也不凭陈旧 planTier 误退。
  */
 export function isRefundablePaidTier(
   planTier: string | undefined,
   membershipType: string | undefined,
 ): boolean {
-  const signals = [planTier, membershipType]
-    .map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
-    .filter((v) => v.length > 0)
-  if (signals.length === 0) return false
-  if (signals.some((v) => /free|trial|team|enterprise|business/.test(v))) return false
-  return signals.some((v) => /pro|ultra/.test(v))
+  const live = (typeof membershipType === 'string' ? membershipType : '').trim().toLowerCase()
+  const frozen = (typeof planTier === 'string' ? planTier : '').trim().toLowerCase()
+  if (isExcludedTier(live) || isExcludedTier(frozen)) return false
+  return /pro|ultra/.test(live)
 }
 
 /**
