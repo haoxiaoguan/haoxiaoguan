@@ -1,6 +1,7 @@
 import { memo, useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftRight,
+  BadgeDollarSign,
   CalendarDays,
   Chrome,
   Copy,
@@ -32,7 +33,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { useAccountStore, useHealthStore, useQuotaStateStore } from '../../stores'
-import { quotaService } from '../../services/tauri'
+import { accountService, quotaService } from '../../services/tauri'
 import type { Account, CodexResetCredits } from '../../types'
 import {
   accountPlanLabel,
@@ -121,6 +122,10 @@ function AccountCard(props: AccountCardProps) {
   const fetchAccounts = useAccountStore((s) => s.fetchAccounts)
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
+  // Cursor 一键退款：卡片按钮 + 二次确认。退款不可逆（订阅转 Free、token 失效）。
+  const isCursor = props.account.platform === 'cursor'
+  const [refundConfirmOpen, setRefundConfirmOpen] = useState(false)
+  const [refunding, setRefunding] = useState(false)
 
   const handleConsumeReset = () => {
     setResetting(true)
@@ -136,6 +141,41 @@ function AccountCard(props: AccountCardProps) {
         })
       })
       .finally(() => setResetting(false))
+  }
+
+  const handleRefund = () => {
+    setRefunding(true)
+    accountService
+      .refundCursor(props.account.id)
+      .then((result) => {
+        setRefundConfirmOpen(false)
+        const amount = result.amountUsd ? `$${result.amountUsd}` : ''
+        switch (result.status) {
+          case 'success':
+            toast.success(t('refund.success', { amount }).trim())
+            break
+          case 'pending':
+            toast.success(t('refund.pending', { amount }).trim())
+            break
+          case 'already_free':
+            toast.info(result.message || t('refund.alreadyFree'))
+            break
+          case 'ratelimited':
+            toast.warning(result.message || t('refund.limited'))
+            break
+          default:
+            toast.error(t('refund.failed'), { description: result.message })
+        }
+        // 退款后订阅态变化：刷新该平台账号列表 + 该账号额度。
+        void fetchAccounts(props.account.platform)
+        void refreshQuotaState(props.account.id).catch(() => {})
+      })
+      .catch((error: unknown) => {
+        toast.error(t('refund.failed'), {
+          description: error instanceof Error ? error.message : String(error),
+        })
+      })
+      .finally(() => setRefunding(false))
   }
 
   const handleRefresh = () => {
@@ -299,7 +339,8 @@ function AccountCard(props: AccountCardProps) {
         <div className="flex items-center gap-2">
           <IconAction
             label={props.switching ? t('actions.switching') : t('actions.switch')}
-            disabled={props.active || !!props.switching}
+            // 使用中的账号也允许再次切换（幂等重注入 + 停-写-启重启客户端），仅在切换进行中禁用防连点。
+            disabled={!!props.switching}
             icon={ArrowLeftRight}
             onClick={() => props.onSwitch(props.account)}
           />
@@ -320,6 +361,14 @@ function AccountCard(props: AccountCardProps) {
               label={t('actions.export')}
               icon={Upload}
               onClick={() => props.onExport?.(props.account)}
+            />
+          )}
+          {isCursor && (
+            <IconAction
+              label={t('actions.refund')}
+              icon={BadgeDollarSign}
+              disabled={refunding}
+              onClick={() => setRefundConfirmOpen(true)}
             />
           )}
           <IconAction
@@ -347,6 +396,29 @@ function AccountCard(props: AccountCardProps) {
               }}
             >
               {resetting ? t('resetCredit.consuming') : t('resetCredit.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={refundConfirmOpen} onOpenChange={setRefundConfirmOpen}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('refund.confirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('refund.confirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={refunding}>{t('actions.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={refunding}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                // 阻止默认关闭：等退款请求完成再由 handler 关闭，避免闪退感。
+                e.preventDefault()
+                handleRefund()
+              }}
+            >
+              {refunding ? t('refund.processing') : t('refund.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

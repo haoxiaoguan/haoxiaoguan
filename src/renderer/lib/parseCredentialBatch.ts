@@ -158,6 +158,49 @@ export interface UnifiedBatchParse {
   invalid: string[]
 }
 
+// ---------------------------------------------------------------------------
+// Cursor raw-token login. Unlike other platforms (which paste a token JSON or
+// card-key), Cursor users commonly have only the access-token JWT or the WorkOS
+// session token copied from the browser cookie. This mirrors cockpit-tools'
+// `add_cursor_account_with_token`, which accepts a bare JWT, and tk.sh's
+// `valid_token`, which additionally accepts the `user_xxx::<JWT>` session form.
+// ---------------------------------------------------------------------------
+
+// A three-segment base64url JWT (mirrors tk.sh's valid_token JWT regex).
+const CURSOR_JWT_RE = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/
+
+/** Decode `%XX` escapes if present (session tokens are often pasted URL-encoded,
+ *  e.g. the `::` arrives as `%3A%3A`). Lenient: falls back to a manual `::`/`=`
+ *  substitution when decodeURIComponent rejects a malformed sequence. */
+function decodePercent(value: string): string {
+  if (!value.includes('%')) return value
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value.replace(/%3A/gi, ':').replace(/%3D/gi, '=')
+  }
+}
+
+/**
+ * Normalize a pasted Cursor credential string into its access-token JWT.
+ * Accepts:
+ *   - a bare access-token JWT (`xxx.yyy.zzz`)
+ *   - a WorkOS session token `[WorkosCursorSessionToken=]user_xxx::<JWT>`
+ *     (the `::` may arrive URL-encoded as `%3A%3A`)
+ * Returns the JWT, or null when the input is neither.
+ */
+export function normalizeCursorToken(raw: string): string | null {
+  let s = decodePercent(raw.trim())
+  if (s.length === 0) return null
+  // Strip an optional cookie-name prefix.
+  s = s.replace(/^WorkosCursorSessionToken=/i, '')
+  // Session-token form userId::JWT — the JWT is the segment after the last `::`.
+  const sep = s.lastIndexOf('::')
+  if (sep !== -1) s = s.slice(sep + 2)
+  s = s.trim()
+  return CURSOR_JWT_RE.test(s) ? s : null
+}
+
 /** True if the object carries any access/refresh token spelling (top level or under `tokens`). */
 function hasTokenMaterial(o: Record<string, unknown>): boolean {
   const direct = [o.access_token, o.accessToken, o.token, o.refresh_token, o.refreshToken]
@@ -172,7 +215,10 @@ function hasTokenMaterial(o: Record<string, unknown>): boolean {
   return false
 }
 
-export function parseUnifiedBatch(text: string): UnifiedBatchParse {
+export function parseUnifiedBatch(
+  text: string,
+  opts: { platform?: string } = {},
+): UnifiedBatchParse {
   const trimmed = text.trim()
   const out: UnifiedBatchParse = { items: [], invalid: [] }
   if (trimmed.length === 0) return out
@@ -202,6 +248,16 @@ export function parseUnifiedBatch(text: string): UnifiedBatchParse {
   trimmed.split('\n').forEach((rawLine, lineNo) => {
     const line = rawLine.trim()
     if (line.length === 0 || line.startsWith('#')) return
+    // Cursor: accept a bare access-token JWT or a `user_xxx::<JWT>` session token
+    // (its primary paste formats), tried before the shared card-key grammar so a
+    // JWT is never mis-split by the delimiter matcher.
+    if (opts.platform === 'cursor') {
+      const jwt = normalizeCursorToken(line)
+      if (jwt !== null) {
+        out.items.push({ payload: JSON.stringify({ access_token: jwt }), label: `#${lineNo + 1}` })
+        return
+      }
+    }
     const cred = fromCardKey(line)
     if (cred === null) {
       out.invalid.push(`line ${lineNo + 1}: unparsable card-key row (missing RefreshToken)`)

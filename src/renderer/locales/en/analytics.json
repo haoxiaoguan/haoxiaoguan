@@ -21,7 +21,7 @@
   "agent": {
     "all": "All",
     "claude": "Claude",
-    "codex": "Codex",
+    "codex": "ChatGPT",
     "geminiCli": "Gemini CLI",
     "kiro": "Kiro",
     "qoder": "Qoder"

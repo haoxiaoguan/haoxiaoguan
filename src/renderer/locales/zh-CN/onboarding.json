@@ -27,7 +27,9 @@
   },
   "batch": {
     "placeholder": "自动识别以下任一内容：\n· 单个 Token JSON（cpa 格式）：{\"access_token\": \"...\", \"refresh_token\": \"...\"}\n· JSON 数组（多个账号）：[{...}, {...}]\n· 卡密（每行一个）：邮箱----密码----RefreshToken----ClientId----ClientSecret----provider",
+    "placeholderCursor": "自动识别以下任一内容（每行一个，可批量）：\n· Cursor Access Token（JWT）：eyJhbGciOi...\n· 会话串：user_xxx::eyJhbGciOi...（WorkosCursorSessionToken，支持 %3A%3A 编码）\n· 单个 Token JSON：{\"access_token\": \"...\", \"refresh_token\": \"...\"}\n· JSON 数组：[{...}, {...}]",
     "hint": "粘贴后自动判断条数并逐个导入；卡密分隔符支持 ---- / Tab / 多个空格，# 开头的行忽略。",
+    "hintCursor": "支持直接粘贴 JWT 或 user_xxx::token 会话串，每行一个可批量导入；# 开头的行忽略。仅粘贴 JWT 时无刷新令牌，令牌过期后需重新导入。",
     "empty": "未解析到有效凭证，请检查格式",
     "result": "成功 {{success}} / 失败 {{failed}}，共 {{total}}",
     "importing": "导入中…",

@@ -22,6 +22,9 @@ import { AccountApplicationService } from './contexts/account/application/accoun
 import { SwitchService } from './contexts/account/application/switch-service'
 import { CodexSwitchLifecycle } from './contexts/account/infrastructure/codex-switch-lifecycle'
 import { CodexCredentialRefresher } from './contexts/account/infrastructure/codex-credential-refresher'
+import { refundCursorCredential } from './contexts/account/infrastructure/cursor-refund-client'
+import { createCursorProcessControl } from './contexts/account/infrastructure/cursor-process'
+import { CursorSwitchLifecycle } from './contexts/account/infrastructure/cursor-switch-lifecycle'
 import { SwitchOrchestrator } from './contexts/account/application/switch-orchestrator'
 import { ActiveDetectionService } from './contexts/account/application/active-detection-service'
 import { ValidationService } from './contexts/account/application/validation-service'
@@ -262,13 +265,30 @@ export async function buildContainer(): Promise<Container> {
     () => settings.getIdePath('codex'),
   )
   const codexCredentialRefresher = new CodexCredentialRefresher()
+  // Cursor 切换的「停-写-启」生命周期（对照 cockpit cursor_start_instance）：运行中的
+  // Cursor 会反写 state.vscdb 覆盖注入，必须先停、注入后重启才生效。号小管此前只对
+  // codex 接了停-写-启，cursor 缺失导致切号后仍要重登（见 [[project_cursor_switch_vscdb]]）。
+  const cursorProcessControl = createCursorProcessControl()
+  const cursorSwitchLifecycle = new CursorSwitchLifecycle(
+    cursorProcessControl,
+    () => settings.getIdePath('cursor'),
+  )
   const switchService = new SwitchService(
     credentialStore,
     injectorRegistry,
     { refresher: (p) => (p === 'codex' ? codexCredentialRefresher : undefined) },
-    { lifecycle: (p) => (p === 'codex' ? codexSwitchLifecycle : undefined) },
+    {
+      lifecycle: (p) =>
+        p === 'codex' ? codexSwitchLifecycle : p === 'cursor' ? cursorSwitchLifecycle : undefined,
+    },
   )
-  const account = new AccountApplicationService(accountRepo, credentialStore, switchService)
+  const account = new AccountApplicationService(
+    accountRepo,
+    credentialStore,
+    switchService,
+    // Cursor 一键退款：解密凭证后交给退款客户端调 KC 后端（对齐 9router/tk.sh）。
+    (credential) => refundCursorCredential(credential),
+  )
   const accountSwitchOrchestrator = new SwitchOrchestrator(
     accountRepo,
     credentialStore,

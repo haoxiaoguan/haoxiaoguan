@@ -27,7 +27,9 @@
   },
   "batch": {
     "placeholder": "Auto-detects any of:\n· a single token JSON (cpa format): {\"access_token\": \"...\", \"refresh_token\": \"...\"}\n· a JSON array of accounts: [{...}, {...}]\n· card-key rows (one per line): email----password----RefreshToken----ClientId----ClientSecret----provider",
+    "placeholderCursor": "Auto-detects any of (one per line, batchable):\n· a Cursor Access Token (JWT): eyJhbGciOi...\n· a session token: user_xxx::eyJhbGciOi... (WorkosCursorSessionToken, %3A%3A-encoded ok)\n· a single token JSON: {\"access_token\": \"...\", \"refresh_token\": \"...\"}\n· a JSON array: [{...}, {...}]",
     "hint": "Entries are counted automatically and imported one by one; card-key delimiters: ---- / Tab / 2+ spaces, lines starting with # are ignored.",
+    "hintCursor": "Paste a raw JWT or a user_xxx::token session string, one per line for batch import; lines starting with # are ignored. A JWT-only paste has no refresh token, so re-import once it expires.",
     "empty": "No valid credentials parsed — check the format",
     "result": "{{success}} succeeded / {{failed}} failed of {{total}}",
     "importing": "Importing…",

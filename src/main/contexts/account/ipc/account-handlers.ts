@@ -5,6 +5,7 @@ import { type AccountResponse, toAccountResponse } from './account-response'
 import { parsePlatform } from '../domain/platform-id'
 import type { JsonValue } from '../domain/platform-account-profile'
 import type { AccountApplicationService } from '../application/account-service'
+import type { CursorRefundResult } from '../domain/cursor-refund'
 import type { SwitchOrchestrator } from '../application/switch-orchestrator'
 import type { ValidationService } from '../application/validation-service'
 import type { AccountHealthService } from '../application/health-service'
@@ -311,6 +312,19 @@ export function registerAccountHandlers(deps: AccountHandlerDeps): void {
             ? { account_id: item.accountId, error: item.error }
             : { account_id: item.accountId, result: item.result },
         )
+      } catch (e) {
+        throw new Error(toIpcError(e))
+      }
+    },
+  )
+
+  // refund_cursor — args: { accountId } → CursorRefundResult (camelCase DTO,
+  // already serializable). 对 Cursor 账号发起一键退款（不可逆，二次确认在 UI 层）。
+  ipcMain.handle(
+    ACCOUNT_CHANNELS.refundCursor,
+    async (_e, args: { accountId: string }): Promise<CursorRefundResult> => {
+      try {
+        return await accountService.refundCursorAccount(args.accountId)
       } catch (e) {
         throw new Error(toIpcError(e))
       }

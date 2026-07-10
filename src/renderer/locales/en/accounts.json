@@ -185,6 +185,8 @@
     "history": "History",
     "refresh": "Refresh",
     "export": "Export",
+    "refund": "Refund",
+    "cancel": "Cancel",
     "viewDetail": "Detail",
     "batchDelete": "Delete selected",
     "selectAll": "Select all",
@@ -192,6 +194,17 @@
     "selected": "{{count}} selected",
     "active": "Active",
     "inactive": "Inactive"
+  },
+  "refund": {
+    "confirmTitle": "Refund this Cursor account?",
+    "confirmBody": "Refunds settle instantly, prorated by the remaining subscription time. After a refund the subscription drops to Free and the token stops working — this cannot be undone.",
+    "confirm": "Refund",
+    "processing": "Refunding…",
+    "success": "Refund succeeded {{amount}}",
+    "pending": "Refund submitted {{amount}}, syncing",
+    "alreadyFree": "This account is already Free — nothing to refund",
+    "limited": "Too many requests, please try again later",
+    "failed": "Refund failed"
   },
   "tooltips": {
     "add": "Add account",
@@ -236,7 +249,7 @@
     },
     "special": {
       "requireOnlineCheck": "Require online identity check",
-      "codexLaunchOnSwitch": "Relaunch Codex App after switching accounts"
+      "codexLaunchOnSwitch": "Relaunch ChatGPT App after switching accounts"
     }
   },
   "switchSuccess": "Switched",

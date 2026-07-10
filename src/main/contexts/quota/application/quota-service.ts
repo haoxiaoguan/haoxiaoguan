@@ -176,10 +176,13 @@ export class QuotaApplicationService {
 
     if (hasProviderPayload(result.providerPayload)) {
       account.updateProfilePayload(sanitizeProviderPayload(result.providerPayload))
-      // 自愈显示身份：Kiro 账号若导入时 email 缺失，displayIdentifier 会落到不透明
-      // userId（如 d-xxx.uuid）；一旦在线刷新取回 email，提升为可读显示名。
-      // identityKey 冻结 → 唯一性/额度关联安全（见 account.healDisplayIdentity）。
-      if (platform === 'kiro') {
+      // 自愈显示身份：导入时 email 缺失的账号（displayIdentifier 落到不透明 userId）
+      // 一旦在线刷新取回权威 email，提升为可读显示名。identityKey 冻结 → 唯一性/额度
+      // 关联安全（见 account.healDisplayIdentity，仅当当前显示非 email 时才生效）。
+      //   - kiro：IdC/企业导入无 email，displayIdentifier 是 d-xxx.uuid；
+      //   - cursor：token 登录（裸 JWT）无 email claim，只能拿到 sub=auth0|user_xxx，
+      //     GetUserMeta 在线刷新才回填真实邮箱。
+      if (platform === 'kiro' || platform === 'cursor') {
         const liveEmail = readLiveEmail(result.providerPayload)
         if (liveEmail !== undefined) account.healDisplayIdentity(liveEmail)
       }
