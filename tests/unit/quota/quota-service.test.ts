@@ -372,8 +372,9 @@ describe('QuotaApplicationService.refreshQuota', () => {
     expect(saved!.identityKey).toBe(keyBefore) // 唯一键冻结
   })
 
-  it('does not heal a non-kiro account even if the payload carries an email', async () => {
+  it('heals a cursor account when the online payload carries a real email (token 登录裸 JWT 无 email claim)', async () => {
     const account = Account.create('cursor', 'opaque-id-xyz', undefined, [], undefined)
+    const keyBefore = account.identityKey
     const repo = new FakeAccountRepo([account])
     const svc = new QuotaApplicationService(
       repo,
@@ -390,7 +391,28 @@ describe('QuotaApplicationService.refreshQuota', () => {
     )
     await svc.refreshQuota(account.id)
     const saved = await repo.findById(account.id)
-    expect(saved!.displayIdentifier).toBe('opaque-id-xyz') // 非 kiro 不自愈
+    // cursor token 登录用 sub=auth0|user_xxx 占位，在线刷新取回真实邮箱后自愈显示身份。
+    expect(saved!.displayIdentifier).toBe('someone@example.com')
+    expect(saved!.email).toBe('someone@example.com')
+    expect(saved!.identityKey).toBe(keyBefore) // 唯一键仍冻结
+  })
+
+  it('does not heal a platform outside {kiro, cursor} even if the payload carries an email', async () => {
+    const account = Account.create('windsurf', 'opaque-id-xyz', undefined, [], undefined)
+    const repo = new FakeAccountRepo([account])
+    const svc = new QuotaApplicationService(
+      repo,
+      new FakeCredentialStore(new Credential('tok')),
+      new FakeQuotaCache(),
+      new FakeQuotaStateCache(),
+      new StaticFetcher({
+        ...legacyModelsResult(),
+        providerPayload: { email: 'someone@example.com' },
+      }),
+    )
+    await svc.refreshQuota(account.id)
+    const saved = await repo.findById(account.id)
+    expect(saved!.displayIdentifier).toBe('opaque-id-xyz') // 仅 kiro/cursor 自愈
   })
 
   it('records failure state + account profile error on fetch failure', async () => {
