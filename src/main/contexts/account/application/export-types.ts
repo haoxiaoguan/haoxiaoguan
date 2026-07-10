@@ -19,6 +19,10 @@ export interface ExportAccount {
   is_active: boolean
   created_at: string
   last_used_at?: string | null
+  // Cursor 专属「额度用尽自动退款」开关（存 account.profilePayload.autoRefundEnabled）。
+  // 该偏好不可从 email 现推，故必须显式随导出走，否则导入后会重置为 false。仅在开启时输出，
+  // 缺省/false 时省略以保持导出精简；导入端把缺省视为 false。
+  auto_refund_enabled?: boolean
   // Omitted from the serialized output when undefined.
   credential?: ExportCredential
 }

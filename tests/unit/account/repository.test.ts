@@ -262,9 +262,12 @@ describe('AccountApplicationService (sqlite end-to-end)', () => {
       refreshToken: 'refresh',
       tags: ['x'],
     })
+    // 开启 Cursor 自动退款开关，验证它随导出走（存 profilePayload，不随 rawMetadata 现推）。
+    await svc.setAccountAutoRefund(a.id, true)
     const exportData = await svc.exportAccounts([a.id], true)
     expect(exportData.accounts[0].platform).toBe('cursor')
     expect(exportData.accounts[0].credential?.token).toBe('tok')
+    expect(exportData.accounts[0].auto_refund_enabled).toBe(true)
 
     // Re-import the same data. Faithful to the source: the conflict pre-check
     // queries existsByIdentifier(platform, email), but the stored identity_key
@@ -298,6 +301,7 @@ describe('AccountApplicationService (sqlite end-to-end)', () => {
           is_active: false,
           created_at: new Date().toISOString(),
           last_used_at: null,
+          auto_refund_enabled: true,
           credential: { token: 'tok', refresh_token: null },
         },
       ],
@@ -306,5 +310,10 @@ describe('AccountApplicationService (sqlite end-to-end)', () => {
     expect(result.imported).toBe(1)
     expect(result.skipped).toBe(0)
     expect(result.errors).toEqual([])
+
+    // 导出里的 auto_refund_enabled 应被还原到导入账号的 profilePayload。
+    const repo = new MikroOrmAccountRepository(em)
+    const imported = (await repo.findByPlatform('cursor')).find((x) => x.email === 'fresh@e.com')
+    expect(imported?.autoRefundEnabled).toBe(true)
   })
 })
