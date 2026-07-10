@@ -418,7 +418,7 @@ export function AppShell({ shell }: AppShellProps) {
               <ShellUtilityHoverItem
                 icon={Headphones}
                 label={t('nav:shell.support')}
-                contentClassName="w-64"
+                contentClassName="w-72"
               >
                 <SupportPopover />
               </ShellUtilityHoverItem>
