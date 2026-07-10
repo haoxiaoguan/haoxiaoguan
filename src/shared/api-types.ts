@@ -137,6 +137,14 @@ import type {
 export { PROXY_POOL_PLATFORMS, isProxyPoolPlatform } from './api/routing'
 export type { ProxyPoolPlatform } from './api/routing'
 
+/** Cursor 一键退款结果（wire DTO）。对应主进程 account/domain/cursor-refund。 */
+export interface CursorRefundResult {
+  status: 'success' | 'pending' | 'already_free' | 'ratelimited' | 'failed'
+  amountUsd?: string
+  message?: string
+  sponsorUrl?: string
+}
+
 export interface HxgApi {
   settings: {
     getSettings(): Promise<SettingsResponse>
@@ -193,6 +201,8 @@ export interface HxgApi {
         rawMetadata?: unknown
       },
     ): Promise<AccountResponse>
+    /** Cursor 一键退款(不可逆:退款后订阅转 Free、token 失效)。仅 Cursor 账号。 */
+    refundCursor(accountId: string): Promise<CursorRefundResult>
     validateCredential(accountId: string): Promise<CredentialValidationResult>
     getAccountHealth(accountId: string): Promise<HealthSnapshot>
     validateBatch(

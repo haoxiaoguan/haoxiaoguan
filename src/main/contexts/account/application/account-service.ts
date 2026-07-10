@@ -11,6 +11,7 @@ import {
 } from '../domain/platform-id'
 import type { AccountRepository } from '../domain/account-repository'
 import type { CredentialStorePort } from '../domain/ports'
+import type { CursorRefundFn, CursorRefundResult } from '../domain/cursor-refund'
 import { SwitchService } from './switch-service'
 import {
   type ConflictStrategy,
@@ -42,6 +43,8 @@ export class AccountApplicationService {
     private readonly accountRepo: AccountRepository,
     private readonly credentialStore: CredentialStorePort,
     private readonly switchService: SwitchService,
+    // Cursor 一键退款能力（可选注入）。缺省未配置时 refundCursorAccount 抛错。
+    private readonly cursorRefund?: CursorRefundFn,
   ) {}
 
   /**
@@ -201,6 +204,30 @@ export class AccountApplicationService {
 
     account.activate()
     await this.accountRepo.save(account)
+  }
+
+  /**
+   * Cursor 一键退款：解密账号凭证 → 交给注入的退款端口调 KC 后端接口 → 回传结果。
+   * 仅 Cursor 账号；非 Cursor 或能力未配置时抛错。不可逆（退款后订阅立即转 Free、
+   * token 失效），二次确认在 UI 层完成，本方法不做额外拦截。
+   */
+  async refundCursorAccount(accountId: string): Promise<CursorRefundResult> {
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) {
+      throw AccountError.notFound('Account', accountId)
+    }
+    const platform = parsePlatformAgent(account.agentId)
+    if (platform !== 'cursor') {
+      throw AccountError.invalidCredentialFormat('退款仅支持 Cursor 账号')
+    }
+    if (this.cursorRefund === undefined) {
+      throw AccountError.repositoryError('Cursor 退款能力未配置')
+    }
+    const credential = await this.credentialStore.retrieve(accountId)
+    if (credential === null) {
+      throw AccountError.notFound('Credential', accountId)
+    }
+    return this.cursorRefund(credential)
   }
 
   /**

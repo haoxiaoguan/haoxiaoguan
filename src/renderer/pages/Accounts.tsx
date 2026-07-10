@@ -105,7 +105,7 @@ const PLATFORM_DESCRIPTIONS: Record<string, string> = {
   'antigravity-ide': '管理 Antigravity IDE 登录态、额度刷新与实例切换',
   kiro: '管理 Kiro OAuth、设备凭据与 Credits',
   'gemini-cli': '管理 Gemini CLI 登录态与模型额度',
-  codex: '管理 Codex CLI、API Key 与用量额度',
+  codex: '管理 ChatGPT / Codex CLI、API Key 与用量额度',
   'github-copilot': '管理 GitHub Copilot 账号、组织席位与设备码',
   codebuddy: '管理 CodeBuddy 国际版凭据与额度',
   'codebuddy-cn': '管理 CodeBuddy CN 凭据与额度',

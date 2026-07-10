@@ -28,7 +28,7 @@ const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
   'antigravity-ide': 'Antigravity IDE',
   kiro: 'Kiro',
   'github-copilot': 'GitHub Copilot',
-  codex: 'Codex',
+  codex: 'ChatGPT',
   'gemini-cli': 'Gemini CLI',
   codebuddy: 'CodeBuddy',
   'codebuddy-cn': 'CodeBuddy CN',

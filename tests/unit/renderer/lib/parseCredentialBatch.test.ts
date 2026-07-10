@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { parseCredentialBatch, parseUnifiedBatch, toTokenJson } from '../../../../src/renderer/lib/parseCredentialBatch'
+import {
+  normalizeCursorToken,
+  parseCredentialBatch,
+  parseUnifiedBatch,
+  toTokenJson,
+} from '../../../../src/renderer/lib/parseCredentialBatch'
+
+// A syntactically valid 3-segment base64url JWT (payload decodes to {"sub":"user_001"}).
+const CURSOR_JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyXzAwMSJ9.c2lnbmF0dXJlX3ZhbHVl'
 
 describe('parseCredentialBatch — card-key format', () => {
   it('parses the ---- delimited 6-field card-key', () => {
@@ -190,5 +198,69 @@ describe('parseUnifiedBatch — merged Token/卡密 mode', () => {
 
   it('returns empty results for empty input', () => {
     expect(parseUnifiedBatch('   ')).toEqual({ items: [], invalid: [] })
+  })
+})
+
+describe('normalizeCursorToken', () => {
+  it('accepts a bare access-token JWT', () => {
+    expect(normalizeCursorToken(CURSOR_JWT)).toBe(CURSOR_JWT)
+    expect(normalizeCursorToken(`  ${CURSOR_JWT}  `)).toBe(CURSOR_JWT)
+  })
+
+  it('extracts the JWT from a user_xxx::<JWT> session token', () => {
+    expect(normalizeCursorToken(`user_01ABCDEF::${CURSOR_JWT}`)).toBe(CURSOR_JWT)
+  })
+
+  it('strips the WorkosCursorSessionToken= cookie prefix', () => {
+    expect(normalizeCursorToken(`WorkosCursorSessionToken=user_01::${CURSOR_JWT}`)).toBe(CURSOR_JWT)
+  })
+
+  it('decodes a URL-encoded %3A%3A separator', () => {
+    expect(normalizeCursorToken(`user_01%3A%3A${CURSOR_JWT}`)).toBe(CURSOR_JWT)
+  })
+
+  it('rejects non-JWT junk', () => {
+    expect(normalizeCursorToken('')).toBeNull()
+    expect(normalizeCursorToken('not-a-token')).toBeNull()
+    expect(normalizeCursorToken('a@x.com----pw----RT')).toBeNull()
+    // Two segments only (not a 3-part JWT).
+    expect(normalizeCursorToken('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyXzAwMSJ9')).toBeNull()
+  })
+})
+
+describe('parseUnifiedBatch — cursor raw-token login', () => {
+  it('turns a bare JWT into an access_token token-JSON (cursor only)', () => {
+    const { items, invalid } = parseUnifiedBatch(CURSOR_JWT, { platform: 'cursor' })
+    expect(invalid).toHaveLength(0)
+    expect(items).toHaveLength(1)
+    expect(JSON.parse(items[0].payload)).toEqual({ access_token: CURSOR_JWT })
+  })
+
+  it('turns a session token into an access_token token-JSON', () => {
+    const { items, invalid } = parseUnifiedBatch(`user_01::${CURSOR_JWT}`, { platform: 'cursor' })
+    expect(invalid).toHaveLength(0)
+    expect(JSON.parse(items[0].payload)).toEqual({ access_token: CURSOR_JWT })
+  })
+
+  it('batches multiple raw tokens, one per line', () => {
+    const text = [CURSOR_JWT, `user_02::${CURSOR_JWT}`].join('\n')
+    const { items, invalid } = parseUnifiedBatch(text, { platform: 'cursor' })
+    expect(invalid).toHaveLength(0)
+    expect(items).toHaveLength(2)
+  })
+
+  it('still accepts a JSON paste for cursor', () => {
+    const { items } = parseUnifiedBatch(
+      JSON.stringify({ access_token: CURSOR_JWT, email: 'a@x.com' }),
+      { platform: 'cursor' },
+    )
+    expect(items).toHaveLength(1)
+    expect(items[0].label).toBe('a@x.com')
+  })
+
+  it('does NOT treat a bare JWT as valid for non-cursor platforms', () => {
+    const { items, invalid } = parseUnifiedBatch(CURSOR_JWT, { platform: 'kiro' })
+    expect(items).toHaveLength(0)
+    expect(invalid).toHaveLength(1)
   })
 })

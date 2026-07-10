@@ -185,6 +185,8 @@
     "history": "历史",
     "refresh": "刷新",
     "export": "导出",
+    "refund": "退款",
+    "cancel": "取消",
     "viewDetail": "查看详情",
     "batchDelete": "批量删除",
     "selectAll": "全选",
@@ -192,6 +194,17 @@
     "selected": "已选 {{count}} 个",
     "active": "活跃",
     "inactive": "未激活"
+  },
+  "refund": {
+    "confirmTitle": "确认对该 Cursor 账号发起退款？",
+    "confirmBody": "退款秒到账、按订阅剩余时长比例结算。退款后订阅立即转 Free、Token 随之失效，此操作不可撤销。",
+    "confirm": "确认退款",
+    "processing": "退款中…",
+    "success": "退款成功 {{amount}}",
+    "pending": "已提交退款 {{amount}}，同步中",
+    "alreadyFree": "该账号当前已是 Free，无需退款",
+    "limited": "操作过于频繁，请稍后再试",
+    "failed": "退款失败"
   },
   "tooltips": {
     "add": "添加账号",
@@ -236,7 +249,7 @@
     },
     "special": {
       "requireOnlineCheck": "必须联网检查身份",
-      "codexLaunchOnSwitch": "切换账号后自动重启 Codex App"
+      "codexLaunchOnSwitch": "切换账号后自动重启 ChatGPT App"
     }
   },
   "switchSuccess": "切换成功",

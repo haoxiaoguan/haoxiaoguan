@@ -110,7 +110,18 @@ export class CursorOAuthCapability implements OAuthCapability {
         continue
       }
       const body = await resp.text()
-      let poll: { access_token?: string; refresh_token?: string; auth_id?: string }
+      // Cursor 的 auth/poll 返回**驼峰** accessToken/refreshToken/authId（对照 cockpit-tools
+      // cursor_oauth.rs PollResponse 的 #[serde(rename_all = "camelCase")]）。此前只读下划线
+      // access_token/refresh_token → 永远取不到 token → 一直轮询到 300s 超时 → OAuth 导入失败。
+      // 兼容两种拼写：驼峰优先、下划线兜底。
+      let poll: {
+        access_token?: string
+        accessToken?: string
+        refresh_token?: string
+        refreshToken?: string
+        auth_id?: string
+        authId?: string
+      }
       try {
         poll = JSON.parse(body)
       } catch (e) {
@@ -118,15 +129,16 @@ export class CursorOAuthCapability implements OAuthCapability {
           `parse Cursor OAuth poll response failed: ${e instanceof Error ? e.message : String(e)}`,
         )
       }
-      const accessToken = normalizeNonEmpty(poll.access_token)
-      const refreshToken = normalizeNonEmpty(poll.refresh_token)
+      const accessToken = normalizeNonEmpty(poll.accessToken ?? poll.access_token)
+      const refreshToken = normalizeNonEmpty(poll.refreshToken ?? poll.refresh_token)
       if (!accessToken || !refreshToken) {
         await sleep(OAUTH_POLL_INTERVAL_MS)
         continue
       }
 
       this.pending.delete(pendingId)
-      const email = normalizeNonEmpty(poll.auth_id) ?? `cursor-${state.uuid}`
+      const authId = normalizeNonEmpty(poll.authId ?? poll.auth_id)
+      const email = authId ?? `cursor-${state.uuid}`
       return {
         provider: 'cursor',
         email,
@@ -134,7 +146,7 @@ export class CursorOAuthCapability implements OAuthCapability {
         refreshToken,
         expiresAt: undefined,
         source: 'oauth',
-        rawMetadata: buildCursorRawMetadata(email, poll.auth_id, accessToken, refreshToken),
+        rawMetadata: buildCursorRawMetadata(email, authId, accessToken, refreshToken),
       }
     }
   }

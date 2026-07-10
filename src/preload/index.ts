@@ -82,6 +82,8 @@ const api: HxgApi = {
       ipcRenderer.invoke(ACCOUNT_CHANNELS.updateAccount, { accountId, patch }),
     reauthenticate: (accountId, input) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.reauthenticate, { accountId, ...input }),
+    refundCursor: (accountId) =>
+      ipcRenderer.invoke(ACCOUNT_CHANNELS.refundCursor, { accountId }),
     validateCredential: (accountId) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.validateCredential, { accountId }),
     getAccountHealth: (accountId) =>

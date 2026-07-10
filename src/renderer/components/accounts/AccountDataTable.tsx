@@ -185,7 +185,6 @@ export function AccountDataTable({
         cell: ({ row }) => (
           <RowActions
             account={row.original}
-            active={row.original.isActive}
             switching={switchingId === row.original.id}
             onSwitch={() => onSwitch(row.original.platform, row.original.id)}
             onOpen={() => onOpen(row.original.id)}
@@ -399,7 +398,6 @@ function AccountSyncTime({ account }: { account: Account }) {
 
 function RowActions({
   account,
-  active,
   switching,
   onSwitch,
   onOpen,
@@ -408,7 +406,6 @@ function RowActions({
   onDelete,
 }: {
   account: Account
-  active?: boolean
   switching?: boolean
   onSwitch: () => void
   onOpen: () => void
@@ -437,7 +434,8 @@ function RowActions({
     <div className="flex items-center justify-end gap-1">
       <IconAction
         label={switching ? t('actions.switching') : t('actions.switch')}
-        disabled={active || !!switching}
+        // 使用中的账号也允许再次切换（幂等重注入 + 停-写-启重启客户端），仅在切换进行中禁用防连点。
+        disabled={!!switching}
         icon={ArrowLeftRight}
         onClick={onSwitch}
       />

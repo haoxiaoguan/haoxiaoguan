@@ -219,7 +219,7 @@ export default function AddAccountSheet({
   // online identity confirmation. Serial, error-isolated, with a result summary.
   // Unparsable entries count as failures up front.
   const runBatchImport = async () => {
-    const { items, invalid } = parseUnifiedBatch(batchText);
+    const { items, invalid } = parseUnifiedBatch(batchText, { platform });
     if (items.length === 0 && invalid.length === 0) {
       setError(t('batch.empty'));
       return;
@@ -336,13 +336,15 @@ export default function AddAccountSheet({
                 {t('method.token_batch')}
               </label>
               <Textarea
-                placeholder={t('batch.placeholder')}
+                placeholder={platform === 'cursor' ? t('batch.placeholderCursor') : t('batch.placeholder')}
                 value={batchText}
                 onChange={(e) => setBatchText(e.target.value)}
                 disabled={busy}
                 className="min-h-[140px] font-mono text-xs"
               />
-              <p className="text-xs text-muted-foreground">{t('batch.hint')}</p>
+              <p className="text-xs text-muted-foreground">
+                {platform === 'cursor' ? t('batch.hintCursor') : t('batch.hint')}
+              </p>
               {batchResult && (
                 <BentoInnerPanel className="space-y-1.5 text-xs">
                   <div className="font-medium text-foreground">
