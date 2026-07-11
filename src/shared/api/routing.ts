@@ -180,9 +180,9 @@ export interface UpdateStatus {
 
 /**
  * 已接入「反代账号选号」的平台（账号型上游）。其账号才可被加入反代池 / 显示入池开关。
- * 目前仅 Kiro 走 FailoverAdapter 选号链；以后新增账号型上游平台时在此登记即自动纳入。
+ * Kiro 与 Cursor 均走 FailoverAdapter 选号链；以后新增账号型上游平台时在此登记即自动纳入。
  */
-export const PROXY_POOL_PLATFORMS = ['kiro'] as const
+export const PROXY_POOL_PLATFORMS = ['kiro', 'cursor'] as const
 export type ProxyPoolPlatform = (typeof PROXY_POOL_PLATFORMS)[number]
 /** 平台是否可入反代池。 */
 export function isProxyPoolPlatform(platform: string): boolean {

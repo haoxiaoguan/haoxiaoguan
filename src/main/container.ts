@@ -157,6 +157,9 @@ import { ConversationIdCache } from './contexts/apiProxy/domain/account-selectio
 import { makeKiroAccountPort } from './container-helpers/kiro-account-port-factory'
 import { buildAccountCapabilityRegistry } from './container-helpers/account-capability-registry'
 import { createKiroTokenRefresher } from './container-helpers/kiro-token-refresher'
+import { createCursorTokenRefresher } from './container-helpers/cursor-token-refresher'
+import { CursorAdapter } from './contexts/apiProxy/infrastructure/adapters/cursor/cursor-adapter'
+import { CursorUpstreamClient } from './contexts/apiProxy/infrastructure/adapters/cursor/cursor-upstream-client'
 import { makeQuotaResetResolver } from './container-helpers/quota-reset-resolver'
 import type {
   KiroCredentialPort,
@@ -657,6 +660,35 @@ export async function buildContainer(): Promise<Container> {
     // 收口：只下发 adapter 能路由的模型（保证 /v1/models 列出即可调用）。
     canServe: (id) => kiroInner.supportsModel(id),
   })
+
+  // CursorAdapter（'cursor'）—— 把 cursor 账号暴露为本地反代（对齐 9router open-sse 的 protobuf 反代）。
+  // 复用 credentialStore / accountRepo / proxyResolver，与 kiro 共享同一套 selector/health/proxyPool/
+  // quotaReset（账号 id 跨平台唯一，共享安全）；credential/dispatcher 窄 port 本就通用，直接复用 kiro 的。
+  const cursorAccountPort = makeKiroAccountPort(accountRepo as any, 'cursor')
+  const cursorTokenRefresher = createCursorTokenRefresher()
+  const cursorUpstreamClient = new CursorUpstreamClient({ refresher: cursorTokenRefresher })
+  const cursorInner = new CursorAdapter({ client: cursorUpstreamClient })
+  platformRegistry.register(
+    new FailoverAdapter({
+      inner: cursorInner,
+      selector: apiProxySelector,
+      health: apiProxyHealth,
+      accounts: cursorAccountPort,
+      credentials: kiroCredentialPort,
+      dispatchers: kiroDispatcherPort,
+      maxRetries: settings.getApiProxyMaxRetries(),
+      retryDelayMs: settings.getApiProxyRetryDelayMs(),
+      isPooled: (id) => proxyPoolService.has(id),
+      getPriority: (id) => proxyPoolService.getPriority(id),
+      getConcurrency: (id) => proxyPoolService.getConcurrency(id),
+      quotaReset: quotaResetResolver,
+      removeFromPool: async (id) => {
+        console.info(`[apiProxy] cursor token 永久失效，移出反代池: ${id}`)
+        await proxyPoolService.setPooled(id, false)
+      },
+      random: Math.random,
+    }),
+  )
 
   // 第三方中转上游（relay）— DB 已初始化、cryptoService 已建，安全注册。
   const relayUpstreamRepo = new RelayUpstreamRepository(cryptoService)

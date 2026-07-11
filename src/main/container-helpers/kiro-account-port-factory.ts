@@ -42,10 +42,10 @@ function toEpochMs(val?: Date | string | null): number | undefined {
  * 若 acc 有 updateProfilePayload（Account domain 对象），优先调用保持不变式；
  * 否则直接赋值（内存 stub / plain object 兼容路径）。
  */
-export function makeKiroAccountPort(accountRepo: AccountRepoLike): KiroAccountPort {
+export function makeKiroAccountPort(accountRepo: AccountRepoLike, platform = 'kiro'): KiroAccountPort {
   return {
     async listByPlatform(): Promise<KiroAccountInfo[]> {
-      const accounts = await accountRepo.findByPlatform('kiro')
+      const accounts = await accountRepo.findByPlatform(platform)
       return accounts.map((acc) => ({
         id: acc.id,
         email: acc.email,

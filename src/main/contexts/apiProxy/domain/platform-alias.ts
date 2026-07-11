@@ -12,6 +12,7 @@
 export const PLATFORM_ALIASES: ReadonlyArray<{ platform: string; alias: string }> = [
   { platform: 'kiro', alias: 'kr' },
   { platform: 'codex-native', alias: 'cx' },
+  { platform: 'cursor', alias: 'cu' },
 ]
 
 /** alias → platform（如 kr → kiro）。 */
