@@ -4,6 +4,7 @@ import { SETTINGS_CHANNELS, SYSTEM_CHANNELS } from '../../../../shared/ipc-chann
 import type { SettingsApplicationService, AppDirs } from '../application/settings-service'
 import { appDataDir, appConfigDir, appLogDir } from '../../../platform/persistence/paths'
 import { detectAppPath, type AppPathInfo } from '../../../platform/identity/app-paths'
+import { migrateLegacyCodexIdePathIfNeeded } from '../../../platform/identity/codex-app-path-migration'
 
 interface UpdateSettingsRequest {
   settings: Record<string, string>
@@ -93,6 +94,16 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
   // filesystem probing of well-known locations (no launch, no shell) — returns
   // the first existing candidate plus a placeholder suggestion for the UI.
   ipcMain.handle(SYSTEM_CHANNELS.detectAppPath, async (_e, platform: string): Promise<AppPathInfo> => {
-    return await detectAppPath(platform)
+    const info = await detectAppPath(platform)
+    if (platform === 'codex') {
+      // Codex→ChatGPT 改名：打开平台设置(触发探测)时对官方旧启动路径做守卫式自愈。
+      // fire-and-forget：不阻塞探测响应；migrate 内部吞异常。
+      void migrateLegacyCodexIdePathIfNeeded({
+        getSavedPath: () => svc.getIdePath('codex'),
+        savePath: (p) => svc.updateSettings({ ide_path_codex: p }),
+        detect: async () => info,
+      })
+    }
+    return info
   })
 }

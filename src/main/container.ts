@@ -104,6 +104,7 @@ import { defaultSsotRoot } from './contexts/skill/application/skill-application-
 import { ApiHttpServer } from './contexts/apiProxy/infrastructure/http/api-http-server'
 import { createApiRequestListener } from './contexts/apiProxy/infrastructure/http/hono-app'
 import { SystemProxyResolver } from './platform/net/system-proxy'
+import { migrateLegacyCodexIdePathIfNeeded } from './platform/identity/codex-app-path-migration'
 import { session } from 'electron'
 import { ClientConfigProfileRepository } from './contexts/clientConfig/infrastructure/client-config-profile.repository'
 import { WriterRegistry } from './contexts/clientConfig/application/writer-registry'
@@ -265,6 +266,12 @@ export async function buildContainer(): Promise<Container> {
     () => settings.getCodexLaunchOnSwitch(),
     () => settings.getIdePath('codex'),
   )
+  // Codex→ChatGPT 改名：启动时对保存的官方旧启动路径做一次守卫式自愈
+  // （先查守卫后探测，普通用户零开销；migrate 内部吞异常，绝不影响启动）。
+  void migrateLegacyCodexIdePathIfNeeded({
+    getSavedPath: () => settings.getIdePath('codex'),
+    savePath: (p) => settings.updateSettings({ ide_path_codex: p }),
+  })
   const codexCredentialRefresher = new CodexCredentialRefresher()
   // Cursor 切换的「停-写-启」生命周期（对照 cockpit cursor_start_instance）：运行中的
   // Cursor 会反写 state.vscdb 覆盖注入，必须先停、注入后重启才生效。号小管此前只对
