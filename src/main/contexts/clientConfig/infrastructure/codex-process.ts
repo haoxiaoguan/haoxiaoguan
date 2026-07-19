@@ -13,8 +13,8 @@
 // 「无法退出」且不重启。改用 `application id ... is running`（由 LaunchServices 解析，忽略这类
 // 失联僵尸，且与 quit/launch 同口径）后，检测与退出一致，不再误判。
 //
-// Windows —— 无 bundle id 概念，改按精确镜像名 ChatGPT.exe/Codex.exe 走 tasklist/taskkill/spawn
-// （复用 cursor-process 已验证模式，详见下方 Windows 小节注释）。
+// Windows —— 无 bundle id 概念，身份改按可执行路径校验：镜像名 ChatGPT.exe/Codex.exe 先筛、
+// CIM 查可执行路径认官方 Store 包、taskkill /PID 精确停（详见下方 Windows 小节注释）。
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
@@ -100,21 +100,53 @@ class MacCodexProcessControl implements CodexProcessControl {
   }
 }
 
-// Windows —— 对齐 cockpit + 复用 cursor-process 已验证模式：tasklist 判存活、taskkill /T 优雅
-// (超时 3/4 升级 /F)、spawn 直起 exe。镜像名精确匹配 ChatGPT.exe/Codex.exe(改名双兼容)，
-// 全带 windowsHide 防闪黑框。Store(WindowsApps)目录下 CreateProcess 可能被拒 →
+// Windows —— 对齐 cockpit + 在 cursor-process 已验证模式上加身份校验(铁律：绝不宽泛杀进程)：
+// 镜像名先筛(ChatGPT.exe/Codex.exe 改名双兼容)、CIM 可执行路径校验定身份(对标 mac bundle id，
+// 只认官方 Store 包 \WindowsApps\OpenAI.*)、taskkill /PID 精确停(优雅 /T，超时 3/4 升级 /F)——
+// 第三方碰巧同名的无关应用绝不误判「在运行」、绝不被强杀。spawn 直起 exe，全带 windowsHide
+// 防闪黑框。Store(WindowsApps)目录下 CreateProcess 可能被拒 →
 // 回退 PowerShell Start-Process(仍按 exe 路径，不走 shell:AppsFolder)。
 // 双镜像停/单实例启(有意为之)：旧 Codex 与新 ChatGPT Store 包可能共存共跑，但二者共享同一
 // ~/.codex——任一存活实例退出时都会按内存反写 auth.json/config.toml 抹掉本次注入，故「停」必须
 // 两个镜像名都停；「启」则收敛到单实例(配置路径或 ChatGPT 优先探测)，不把旧实例拉回来与新实例
 // 抢写 ~/.codex(与 mac 按 bundle id 的单实例语义、参考实现的收敛行为一致)。
 const CODEX_WIN_IMAGES = ['ChatGPT.exe', 'Codex.exe'] as const
+
+// 按镜像名查 PID + 可执行路径(身份校验用)。-Filter 静态字符串，无插值。
+const CODEX_WIN_CIM_SCRIPT = [
+  `Get-CimInstance Win32_Process -Filter "Name='ChatGPT.exe' OR Name='Codex.exe'" |`,
+  '  ForEach-Object { "$($_.ProcessId)|$($_.ExecutablePath)" }',
+].join('\n')
 const CODEX_WIN_LAUNCH_HINT =
   '未找到 ChatGPT/Codex 可执行文件，无法自动启动 ChatGPT，请手动打开 ChatGPT 或在平台设置里配置启动路径。'
+
+/** 解析 CIM 输出行「pid|exePath」；坏行/非正整数 pid 忽略。exePath 可为空(权限不可见)。 */
+export function parseCodexCimProcessLines(stdout: string): Array<{ pid: number; exe: string }> {
+  const rows: Array<{ pid: number; exe: string }> = []
+  for (const raw of stdout.split(/\r?\n/)) {
+    const m = raw.trim().match(/^(\d+)\|(.*)$/)
+    if (m === null) continue
+    const pid = Number(m[1])
+    if (!Number.isInteger(pid) || pid <= 0) continue
+    rows.push({ pid, exe: m[2].trim() })
+  }
+  return rows
+}
+
+/** 进程可执行路径是否属于官方 Codex/ChatGPT Store 安装(身份校验，对标 mac bundle id)。
+ *  官方 Windows 形态只有 Store：\WindowsApps\OpenAI.ChatGPT* / OpenAI.Codex_* 包目录。
+ *  路径为空(不可见)按「不是我们的」处理——宁可漏停(退化为写盘可能被反写)也不误杀无关应用。 */
+export function isOfficialCodexWinProcessPath(exePath: string): boolean {
+  const p = exePath.trim().toLowerCase()
+  if (p.length === 0) return false
+  // 兼容 OpenAI.ChatGPT_* 与 OpenAI.ChatGPT-Desktop_* 两种包族名，故 chatgpt 后不锁 `_`。
+  return p.includes('\\windowsapps\\openai.chatgpt') || p.includes('\\windowsapps\\openai.codex_')
+}
 
 /**
  * 解析 `tasklist /FO CSV /NH` 输出里指定镜像名的 PID（含同名 helper 子进程）。
  * 镜像名大小写不敏感；无匹配时 tasklist 打印 `INFO: ...`（非 CSV 行）自然被过滤。
+ * 仅用于 PowerShell 不可用时的降级路径（无身份校验，见 listPids）。
  */
 export function parseCodexTasklistPids(stdout: string, image: string): number[] {
   const pids: number[] = []
@@ -172,7 +204,26 @@ export class WindowsCodexProcessControl implements CodexProcessControl {
     this.resolveExe = deps.resolveExe ?? resolveCodexWinExe
   }
 
+  /** 列出「我们的」进程 PID：CIM 查 PID+可执行路径 → 只留官方 Store 包路径(身份校验)。 */
   private async listPids(): Promise<number[]> {
+    try {
+      const { stdout } = await this.exec(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', CODEX_WIN_CIM_SCRIPT],
+        { windowsHide: true },
+      )
+      return parseCodexCimProcessLines(stdout)
+        .filter((p) => isOfficialCodexWinProcessPath(p.exe))
+        .map((p) => p.pid)
+    } catch {
+      // PowerShell 不可用(组策略禁用/环境损坏) → 降级为镜像名 tasklist。降级路径丢失身份
+      // 过滤(同名无关应用会被误判/参与停止)，已知取舍：保住停-写-启主链路可用。
+      return this.listPidsByImageName()
+    }
+  }
+
+  /** 降级路径：按精确镜像名 tasklist 列 PID（无可执行路径可校验）。 */
+  private async listPidsByImageName(): Promise<number[]> {
     const pids: number[] = []
     for (const image of CODEX_WIN_IMAGES) {
       try {
@@ -189,10 +240,10 @@ export class WindowsCodexProcessControl implements CodexProcessControl {
     return pids
   }
 
-  /** taskkill /IM <image> /T[ /F]：/T 连 Electron 子进程树，force 时 /F 强杀。 */
-  private async taskkill(force: boolean): Promise<void> {
-    for (const image of CODEX_WIN_IMAGES) {
-      const args = force ? ['/F', '/IM', image, '/T'] : ['/IM', image, '/T']
+  /** taskkill /PID <pid> /T[ /F]：逐 PID 精确停(绝不 /IM 按镜像名杀)，/T 连 Electron 子进程树。 */
+  private async killPids(pids: number[], force: boolean): Promise<void> {
+    for (const pid of pids) {
+      const args = force ? ['/F', '/PID', String(pid), '/T'] : ['/PID', String(pid), '/T']
       await this.exec('taskkill', args, { windowsHide: true }).catch(() => undefined)
     }
   }
@@ -202,17 +253,20 @@ export class WindowsCodexProcessControl implements CodexProcessControl {
   }
 
   async quit(timeoutMs: number): Promise<boolean> {
-    if ((await this.listPids()).length === 0) return true
-    await this.taskkill(false)
+    const initial = await this.listPids()
+    if (initial.length === 0) return true
+    await this.killPids(initial, false)
     const deadline = Date.now() + Math.max(0, timeoutMs)
     const escalateAt = Date.now() + Math.max(0, Math.floor(timeoutMs * 0.75))
     let escalated = false
     while (Date.now() < deadline) {
       await delay(SLEEP_STEP_MS)
-      if ((await this.listPids()).length === 0) return true
+      const alive = await this.listPids()
+      if (alive.length === 0) return true
       if (!escalated && Date.now() >= escalateAt) {
         escalated = true
-        await this.taskkill(true)
+        // 强杀用刚取的最新 PID 列表：优雅期内旧 PID 可能已消亡/被复用，不能沿用 initial。
+        await this.killPids(alive, true)
       }
     }
     return (await this.listPids()).length === 0
