@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parsePlatformLoose, type PlatformId } from '../../contexts/account/domain/platform-id'
+import { detectCodexAppOnWindows, CODEX_WIN_SUGGESTION } from './codex-app-detect-win'
 
 const execFileAsync = promisify(execFile)
 
@@ -150,6 +151,11 @@ export async function detectAppPath(frontendPlatformId: string): Promise<AppPath
     platform = parsePlatformLoose(frontendPlatformId)
   } catch {
     return { detected: null, suggestion: '' }
+  }
+  // codex 在 Windows 只有 Store 安装形态，路径含版本号无法静态列举 → 动态探测。
+  if (platform === 'codex' && osKey() === 'win32') {
+    const detected = await detectCodexAppOnWindows()
+    return { detected, suggestion: CODEX_WIN_SUGGESTION }
   }
   const candidates = candidatesFor(platform)
   const validators = osKey() === 'darwin' ? DARWIN_VALIDATORS[platform] : undefined
