@@ -20,8 +20,8 @@ class FakeControl implements CodexProcessControl {
     if (this.quitSucceeds) this.running = false
     return !this.running
   }
-  async launch(): Promise<void> {
-    this.calls.push('launch')
+  async launch(appPath?: string): Promise<void> {
+    this.calls.push(`launch:${appPath ?? ''}`)
     this.running = true
   }
 }
@@ -54,19 +54,26 @@ describe('CodexAppLifecycle', () => {
     const ctrl = new FakeControl(false)
     const lc = new CodexAppLifecycle(ctrl)
     await lc.afterWrite({ restart: true })
-    expect(ctrl.calls).toContain('launch')
+    expect(ctrl.calls).toContain('launch:')
   })
 
   it('afterWrite(restart=false)：不重启（我们没停过它）', async () => {
     const ctrl = new FakeControl(false)
     const lc = new CodexAppLifecycle(ctrl)
     await lc.afterWrite({ restart: false })
-    expect(ctrl.calls).not.toContain('launch')
+    expect(ctrl.calls.some((c) => c.startsWith('launch'))).toBe(false)
+  })
+
+  it('afterWrite 重启带上平台设置的启动路径(尊重自定义路径)', async () => {
+    const ctrl = new FakeControl(false)
+    const lc = new CodexAppLifecycle(ctrl, () => 'D:\\custom\\ChatGPT.exe')
+    await lc.afterWrite({ restart: true })
+    expect(ctrl.calls).toContain('launch:D:\\custom\\ChatGPT.exe')
   })
 
   it('enabled=false（关闭自动重启）：完全不碰 App', async () => {
     const ctrl = new FakeControl(true)
-    const lc = new CodexAppLifecycle(ctrl, () => false)
+    const lc = new CodexAppLifecycle(ctrl, () => undefined, () => false)
     const token = await lc.beforeWrite()
     expect(token.restart).toBe(false)
     expect(ctrl.calls).toEqual([]) // 连 isRunning 都不调
@@ -79,6 +86,6 @@ describe('CodexAppLifecycle', () => {
     expect(ctrl.running).toBe(false) // 写盘窗口内 App 已退出
     await lc.afterWrite(token)
     expect(ctrl.running).toBe(true) // 写完重启回来
-    expect(ctrl.calls).toEqual(['isRunning', 'quit', 'launch'])
+    expect(ctrl.calls).toEqual(['isRunning', 'quit', 'launch:'])
   })
 })

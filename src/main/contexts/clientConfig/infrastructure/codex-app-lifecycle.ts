@@ -9,11 +9,19 @@ const DEFAULT_QUIT_TIMEOUT_MS = 8000
 
 export class CodexAppLifecycle implements WriteLifecycle {
   private readonly control: CodexProcessControl
+  private readonly appPath: () => string | undefined
   private readonly enabled: () => boolean
   private readonly quitTimeoutMs: number
 
-  constructor(control: CodexProcessControl, enabled: () => boolean = () => true, quitTimeoutMs: number = DEFAULT_QUIT_TIMEOUT_MS) {
+  constructor(
+    control: CodexProcessControl,
+    /** 平台设置里的启动路径（idePaths.codex）；空则按 bundle id / 动态探测。 */
+    appPath: () => string | undefined = () => undefined,
+    enabled: () => boolean = () => true,
+    quitTimeoutMs: number = DEFAULT_QUIT_TIMEOUT_MS,
+  ) {
     this.control = control
+    this.appPath = appPath
     this.enabled = enabled
     this.quitTimeoutMs = quitTimeoutMs
   }
@@ -32,6 +40,6 @@ export class CodexAppLifecycle implements WriteLifecycle {
 
   async afterWrite(token: WriteLifecycleToken): Promise<void> {
     // 只重启「我们停掉的」那次；写盘失败回滚后也照常重启，恢复用户的 App。
-    if (token.restart) await this.control.launch()
+    if (token.restart) await this.control.launch(this.appPath())
   }
 }

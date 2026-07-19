@@ -846,9 +846,10 @@ export async function buildContainer(): Promise<Container> {
   )
   clientConfigRegistry.register(new OpenCodeWriter(join(xdgConfigDir('opencode'), 'opencode.json')))
   // Codex 桌面 App 停-写-启生命周期：运行中的 Codex App 会按内存反写 config.toml，
-  // 必须停 App→写→重启它，改动才会被采纳（osascript 优雅退出，绝不宽泛 pkill；非 macOS 为 no-op）。
+  // 必须停 App→写→重启它，改动才会被采纳（macOS osascript 优雅退出 / Windows taskkill 优雅关，
+  // 绝不宽泛 pkill；其它平台为 no-op）。重启带平台设置里的启动路径（idePaths.codex）。
   // codexProcessControl 在账号上下文（§4）创建，与切号生命周期/codexSessionRepair 共用一个 control。
-  const codexAppLifecycle = new CodexAppLifecycle(codexProcessControl)
+  const codexAppLifecycle = new CodexAppLifecycle(codexProcessControl, () => settings.getIdePath('codex'))
   clientConfigRegistry.register(
     new CodexWriter(
       join(dotDir('codex'), 'config.toml'),
