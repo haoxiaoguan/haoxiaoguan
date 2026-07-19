@@ -60,12 +60,15 @@ export function findCodexWindowsAppMainExe(
   return null
 }
 
-/** 各固定盘的 WindowsApps 根：C 盘在 Program Files 下，其它盘在盘根（对照 cockpit）。 */
+/** 各固定盘的 WindowsApps 根：系统盘在 Program Files 下，其它盘在盘根（对照 cockpit）。 */
 export function windowsAppsRoots(exists: (p: string) => boolean = existsSync): string[] {
+  // 系统盘符从 SystemDrive 环境变量推导（如 'D:'），缺失时回退 C。
+  const systemLetter = (process.env.SystemDrive ?? 'C').charAt(0).toUpperCase() || 'C'
   const roots: string[] = []
   for (let code = 65; code <= 90; code++) {
     const letter = String.fromCharCode(code)
-    const root = letter === 'C' ? 'C:\\Program Files\\WindowsApps' : `${letter}:\\WindowsApps`
+    const root =
+      letter === systemLetter ? `${letter}:\\Program Files\\WindowsApps` : `${letter}:\\WindowsApps`
     if (exists(root)) roots.push(root)
   }
   return roots
@@ -76,7 +79,7 @@ const GET_APPX_SCRIPT = [
   "$names = @('OpenAI.ChatGPT', 'OpenAI.ChatGPT-Desktop', 'OpenAI.Codex')",
   '$pkg = $names |',
   '  ForEach-Object { Get-AppxPackage -Name $_ -ErrorAction SilentlyContinue } |',
-  "  Sort-Object @{ Expression = { if ($_.Name -like 'OpenAI.ChatGPT*') { 0 } else { 1 } } }, @{ Expression = { $_.Version }; Descending = $true } |",
+  "  Sort-Object @{ Expression = { if ($_.Name -like 'OpenAI.ChatGPT*') { 0 } else { 1 } } }, @{ Expression = { [version]$_.Version }; Descending = $true } |",
   '  Select-Object -First 1',
   'if ($pkg) { Write-Output $pkg.InstallLocation }',
 ].join('\n')

@@ -1,7 +1,7 @@
 // Codex 桌面 App 的写盘生命周期：停 App → (applier 写盘) → 重启 App。
 // 运行中的 Codex App 会按内存反写 ~/.codex/config.toml 抹掉外部编辑，必须停掉它写、再重启
-// 让它在启动时把 provider 吃进内存。退出用 AppleScript 优雅退出（见 codex-process.ts），
-// 绝不宽泛 pkill。可由 enabled 开关关闭（关闭后退化为 no-op，仅 codex CLI 链路生效）。
+// 让它在启动时把 provider 吃进内存。退出走 codex-process 的平台实现（mac AppleScript 按
+// bundle id / win taskkill 精确镜像名），绝不宽泛 pkill。可由 enabled 开关关闭（关闭后退化为 no-op，仅 codex CLI 链路生效）。
 import type { WriteLifecycle, WriteLifecycleToken } from '../domain/client-writer'
 import type { CodexProcessControl } from './codex-process'
 
@@ -27,7 +27,7 @@ export class CodexAppLifecycle implements WriteLifecycle {
   }
 
   async beforeWrite(): Promise<WriteLifecycleToken> {
-    // 关闭自动重启时不碰用户的 Codex App（仅 CLI 链路）。
+    // 关闭自动重启时不碰用户的 ChatGPT App（仅 CLI 链路）。
     if (!this.enabled()) return { restart: false }
     if (!(await this.control.isRunning())) return { restart: false }
     const exited = await this.control.quit(this.quitTimeoutMs)
