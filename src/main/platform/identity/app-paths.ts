@@ -1,6 +1,11 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { parsePlatformLoose, type PlatformId } from '../../contexts/account/domain/platform-id'
+import { detectCodexAppOnWindows, CODEX_WIN_SUGGESTION } from './codex-app-detect-win'
+
+const execFileAsync = promisify(execFile)
 
 // Per-platform, per-OS candidate install locations for the editor/IDE/app each
 // account platform launches into.
@@ -47,7 +52,9 @@ const CANDIDATES: Partial<Record<PlatformId, Record<OsKey, string[]>>> = {
     linux: ['/usr/bin/antigravity-ide', '/opt/antigravity-ide/antigravity-ide', '~/.local/bin/antigravity-ide'],
   },
   codex: {
-    darwin: ['/Applications/Codex.app'],
+    // Codex→ChatGPT 改名(2026)：新装机是 ChatGPT.app，旧装机仍是 Codex.app，新优先旧回退。
+    // ChatGPT.app 名字有歧义(旧聊天助手 com.openai.chat 同名)，探测时经 bundle id 校验。
+    darwin: ['/Applications/ChatGPT.app', '/Applications/Codex.app'],
     win32: [],
     linux: [],
   },
@@ -98,6 +105,33 @@ function candidatesFor(platform: PlatformId): string[] {
   return byOs[osKey()].map(expand).filter((p) => p.length > 0)
 }
 
+export const CODEX_MAC_BUNDLE_ID = 'com.openai.codex'
+
+/** 候选路径的可选异步校验器：返回 false 则跳过该候选继续下一个。 */
+type CandidateValidator = (path: string) => Promise<boolean>
+
+/**
+ * ChatGPT.app 候选的 bundle id 排歧义校验：改名后的 Codex App 与旧聊天助手都叫
+ * ChatGPT.app，只有 CFBundleIdentifier(com.openai.codex vs com.openai.chat)能区分。
+ * `defaults` 自身失败(权限等)时放行——校验只用于排歧义，最坏退回纯存在性探测。
+ */
+export async function verifyCodexDarwinBundle(
+  appPath: string,
+  exec: (cmd: string, args: string[]) => Promise<{ stdout: string }> = execFileAsync,
+): Promise<boolean> {
+  try {
+    const { stdout } = await exec('defaults', ['read', `${appPath}/Contents/Info`, 'CFBundleIdentifier'])
+    return stdout.trim() === CODEX_MAC_BUNDLE_ID
+  } catch {
+    return true
+  }
+}
+
+// 按平台×候选路径挂校验器；只有歧义候选才挂（Codex.app 名字无歧义，不校验）。
+const DARWIN_VALIDATORS: Partial<Record<PlatformId, Record<string, CandidateValidator>>> = {
+  codex: { '/Applications/ChatGPT.app': (p) => verifyCodexDarwinBundle(p) },
+}
+
 export interface AppPathInfo {
   /** First existing candidate for the current OS, or null if none found. */
   detected: string | null
@@ -107,18 +141,31 @@ export interface AppPathInfo {
 
 /**
  * Resolve the app/IDE path for a platform on the current OS: the first
- * candidate that exists on disk (detected) plus a placeholder suggestion. The
- * platform id is the frontend (kebab) form; unknown/unsupported ids yield
- * { detected: null, suggestion: '' }.
+ * candidate that exists on disk (detected, subject to per-candidate
+ * validation) plus a placeholder suggestion. The platform id is the frontend
+ * (kebab) form; unknown/unsupported ids yield { detected: null, suggestion: '' }.
  */
-export function detectAppPath(frontendPlatformId: string): AppPathInfo {
+export async function detectAppPath(frontendPlatformId: string): Promise<AppPathInfo> {
   let platform: PlatformId
   try {
     platform = parsePlatformLoose(frontendPlatformId)
   } catch {
     return { detected: null, suggestion: '' }
   }
+  // codex 在 Windows 只有 Store 安装形态，路径含版本号无法静态列举 → 动态探测。
+  if (platform === 'codex' && osKey() === 'win32') {
+    const detected = await detectCodexAppOnWindows()
+    return { detected, suggestion: CODEX_WIN_SUGGESTION }
+  }
   const candidates = candidatesFor(platform)
-  const detected = candidates.find((p) => existsSync(p)) ?? null
+  const validators = osKey() === 'darwin' ? DARWIN_VALIDATORS[platform] : undefined
+  let detected: string | null = null
+  for (const p of candidates) {
+    if (!existsSync(p)) continue
+    const validate = validators?.[p]
+    if (validate !== undefined && !(await validate(p))) continue
+    detected = p
+    break
+  }
   return { detected, suggestion: candidates[0] ?? '' }
 }

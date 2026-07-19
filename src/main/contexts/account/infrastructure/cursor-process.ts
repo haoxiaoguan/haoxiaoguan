@@ -185,7 +185,7 @@ class LinuxCursorProcessControl extends PsKillCursorProcessControl {
   }
 
   async launch(appPath?: string): Promise<void> {
-    const exe = resolveCursorExe(appPath)
+    const exe = await resolveCursorExe(appPath)
     if (exe === null) {
       throw new Error(
         '未找到 Cursor 可执行文件，无法自动重启 Cursor，请手动打开 Cursor 或在平台设置里配置启动路径。',
@@ -208,10 +208,10 @@ class LinuxCursorProcessControl extends PsKillCursorProcessControl {
  *  注意：detectAppPath.detected 为 null 表示所有候选都不存在盘上，故绝不兜底返回 suggestion（第一候选，
  *  此时必不存在，如 AppImage 装法下 /usr/bin/cursor 并不存在）——返回 null 让 launch 报「请手动打开」友好错误，
  *  而不是 spawn 一个必然 ENOENT 的假路径。 */
-function resolveCursorExe(appPath?: string): string | null {
+async function resolveCursorExe(appPath?: string): Promise<string | null> {
   const configured = appPath?.trim()
   if (configured !== undefined && configured.length > 0 && existsSync(configured)) return configured
-  const info = detectAppPath('cursor')
+  const info = await detectAppPath('cursor')
   if (info.detected !== null) return info.detected
   // 探测不到：退回用户配置值（可能路径有效但 existsSync 因权限失败），交给 spawn 尝试；否则 null。
   if (configured !== undefined && configured.length > 0) return configured
@@ -266,7 +266,7 @@ class WindowsCursorProcessControl implements CursorProcessControl {
   }
 
   async launch(appPath?: string): Promise<void> {
-    const exe = resolveCursorExe(appPath)
+    const exe = await resolveCursorExe(appPath)
     if (exe === null) {
       throw new Error('未找到 Cursor.exe，无法自动重启 Cursor，请手动打开 Cursor 或在平台设置里配置启动路径。')
     }
