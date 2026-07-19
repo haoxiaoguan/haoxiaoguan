@@ -90,6 +90,25 @@ describe('migrateLegacyCodexIdePathIfNeeded', () => {
     expect(saves).toEqual([newPath])
   })
 
+  it('探测窗口期内用户改保存了自定义路径 → 写前复检不通过，不覆盖(异步竞态守卫)', async () => {
+    let saved = '/Applications/Codex.app'
+    const saves: string[] = []
+    const d = {
+      getSavedPath: () => saved,
+      savePath: async (p: string) => {
+        saves.push(p)
+      },
+      detect: async () => {
+        // 模拟探测期间(win PowerShell 可达数秒)用户在设置里保存了自定义路径
+        saved = '/Users/me/Apps/MyCodex.app'
+        return { detected: '/Applications/ChatGPT.app', suggestion: '' }
+      },
+      platform: 'darwin' as NodeJS.Platform,
+    }
+    expect(await migrateLegacyCodexIdePathIfNeeded(d)).toBe(false)
+    expect(saves).toEqual([])
+  })
+
   it('linux 平台直接跳过；savePath 抛错被吞(返回 false，不上抛)', async () => {
     expect(await migrateLegacyCodexIdePathIfNeeded(deps('/Applications/Codex.app', '/Applications/ChatGPT.app', 'linux').deps)).toBe(false)
     const d = {

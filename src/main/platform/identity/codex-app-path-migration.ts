@@ -54,6 +54,9 @@ export async function migrateLegacyCodexIdePathIfNeeded(
     if (info.detected === null) return false
     if (!isOfficialChatGptDetectedPath(info.detected, platform)) return false
     if (info.detected === saved) return false
+    // 写前复检：探测是异步的(win PowerShell 回退可达数秒)，窗口期内用户可能已在设置里
+    // 保存了自定义路径；只有保存值仍是进入时捕获的官方旧路径才落笔，守住「自定义路径永不动」。
+    if (deps.getSavedPath()?.trim() !== saved) return false
     await deps.savePath(info.detected)
     return true
   } catch (e) {
