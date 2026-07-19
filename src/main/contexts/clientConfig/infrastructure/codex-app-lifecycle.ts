@@ -33,7 +33,7 @@ export class CodexAppLifecycle implements WriteLifecycle {
     const exited = await this.control.quit(this.quitTimeoutMs)
     if (!exited) {
       // 停不掉就中止写入：否则写了也会被运行中的 App 立刻抹掉，造成「配置没生效」的假象。
-      throw new Error('Codex 仍在运行，无法安全写入配置。请手动完全退出 Codex App 后重试。')
+      throw new Error('ChatGPT 仍在运行，无法安全写入配置。请手动完全退出 ChatGPT App 后重试。')
     }
     return { restart: true }
   }

@@ -28,7 +28,7 @@ export class CodexSwitchLifecycle implements PlatformSwitchLifecycle {
       const exited = await this.control.quit(this.quitTimeoutMs)
       if (!exited) {
         // 停不掉就中止切换：否则写完被运行中的 App 反写回旧账号，看似切了实际没切。
-        throw new Error('Codex 仍在运行且无法退出，切换已中止。请手动完全退出 Codex App 后重试。')
+        throw new Error('ChatGPT 仍在运行且无法退出，切换已中止。请手动完全退出 ChatGPT App 后重试。')
       }
     }
     return { relaunch: true }

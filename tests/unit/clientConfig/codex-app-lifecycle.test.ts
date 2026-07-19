@@ -47,7 +47,7 @@ describe('CodexAppLifecycle', () => {
   it('停不掉：beforeWrite 抛错中止写入（避免写了被反写抹掉）', async () => {
     const ctrl = new FakeControl(true, false) // quit 不成功
     const lc = new CodexAppLifecycle(ctrl)
-    await expect(lc.beforeWrite()).rejects.toThrow(/Codex 仍在运行/)
+    await expect(lc.beforeWrite()).rejects.toThrow(/ChatGPT 仍在运行/)
   })
 
   it('afterWrite(restart=true)：重启 App', async () => {
