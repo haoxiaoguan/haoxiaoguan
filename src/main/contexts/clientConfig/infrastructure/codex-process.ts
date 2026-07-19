@@ -104,6 +104,10 @@ class MacCodexProcessControl implements CodexProcessControl {
 // (超时 3/4 升级 /F)、spawn 直起 exe。镜像名精确匹配 ChatGPT.exe/Codex.exe(改名双兼容)，
 // 全带 windowsHide 防闪黑框。Store(WindowsApps)目录下 CreateProcess 可能被拒 →
 // 回退 PowerShell Start-Process(仍按 exe 路径，不走 shell:AppsFolder)。
+// 双镜像停/单实例启(有意为之)：旧 Codex 与新 ChatGPT Store 包可能共存共跑，但二者共享同一
+// ~/.codex——任一存活实例退出时都会按内存反写 auth.json/config.toml 抹掉本次注入，故「停」必须
+// 两个镜像名都停；「启」则收敛到单实例(配置路径或 ChatGPT 优先探测)，不把旧实例拉回来与新实例
+// 抢写 ~/.codex(与 mac 按 bundle id 的单实例语义、参考实现的收敛行为一致)。
 const CODEX_WIN_IMAGES = ['ChatGPT.exe', 'Codex.exe'] as const
 const CODEX_WIN_LAUNCH_HINT =
   '未找到 ChatGPT/Codex 可执行文件，无法自动启动 ChatGPT，请手动打开 ChatGPT 或在平台设置里配置启动路径。'
