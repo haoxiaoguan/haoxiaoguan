@@ -93,6 +93,6 @@ export function registerSettingsHandlers(svc: SettingsApplicationService): void 
   // filesystem probing of well-known locations (no launch, no shell) — returns
   // the first existing candidate plus a placeholder suggestion for the UI.
   ipcMain.handle(SYSTEM_CHANNELS.detectAppPath, async (_e, platform: string): Promise<AppPathInfo> => {
-    return detectAppPath(platform)
+    return await detectAppPath(platform)
   })
 }
