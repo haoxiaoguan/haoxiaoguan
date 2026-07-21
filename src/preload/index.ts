@@ -4,6 +4,7 @@ import {
   SYSTEM_CHANNELS,
   QUOTA_EVENTS,
   USAGE_EVENTS,
+  REFUND_EVENTS,
   AGENT_CHANNELS,
   ACCOUNT_CHANNELS,
   ACCOUNT_GROUP_CHANNELS,
@@ -33,6 +34,7 @@ import type {
   UpdateStatus,
   RoutingObsLiveEventDto,
   CodexRepairProgressDto,
+  AutoRefundEventDto,
 } from '../shared/api-types'
 
 const api: HxgApi = {
@@ -54,6 +56,11 @@ const api: HxgApi = {
       const listener = () => cb()
       ipcRenderer.on(USAGE_EVENTS.synced, listener)
       return () => ipcRenderer.removeListener(USAGE_EVENTS.synced, listener)
+    },
+    onAutoRefunded: (cb) => {
+      const listener = (_e: unknown, payload: AutoRefundEventDto) => cb(payload)
+      ipcRenderer.on(REFUND_EVENTS.autoRefunded, listener)
+      return () => ipcRenderer.removeListener(REFUND_EVENTS.autoRefunded, listener)
     },
   },
   agent: {
@@ -80,6 +87,8 @@ const api: HxgApi = {
     importAccounts: (req) => ipcRenderer.invoke(ACCOUNT_CHANNELS.importAccounts, { request: req }),
     updateAccount: (accountId, patch) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.updateAccount, { accountId, patch }),
+    setAccountAutoRefund: (accountId, enabled) =>
+      ipcRenderer.invoke(ACCOUNT_CHANNELS.setAccountAutoRefund, { accountId, enabled }),
     reauthenticate: (accountId, input) =>
       ipcRenderer.invoke(ACCOUNT_CHANNELS.reauthenticate, { accountId, ...input }),
     refundCursor: (accountId) =>

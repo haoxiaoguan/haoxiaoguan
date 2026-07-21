@@ -51,6 +51,8 @@ export interface Account {
   tags: string[];
   notes?: string;
   isActive: boolean;
+  /** Cursor 专属「额度用尽自动退款」开关（存 profilePayload.autoRefundEnabled，默认 false）。 */
+  autoRefundEnabled: boolean;
   createdAt: string;
   lastUsedAt?: string;
 }

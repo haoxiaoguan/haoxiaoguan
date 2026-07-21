@@ -149,6 +149,14 @@ export interface CursorRefundResult {
 export type CursorCheckoutTier = 'pro' | 'pro_plus' | 'ultra'
 export type CursorCheckoutTarget = 'embedded' | 'chrome'
 
+/** Cursor 额度用尽自动退款完成后推给渲染层的事件（渲染层据 status 弹对应 toast）。 */
+export interface AutoRefundEventDto {
+  accountId: string
+  status: string
+  amountUsd?: string
+  message?: string
+}
+
 export interface HxgApi {
   settings: {
     getSettings(): Promise<SettingsResponse>
@@ -165,6 +173,8 @@ export interface HxgApi {
     onQuotaUpdated(cb: (accountIds: string[]) => void): () => void
     /** Subscribe to the main-process periodic usage-sync completion. Returns an unsubscribe fn. */
     onUsageSynced(cb: () => void): () => void
+    /** Subscribe to Cursor quota-exhausted auto-refund events. Returns an unsubscribe fn. */
+    onAutoRefunded(cb: (event: AutoRefundEventDto) => void): () => void
   }
   agent: {
     listAgents(): Promise<AgentInfo[]>
@@ -195,6 +205,8 @@ export interface HxgApi {
       accountId: string,
       patch: { name?: string | null; tags?: string[]; notes?: string | null },
     ): Promise<AccountResponse>
+    /** Cursor 专属「额度用尽自动退款」开关（存 profilePayload.autoRefundEnabled）。 */
+    setAccountAutoRefund(accountId: string, enabled: boolean): Promise<AccountResponse>
     reauthenticate(
       accountId: string,
       input: {

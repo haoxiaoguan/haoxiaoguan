@@ -28,6 +28,12 @@ export const USAGE_EVENTS = {
   synced: 'usage:synced',
 } as const
 
+// Main → renderer push events. Fired after a Cursor account's quota-exhausted
+// auto-refund runs (see cursor-auto-refund-consumer), so the renderer can toast.
+export const REFUND_EVENTS = {
+  autoRefunded: 'account:autoRefunded',
+} as const
+
 export const SKILL_CHANNELS = {
   getInstalledSkills: 'skill:getInstalledSkills',
   installSkillUnified: 'skill:installSkillUnified',
@@ -83,6 +89,7 @@ export const ACCOUNT_CHANNELS = {
   exportAccountsCpa: 'account:exportAccountsCpa',
   importAccounts: 'account:importAccounts',
   updateAccount: 'account:updateAccount',
+  setAccountAutoRefund: 'account:setAccountAutoRefund',
   reauthenticate: 'account:reauthenticate',
   refundCursor: 'account:refundCursor',
   openCursorCheckout: 'account:openCursorCheckout',

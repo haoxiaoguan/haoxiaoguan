@@ -23,6 +23,7 @@ import {
   useEffect,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { KeepAliveOutlet } from './KeepAliveOutlet';
 import {
@@ -47,7 +48,7 @@ import { detectPlatformShell, isWindowsChrome, type PlatformShell } from './plat
 import { SupportPopover } from './shell-utility/SupportPopover';
 import { FaqPopover } from './shell-utility/FaqPopover';
 import { systemService } from '../services/tauri';
-import { useQuotaStateStore } from '../stores';
+import { useAccountStore, useQuotaStateStore } from '../stores';
 import { NotificationPopover } from './shell-utility/NotificationPopover';
 import { UpdaterIndicator } from './shell-utility/UpdaterIndicator';
 import { WindowControls } from './shell-utility/WindowControls';
@@ -184,6 +185,7 @@ function ShellUtilityHoverItem({
 
 export function AppShell({ shell }: AppShellProps) {
   const { t } = useTranslation();
+  const { t: tAccounts } = useTranslation('accounts');
   const location = useLocation();
   const navigate = useNavigate();
   const isSettingsRoute = location.pathname.startsWith('/settings');
@@ -208,6 +210,49 @@ export function AppShell({ shell }: AppShellProps) {
     });
     return unsub;
   }, []);
+
+  // Cursor 额度用尽自动退款完成后主进程推 account:autoRefunded;按结果 status 弹 toast，
+  // 并重拉该账号 quota state 让卡片同步（退款后订阅转 Free、额度归零）。
+  useEffect(() => {
+    const unsub = systemService.onAutoRefunded((event) => {
+      let label = event.accountId;
+      for (const list of useAccountStore.getState().accounts.values()) {
+        const found = list.find((a) => a.id === event.accountId);
+        if (found) {
+          label = found.name || found.displayIdentifier || found.email || event.accountId;
+          break;
+        }
+      }
+      const amount = event.amountUsd ? `$${event.amountUsd}` : '';
+      switch (event.status) {
+        case 'success':
+          toast.success(tAccounts('autoRefund.toast.success', { account: label, amount }).trim());
+          break;
+        case 'pending':
+          toast.info(tAccounts('autoRefund.toast.pending', { account: label, amount }).trim());
+          break;
+        case 'already_free':
+          toast.info(tAccounts('autoRefund.toast.alreadyFree', { account: label }));
+          break;
+        case 'ratelimited':
+          toast.warning(tAccounts('autoRefund.toast.limited', { account: label }));
+          break;
+        default:
+          toast.error(tAccounts('autoRefund.toast.failed', { account: label }), {
+            description: event.message,
+          });
+      }
+      // 用在线刷新（非只读缓存 pull）：refreshQuota 在调退款消费者之前就存了退款前的 exhausted
+      // 快照，pull 只会读回那个旧态、卡片仍显示 Pro/额度耗尽。refresh 走一次真刷拿退款后的新态
+      // （订阅转 Free / 额度重置）。重入安全：退款消费者被在途锁 + autoRefundStatus 终态 + Free 会员
+      // 三重门控挡住，不会重复退、不成环。
+      void useQuotaStateStore
+        .getState()
+        .refresh(event.accountId)
+        .catch(() => {});
+    });
+    return unsub;
+  }, [tAccounts]);
 
   // 仅 Windows：应用明暗主题变化时，同步系统原生覆盖按钮(min/max/close)的图标颜色。
   useEffect(() => {

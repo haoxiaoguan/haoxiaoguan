@@ -123,6 +123,19 @@ export class AccountApplicationService {
   }
 
   /**
+   * Toggle the Cursor per-account「额度用尽自动退款」switch. Stored on the
+   * account's profilePayload (autoRefundEnabled) so it follows the account
+   * through export/import/persistence without a shared-table column.
+   */
+  async setAccountAutoRefund(accountId: string, enabled: boolean): Promise<Account> {
+    const account = await this.accountRepo.findById(accountId)
+    if (account === null) throw AccountError.notFound('Account', accountId)
+    account.setAutoRefundEnabled(enabled)
+    await this.accountRepo.save(account)
+    return account
+  }
+
+  /**
    * Re-authenticate: replace an account's credential without losing its id,
    * tags, notes, or group memberships.
    *
@@ -359,6 +372,9 @@ export class AccountApplicationService {
         is_active: account.isActive,
         created_at: account.createdAt.toISOString(),
         last_used_at: account.lastUsedAt ? account.lastUsedAt.toISOString() : null,
+        // 仅在开启时带上，让 autoRefundEnabled 随账号导出/导入迁移（存 profilePayload，不随
+        // rawMetadata=undefined 的导入重建，故须显式导出）。
+        ...(account.autoRefundEnabled ? { auto_refund_enabled: true } : {}),
         ...(credential !== undefined ? { credential } : {}),
       })
     }
@@ -521,7 +537,7 @@ export class AccountApplicationService {
       const refreshToken = exportAccount.credential?.refresh_token ?? undefined
 
       try {
-        await this.importAccount({
+        const account = await this.importAccount({
           platform,
           email: exportAccount.email,
           token,
@@ -532,6 +548,12 @@ export class AccountApplicationService {
           tags: exportAccount.tags ?? [],
           notes: exportAccount.notes ?? undefined,
         })
+        // 还原 Cursor 自动退款开关（importAccount 用 rawMetadata=undefined 现推 profilePayload，
+        // 不含该偏好，故导入后显式补写）。缺省/false 时不动（新账号默认关，符合不可逆退款的安全默认）。
+        if (exportAccount.auto_refund_enabled === true) {
+          account.setAutoRefundEnabled(true)
+          await this.accountRepo.save(account)
+        }
         imported += 1
       } catch (e) {
         errors.push(`Account '${exportAccount.email}': ${e instanceof Error ? e.message : String(e)}`)

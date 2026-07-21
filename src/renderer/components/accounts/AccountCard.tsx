@@ -128,6 +128,9 @@ function AccountCard(props: AccountCardProps) {
   const isCursor = props.account.platform === 'cursor'
   const [refundConfirmOpen, setRefundConfirmOpen] = useState(false)
   const [refunding, setRefunding] = useState(false)
+  // Cursor「额度用尽自动退款」：每账号开关（默认关），存在账号 profilePayload.autoRefundEnabled。
+  // 开启后配额刷新检测到额度耗尽会自动退款。
+  const autoRefundEnabled = props.account.autoRefundEnabled ?? false
   // Cursor 充值：卡片按钮 → 弹窗选 Pro/Pro+/Ultra → 内嵌窗口(免登录本号)或系统 Chrome 打开结账。
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [checkoutTier, setCheckoutTier] = useState<CursorCheckoutTier>('pro')
@@ -325,6 +328,36 @@ function AccountCard(props: AccountCardProps) {
             checked={props.pooled ?? false}
             onCheckedChange={(v) => props.onTogglePool?.(props.account, v)}
             aria-label={t('card.pool')}
+          />
+        </div>
+      ) : null}
+
+      {isCursor ? (
+        <div
+          className="mt-3 flex items-center justify-between rounded-[7px] bg-muted/40 px-2.5 py-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="min-w-0">
+            <div className="text-[11.5px] font-medium text-foreground">
+              {t('autoRefund.label')}
+            </div>
+            <div className="text-[10.5px] text-muted-foreground" title={t('autoRefund.hint')}>
+              {t('autoRefund.hint')}
+            </div>
+          </div>
+          <Switch
+            checked={autoRefundEnabled}
+            onCheckedChange={(v) => {
+              void accountService
+                .setAccountAutoRefund(props.account.id, v)
+                .then(() => fetchAccounts(props.account.platform))
+                .catch((error: unknown) => {
+                  toast.error(t('refreshFailed'), {
+                    description: error instanceof Error ? error.message : String(error),
+                  })
+                })
+            }}
+            aria-label={t('autoRefund.label')}
           />
         </div>
       ) : null}

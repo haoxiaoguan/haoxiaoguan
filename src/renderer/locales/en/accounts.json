@@ -207,6 +207,17 @@
     "limited": "Too many requests, please try again later",
     "failed": "Refund failed"
   },
+  "autoRefund": {
+    "label": "Auto-refund when quota exhausted",
+    "hint": "When on, an exhausted quota triggers a refund automatically (irreversible: subscription drops to Free, token stops working)",
+    "toast": {
+      "success": "Auto-refunded {{account}} {{amount}}",
+      "pending": "Auto-refund submitted for {{account}} {{amount}}, syncing",
+      "alreadyFree": "{{account}} is already Free — nothing to refund",
+      "limited": "Auto-refund for {{account}} rate-limited, try again later",
+      "failed": "Auto-refund failed for {{account}}"
+    }
+  },
   "recharge": {
     "title": "Upgrade Cursor",
     "desc": "Pick a plan, then open the checkout page to complete payment.",
